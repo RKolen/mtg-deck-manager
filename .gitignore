@@ -1,0 +1,62 @@
+# Spreadsheet source files (personal data)
+*.xlsx
+*.xls
+
+# Planning notes (local only)
+plan.md
+
+# ============================================================
+# DDEV
+# ============================================================
+.ddev/config.local.yaml
+.ddev/.gitignore
+
+# ============================================================
+# Drupal
+# ============================================================
+drupal/vendor/
+drupal/web/sites/default/files/
+drupal/web/sites/default/settings.local.php
+drupal/web/sites/simpletest/
+
+# Composer-generated lock artifacts (keep composer.lock in git)
+drupal/web/core/
+drupal/web/modules/contrib/
+drupal/web/themes/contrib/
+drupal/web/profiles/contrib/
+drupal/web/libraries/
+
+# Scryfall bulk data (~300 MB, re-downloaded by sync module)
+drupal/web/modules/custom/mtg_scryfall_sync/data/*.json
+
+# Drupal private files / temp
+drupal/private/
+drupal/tmp/
+
+# ============================================================
+# Gatsby / Node
+# ============================================================
+mtg-app/node_modules/
+mtg-app/.cache/
+mtg-app/public/
+mtg-app/.env
+mtg-app/.env.local
+mtg-app/.env.development.local
+mtg-app/.env.production.local
+
+# ============================================================
+# Environment & secrets
+# ============================================================
+.env
+.env.local
+*.env.local
+
+# ============================================================
+# OS & editor
+# ============================================================
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+*.swp
+*.swo

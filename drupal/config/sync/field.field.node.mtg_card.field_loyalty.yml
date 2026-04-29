@@ -1,0 +1,19 @@
+uuid: 11a1b231-9ea0-449b-9835-f5a20afb3328
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_loyalty
+    - node.type.mtg_card
+id: node.mtg_card.field_loyalty
+field_name: field_loyalty
+entity_type: node
+bundle: mtg_card
+label: Loyalty
+description: ''
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: string

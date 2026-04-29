@@ -1,0 +1,11 @@
+uuid: 865b5378-3a50-451d-922c-cec666e63a47
+langcode: en
+status: true
+dependencies: {  }
+name: 'Deck Card'
+type: deck_card
+description: 'A card entry within a deck.'
+help: null
+new_revision: true
+preview_mode: 1
+display_submitted: true

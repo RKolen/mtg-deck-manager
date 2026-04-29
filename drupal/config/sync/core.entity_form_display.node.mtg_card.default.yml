@@ -1,0 +1,246 @@
+uuid: f2bf1baf-3610-4955-b277-d292aab39297
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.field.node.mtg_card.field_cmc
+    - field.field.node.mtg_card.field_color_identity
+    - field.field.node.mtg_card.field_colors
+    - field.field.node.mtg_card.field_image_uri
+    - field.field.node.mtg_card.field_is_mana_producer
+    - field.field.node.mtg_card.field_mana_cost
+    - field.field.node.mtg_card.field_oracle_text
+    - field.field.node.mtg_card.field_produced_mana
+    - field.field.node.mtg_card.field_legal_formats
+    - field.field.node.mtg_card.field_loyalty
+    - field.field.node.mtg_card.field_power
+    - field.field.node.mtg_card.field_scryfall_id
+    - field.field.node.mtg_card.field_toughness
+    - field.field.node.mtg_card.field_type_line
+    - node.type.mtg_card
+  module:
+    - field_group
+    - text
+third_party_settings:
+  field_group:
+    group_mtg_card_tabs:
+      children:
+        - group_identity
+        - group_gameplay
+        - group_scryfall
+      label: 'Card details'
+      region: content
+      parent_name: ''
+      weight: 1
+      format_type: tabs
+      format_settings:
+        label: ''
+        classes: ''
+        id: ''
+        direction: horizontal
+    group_identity:
+      children:
+        - title
+        - field_mana_cost
+        - field_cmc
+        - field_type_line
+        - field_colors
+        - field_color_identity
+      label: Identity
+      region: content
+      parent_name: group_mtg_card_tabs
+      weight: 0
+      format_type: tab
+      format_settings:
+        label: Identity
+        classes: ''
+        show_empty_fields: false
+        id: ''
+        description: ''
+        direction: horizontal
+    group_gameplay:
+      children:
+        - field_oracle_text
+        - field_is_mana_producer
+        - field_produced_mana
+        - field_power
+        - field_toughness
+        - field_loyalty
+        - field_legal_formats
+      label: Gameplay
+      region: content
+      parent_name: group_mtg_card_tabs
+      weight: 1
+      format_type: tab
+      format_settings:
+        label: Gameplay
+        classes: ''
+        show_empty_fields: false
+        id: ''
+        description: ''
+        direction: horizontal
+    group_scryfall:
+      children:
+        - field_scryfall_id
+        - field_image_uri
+      label: 'Scryfall Data'
+      region: content
+      parent_name: group_mtg_card_tabs
+      weight: 2
+      format_type: tab
+      format_settings:
+        label: 'Scryfall Data'
+        classes: ''
+        show_empty_fields: false
+        id: ''
+        description: ''
+        direction: horizontal
+id: node.mtg_card.default
+targetEntityType: node
+bundle: mtg_card
+mode: default
+content:
+  created:
+    type: datetime_timestamp
+    weight: 10
+    region: content
+    settings: {  }
+    third_party_settings: {  }
+  field_cmc:
+    type: number
+    weight: 2
+    region: content
+    settings:
+      placeholder: ''
+    third_party_settings: {  }
+  field_color_identity:
+    type: string_textfield
+    weight: 5
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_colors:
+    type: string_textfield
+    weight: 4
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_image_uri:
+    type: string_textfield
+    weight: 10
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_is_mana_producer:
+    type: boolean_checkbox
+    weight: 7
+    region: content
+    settings:
+      display_label: true
+    third_party_settings: {  }
+  field_legal_formats:
+    type: string_textfield
+    weight: 14
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_loyalty:
+    type: string_textfield
+    weight: 13
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_mana_cost:
+    type: string_textfield
+    weight: 1
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_oracle_text:
+    type: text_textarea
+    weight: 6
+    region: content
+    settings:
+      rows: 5
+      placeholder: ''
+    third_party_settings: {  }
+  field_power:
+    type: string_textfield
+    weight: 11
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_produced_mana:
+    type: string_textfield
+    weight: 8
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_scryfall_id:
+    type: string_textfield
+    weight: 9
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_toughness:
+    type: string_textfield
+    weight: 12
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_type_line:
+    type: string_textfield
+    weight: 3
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  status:
+    type: boolean_checkbox
+    weight: 120
+    region: content
+    settings:
+      display_label: true
+    third_party_settings: {  }
+  title:
+    type: string_textfield
+    weight: 0
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  uid:
+    type: entity_reference_autocomplete
+    weight: 5
+    region: content
+    settings:
+      match_operator: CONTAINS
+      match_limit: 10
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+hidden:
+  promote: true
+  sticky: true

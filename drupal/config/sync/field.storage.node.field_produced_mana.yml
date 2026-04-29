@@ -1,0 +1,21 @@
+uuid: 0d3dc74d-0595-40e7-ad87-ffe00cbd0dda
+langcode: en
+status: true
+dependencies:
+  module:
+    - node
+id: node.field_produced_mana
+field_name: field_produced_mana
+entity_type: node
+type: string
+settings:
+  max_length: 255
+  case_sensitive: false
+  is_ascii: false
+module: core
+locked: false
+cardinality: -1
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

@@ -1,0 +1,23 @@
+uuid: 6a6ec3e1-58ef-4b88-9892-2ac8bb4e75d7
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_quantity_owned
+    - node.type.collection_card
+id: node.collection_card.field_quantity_owned
+field_name: field_quantity_owned
+entity_type: node
+bundle: collection_card
+label: 'Quantity Owned'
+description: ''
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings:
+  min: null
+  max: null
+  prefix: ''
+  suffix: ''
+field_type: integer

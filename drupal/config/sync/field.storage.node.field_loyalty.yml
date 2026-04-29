@@ -1,0 +1,21 @@
+uuid: eb810ed1-0e70-4223-b9d7-b29c745d3749
+langcode: en
+status: true
+dependencies:
+  module:
+    - node
+id: node.field_loyalty
+field_name: field_loyalty
+entity_type: node
+type: string
+settings:
+  max_length: 10
+  case_sensitive: false
+  is_ascii: false
+module: core
+locked: false
+cardinality: 1
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

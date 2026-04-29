@@ -1,0 +1,13 @@
+parameters:
+  level: 6
+  paths:
+    - web/modules/custom/mtg_scryfall_sync
+  treatPhpDocTypesAsCertain: false
+  ignoreErrors:
+    # ContentEntityInterface extends Traversable so PHPStan flags it as an
+    # iterable requiring a value type. False positive without mglaman/phpstan-drupal.
+    - identifier: missingType.iterableValue
+    # EntityInterface::set() is a magic method in Drupal entity system.
+    # mglaman/phpstan-drupal extension is required for full coverage.
+    - identifier: method.notFound
+      path: web/modules/custom/mtg_scryfall_sync/src/ScryfallImporter.php

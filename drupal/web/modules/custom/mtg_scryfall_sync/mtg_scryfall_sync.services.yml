@@ -1,0 +1,9 @@
+services:
+  mtg_scryfall_sync.importer:
+    class: Drupal\mtg_scryfall_sync\ScryfallImporter
+    arguments:
+      - '@entity_type.manager'
+      - '@logger.factory'
+      - '@state'
+      - '@datetime.time'
+      - '@http_client'

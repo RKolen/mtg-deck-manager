@@ -1,0 +1,41 @@
+<?php
+
+/**
+ * @file
+ * MTG Scryfall Sync module file.
+ */
+
+/**
+ * Implements hook_entity_type_alter().
+ *
+ * Attaches the DeckCopyLimit validation constraint to the deck node bundle.
+ * This enforces the four-copy rule (with exceptions for basic lands and
+ * "any number" cards) on every deck save, including direct JSON:API writes.
+ *
+ * @param array<string, \Drupal\Core\Entity\EntityTypeInterface> $entity_types
+ *   The master entity type list, keyed by entity type ID.
+ */
+function mtg_scryfall_sync_entity_type_alter(array &$entity_types): void {
+  if (isset($entity_types['node'])) {
+    $entity_types['node']->addConstraint('DeckCopyLimit');
+  }
+}
+
+/**
+ * Implements hook_cron().
+ *
+ * Triggers a weekly Scryfall sync by queueing a batch import job. The sync
+ * only runs if more than 7 days have passed since the last successful sync.
+ */
+function mtg_scryfall_sync_cron(): void {
+  $config = \Drupal::state();
+  $last_sync = $config->get('mtg_scryfall_sync.last_sync', 0);
+  $interval = 60 * 60 * 24 * 7;
+
+  if (\Drupal::time()->getRequestTime() - $last_sync >= $interval) {
+    /** @var \Drupal\mtg_scryfall_sync\ScryfallImporter $importer */
+    $importer = \Drupal::service('mtg_scryfall_sync.importer');
+    $importer->queueFullSync();
+    \Drupal::logger('mtg_scryfall_sync')->info('Weekly Scryfall sync queued by cron.');
+  }
+}

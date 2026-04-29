@@ -1,0 +1,11 @@
+uuid: 4cc501b4-6862-4ded-90c3-1d2fe374768f
+langcode: en
+status: true
+dependencies: {  }
+name: Deck
+type: deck
+description: 'A Magic: The Gathering deck.'
+help: null
+new_revision: true
+preview_mode: 1
+display_submitted: true

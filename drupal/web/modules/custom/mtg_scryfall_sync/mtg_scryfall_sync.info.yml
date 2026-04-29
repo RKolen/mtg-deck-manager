@@ -1,0 +1,7 @@
+name: MTG Scryfall Sync
+type: module
+description: Imports Magic The Gathering card data from the Scryfall bulk data API into Drupal nodes.
+core_version_requirement: ^11
+package: MTG Deck Manager
+dependencies:
+  - drupal:node

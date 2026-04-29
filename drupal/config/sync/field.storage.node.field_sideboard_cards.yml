@@ -1,0 +1,19 @@
+uuid: aa165d7e-277c-4104-8f81-946eaab564f5
+langcode: en
+status: true
+dependencies:
+  module:
+    - node
+id: node.field_sideboard_cards
+field_name: field_sideboard_cards
+entity_type: node
+type: entity_reference
+settings:
+  target_type: node
+module: core
+locked: false
+cardinality: 15
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

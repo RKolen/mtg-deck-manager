@@ -1,0 +1,38 @@
+_core:
+  default_config_hash: 4GIX5Esnc_umpXUBj4IIocRX7Mt5fPhm4AgXfE3E56E
+module:
+  basic_auth: 0
+  block: 0
+  breakpoint: 0
+  coffee: 0
+  dblog: 0
+  dynamic_page_cache: 0
+  field: 0
+  field_group: 0
+  field_ui: 0
+  file: 0
+  filter: 0
+  gin_toolbar: 0
+  jsonapi: 0
+  migrate: 0
+  migrate_plus: 0
+  mtg_scryfall_sync: 0
+  mysql: 0
+  node: 0
+  options: 0
+  page_cache: 0
+  path_alias: 0
+  rest: 0
+  serialization: 0
+  system: 0
+  text: 0
+  toolbar: 0
+  update: 0
+  user: 0
+  minimal: 1000
+theme:
+  stark: 0
+  claro: 0
+  gin: 0
+  olivero: 0
+profile: minimal

@@ -1,0 +1,19 @@
+uuid: 83633f32-c90a-4a2e-8b36-1e264f93bb9a
+langcode: en
+status: true
+dependencies:
+  module:
+    - node
+    - text
+id: node.field_oracle_text
+field_name: field_oracle_text
+entity_type: node
+type: text_long
+settings: {  }
+module: text
+locked: false
+cardinality: 1
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

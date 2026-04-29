@@ -1,0 +1,23 @@
+uuid: 4f970390-7c97-42f8-b918-4edfe6075946
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_cmc
+    - node.type.mtg_card
+id: node.mtg_card.field_cmc
+field_name: field_cmc
+entity_type: node
+bundle: mtg_card
+label: CMC
+description: ''
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings:
+  min: null
+  max: null
+  prefix: ''
+  suffix: ''
+field_type: decimal

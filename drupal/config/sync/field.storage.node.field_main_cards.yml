@@ -1,0 +1,19 @@
+uuid: 9a648ad7-0c1a-4b24-b42e-a12e002b0f1d
+langcode: en
+status: true
+dependencies:
+  module:
+    - node
+id: node.field_main_cards
+field_name: field_main_cards
+entity_type: node
+type: entity_reference
+settings:
+  target_type: node
+module: core
+locked: false
+cardinality: 60
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

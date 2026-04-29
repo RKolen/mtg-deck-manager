@@ -1,0 +1,19 @@
+uuid: d43602b8-fcd5-4e43-9a3f-76bbbd09aac4
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_colors
+    - node.type.mtg_card
+id: node.mtg_card.field_colors
+field_name: field_colors
+entity_type: node
+bundle: mtg_card
+label: Colors
+description: ''
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: string

@@ -1,0 +1,20 @@
+uuid: 1a9d4787-2fe6-4995-95fd-f19bedf3f027
+langcode: en
+status: true
+dependencies:
+  module:
+    - node
+id: node.field_cmc
+field_name: field_cmc
+entity_type: node
+type: decimal
+settings:
+  precision: 5
+  scale: 1
+module: core
+locked: false
+cardinality: 1
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

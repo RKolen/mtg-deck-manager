@@ -1,0 +1,24 @@
+uuid: dfee1101-627e-4fe7-b17a-eaf08bb9e4b2
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_sideboard_cards
+    - node.type.deck
+    - node.type.mtg_card
+id: node.deck.field_sideboard_cards
+field_name: field_sideboard_cards
+entity_type: node
+bundle: deck
+label: Sideboard
+description: ''
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings:
+  handler: 'default:node'
+  handler_settings:
+    target_bundles:
+      mtg_card: mtg_card
+field_type: entity_reference

@@ -1,0 +1,19 @@
+uuid: 00eb1acf-ff70-46db-8241-dd0ea7b875c9
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_type_line
+    - node.type.mtg_card
+id: node.mtg_card.field_type_line
+field_name: field_type_line
+entity_type: node
+bundle: mtg_card
+label: 'Type Line'
+description: ''
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: string

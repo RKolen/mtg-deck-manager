@@ -1,0 +1,21 @@
+uuid: aaf8a4c3-01f6-40c2-a85f-f882a3e2b9a7
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_is_mana_producer
+    - node.type.mtg_card
+id: node.mtg_card.field_is_mana_producer
+field_name: field_is_mana_producer
+entity_type: node
+bundle: mtg_card
+label: 'Is Mana Producer'
+description: ''
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings:
+  on_label: 'On'
+  off_label: 'Off'
+field_type: boolean

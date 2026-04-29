@@ -1,0 +1,19 @@
+uuid: d264eb31-d6cd-476b-be53-ce6761d1a38f
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_scryfall_id
+    - node.type.mtg_card
+id: node.mtg_card.field_scryfall_id
+field_name: field_scryfall_id
+entity_type: node
+bundle: mtg_card
+label: 'Scryfall ID'
+description: ''
+required: true
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: string

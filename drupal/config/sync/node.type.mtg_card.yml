@@ -1,0 +1,11 @@
+uuid: a82d4c31-7471-4054-8b78-a08a1896dad1
+langcode: en
+status: true
+dependencies: {  }
+name: 'MTG Card'
+type: mtg_card
+description: 'A Magic: The Gathering card imported from Scryfall.'
+help: null
+new_revision: true
+preview_mode: 1
+display_submitted: true

@@ -1,0 +1,7 @@
+services:
+  mtg_scryfall_sync.commands:
+    class: Drupal\mtg_scryfall_sync\Commands\ScryfallCommands
+    arguments:
+      - '@mtg_scryfall_sync.importer'
+    tags:
+      - { name: drush.command }

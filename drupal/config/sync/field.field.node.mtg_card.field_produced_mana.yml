@@ -1,0 +1,19 @@
+uuid: 97cfb2f2-7904-4b12-98ea-474ffdaa8365
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_produced_mana
+    - node.type.mtg_card
+id: node.mtg_card.field_produced_mana
+field_name: field_produced_mana
+entity_type: node
+bundle: mtg_card
+label: 'Produced Mana'
+description: ''
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: string

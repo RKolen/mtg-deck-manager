@@ -1,0 +1,11 @@
+uuid: 4a6c011d-a71b-4d15-b21b-4a3488297a19
+langcode: en
+status: true
+dependencies: {  }
+name: 'Collection Card'
+type: collection_card
+description: 'A card in the personal collection.'
+help: null
+new_revision: true
+preview_mode: 1
+display_submitted: true

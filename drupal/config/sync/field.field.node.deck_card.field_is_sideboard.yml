@@ -1,0 +1,21 @@
+uuid: 1dc9a1b6-a6c7-4318-b94f-9f4131a84399
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_is_sideboard
+    - node.type.deck_card
+id: node.deck_card.field_is_sideboard
+field_name: field_is_sideboard
+entity_type: node
+bundle: deck_card
+label: 'Is Sideboard'
+description: ''
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings:
+  on_label: 'On'
+  off_label: 'Off'
+field_type: boolean
