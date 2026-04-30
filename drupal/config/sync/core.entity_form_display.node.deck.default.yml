@@ -3,6 +3,7 @@ langcode: en
 status: true
 dependencies:
   config:
+    - field.field.node.deck.field_deck_cards
     - field.field.node.deck.field_format
     - field.field.node.deck.field_main_cards
     - field.field.node.deck.field_notes
@@ -131,5 +132,6 @@ content:
       placeholder: ''
     third_party_settings: {  }
 hidden:
+  field_deck_cards: true
   promote: true
   sticky: true

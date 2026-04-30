@@ -12,13 +12,19 @@ const config: GatsbyConfig = {
       resolve: 'gatsby-source-drupal',
       options: {
         baseUrl: DRUPAL_URL,
-        // Pull mtg_card for build-time card browsing and basic_page for
-        // CMS-driven static pages (e.g. the home page).
-        // Decks, collection, and analysis data are fetched client-side.
+        // Only fetch basic_page nodes for CMS-driven static pages (home page).
+        // All card, deck, and collection data is fetched at runtime via JSON:API.
         filters: {
-          'node--mtg_card': 'filter[status][value]=1',
           'node--page': 'filter[status][value]=1',
         },
+        // Exclude the large content types entirely — Drupal's MAX_SIZE=50 cap
+        // makes fetching 108k mtg_card nodes impractical at build time.
+        disallowedLinkTypes: [
+          'node--mtg_card',
+          'node--deck',
+          'node--deck_card',
+          'node--collection_card',
+        ],
       },
     },
   ],

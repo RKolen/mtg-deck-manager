@@ -58,6 +58,68 @@ async function fetchAll<T>(url: string): Promise<JsonApiResource<T>[]> {
 // MTG Card
 // ---------------------------------------------------------------------------
 
+const CARD_FIELDS =
+  'title,field_mana_cost,field_cmc,field_type_line,field_colors,field_color_identity,field_oracle_text,field_scryfall_id,field_image_uri,field_is_mana_producer,field_produced_mana,field_legal_formats';
+
+export interface CardPage {
+  cards: JsonApiResource<MtgCardAttributes>[];
+  nextUrl: string | null;
+}
+
+/**
+ * Fetches one page of mtg_card nodes with optional filters.
+ * Pass the returned nextUrl as `pageUrl` to get the next page.
+ */
+export async function fetchCardsPage(
+  pageUrl: string | null,
+  filters: {
+    name?: string;
+    colors?: string[];
+    type?: string;
+    maxCmc?: number | null;
+  } = {},
+): Promise<CardPage> {
+  const url = pageUrl ?? '/node/mtg_card';
+  const params: Record<string, string> = {};
+
+  if (pageUrl === null) {
+    // First page — apply filters and field selection.
+    params['fields[node--mtg_card]'] = CARD_FIELDS;
+    params['filter[status][value]'] = '1';
+    params['page[limit]'] = '50';
+
+    if (filters.name != null && filters.name !== '') {
+      params['filter[title][operator]'] = 'CONTAINS';
+      params['filter[title][value]'] = filters.name;
+    }
+    if (filters.type != null && filters.type !== 'All') {
+      params['filter[field_type_line][operator]'] = 'CONTAINS';
+      params['filter[field_type_line][value]'] = filters.type;
+    }
+    if (filters.maxCmc != null) {
+      params['filter[field_cmc][operator]'] = '<=';
+      params['filter[field_cmc][value]'] = String(filters.maxCmc);
+    }
+    if (filters.colors != null && filters.colors.length > 0) {
+      filters.colors.forEach((color, i) => {
+        params[`filter[colors][condition][path]`] = 'field_colors';
+        params[`filter[colors][condition][operator]`] = 'IN';
+        params[`filter[colors][condition][value][${i}]`] = color;
+      });
+    }
+  }
+
+  const response = await client.get<JsonApiCollectionResponse<MtgCardAttributes>>(
+    url,
+    { params: pageUrl !== null ? {} : params },
+  );
+
+  return {
+    cards: response.data.data,
+    nextUrl: response.data.links.next?.href ?? null,
+  };
+}
+
 /**
  * Searches cards by name using a JSON:API filter. Used during XLSX import
  * to match card names to existing Drupal nodes.
@@ -66,12 +128,11 @@ export async function findCardsByName(
   name: string,
 ): Promise<JsonApiResource<MtgCardAttributes>[]> {
   const response = await client.get<JsonApiCollectionResponse<MtgCardAttributes>>(
-    '/node--mtg_card',
+    '/node/mtg_card',
     {
       params: {
         'filter[title]': name,
-        'fields[node--mtg_card]':
-          'title,field_mana_cost,field_cmc,field_type_line,field_colors,field_color_identity,field_oracle_text,field_scryfall_id,field_image_uri,field_is_mana_producer,field_produced_mana,field_legal_formats',
+        'fields[node--mtg_card]': CARD_FIELDS,
       },
     },
   );
@@ -84,7 +145,7 @@ export async function findCardsByName(
 
 export async function fetchDecks(): Promise<JsonApiResource<DeckAttributes>[]> {
   return fetchAll<DeckAttributes>(
-    '/node--deck?fields[node--deck]=title,field_format,field_notes',
+    '/node/deck?fields[node--deck]=title,field_format,field_notes',
   );
 }
 
@@ -92,7 +153,7 @@ export async function fetchDeck(
   id: string,
 ): Promise<JsonApiResource<DeckAttributes>> {
   const response = await client.get<JsonApiSingleResponse<DeckAttributes>>(
-    `/node--deck/${id}`,
+    `/node/deck/${id}`,
   );
   return response.data.data;
 }
@@ -101,7 +162,7 @@ export async function createDeck(
   attributes: Pick<DeckAttributes, 'title' | 'field_format' | 'field_notes'>,
 ): Promise<JsonApiResource<DeckAttributes>> {
   const response = await client.post<JsonApiSingleResponse<DeckAttributes>>(
-    '/node--deck',
+    '/node/deck',
     {
       data: {
         type: 'node--deck',
@@ -117,7 +178,7 @@ export async function updateDeck(
   attributes: Partial<DeckAttributes>,
 ): Promise<JsonApiResource<DeckAttributes>> {
   const response = await client.patch<JsonApiSingleResponse<DeckAttributes>>(
-    `/node--deck/${id}`,
+    `/node/deck/${id}`,
     {
       data: {
         type: 'node--deck',
@@ -130,131 +191,169 @@ export async function updateDeck(
 }
 
 export async function deleteDeck(id: string): Promise<void> {
-  await client.delete(`/node--deck/${id}`);
+  await client.delete(`/node/deck/${id}`);
 }
 
 // ---------------------------------------------------------------------------
-// Deck cards — direct reference model
+// Deck cards — deck_card node model
 //
-// Decks reference mtg_card nodes directly via two multi-value fields:
-//   field_main_cards    (cardinality 60) — each value = one copy of a card
-//   field_sideboard_cards (cardinality 15)
+// Each card slot is a `deck_card` node with:
+//   field_card          entity reference → mtg_card
+//   field_deck          entity reference → deck
+//   field_quantity      integer (how many copies)
+//   field_is_sideboard  boolean
 //
-// To have 4x Lightning Bolt: add the same card ID four times to the field.
+// To fetch a deck's cards: filter deck_card nodes by field_deck.id.
 // ---------------------------------------------------------------------------
 
-const CARD_FIELDS =
+const DECK_CARD_FIELDS =
   'title,field_mana_cost,field_cmc,field_type_line,' +
   'field_colors,field_color_identity,field_oracle_text,field_image_uri,' +
   'field_is_mana_producer,field_produced_mana,field_legal_formats';
 
+interface DeckCardNodeAttributes {
+  title: string;
+  field_quantity: number;
+  field_is_sideboard: boolean;
+}
+
 /**
- * Fetches a deck with both card fields included and returns a flat list of
- * DeckCardWithCard slots (one per copy of each card).
+ * Fetches all deck_card nodes for a deck, including the referenced mtg_card
+ * nodes, and returns them as DeckCardWithCard slots.
  */
 export async function fetchDeckCardsWithCards(
   deckId: string,
 ): Promise<DeckCardWithCard[]> {
   const response = await client.get<{
-    data: JsonApiResource<DeckAttributes & {
-      field_main_cards: JsonApiResourceIdentifier[];
-      field_sideboard_cards: JsonApiResourceIdentifier[];
-    }>;
+    data: JsonApiResource<DeckCardNodeAttributes>[];
     included?: JsonApiResource<MtgCardAttributes>[];
   }>(
-    `/node--deck/${deckId}` +
-    `?include=field_main_cards,field_sideboard_cards` +
-    `&fields[node--mtg_card]=${CARD_FIELDS}`,
+    `/node/deck_card` +
+    `?filter[field_deck.id]=${deckId}` +
+    `&include=field_card` +
+    `&fields[node--deck_card]=field_quantity,field_is_sideboard,field_card` +
+    `&fields[node--mtg_card]=${DECK_CARD_FIELDS}` +
+    `&page[limit]=200`,
   );
 
   const cardMap = new Map<string, MtgCardAttributes & { id: string }>(
     (response.data.included ?? []).map(c => [c.id, { id: c.id, ...c.attributes }]),
   );
 
-  const slots: DeckCardWithCard[] = [];
-
-  // Build grouped slots: count occurrences of each card ID, then create one
-  // DeckCardWithCard per unique card.
-  function buildSlots(refs: JsonApiResourceIdentifier[], isSideboard: boolean): void {
-    const counts = new Map<string, number>();
-    for (const ref of refs) {
-      counts.set(ref.id, (counts.get(ref.id) ?? 0) + 1);
-    }
-    for (const [cardId, quantity] of counts) {
-      const card = cardMap.get(cardId);
-      if (!card) continue;
-      slots.push({ id: cardId, quantity, isSideboard, card });
-    }
-  }
-
-  const rels = response.data.data.relationships ?? {};
-  const mainRefs = (rels.field_main_cards?.data ?? []) as JsonApiResourceIdentifier[];
-  const sbRefs = (rels.field_sideboard_cards?.data ?? []) as JsonApiResourceIdentifier[];
-
-  buildSlots(mainRefs, false);
-  buildSlots(sbRefs, true);
-
-  return slots;
+  return response.data.data.flatMap(node => {
+    const cardRef = (node.relationships?.field_card?.data) as JsonApiResourceIdentifier | null;
+    if (!cardRef) return [];
+    const card = cardMap.get(cardRef.id);
+    if (!card) return [];
+    return [{
+      id: node.id,
+      quantity: node.attributes.field_quantity ?? 1,
+      isSideboard: node.attributes.field_is_sideboard ?? false,
+      card,
+    }];
+  });
 }
 
 /**
- * Adds one copy of a card to a deck field by appending its ID to the
- * existing relationship list (POST relationship endpoint).
+ * Creates a deck_card node with a specific quantity in one call.
+ * Used by the import page.
+ */
+export async function importCardToDeck(
+  deckId: string,
+  cardId: string,
+  quantity: number,
+  isSideboard: boolean,
+): Promise<void> {
+  await client.post<JsonApiSingleResponse<DeckCardNodeAttributes>>(
+    '/node/deck_card',
+    {
+      data: {
+        type: 'node--deck_card',
+        attributes: {
+          title: `${deckId}-${cardId}`,
+          status: true,
+          field_quantity: quantity,
+          field_is_sideboard: isSideboard,
+        },
+        relationships: {
+          field_card: { data: { type: 'node--mtg_card', id: cardId } },
+          field_deck: { data: { type: 'node--deck', id: deckId } },
+        },
+      },
+    },
+  );
+}
+
+/**
+ * Adds a card slot to a deck. If a deck_card node already exists for this
+ * card in the same zone, increments its quantity instead.
  */
 export async function addCardToDeck(
   deckId: string,
   cardId: string,
   isSideboard = false,
+  existingSlots: DeckCardWithCard[] = [],
 ): Promise<void> {
-  const field = isSideboard ? 'field_sideboard_cards' : 'field_main_cards';
-  await client.post(
-    `/node--deck/${deckId}/relationships/${field}`,
-    { data: [{ type: 'node--mtg_card', id: cardId }] },
+  const existing = existingSlots.find(
+    s => s.card.id === cardId && s.isSideboard === isSideboard,
   );
+
+  if (existing != null) {
+    await setCardQuantityInDeck(
+      cardId, existing.quantity + 1, isSideboard, existingSlots,
+    );
+    return;
+  }
+
+  await importCardToDeck(deckId, cardId, 1, isSideboard);
 }
 
 /**
- * Removes all copies of a card from a deck field and re-adds the desired
- * quantity. Used by +/- controls in the editor.
- *
- * JSON:API relationship PATCH replaces the entire list, so we must send the
- * full updated list every time.
+ * Updates the quantity on an existing deck_card node.
+ * If quantity reaches 0, deletes the node instead.
  */
 export async function setCardQuantityInDeck(
-  deckId: string,
   cardId: string,
   quantity: number,
   isSideboard: boolean,
   allSlots: DeckCardWithCard[],
 ): Promise<void> {
-  const field = isSideboard ? 'field_sideboard_cards' : 'field_main_cards';
-  const sideboardFlag = isSideboard;
-
-  // Build the complete new list for this field.
-  const otherCards = allSlots.filter(s => s.isSideboard === sideboardFlag && s.card.id !== cardId);
-  const retained: JsonApiResourceIdentifier[] = otherCards.flatMap(s =>
-    Array.from({ length: s.quantity }, () => ({ type: 'node--mtg_card', id: s.card.id })),
+  const slot = allSlots.find(
+    s => s.card.id === cardId && s.isSideboard === isSideboard,
   );
-  const additions: JsonApiResourceIdentifier[] = quantity > 0
-    ? Array.from({ length: quantity }, () => ({ type: 'node--mtg_card', id: cardId }))
-    : [];
+  if (!slot) return;
+
+  if (quantity <= 0) {
+    await removeCardFromDeck(cardId, isSideboard, allSlots);
+    return;
+  }
 
   await client.patch(
-    `/node--deck/${deckId}/relationships/${field}`,
-    { data: [...retained, ...additions] },
+    `/node/deck_card/${slot.id}`,
+    {
+      data: {
+        type: 'node--deck_card',
+        id: slot.id,
+        attributes: { field_quantity: quantity },
+      },
+    },
   );
 }
 
 /**
- * Removes all copies of a specific card from one field of the deck.
+ * Deletes a deck_card node entirely.
  */
 export async function removeCardFromDeck(
-  deckId: string,
   cardId: string,
   isSideboard: boolean,
   allSlots: DeckCardWithCard[],
 ): Promise<void> {
-  return setCardQuantityInDeck(deckId, cardId, 0, isSideboard, allSlots);
+  const slot = allSlots.find(
+    s => s.card.id === cardId && s.isSideboard === isSideboard,
+  );
+  if (!slot) return;
+
+  await client.delete(`/node/deck_card/${slot.id}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -265,7 +364,7 @@ export async function fetchCollectionCards(): Promise<
   JsonApiResource<CollectionCardAttributes>[]
 > {
   return fetchAll<CollectionCardAttributes>(
-    '/node--collection_card?include=field_card&fields[node--collection_card]=field_quantity_owned,field_quantity_foil,field_card&fields[node--mtg_card]=title,field_mana_cost,field_cmc,field_type_line,field_colors,field_image_uri',
+    '/node/collection_card?include=field_card&fields[node--collection_card]=field_quantity_owned,field_quantity_foil,field_card&fields[node--mtg_card]=title,field_mana_cost,field_cmc,field_type_line,field_colors,field_image_uri',
   );
 }
 
@@ -278,7 +377,7 @@ export async function upsertCollectionCard(
   if (existingId !== undefined) {
     const response = await client.patch<
       JsonApiSingleResponse<CollectionCardAttributes>
-    >(`/node--collection_card/${existingId}`, {
+    >(`/node/collection_card/${existingId}`, {
       data: {
         type: 'node--collection_card',
         id: existingId,
@@ -293,7 +392,7 @@ export async function upsertCollectionCard(
 
   const response = await client.post<
     JsonApiSingleResponse<CollectionCardAttributes>
-  >('/node--collection_card', {
+  >('/node/collection_card', {
     data: {
       type: 'node--collection_card',
       attributes: {

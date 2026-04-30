@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "develop": "NODE_EXTRA_CA_CERTS=$HOME/.ddev/mkcert/rootCA.pem gatsby develop",
+    "develop": "NODE_EXTRA_CA_CERTS=$HOME/.local/share/mkcert/rootCA.pem gatsby develop",
     "build": "NODE_EXTRA_CA_CERTS=$HOME/.ddev/mkcert/rootCA.pem gatsby build",
     "serve": "gatsby serve",
     "clean": "gatsby clean",

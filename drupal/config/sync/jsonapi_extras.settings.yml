@@ -1,0 +1,8 @@
+_core:
+  default_config_hash: 4_ifqxmFEAYSrGFkA63fLBYAWO-Fz9ACp9qVjkxPghg
+path_prefix: jsonapi
+include_count: true
+default_disabled: false
+validate_configuration_integrity: true
+max_include_depth: 3
+page_size: 500

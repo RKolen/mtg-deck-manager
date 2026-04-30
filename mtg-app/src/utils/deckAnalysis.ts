@@ -36,6 +36,59 @@ export function isLand(typeLine: string): boolean {
 }
 
 /**
+ * Extracts a plain-string oracle text from a card attribute that may be a
+ * Drupal text-format object ({ value, processed, format }) or a bare string.
+ */
+export function getOracleText(card: { field_oracle_text?: unknown }): string {
+  const raw = card.field_oracle_text;
+  if (!raw) return '';
+  if (typeof raw === 'string') return raw;
+  const obj = raw as { value?: string };
+  return obj.value ?? '';
+}
+
+/**
+ * For fetchlands — lands that sacrifice themselves to search a library for
+ * another land card — Scryfall does not populate produced_mana.  We derive
+ * the colours they can fetch from the basic land types named in their oracle
+ * text (e.g. "Search your library for a Forest or Mountain card" → G + R).
+ *
+ * Returns an empty array when the oracle text does not match the fetch pattern
+ * (so utility lands like Tabernacle and Maze of Ith return []).
+ */
+export function fetchlandColors(oracleText: string): MtgColor[] {
+  const SEARCH_PATTERN =
+    /sacrifice [^:]+: search your library for a .+ card, put it onto the battlefield/i;
+  if (!SEARCH_PATTERN.test(oracleText)) return [];
+
+  const LAND_TYPE_COLOR: [string, MtgColor][] = [
+    ['Plains', 'W'],
+    ['Island', 'U'],
+    ['Swamp', 'B'],
+    ['Mountain', 'R'],
+    ['Forest', 'G'],
+  ];
+  return LAND_TYPE_COLOR
+    .filter(([type]) => oracleText.includes(type))
+    .map(([, color]) => color);
+}
+
+/**
+ * Returns true when a land permanent can produce mana:
+ * - Scryfall lists produced_mana (basics, shocks, duals, etc.), OR
+ * - Its oracle text matches the fetchland search-and-fetch pattern.
+ *
+ * Returns false for utility lands (Tabernacle, Maze of Ith, etc.).
+ */
+export function landProducesMana(
+  card: { field_oracle_text?: unknown; field_produced_mana?: unknown },
+): boolean {
+  const produced = (card.field_produced_mana ?? []) as string[];
+  if (produced.length > 0) return true;
+  return fetchlandColors(getOracleText(card)).length > 0;
+}
+
+/**
  * Returns the maximum number of copies of a card allowed in a deck, based on
  * the four-copy rule with these exceptions (matching Drupal's DeckCopyLimit):
  *
@@ -170,8 +223,15 @@ export function effectiveManaSources(
     const card = dc.card;
     const produced = (card.field_produced_mana ?? []) as string[];
 
-    if (isLand(card.field_type_line ?? '') && produced.length > 0) {
-      for (const color of produced) {
+    if (isLand(card.field_type_line ?? '')) {
+      // Use Scryfall produced_mana when available, otherwise derive colours
+      // from fetchland oracle text.  Utility lands produce no colours and
+      // are skipped entirely.
+      const landColors =
+        produced.length > 0
+          ? produced
+          : fetchlandColors(getOracleText(card));
+      for (const color of landColors) {
         if (color in result) {
           result[color as MtgColor] += dc.quantity;
         }
@@ -198,8 +258,16 @@ export function totalManaSources(cards: DeckCardWithCard[]): number {
   for (const dc of mainDeck(cards)) {
     const card = dc.card;
     const land = isLand(card.field_type_line ?? '');
-    if (land || card.field_is_mana_producer === true) {
-      count += dc.quantity * (land ? 1 : 0.5);
+    if (land) {
+      // Exclude utility lands (Tabernacle, Maze of Ith, Emeria the Sky Ruin,
+      // etc.) that genuinely do not produce mana.  Fetchlands are correctly
+      // included even though Scryfall leaves their produced_mana empty.
+      if (landProducesMana(card)) {
+        count += dc.quantity;
+      }
+    } else if (card.field_is_mana_producer === true) {
+      // Non-land mana producers (dorks, rocks, etc.) count as 0.5.
+      count += dc.quantity * 0.5;
     }
   }
   return count;

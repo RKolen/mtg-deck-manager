@@ -12,7 +12,7 @@ import * as XLSX from 'xlsx';
 import {
   findCardsByName,
   createDeck,
-  addCardToDeck,
+  importCardToDeck,
 } from '../../services/drupalApi';
 
 // ---------------------------------------------------------------------------
@@ -23,6 +23,7 @@ interface ParsedRow {
   name: string;
   quantity: number;
   isSideboard: boolean;
+  isFoil: boolean;
 }
 
 interface MatchedRow extends ParsedRow {
@@ -41,96 +42,130 @@ interface MatchedRow extends ParsedRow {
  * Strategy:
  *  1. Look for a column header containing "name" and another containing "qty"
  *     or "quantity". Use those columns.
- *  2. Fall back to scanning each row for a numeric cell followed by a string
+ *  2. Detect Magic Deck Spreadsheet v2 three-section horizontal layout
+ *     (Lands | Spells | Creatures in parallel columns). A blank row after
+ *     the main deck signals the sideboard section.
+ *  3. Fall back to scanning each row for a numeric cell followed by a string
  *     cell (format: "4 Lightning Bolt" is also handled by splitting on space).
  */
 function parseSheet(sheet: XLSX.WorkSheet): ParsedRow[] {
-  const rows: XLSX.CellObject[][] = XLSX.utils.sheet_to_json(sheet, {
+  // Keep blank rows so we can detect the sideboard blank-row separator.
+  const rows = XLSX.utils.sheet_to_json(sheet, {
     header: 1,
     raw: false,
-    blankrows: false,
-  }) as XLSX.CellObject[][];
+    blankrows: true,
+  }) as (string | null)[][];
 
   if (rows.length === 0) return [];
 
-  const results: ParsedRow[] = [];
-
-  // Try header detection first.
-  const headerRow = rows[0];
-  if (headerRow != null) {
-    const headers = headerRow.map(c =>
-      String(c ?? '').toLowerCase().trim(),
-    );
+  // --- Strategy 1: simple name/qty header row ---
+  const firstNonBlank = rows.find(r => r.some(c => c != null && String(c).trim() !== ''));
+  if (firstNonBlank != null) {
+    const headers = Array.from(firstNonBlank, c => String(c ?? '').toLowerCase().trim());
     const nameIdx = headers.findIndex(h => h.includes('name'));
-    const qtyIdx = headers.findIndex(
-      h => h.includes('qty') || h.includes('quantity'),
-    );
-    const sbIdx = headers.findIndex(
-      h => h.includes('side') || h.includes('sb'),
-    );
+    const qtyIdx = headers.findIndex(h => h.includes('qty') || h.includes('quantity'));
+    const sbIdx = headers.findIndex(h => h.includes('side') || h.includes('sb'));
 
     if (nameIdx >= 0 && qtyIdx >= 0) {
-      for (let i = 1; i < rows.length; i++) {
+      const results: ParsedRow[] = [];
+      const startIdx = rows.indexOf(firstNonBlank) + 1;
+      for (let i = startIdx; i < rows.length; i++) {
         const row = rows[i];
         if (row == null) continue;
         const name = String(row[nameIdx] ?? '').trim();
         const qty = parseInt(String(row[qtyIdx] ?? ''), 10);
-        const isSideboard =
-          sbIdx >= 0 ? Boolean(row[sbIdx]) : false;
-        if (name !== '' && qty > 0) {
-          results.push({ name, quantity: qty, isSideboard });
-        }
+        const isSideboard = sbIdx >= 0 ? String(row[sbIdx] ?? '').trim() !== '' : false;
+        if (name !== '' && qty > 0) results.push({ name, quantity: qty, isSideboard, isFoil: false });
       }
       if (results.length > 0) return results;
     }
   }
 
-  // Fall back: scan all rows for qty + name pattern.
+  // --- Strategy 2: Magic Deck Spreadsheet v2 three-section horizontal layout ---
+  // Row format: ["Lands", null*7, "Spells", null*8, "Creatures"]
+  // Followed by a column-header row, then data rows.
+  // A blank row after the last data row introduces a sideboard section.
+  const sectionHeaderIdx = rows.findIndex(
+    row =>
+      row.some(c => String(c ?? '').trim() === 'Lands') &&
+      row.some(c => String(c ?? '').trim() === 'Spells') &&
+      row.some(c => String(c ?? '').trim() === 'Creatures'),
+  );
+
+  if (sectionHeaderIdx >= 0) {
+    const sectionRow = rows[sectionHeaderIdx]!;
+    const landsCol = sectionRow.findIndex(c => String(c ?? '').trim() === 'Lands');
+    const spellsCol = sectionRow.findIndex(c => String(c ?? '').trim() === 'Spells');
+    const creaturesCol = sectionRow.findIndex(c => String(c ?? '').trim() === 'Creatures');
+
+    // Each section: qty at sectionCol, name at sectionCol+1.
+    const sections = [landsCol, spellsCol, creaturesCol]
+      .filter(col => col >= 0)
+      .map(col => ({ qtyCol: col, nameCol: col + 1 }));
+
+    // Data starts two rows after the section header (skip column-name row).
+    const dataStartIdx = sectionHeaderIdx + 2;
+    const results: ParsedRow[] = [];
+    let inSideboard = false;
+    let seenCards = false;
+
+    for (let i = dataStartIdx; i < rows.length; i++) {
+      const row = rows[i]!;
+      // A row is blank when none of the card-name columns have a value.
+      // ODS templates leave "0" totals in non-name columns, so we check
+      // name columns only rather than testing every cell.
+      const isBlank = sections.every(
+        ({ nameCol }) => String(row[nameCol] ?? '').trim() === '',
+      );
+
+      if (isBlank) {
+        if (seenCards) inSideboard = true;
+        continue;
+      }
+
+      for (const { qtyCol, nameCol } of sections) {
+        const qty = parseInt(String(row[qtyCol] ?? ''), 10);
+        // Strip trailing foil marker " F" added by some spreadsheet templates.
+        const rawName = String(row[nameCol] ?? '').trim();
+        const isFoil = / F$/.test(rawName);
+        const name = rawName.replace(/ F$/, '').trim();
+        if (!isNaN(qty) && qty > 0 && name.length > 0 && /^[A-Za-z]/.test(name)) {
+          results.push({ name, quantity: qty, isSideboard: inSideboard, isFoil });
+          seenCards = true;
+        }
+      }
+    }
+
+    if (results.length > 0) return results;
+  }
+
+  // --- Strategy 3: fallback qty+name scan ---
+  const results: ParsedRow[] = [];
   let inSideboard = false;
   for (const row of rows) {
     if (row == null) continue;
 
-    // Detect section headers like "Sideboard" or "Side"
     const firstCell = String(row[0] ?? '').trim().toLowerCase();
-    if (/^side(board)?$/.test(firstCell)) {
-      inSideboard = true;
-      continue;
-    }
-    if (/^main(deck)?$/.test(firstCell)) {
-      inSideboard = false;
-      continue;
-    }
+    if (/^side(board)?$/.test(firstCell)) { inSideboard = true; continue; }
+    if (/^main(deck)?$/.test(firstCell)) { inSideboard = false; continue; }
 
-    // Look for a numeric column followed by a string column.
     for (let ci = 0; ci < row.length - 1; ci++) {
       const maybeQty = parseInt(String(row[ci] ?? ''), 10);
       const maybeName = String(row[ci + 1] ?? '').trim();
       if (
-        !isNaN(maybeQty) &&
-        maybeQty > 0 &&
-        maybeQty <= 99 &&
-        maybeName.length > 0 &&
-        /^[A-Za-z]/.test(maybeName)
+        !isNaN(maybeQty) && maybeQty > 0 && maybeQty <= 99 &&
+        maybeName.length > 0 && /^[A-Za-z]/.test(maybeName)
       ) {
-        results.push({
-          name: maybeName,
-          quantity: maybeQty,
-          isSideboard: inSideboard,
-        });
+        results.push({ name: maybeName, quantity: maybeQty, isSideboard: inSideboard, isFoil: false });
         break;
       }
     }
 
-    // Also handle single-cell "4 Lightning Bolt" format.
     if (row.length === 1) {
       const cell = String(row[0] ?? '').trim();
       const m = /^(\d+)\s+(.+)/.exec(cell);
       if (m != null) {
-        results.push({
-          name: m[2]!.trim(),
-          quantity: parseInt(m[1]!, 10),
-          isSideboard: inSideboard,
-        });
+        results.push({ name: m[2]!.trim(), quantity: parseInt(m[1]!, 10), isSideboard: inSideboard, isFoil: false });
       }
     }
   }
@@ -190,12 +225,18 @@ const ImportPage: React.FC = () => {
 
         const matched: MatchedRow[] = [];
         for (const row of parsed) {
-          const results = await findCardsByName(row.name);
+          // Normalize smart/curly quotes to straight apostrophes so names like
+          // "Prey\u2019s Vengeance" match Drupal\u2019s stored straight-apostrophe titles.
+          const normalizedName = row.name
+            .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
+            .replace(/[\u201C\u201D\u201E\u201F]/g, '"');
+          const results = await findCardsByName(normalizedName);
           const exact = results.find(
-            r => r.attributes.title.toLowerCase() === row.name.toLowerCase(),
+            r => r.attributes.title.toLowerCase() === normalizedName.toLowerCase(),
           );
           matched.push({
             ...row,
+            name: normalizedName,
             matchId: exact?.id ?? results[0]?.id ?? null,
             matchTitle:
               exact?.attributes.title ??
@@ -278,15 +319,13 @@ const ImportPage: React.FC = () => {
       for (const row of toImport) {
         i++;
         setProgress(`Adding card ${i} / ${toImport.length}: ${row.name}`);
-        // Add one copy at a time to match the direct-reference model.
-        for (let copy = 0; copy < row.quantity; copy++) {
-          // eslint-disable-next-line no-await-in-loop
-          await addCardToDeck(
-            deck.id,
-            row.matchId!,
-            row.isSideboard,
-          );
-        }
+        // eslint-disable-next-line no-await-in-loop
+        await importCardToDeck(
+          deck.id,
+          row.matchId!,
+          row.quantity,
+          row.isSideboard,
+        );
       }
 
       setCreatedDeckId(deck.id);
@@ -422,6 +461,7 @@ const ImportPage: React.FC = () => {
                 <th style={{ padding: '0.4rem', textAlign: 'left' }}>Parsed name</th>
                 <th style={{ padding: '0.4rem', textAlign: 'left' }}>Matched card</th>
                 <th style={{ padding: '0.4rem' }}>SB</th>
+                <th style={{ padding: '0.4rem' }}>Foil</th>
                 <th style={{ padding: '0.4rem' }}></th>
               </tr>
             </thead>
@@ -456,6 +496,9 @@ const ImportPage: React.FC = () => {
                   </td>
                   <td style={{ padding: '0.3rem 0.4rem', textAlign: 'center' }}>
                     {row.isSideboard ? 'SB' : ''}
+                  </td>
+                  <td style={{ padding: '0.3rem 0.4rem', textAlign: 'center' }}>
+                    {row.isFoil ? 'F' : ''}
                   </td>
                   <td style={{ padding: '0.3rem 0.4rem', textAlign: 'center' }}>
                     <button

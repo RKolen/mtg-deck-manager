@@ -23,7 +23,9 @@
         "drupal/core-recommended": "^11.3",
         "drupal/field_group": "^4.0",
         "drupal/gin": "^5.0",
+        "drupal/jsonapi_extras": "^3.28",
         "drupal/migrate_plus": "^6.0",
+        "drupal/paragraphs": "^1.20",
         "drush/drush": "^13.7"
     },
     "conflict": {

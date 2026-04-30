@@ -1,0 +1,25 @@
+uuid: eef26bd6-d843-4377-a3a5-0888dda36920
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.paragraph.field_card
+    - node.type.mtg_card
+    - paragraphs.paragraphs_type.deck_card
+id: paragraph.deck_card.field_card
+field_name: field_card
+entity_type: paragraph
+bundle: deck_card
+label: Card
+description: ''
+required: true
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings:
+  handler: 'default:node'
+  handler_settings:
+    target_bundles:
+      mtg_card: mtg_card
+    auto_create: false
+field_type: entity_reference

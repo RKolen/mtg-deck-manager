@@ -1,0 +1,25 @@
+uuid: c2a756ee-ba50-42ee-afe2-b557d94ef049
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.paragraph.field_quantity
+    - paragraphs.paragraphs_type.deck_card
+id: paragraph.deck_card.field_quantity
+field_name: field_quantity
+entity_type: paragraph
+bundle: deck_card
+label: Quantity
+description: ''
+required: true
+translatable: true
+default_value:
+  -
+    value: 1
+default_value_callback: ''
+settings:
+  min: null
+  max: null
+  prefix: ''
+  suffix: ''
+field_type: integer

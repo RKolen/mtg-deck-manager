@@ -1,82 +1,34 @@
 /**
  * Collection binder page — Phase 3.
  *
- * Card catalogue is fetched at build time via gatsby-source-drupal + GraphQL.
+ * Card catalogue is fetched at runtime via JSON:API with debounced filters.
+ * Switched from build-time gatsby-source-drupal (too slow for 108k cards —
+ * will be replaced by Solr search in Phase 7).
  * Collection quantities (owned/foil) are fetched at runtime via JSON:API and
  * managed through @tanstack/react-query.
  */
 
-import React, { useState, useMemo } from 'react';
-import { graphql, type PageProps } from 'gatsby';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import CardFilter, { type FilterState } from '../../components/CardFilter';
 import CardModal, { type CardData } from '../../components/CardModal';
 import CollectionSidebar from '../../components/CollectionSidebar';
-import { fetchCollectionCards, upsertCollectionCard } from '../../services/drupalApi';
-import { isLand, classifyType } from '../../utils/deckAnalysis';
-import type { CollectionCard } from '../../types/drupal';
+import {
+  fetchCardsPage,
+  fetchCollectionCards,
+  upsertCollectionCard,
+} from '../../services/drupalApi';
+import { classifyType } from '../../utils/deckAnalysis';
+import type { CollectionCard, JsonApiResource, MtgCardAttributes } from '../../types/drupal';
 
-// ---------------------------------------------------------------------------
-// GraphQL page query (build-time card catalogue)
-// ---------------------------------------------------------------------------
-
-export const query = graphql`
-  query CollectionPageQuery {
-    allNodeMtgCard {
-      nodes {
-        id
-        drupalId
-        title
-        field_mana_cost
-        field_cmc
-        field_type_line
-        field_colors
-        field_color_identity
-        field_oracle_text
-        field_scryfall_id
-        field_image_uri
-        field_is_mana_producer
-        field_produced_mana
-        field_legal_formats
-      }
-    }
-  }
-`;
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface GatsbyCard {
-  id: string;
-  drupalId?: string | null;
-  title?: string | null;
-  field_mana_cost?: string | null;
-  field_cmc?: number | null;
-  field_type_line?: string | null;
-  field_colors?: string[] | null;
-  field_color_identity?: string[] | null;
-  field_oracle_text?: string | null;
-  field_scryfall_id?: string | null;
-  field_image_uri?: string | null;
-  field_is_mana_producer?: boolean | null;
-  field_produced_mana?: string[] | null;
-  field_legal_formats?: string[] | null;
-}
-
-interface QueryData {
-  allNodeMtgCard: {
-    nodes: GatsbyCard[];
-  };
-}
+type CardResource = JsonApiResource<MtgCardAttributes>;
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-const CollectionPage: React.FC<PageProps<QueryData>> = ({ data }) => {
-  const cards = data.allNodeMtgCard.nodes;
+const CollectionPage: React.FC = () => {
 
   const [filter, setFilter] = useState<FilterState>({
     name: '',
@@ -84,17 +36,77 @@ const CollectionPage: React.FC<PageProps<QueryData>> = ({ data }) => {
     type: 'All',
     maxCmc: null,
   });
-  const [modalCard, setModalCard] = useState<GatsbyCard | null>(null);
+  const [modalCard, setModalCard] = useState<CardResource | null>(null);
+
+  // Debounced filter for API calls — avoids a request on every keystroke.
+  const [debouncedFilter, setDebouncedFilter] = useState(filter);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleFilterChange = useCallback((f: FilterState) => {
+    setFilter(f);
+    if (debounceRef.current !== null) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setDebouncedFilter(f), 400);
+  }, []);
 
   const qc = useQueryClient();
 
+  // Fetch card catalogue page — refetches when debounced filter changes.
+  const filterKey = JSON.stringify({
+    name: debouncedFilter.name,
+    colors: [...debouncedFilter.colors].sort(),
+    type: debouncedFilter.type,
+    maxCmc: debouncedFilter.maxCmc,
+  });
+  const {
+    data: cardPage,
+    isLoading: cardsLoading,
+  } = useQuery({
+    queryKey: ['cards', filterKey],
+    queryFn: () =>
+      fetchCardsPage(null, {
+        name: debouncedFilter.name || undefined,
+        colors: debouncedFilter.colors.size > 0 ? [...debouncedFilter.colors] : undefined,
+        type: debouncedFilter.type !== 'All' ? debouncedFilter.type : undefined,
+        maxCmc: debouncedFilter.maxCmc,
+      }),
+  });
+
+  const [extraCards, setExtraCards] = useState<CardResource[]>([]);
+  const [nextUrl, setNextUrl] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  // Reset extra pages when filter changes.
+  useEffect(() => {
+    setExtraCards([]);
+    setNextUrl(cardPage?.nextUrl ?? null);
+  }, [cardPage]);
+
+  const loadMore = useCallback(async () => {
+    const url = nextUrl ?? cardPage?.nextUrl;
+    if (url == null) return;
+    setLoadingMore(true);
+    try {
+      const page = await fetchCardsPage(url);
+      setExtraCards(prev => [...prev, ...page.cards]);
+      setNextUrl(page.nextUrl);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [nextUrl, cardPage]);
+
+  const cards = useMemo(
+    () => [...(cardPage?.cards ?? []), ...extraCards],
+    [cardPage, extraCards],
+  );
+
   // Fetch all collection_card nodes at runtime.
-  const { data: collectionCards = [], isLoading } = useQuery<CollectionCard[]>({
+  const { data: collectionCards = [], isLoading: collectionLoading } = useQuery<CollectionCard[]>({
     queryKey: ['collectionCards'],
     queryFn: fetchCollectionCards,
   });
 
-  // Build a map: drupalId (mtg_card UUID) → collection_card resource.
+  const isLoading = cardsLoading || collectionLoading;
+
+  // Build a map: mtg_card UUID → collection_card resource.
   const collectionMap = useMemo(() => {
     const map = new Map<string, CollectionCard>();
     for (const cc of collectionCards) {
@@ -123,14 +135,14 @@ const CollectionPage: React.FC<PageProps<QueryData>> = ({ data }) => {
   });
 
   function handleQuantityChange(
-    card: GatsbyCard,
+    card: CardResource,
     delta: number,
     field: 'owned' | 'foil',
   ): void {
-    const drupalId = card.drupalId;
-    if (drupalId == null) return;
+    const cardId = card.id;
+    if (cardId == null) return;
 
-    const existing = collectionMap.get(drupalId);
+    const existing = collectionMap.get(cardId);
     const owned = existing?.attributes.field_quantity_owned ?? 0;
     const foil = existing?.attributes.field_quantity_foil ?? 0;
 
@@ -138,45 +150,21 @@ const CollectionPage: React.FC<PageProps<QueryData>> = ({ data }) => {
     const nextFoil = field === 'foil' ? Math.max(0, foil + delta) : foil;
 
     upsert.mutate({
-      cardId: drupalId,
+      cardId,
       owned: nextOwned,
       foil: nextFoil,
       existingId: existing?.id,
     });
   }
 
-  // Client-side filtering.
+  // Client-side type filter on already-fetched cards (server filters name/cmc/color).
   const filteredCards = useMemo(() => {
+    if (filter.type === 'All') return cards;
     return cards.filter(card => {
-      if (
-        filter.name !== '' &&
-        !(card.title ?? '').toLowerCase().includes(filter.name.toLowerCase())
-      ) {
-        return false;
-      }
-
-      if (filter.colors.size > 0) {
-        const cardColors = card.field_colors ?? [];
-        const hasColor = [...filter.colors].some(c => cardColors.includes(c));
-        if (!hasColor) return false;
-      }
-
-      if (filter.type !== 'All') {
-        const type = classifyType(card.field_type_line ?? '');
-        if (type !== filter.type) return false;
-      }
-
-      if (
-        filter.maxCmc !== null &&
-        !isLand(card.field_type_line ?? '') &&
-        (card.field_cmc ?? 0) > filter.maxCmc
-      ) {
-        return false;
-      }
-
-      return true;
+      const type = classifyType(card.attributes.field_type_line ?? '');
+      return type === filter.type;
     });
-  }, [cards, filter]);
+  }, [cards, filter.type]);
 
   // Collection summary stats.
   const { totalCards, totalUnique, totalFoil } = useMemo(() => {
@@ -198,7 +186,7 @@ const CollectionPage: React.FC<PageProps<QueryData>> = ({ data }) => {
   const filteredCopies = useMemo(
     () =>
       filteredCards.reduce((sum, card) => {
-        const cc = collectionMap.get(card.drupalId ?? '');
+        const cc = collectionMap.get(card.id ?? '');
         return (
           sum +
           (cc?.attributes.field_quantity_owned ?? 0) +
@@ -210,26 +198,26 @@ const CollectionPage: React.FC<PageProps<QueryData>> = ({ data }) => {
 
   const modalEntry =
     modalCard != null
-      ? collectionMap.get(modalCard.drupalId ?? '')
+      ? collectionMap.get(modalCard.id ?? '')
       : undefined;
 
   return (
     <main style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      <CardFilter filter={filter} onChange={setFilter} />
+      <CardFilter filter={filter} onChange={handleFilterChange} />
 
       <div style={{ flex: 1, overflow: 'auto', padding: '1rem' }}>
         <h1 style={{ marginTop: 0 }}>
           Collection
           {isLoading && (
             <span style={{ fontSize: '0.75rem', marginLeft: 8, color: '#888' }}>
-              loading quantities...
+              loading...
             </span>
           )}
         </h1>
 
-        {cards.length === 0 && (
+        {!cardsLoading && cards.length === 0 && (
           <p>
-            No cards imported yet. Run{' '}
+            No cards found. Try adjusting your filters or run{' '}
             <code>ddev drush mtg-scryfall:sync</code> to import cards from
             Scryfall.
           </p>
@@ -243,9 +231,11 @@ const CollectionPage: React.FC<PageProps<QueryData>> = ({ data }) => {
           }}
         >
           {filteredCards.map(card => {
-            const cc = collectionMap.get(card.drupalId ?? '');
+            const cc = collectionMap.get(card.id ?? '');
             const owned = cc?.attributes.field_quantity_owned ?? 0;
             const foil = cc?.attributes.field_quantity_foil ?? 0;
+            const title = card.attributes.title ?? '';
+            const imageUri = card.attributes.field_image_uri;
 
             return (
               <div
@@ -257,10 +247,10 @@ const CollectionPage: React.FC<PageProps<QueryData>> = ({ data }) => {
                   background: owned > 0 || foil > 0 ? '#fffef0' : '#fff',
                 }}
               >
-                {card.field_image_uri != null ? (
+                {imageUri != null ? (
                   <img
-                    src={card.field_image_uri}
-                    alt={card.title ?? ''}
+                    src={imageUri}
+                    alt={title}
                     style={{ width: '100%', display: 'block', cursor: 'pointer' }}
                     onClick={() => setModalCard(card)}
                   />
@@ -284,7 +274,7 @@ const CollectionPage: React.FC<PageProps<QueryData>> = ({ data }) => {
                       fontSize: '0.8rem',
                     }}
                   >
-                    {card.title}
+                    {title}
                   </div>
                 )}
 
@@ -297,9 +287,9 @@ const CollectionPage: React.FC<PageProps<QueryData>> = ({ data }) => {
                       marginBottom: 4,
                       fontWeight: owned > 0 ? 'bold' : 'normal',
                     }}
-                    title={card.title ?? ''}
+                    title={title}
                   >
-                    {card.title}
+                    {title}
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -330,6 +320,19 @@ const CollectionPage: React.FC<PageProps<QueryData>> = ({ data }) => {
             );
           })}
         </div>
+
+        {(nextUrl != null || (cardPage?.nextUrl != null && extraCards.length === 0)) && (
+          <div style={{ textAlign: 'center', padding: '1rem' }}>
+            <button
+              type="button"
+              onClick={() => { void loadMore(); }}
+              disabled={loadingMore}
+              style={{ padding: '0.5rem 1.5rem' }}
+            >
+              {loadingMore ? 'Loading...' : 'Load more cards'}
+            </button>
+          </div>
+        )}
       </div>
 
       <div style={{ padding: '1rem', borderLeft: '1px solid #eee' }}>
@@ -344,7 +347,21 @@ const CollectionPage: React.FC<PageProps<QueryData>> = ({ data }) => {
 
       {modalCard != null && (
         <CardModal
-          card={modalCard as CardData}
+          card={{
+            id: modalCard.id,
+            title: modalCard.attributes.title ?? null,
+            field_mana_cost: modalCard.attributes.field_mana_cost ?? null,
+            field_cmc: modalCard.attributes.field_cmc ?? null,
+            field_type_line: modalCard.attributes.field_type_line ?? null,
+            field_colors: modalCard.attributes.field_colors ?? null,
+            field_color_identity: modalCard.attributes.field_color_identity ?? null,
+            field_oracle_text: modalCard.attributes.field_oracle_text ?? null,
+            field_scryfall_id: modalCard.attributes.field_scryfall_id ?? null,
+            field_image_uri: modalCard.attributes.field_image_uri ?? null,
+            field_is_mana_producer: modalCard.attributes.field_is_mana_producer ?? null,
+            field_produced_mana: modalCard.attributes.field_produced_mana ?? null,
+            field_legal_formats: modalCard.attributes.field_legal_formats ?? null,
+          } as CardData}
           quantityOwned={modalEntry?.attributes.field_quantity_owned}
           quantityFoil={modalEntry?.attributes.field_quantity_foil}
           onClose={() => setModalCard(null)}

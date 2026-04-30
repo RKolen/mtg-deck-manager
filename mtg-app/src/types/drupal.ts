@@ -45,7 +45,7 @@ export interface MtgCardAttributes {
   field_type_line: string;
   field_colors: string[];
   field_color_identity: string[];
-  field_oracle_text: string;
+  field_oracle_text: { value: string; format: string | null; processed: string } | null;
   field_scryfall_id: string;
   field_image_uri: string;
   field_is_mana_producer: boolean;

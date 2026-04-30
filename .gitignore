@@ -1,6 +1,7 @@
 # Spreadsheet source files (personal data)
 *.xlsx
 *.xls
+*.ods
 
 # Planning notes (local only)
 plan.md
@@ -41,6 +42,7 @@ mtg-app/.cache/
 mtg-app/public/
 mtg-app/.env
 mtg-app/.env.local
+mtg-app/.env.development
 mtg-app/.env.development.local
 mtg-app/.env.production.local
 

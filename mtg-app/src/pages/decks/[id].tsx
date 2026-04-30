@@ -46,6 +46,7 @@ import {
   manaColorDistribution,
   manaRequirement,
   effectiveManaSources,
+  totalManaSources,
   manaHandProbability,
   manaColoredCardRatio,
   maxCopiesAllowed,
@@ -112,13 +113,13 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, cards }) => {
       cardId: string;
       qty: number;
       isSideboard: boolean;
-    }) => setCardQuantityInDeck(deckId, cardId, qty, isSideboard, cards),
+    }) => setCardQuantityInDeck(cardId, qty, isSideboard, cards),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['deckCards', deckId] }),
   });
 
   const remove = useMutation({
     mutationFn: ({ cardId, isSideboard }: { cardId: string; isSideboard: boolean }) =>
-      removeCardFromDeck(deckId, cardId, isSideboard, cards),
+      removeCardFromDeck(cardId, isSideboard, cards),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['deckCards', deckId] }),
   });
 
@@ -129,7 +130,7 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, cards }) => {
     }: {
       cardId: string;
       isSideboard: boolean;
-    }) => addCardToDeck(deckId, cardId, isSideboard),
+    }) => addCardToDeck(deckId, cardId, isSideboard, cards),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['deckCards', deckId] });
       setSearchResults([]);
@@ -167,9 +168,13 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, cards }) => {
   }
 
   function renderRow(dc: DeckCardWithCard): React.ReactNode {
+    const oracleText =
+      typeof dc.card.field_oracle_text === 'string'
+        ? dc.card.field_oracle_text
+        : (dc.card.field_oracle_text as { value?: string } | null)?.value ?? '';
     const maxCopies = maxCopiesAllowed(
       dc.card.field_type_line ?? '',
-      dc.card.field_oracle_text ?? '',
+      oracleText,
     );
     const atMax = dc.quantity >= maxCopies;
     return (
@@ -385,6 +390,7 @@ const DeckAnalysis: React.FC<{ cards: DeckCardWithCard[] }> = ({ cards }) => {
   const manaDist = useMemo(() => manaColorDistribution(cards), [cards]);
   const manaReq = useMemo(() => manaRequirement(cards), [cards]);
   const sources = useMemo(() => effectiveManaSources(cards), [cards]);
+  const totalSources = useMemo(() => totalManaSources(cards), [cards]);
   const handTable = useMemo(
     () => manaHandProbability(cards, selectedColor),
     [cards, selectedColor],
@@ -433,7 +439,7 @@ const DeckAnalysis: React.FC<{ cards: DeckCardWithCard[] }> = ({ cards }) => {
           {[
             ['Cards (main)', mainCount],
             ['Avg CMC', avgCmc.toFixed(2)],
-            ['Mana sources', sources !== undefined ? Object.values(sources).reduce((a, b) => a + b, 0).toFixed(1) : 0],
+            ['Mana sources', totalSources.toFixed(1)],
             ['Mana/colored ratio', ratio.toFixed(2)],
           ].map(([label, value]) => (
             <div
