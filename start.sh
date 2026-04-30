@@ -112,7 +112,7 @@ else
   npm run clean > /dev/null 2>&1
 
   echo "==> Starting Gatsby dev server (background)..."
-  npm run develop > "$SCRIPT_DIR/.gatsby.log" 2>&1 &
+  NODE_EXTRA_CA_CERTS="$HOME/.local/share/mkcert/rootCA.pem" npx gatsby develop --port "$GATSBY_PORT" > "$SCRIPT_DIR/.gatsby.log" 2>&1 &
   GATSBY_PID=$!
   echo "    Gatsby PID: $GATSBY_PID (logs: .gatsby.log)"
   echo "    Frontend:   http://localhost:$GATSBY_PORT"
