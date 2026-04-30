@@ -25,7 +25,7 @@ import {
 } from 'recharts';
 
 import {
-  fetchDeck,
+  fetchDeckBySlug,
   fetchDeckCardsWithCards,
   findCardsByName,
   addCardToDeck,
@@ -34,6 +34,7 @@ import {
   updateDeck,
 } from '../../services/drupalApi';
 import type { DeckCardWithCard } from '../../types/drupal';
+import { slugify } from '../../utils/slugify';
 import {
   ALL_COLORS,
   COLOR_LABEL,
@@ -182,7 +183,12 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, cards }) => {
     return (
       <tr key={dc.card.id + String(dc.isSideboard)}>
         <td style={{ padding: '0.25rem 0.5rem' }}>
-          {dc.card.title}
+          <Link
+            to={`/cards/${slugify(dc.card.title)}`}
+            style={{ color: 'inherit', textDecoration: 'none', fontWeight: 'bold' }}
+          >
+            {dc.card.title}
+          </Link>
           <span style={{ marginLeft: 8, color: '#999', fontSize: '0.8rem' }}>
             {dc.card.field_mana_cost}
           </span>
@@ -751,19 +757,21 @@ const DeckHeader: React.FC<DeckHeaderProps> = ({ deckId, title, format }) => {
 // ---------------------------------------------------------------------------
 
 const DeckPage: React.FC<DeckPageProps> = ({ params }) => {
-  const { id } = params;
+  const { id: slug } = params;
   const [tab, setTab] = useState<'editor' | 'analysis'>('editor');
 
   const { data: deck, isLoading: deckLoading } = useQuery({
-    queryKey: ['deck', id],
-    queryFn: () => fetchDeck(id),
-    enabled: id != null,
+    queryKey: ['deck', slug],
+    queryFn: () => fetchDeckBySlug(slug),
+    enabled: slug != null,
   });
 
+  const deckId = deck?.id;
+
   const { data: deckCards = [], isLoading: cardsLoading } = useQuery<DeckCardWithCard[]>({
-    queryKey: ['deckCards', id],
-    queryFn: () => fetchDeckCardsWithCards(id),
-    enabled: id != null,
+    queryKey: ['deckCards', deckId],
+    queryFn: () => fetchDeckCardsWithCards(deckId!),
+    enabled: deckId != null,
   });
 
   if (deckLoading) return <main style={{ padding: '1.5rem' }}>Loading deck...</main>;
@@ -786,7 +794,7 @@ const DeckPage: React.FC<DeckPageProps> = ({ params }) => {
       </p>
 
       <DeckHeader
-        deckId={id}
+        deckId={deckId!}
         title={deck.attributes.title}
         format={deck.attributes.field_format}
       />
@@ -818,7 +826,7 @@ const DeckPage: React.FC<DeckPageProps> = ({ params }) => {
       {cardsLoading ? (
         <p>Loading cards...</p>
       ) : tab === 'editor' ? (
-        <DeckEditor deckId={id} cards={deckCards} />
+        <DeckEditor deckId={deckId!} cards={deckCards} />
       ) : (
         <DeckAnalysis cards={deckCards} />
       )}

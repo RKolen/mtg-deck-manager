@@ -172,7 +172,7 @@ resourceFields:
     enhancer:
       id: ''
   field_power:
-    disabled: true
+    disabled: false
     fieldName: field_power
     publicName: field_power
     enhancer:

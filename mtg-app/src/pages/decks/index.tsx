@@ -13,6 +13,7 @@ import {
   deleteDeck,
 } from '../../services/drupalApi';
 import type { Deck } from '../../types/drupal';
+import { slugify } from '../../utils/slugify';
 
 const FORMATS = [
   'Standard',
@@ -75,7 +76,7 @@ const DecksPage: React.FC = () => {
             }}
           >
             <Link
-              to={`/decks/${deck.id}`}
+              to={`/decks/${slugify(deck.attributes.title)}`}
               style={{ flex: 1, fontWeight: 'bold' }}
             >
               {deck.attributes.title}

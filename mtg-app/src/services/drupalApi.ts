@@ -17,6 +17,7 @@ import type {
   JsonApiSingleResponse,
   MtgCardAttributes,
 } from '../types/drupal';
+import { slugify } from '../utils/slugify';
 
 const DRUPAL_URL = process.env.GATSBY_DRUPAL_URL ?? 'https://mtg-deck-manager.ddev.site';
 
@@ -60,6 +61,10 @@ async function fetchAll<T>(url: string): Promise<JsonApiResource<T>[]> {
 
 const CARD_FIELDS =
   'title,field_mana_cost,field_cmc,field_type_line,field_colors,field_color_identity,field_oracle_text,field_image_uri,field_is_mana_producer,field_produced_mana,field_legal_formats';
+
+// Full field set used on the card detail page — includes P/T and loyalty.
+const CARD_DETAIL_FIELDS =
+  CARD_FIELDS + ',field_power,field_toughness,field_loyalty';
 
 export interface CardPage {
   cards: JsonApiResource<MtgCardAttributes>[];
@@ -121,6 +126,37 @@ export async function fetchCardsPage(
 }
 
 /**
+ * Fetches a single card whose title slugifies to the given slug.
+ *
+ * Strategy: use the first word of the slug as a STARTS_WITH filter to
+ * narrow the result set to at most 50 records, then find the exact slug
+ * match client-side. This avoids needing Drupal path aliases for 108k nodes.
+ */
+export async function fetchCardBySlug(
+  slug: string,
+): Promise<JsonApiResource<MtgCardAttributes> | null> {
+  const firstWord = slug.split('-')[0] ?? slug;
+  const searchPrefix =
+    firstWord.charAt(0).toUpperCase() + firstWord.slice(1);
+
+  const response = await client.get<JsonApiCollectionResponse<MtgCardAttributes>>(
+    '/node/mtg_card',
+    {
+      params: {
+        'filter[title][operator]': 'STARTS_WITH',
+        'filter[title][value]': searchPrefix,
+        'fields[node--mtg_card]': CARD_DETAIL_FIELDS,
+        'page[limit]': '50',
+      },
+    },
+  );
+
+  return (
+    response.data.data.find(c => slugify(c.attributes.title) === slug) ?? null
+  );
+}
+
+/**
  * Searches cards by name using a JSON:API filter. Used during XLSX import
  * to match card names to existing Drupal nodes.
  */
@@ -147,6 +183,17 @@ export async function fetchDecks(): Promise<JsonApiResource<DeckAttributes>[]> {
   return fetchAll<DeckAttributes>(
     '/node/deck?fields[node--deck]=title,field_format,field_notes',
   );
+}
+
+/**
+ * Fetches all decks and returns the one whose title slugifies to the given
+ * slug, or null if no match is found.
+ */
+export async function fetchDeckBySlug(
+  slug: string,
+): Promise<JsonApiResource<DeckAttributes> | null> {
+  const decks = await fetchDecks();
+  return decks.find(d => slugify(d.attributes.title) === slug) ?? null;
 }
 
 export async function fetchDeck(

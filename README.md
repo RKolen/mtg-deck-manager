@@ -110,7 +110,7 @@ ddev exec vendor/bin/phpstan analyse --level=6 web/modules/custom
 
 ## Directory Layout
 
-```
+```mermaid
 drupal/          Drupal 11 headless backend (DDEV project root)
   composer.json  Dependencies + patch registry
   config/sync/   Drupal configuration (version-controlled)

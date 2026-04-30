@@ -51,6 +51,9 @@ export interface MtgCardAttributes {
   field_is_mana_producer: boolean;
   field_produced_mana: string[];
   field_legal_formats: string[];
+  field_power: string | null;
+  field_toughness: string | null;
+  field_loyalty: string | null;
 }
 
 export interface DeckAttributes {

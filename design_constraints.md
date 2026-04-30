@@ -20,8 +20,15 @@ Placeholder for a future design system. Notes on hard constraints discovered dur
 ## Layout / UI
 
 - Collection page: sidebar left (filters), card grid center, stats panel right.
-- Card images: Scryfall CDN URIs stored in field_image_uri. No local copies.
+- Card images: Scryfall CDN URIs stored in `field_image_uri`. Displayed directly via `<img>` — no local copies. If local storage is needed in future, WebP is the preferred format; images would be imported as Drupal media entities and downloaded via cron.
 - Mobile breakpoints: not yet defined.
+
+## URL / Routing
+
+- Deck URLs use a client-side slug derived from the deck title: `/decks/hyper-heroic`.
+- Card detail URLs use a slug derived from the card title: `/cards/monastery-swiftspear`.
+- Slug generation: lowercase, apostrophes stripped, non-alphanumeric runs replaced with `-`. Implemented in `src/utils/slugify.ts`.
+- No Drupal path aliases are required. The slug is resolved back to a Drupal node by filtering JSON:API with `STARTS_WITH` on the capitalised first word, then matching the exact slug client-side. This is reliable for MTG card names (unique) and works without pathauto or 108k alias records.
 
 ## Component Patterns
 
