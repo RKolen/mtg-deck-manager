@@ -59,7 +59,7 @@ async function fetchAll<T>(url: string): Promise<JsonApiResource<T>[]> {
 // ---------------------------------------------------------------------------
 
 const CARD_FIELDS =
-  'title,field_mana_cost,field_cmc,field_type_line,field_colors,field_color_identity,field_oracle_text,field_scryfall_id,field_image_uri,field_is_mana_producer,field_produced_mana,field_legal_formats';
+  'title,field_mana_cost,field_cmc,field_type_line,field_colors,field_color_identity,field_oracle_text,field_image_uri,field_is_mana_producer,field_produced_mana,field_legal_formats';
 
 export interface CardPage {
   cards: JsonApiResource<MtgCardAttributes>[];
@@ -263,6 +263,7 @@ export async function importCardToDeck(
   cardId: string,
   quantity: number,
   isSideboard: boolean,
+  cardName: string,
 ): Promise<void> {
   await client.post<JsonApiSingleResponse<DeckCardNodeAttributes>>(
     '/node/deck_card',
@@ -270,7 +271,7 @@ export async function importCardToDeck(
       data: {
         type: 'node--deck_card',
         attributes: {
-          title: `${deckId}-${cardId}`,
+          title: cardName,
           status: true,
           field_quantity: quantity,
           field_is_sideboard: isSideboard,
@@ -293,6 +294,7 @@ export async function addCardToDeck(
   cardId: string,
   isSideboard = false,
   existingSlots: DeckCardWithCard[] = [],
+  cardName = 'Unknown card',
 ): Promise<void> {
   const existing = existingSlots.find(
     s => s.card.id === cardId && s.isSideboard === isSideboard,
@@ -305,7 +307,7 @@ export async function addCardToDeck(
     return;
   }
 
-  await importCardToDeck(deckId, cardId, 1, isSideboard);
+  await importCardToDeck(deckId, cardId, 1, isSideboard, cardName);
 }
 
 /**

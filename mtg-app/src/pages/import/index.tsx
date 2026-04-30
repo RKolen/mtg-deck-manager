@@ -325,6 +325,7 @@ const ImportPage: React.FC = () => {
           row.matchId!,
           row.quantity,
           row.isSideboard,
+          row.name,
         );
       }
 

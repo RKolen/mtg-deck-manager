@@ -1,0 +1,41 @@
+uuid: 28a5cf35-79a7-4941-9179-acbd104ec8f8
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.field.paragraph.deck_card.field_card
+    - field.field.paragraph.deck_card.field_is_sideboard
+    - field.field.paragraph.deck_card.field_quantity
+    - paragraphs.paragraphs_type.deck_card
+id: paragraph.deck_card.default
+targetEntityType: paragraph
+bundle: deck_card
+mode: default
+content:
+  field_card:
+    type: entity_reference_autocomplete
+    weight: 0
+    region: content
+    settings:
+      match_operator: CONTAINS
+      match_limit: 10
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_is_sideboard:
+    type: boolean_checkbox
+    weight: 2
+    region: content
+    settings:
+      display_label: true
+    third_party_settings: {  }
+  field_quantity:
+    type: number
+    weight: 1
+    region: content
+    settings:
+      placeholder: ''
+    third_party_settings: {  }
+hidden:
+  created: true
+  status: true

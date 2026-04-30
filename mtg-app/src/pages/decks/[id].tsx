@@ -126,11 +126,13 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, cards }) => {
   const addCard = useMutation({
     mutationFn: ({
       cardId,
+      cardName,
       isSideboard,
     }: {
       cardId: string;
+      cardName: string;
       isSideboard: boolean;
-    }) => addCardToDeck(deckId, cardId, isSideboard, cards),
+    }) => addCardToDeck(deckId, cardId, isSideboard, cards, cardName),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['deckCards', deckId] });
       setSearchResults([]);
@@ -214,7 +216,7 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, cards }) => {
             type="button"
             onClick={() => {
               void remove.mutateAsync({ cardId: dc.card.id, isSideboard: dc.isSideboard }).then(() =>
-                addCard.mutate({ cardId: dc.card.id, isSideboard: !dc.isSideboard }),
+                addCard.mutate({ cardId: dc.card.id, cardName: dc.card.title, isSideboard: !dc.isSideboard }),
               );
             }}
             style={{ fontSize: '0.75rem' }}
@@ -291,13 +293,13 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, cards }) => {
               <span style={{ flex: 1 }}>{r.title}</span>
               <button
                 type="button"
-                onClick={() => addCard.mutate({ cardId: r.id, isSideboard: false })}
+                onClick={() => addCard.mutate({ cardId: r.id, cardName: r.title, isSideboard: false })}
               >
                 + Main
               </button>
               <button
                 type="button"
-                onClick={() => addCard.mutate({ cardId: r.id, isSideboard: true })}
+                onClick={() => addCard.mutate({ cardId: r.id, cardName: r.title, isSideboard: true })}
               >
                 + SB
               </button>

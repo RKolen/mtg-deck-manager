@@ -53,27 +53,34 @@ headless backend and a Gatsby + TypeScript frontend.
 
 - [DDEV](https://ddev.readthedocs.io/) v1.24+
 - Node.js 20+
+- [Ollama](https://ollama.com/) installed on the host
 
-### Backend (Drupal)
+### Quick Start
 
 ```bash
+cp .env.example .env        # configure ports and URLs (gitignored)
+./start.sh                  # start DDEV, Ollama, Milvus, and Gatsby
+./start.sh --stop           # stop all services
+```
+
+Logs are written to `.gatsby.log` and `.ollama.log` in the project root.
+
+### Manual Setup (first time only)
+
+```bash
+# Backend
 cd drupal
-ddev start
 ddev composer install
 ddev drush cim   # import configuration
 ddev drush cr    # rebuild cache
+
+# Frontend
+cd mtg-app
+cp .env.development.example .env.development   # adjust credentials if needed
+npm install
 ```
 
 Drupal admin: https://mtg-deck-manager.ddev.site/user
-
-### Frontend (Gatsby)
-
-```bash
-cd mtg-app
-cp .env.development.example .env.development   # adjust if needed
-npm install
-npm run develop
-```
 
 Frontend: http://localhost:8001
 

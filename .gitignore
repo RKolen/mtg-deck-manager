@@ -32,6 +32,7 @@ drupal/web/modules/custom/mtg_scryfall_sync/data/*.json
 
 # Drupal private files / temp
 drupal/private/
+drupal/scripts/
 drupal/tmp/
 
 # ============================================================

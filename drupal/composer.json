@@ -16,6 +16,7 @@
     ],
     "require": {
         "composer/installers": "^2.3",
+        "drupal/ai_vdb_provider_milvus": "^1.1@beta",
         "drupal/coffee": "^2.0",
         "drupal/core-composer-scaffold": "^11.3",
         "drupal/core-project-message": "^11.3",
@@ -26,6 +27,7 @@
         "drupal/jsonapi_extras": "^3.28",
         "drupal/migrate_plus": "^6.0",
         "drupal/paragraphs": "^1.20",
+        "drupal/search_api_solr": "^4.3",
         "drush/drush": "^13.7"
     },
     "conflict": {

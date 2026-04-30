@@ -98,7 +98,52 @@ contrib module, follow this resolution order:
 This keeps contrib upgrades reproducible and prevents local hotfixes from
 being lost on reinstall or update.
 
-### 5. Documentation Must Track Code
+### 5. JSON:API Field Exposure
+
+Every JSON:API resource config (`jsonapi_extras.jsonapi_resource_config.*.yml`)
+must explicitly list **every** field on that content type. Fields not needed by
+the frontend must have `disabled: true`. Fields needed by the frontend must have
+`disabled: false`.
+
+`jsonapi_extras` does not hide unknown fields by default — omitting a field
+from the config leaves it exposed. The only reliable way to lock down a field
+is to declare it with `disabled: true`.
+
+Rules:
+
+- Never expose a field that is not consumed by the frontend.
+- When adding a new content type, enumerate all fields and disable unused ones.
+- When adding a new field to an existing type, explicitly add it to the resource
+  config (`disabled: true` if not yet used, `disabled: false` if immediately
+  needed).
+- After any change, run `ddev drush cex` and commit the updated YAML.
+- Verify with `ddev drush cr` then inspect the live response to confirm only
+  expected attributes appear.
+
+### 6. One-Time Scripts
+
+Scripts used for one-off data migrations or fixes must be placed in
+`drupal/scripts/`, which is gitignored. Never commit one-time scripts to the
+repository.
+
+### 7. Form Displays
+
+Every field on every content type, paragraph type, media type, and taxonomy
+term must be placed in the `content` section of all relevant form displays. No
+field may remain in the `hidden` section — all fields must be visible and
+editable in the Drupal admin UI.
+
+After adding a field, always verify it appears in the form display at
+`/admin/structure/types/manage/{type}/form-display` and export the updated
+config with `ddev drush cex`.
+
+### 8. Never Commit or Push
+
+Never run `git add`, `git commit`, `git push`, or any other git write command.
+All commits and pushes are made exclusively by the developer. Only suggest what
+should be committed and with what message if asked.
+
+### 9. Documentation Must Track Code
 
 | Change Type | Documentation to Update |
 |-------------|------------------------|

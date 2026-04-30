@@ -8,12 +8,12 @@ dependencies:
     - field.field.node.mtg_card.field_colors
     - field.field.node.mtg_card.field_image_uri
     - field.field.node.mtg_card.field_is_mana_producer
-    - field.field.node.mtg_card.field_mana_cost
-    - field.field.node.mtg_card.field_oracle_text
-    - field.field.node.mtg_card.field_produced_mana
     - field.field.node.mtg_card.field_legal_formats
     - field.field.node.mtg_card.field_loyalty
+    - field.field.node.mtg_card.field_mana_cost
+    - field.field.node.mtg_card.field_oracle_text
     - field.field.node.mtg_card.field_power
+    - field.field.node.mtg_card.field_produced_mana
     - field.field.node.mtg_card.field_scryfall_id
     - field.field.node.mtg_card.field_toughness
     - field.field.node.mtg_card.field_type_line
@@ -215,6 +215,13 @@ content:
     settings:
       size: 60
       placeholder: ''
+    third_party_settings: {  }
+  langcode:
+    type: language_select
+    weight: 2
+    region: content
+    settings:
+      include_locked: true
     third_party_settings: {  }
   status:
     type: boolean_checkbox

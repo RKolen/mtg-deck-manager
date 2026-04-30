@@ -1,0 +1,203 @@
+uuid: 3068efbf-eff4-4fc6-a4c6-6e3ecb3979fe
+langcode: en
+status: true
+dependencies:
+  config:
+    - node.type.mtg_card
+id: node--mtg_card
+disabled: false
+path: node/mtg_card
+resourceType: node--mtg_card
+resourceFields:
+  nid:
+    disabled: true
+    fieldName: nid
+    publicName: nid
+    enhancer:
+      id: ''
+  uuid:
+    disabled: true
+    fieldName: uuid
+    publicName: uuid
+    enhancer:
+      id: ''
+  vid:
+    disabled: true
+    fieldName: vid
+    publicName: vid
+    enhancer:
+      id: ''
+  langcode:
+    disabled: true
+    fieldName: langcode
+    publicName: langcode
+    enhancer:
+      id: ''
+  type:
+    disabled: true
+    fieldName: type
+    publicName: type
+    enhancer:
+      id: ''
+  revision_timestamp:
+    disabled: true
+    fieldName: revision_timestamp
+    publicName: revision_timestamp
+    enhancer:
+      id: ''
+  revision_uid:
+    disabled: true
+    fieldName: revision_uid
+    publicName: revision_uid
+    enhancer:
+      id: ''
+  revision_log:
+    disabled: true
+    fieldName: revision_log
+    publicName: revision_log
+    enhancer:
+      id: ''
+  status:
+    disabled: true
+    fieldName: status
+    publicName: status
+    enhancer:
+      id: ''
+  uid:
+    disabled: true
+    fieldName: uid
+    publicName: uid
+    enhancer:
+      id: ''
+  title:
+    disabled: false
+    fieldName: title
+    publicName: title
+    enhancer:
+      id: ''
+  created:
+    disabled: true
+    fieldName: created
+    publicName: created
+    enhancer:
+      id: ''
+  changed:
+    disabled: true
+    fieldName: changed
+    publicName: changed
+    enhancer:
+      id: ''
+  promote:
+    disabled: true
+    fieldName: promote
+    publicName: promote
+    enhancer:
+      id: ''
+  sticky:
+    disabled: true
+    fieldName: sticky
+    publicName: sticky
+    enhancer:
+      id: ''
+  default_langcode:
+    disabled: true
+    fieldName: default_langcode
+    publicName: default_langcode
+    enhancer:
+      id: ''
+  revision_default:
+    disabled: true
+    fieldName: revision_default
+    publicName: revision_default
+    enhancer:
+      id: ''
+  revision_translation_affected:
+    disabled: true
+    fieldName: revision_translation_affected
+    publicName: revision_translation_affected
+    enhancer:
+      id: ''
+  field_cmc:
+    disabled: false
+    fieldName: field_cmc
+    publicName: field_cmc
+    enhancer:
+      id: ''
+  field_colors:
+    disabled: false
+    fieldName: field_colors
+    publicName: field_colors
+    enhancer:
+      id: ''
+  field_color_identity:
+    disabled: false
+    fieldName: field_color_identity
+    publicName: field_color_identity
+    enhancer:
+      id: ''
+  field_image_uri:
+    disabled: false
+    fieldName: field_image_uri
+    publicName: field_image_uri
+    enhancer:
+      id: ''
+  field_is_mana_producer:
+    disabled: false
+    fieldName: field_is_mana_producer
+    publicName: field_is_mana_producer
+    enhancer:
+      id: ''
+  field_legal_formats:
+    disabled: false
+    fieldName: field_legal_formats
+    publicName: field_legal_formats
+    enhancer:
+      id: ''
+  field_loyalty:
+    disabled: false
+    fieldName: field_loyalty
+    publicName: field_loyalty
+    enhancer:
+      id: ''
+  field_mana_cost:
+    disabled: false
+    fieldName: field_mana_cost
+    publicName: field_mana_cost
+    enhancer:
+      id: ''
+  field_oracle_text:
+    disabled: false
+    fieldName: field_oracle_text
+    publicName: field_oracle_text
+    enhancer:
+      id: ''
+  field_power:
+    disabled: true
+    fieldName: field_power
+    publicName: field_power
+    enhancer:
+      id: ''
+  field_produced_mana:
+    disabled: false
+    fieldName: field_produced_mana
+    publicName: field_produced_mana
+    enhancer:
+      id: ''
+  field_scryfall_id:
+    disabled: true
+    fieldName: field_scryfall_id
+    publicName: field_scryfall_id
+    enhancer:
+      id: ''
+  field_toughness:
+    disabled: false
+    fieldName: field_toughness
+    publicName: field_toughness
+    enhancer:
+      id: ''
+  field_type_line:
+    disabled: false
+    fieldName: field_type_line
+    publicName: field_type_line
+    enhancer:
+      id: ''
