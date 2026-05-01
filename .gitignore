@@ -12,6 +12,9 @@ plan.md
 .ddev/config.local.yaml
 .ddev/.gitignore
 
+# Solr runtime data — created by the container (UID 8983), never commit.
+drupal/.ddev/solr-core/data/
+
 # ============================================================
 # Drupal
 # ============================================================

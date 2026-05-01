@@ -6,6 +6,8 @@ export interface FilterState {
   colors: Set<MtgColor>;
   type: string;
   maxCmc: number | null;
+  legalIn: string;
+  oracleText: string;
 }
 
 interface CardFilterProps {
@@ -19,6 +21,17 @@ const COLORS: { value: MtgColor; label: string; symbol: string }[] = [
   { value: 'B', label: 'Black', symbol: 'B' },
   { value: 'R', label: 'Red', symbol: 'R' },
   { value: 'G', label: 'Green', symbol: 'G' },
+];
+
+const FORMATS = [
+  '',
+  'standard',
+  'pioneer',
+  'modern',
+  'legacy',
+  'vintage',
+  'commander',
+  'pauper',
 ];
 
 const TYPES = [
@@ -88,6 +101,21 @@ const CardFilter: React.FC<CardFilterProps> = ({ filter, onChange }) => {
       </div>
 
       <div style={{ marginBottom: '1rem' }}>
+        <label htmlFor="oracle-text">
+          <strong>Oracle Text</strong>
+        </label>
+        <br />
+        <input
+          id="oracle-text"
+          type="search"
+          value={filter.oracleText}
+          onChange={e => onChange({ ...filter, oracleText: e.target.value })}
+          placeholder="Contains..."
+          style={{ width: '100%', marginTop: 4 }}
+        />
+      </div>
+
+      <div style={{ marginBottom: '1rem' }}>
         <label htmlFor="type-select">
           <strong>Type</strong>
         </label>
@@ -101,6 +129,25 @@ const CardFilter: React.FC<CardFilterProps> = ({ filter, onChange }) => {
           {TYPES.map(t => (
             <option key={t} value={t}>
               {t}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div style={{ marginBottom: '1rem' }}>
+        <label htmlFor="format-select">
+          <strong>Legal In</strong>
+        </label>
+        <br />
+        <select
+          id="format-select"
+          value={filter.legalIn}
+          onChange={e => onChange({ ...filter, legalIn: e.target.value })}
+          style={{ width: '100%', marginTop: 4 }}
+        >
+          {FORMATS.map(f => (
+            <option key={f} value={f}>
+              {f === '' ? 'Any format' : f.charAt(0).toUpperCase() + f.slice(1)}
             </option>
           ))}
         </select>
@@ -134,7 +181,7 @@ const CardFilter: React.FC<CardFilterProps> = ({ filter, onChange }) => {
       <button
         type="button"
         onClick={() =>
-          onChange({ name: '', colors: new Set(), type: 'All', maxCmc: null })
+          onChange({ name: '', colors: new Set(), type: 'All', maxCmc: null, legalIn: '', oracleText: '' })
         }
         style={{ width: '100%' }}
       >

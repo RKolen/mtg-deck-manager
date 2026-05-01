@@ -1,0 +1,38 @@
+services:
+  milvus:
+    container_name: ddev-${DDEV_SITENAME}-milvus
+    image: milvusdb/milvus:v2.4.17
+    pull_policy: always
+    command: milvus run standalone
+    security_opt:
+      - seccomp:unconfined
+    cap_add:
+      - SYS_PTRACE
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    environment:
+      ETCD_USE_EMBED: "true"
+      ETCD_DATA_DIR: /var/lib/milvus/etcd
+      ETCD_CONFIG_PATH: /milvus/configs/embedEtcd.yaml
+      COMMON_STORAGETYPE: local
+    volumes:
+      - milvus-data:/var/lib/milvus
+      - ./embedEtcd.yaml:/milvus/configs/embedEtcd.yaml
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+      start_period: 120s
+    labels:
+      com.ddev.site-name: ${DDEV_SITENAME}
+
+  web:
+    environment:
+      - MILVUS_HOST=milvus
+      - MILVUS_PORT=19530
+
+volumes:
+  milvus-data:

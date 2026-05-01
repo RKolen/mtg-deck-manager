@@ -1,0 +1,17 @@
+services:
+  web:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  ollama:
+    container_name: ddev-${DDEV_SITENAME}-ollama
+    pull_policy: always
+    tty: true
+    image: ollama/ollama:latest
+    environment:
+      - OLLAMA_KEEP_ALIVE=24h
+      - OLLAMA_HOST=0.0.0.0:11434
+    volumes:
+      - /usr/share/ollama/.ollama:/root/.ollama
+    labels:
+      com.ddev.site-name: ${DDEV_SITENAME}

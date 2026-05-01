@@ -1,0 +1,20 @@
+uuid: 9b1c2d3e-4f5a-6b7c-8d9e-0f1a2b3c4d5e
+langcode: en
+status: true
+dependencies:
+  module:
+    - basic_auth
+    - mtg_card_search
+    - serialization
+_core:
+  default_config_hash: mtg_card_search_rest_v1
+id: card_search
+plugin_id: card_search
+granularity: resource
+configuration:
+  methods:
+    - GET
+  formats:
+    - json
+  authentication:
+    - basic_auth

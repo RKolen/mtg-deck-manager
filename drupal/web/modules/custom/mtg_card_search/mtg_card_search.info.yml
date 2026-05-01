@@ -1,0 +1,9 @@
+name: MTG Card Search
+type: module
+description: 'Exposes a GET /api/card-search REST endpoint backed by Search API + Apache Solr.'
+core_version_requirement: ^11
+package: 'MTG Deck Manager'
+dependencies:
+  - drupal:rest
+  - drupal:serialization
+  - search_api:search_api

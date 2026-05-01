@@ -1,0 +1,192 @@
+uuid: 7a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
+langcode: en
+status: true
+dependencies:
+  config:
+    - search_api.server.solr_server
+  module:
+    - node
+    - search_api
+    - search_api_solr
+_core:
+  default_config_hash: mtg_card_search_index_v1
+id: mtg_card_search
+name: 'MTG Card Search'
+description: 'Search index for mtg_card nodes, backed by Apache Solr.'
+read_only: false
+field_settings:
+  field_cmc:
+    label: CMC
+    datasource_id: 'entity:node'
+    property_path: field_cmc
+    type: decimal
+    boost: 1.0
+    type_locked: false
+    dependencies: {  }
+    index_locked: false
+  field_color_identity:
+    label: 'Color Identity'
+    datasource_id: 'entity:node'
+    property_path: field_color_identity
+    type: string
+    boost: 1.0
+    type_locked: false
+    dependencies: {  }
+    index_locked: false
+  field_colors:
+    label: Colors
+    datasource_id: 'entity:node'
+    property_path: field_colors
+    type: string
+    boost: 1.0
+    type_locked: false
+    dependencies: {  }
+    index_locked: false
+  field_image_uri:
+    label: 'Image URI'
+    datasource_id: 'entity:node'
+    property_path: field_image_uri
+    type: string
+    boost: 1.0
+    type_locked: false
+    dependencies: {  }
+    index_locked: false
+  field_is_mana_producer:
+    label: 'Is Mana Producer'
+    datasource_id: 'entity:node'
+    property_path: field_is_mana_producer
+    type: boolean
+    boost: 1.0
+    type_locked: false
+    dependencies: {  }
+    index_locked: false
+  field_legal_formats:
+    label: 'Legal Formats'
+    datasource_id: 'entity:node'
+    property_path: field_legal_formats
+    type: string
+    boost: 1.0
+    type_locked: false
+    dependencies: {  }
+    index_locked: false
+  field_mana_cost:
+    label: 'Mana Cost'
+    datasource_id: 'entity:node'
+    property_path: field_mana_cost
+    type: string
+    boost: 1.0
+    type_locked: false
+    dependencies: {  }
+    index_locked: false
+  field_oracle_text:
+    label: 'Oracle Text'
+    datasource_id: 'entity:node'
+    property_path: field_oracle_text.value
+    type: text
+    boost: 1.0
+    type_locked: false
+    dependencies: {  }
+    index_locked: false
+  field_power:
+    label: Power
+    datasource_id: 'entity:node'
+    property_path: field_power
+    type: string
+    boost: 1.0
+    type_locked: false
+    dependencies: {  }
+    index_locked: false
+  field_produced_mana:
+    label: 'Produced Mana'
+    datasource_id: 'entity:node'
+    property_path: field_produced_mana
+    type: string
+    boost: 1.0
+    type_locked: false
+    dependencies: {  }
+    index_locked: false
+  field_scryfall_id:
+    label: 'Scryfall ID'
+    datasource_id: 'entity:node'
+    property_path: field_scryfall_id
+    type: string
+    boost: 1.0
+    type_locked: false
+    dependencies: {  }
+    index_locked: false
+  field_toughness:
+    label: Toughness
+    datasource_id: 'entity:node'
+    property_path: field_toughness
+    type: string
+    boost: 1.0
+    type_locked: false
+    dependencies: {  }
+    index_locked: false
+  field_type_line:
+    label: 'Type Line'
+    datasource_id: 'entity:node'
+    property_path: field_type_line
+    type: text
+    boost: 2.0
+    type_locked: false
+    dependencies: {  }
+    index_locked: false
+  field_type_line_string:
+    label: 'Type Line (string)'
+    datasource_id: 'entity:node'
+    property_path: field_type_line
+    type: string
+    boost: 1.0
+    type_locked: false
+    dependencies: {  }
+    index_locked: false
+  nid:
+    label: 'Node ID'
+    datasource_id: 'entity:node'
+    property_path: nid
+    type: integer
+    boost: 1.0
+    type_locked: false
+    dependencies: {  }
+    index_locked: false
+  title:
+    label: Title
+    datasource_id: 'entity:node'
+    property_path: title
+    type: text
+    boost: 5.0
+    type_locked: false
+    dependencies: {  }
+    index_locked: false
+  uuid:
+    label: UUID
+    datasource_id: 'entity:node'
+    property_path: uuid
+    type: string
+    boost: 1.0
+    type_locked: false
+    dependencies: {  }
+    index_locked: false
+datasource_settings:
+  'entity:node':
+    plugin_id: 'entity:node'
+    settings:
+      bundles:
+        default: false
+        selected:
+          - mtg_card
+      languages:
+        default: true
+        selected: {  }
+processor_settings: {  }
+tracker_settings:
+  default:
+    plugin_id: default
+    settings:
+      indexing_order: fifo
+options:
+  cron_limit: 50
+  index_directly: true
+  track_changes_in_references_enabled: false
+server: solr_server

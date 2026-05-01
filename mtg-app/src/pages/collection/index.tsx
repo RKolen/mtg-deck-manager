@@ -1,11 +1,9 @@
 /**
- * Collection binder page — Phase 3.
+ * Collection binder page — Phase 7.
  *
- * Card catalogue is fetched at runtime via JSON:API with debounced filters.
- * Switched from build-time gatsby-source-drupal (too slow for 108k cards —
- * will be replaced by Solr search in Phase 7).
- * Collection quantities (owned/foil) are fetched at runtime via JSON:API and
- * managed through @tanstack/react-query.
+ * Card catalogue is fetched at runtime via Solr-backed search endpoint with
+ * debounced filters. Collection quantities (owned/foil) are fetched at
+ * runtime via JSON:API and managed through @tanstack/react-query.
  */
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
@@ -14,12 +12,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import CardFilter, { type FilterState } from '../../components/CardFilter';
 import CardModal, { type CardData } from '../../components/CardModal';
 import CollectionSidebar from '../../components/CollectionSidebar';
+import { searchCards } from '../../services/cardSearch';
 import {
-  fetchCardsPage,
   fetchCollectionCards,
   upsertCollectionCard,
 } from '../../services/drupalApi';
-import { classifyType } from '../../utils/deckAnalysis';
 import type { CollectionCard, JsonApiResource, MtgCardAttributes } from '../../types/drupal';
 
 type CardResource = JsonApiResource<MtgCardAttributes>;
@@ -35,6 +32,8 @@ const CollectionPage: React.FC = () => {
     colors: new Set(),
     type: 'All',
     maxCmc: null,
+    legalIn: '',
+    oracleText: '',
   });
   const [modalCard, setModalCard] = useState<CardResource | null>(null);
 
@@ -50,53 +49,50 @@ const CollectionPage: React.FC = () => {
   const qc = useQueryClient();
 
   // Fetch card catalogue page — refetches when debounced filter changes.
+  const [page, setPage] = useState(0);
+
   const filterKey = JSON.stringify({
     name: debouncedFilter.name,
     colors: [...debouncedFilter.colors].sort(),
     type: debouncedFilter.type,
     maxCmc: debouncedFilter.maxCmc,
+    legalIn: debouncedFilter.legalIn,
+    oracleText: debouncedFilter.oracleText,
+    page,
   });
   const {
-    data: cardPage,
+    data: searchResult,
     isLoading: cardsLoading,
   } = useQuery({
     queryKey: ['cards', filterKey],
     queryFn: () =>
-      fetchCardsPage(null, {
-        name: debouncedFilter.name || undefined,
+      searchCards({
+        q: debouncedFilter.name || undefined,
         colors: debouncedFilter.colors.size > 0 ? [...debouncedFilter.colors] : undefined,
         type: debouncedFilter.type !== 'All' ? debouncedFilter.type : undefined,
-        maxCmc: debouncedFilter.maxCmc,
+        cmcMax: debouncedFilter.maxCmc ?? undefined,
+        legalIn: debouncedFilter.legalIn || undefined,
+        oracleText: debouncedFilter.oracleText || undefined,
+        page,
+        limit: 50,
       }),
   });
 
-  const [extraCards, setExtraCards] = useState<CardResource[]>([]);
-  const [nextUrl, setNextUrl] = useState<string | null>(null);
-  const [loadingMore, setLoadingMore] = useState(false);
-
-  // Reset extra pages when filter changes.
+  // Reset to first page when filters change.
   useEffect(() => {
-    setExtraCards([]);
-    setNextUrl(cardPage?.nextUrl ?? null);
-  }, [cardPage]);
+    setPage(0);
+  }, [
+    debouncedFilter.name,
+    debouncedFilter.type,
+    debouncedFilter.maxCmc,
+    debouncedFilter.legalIn,
+    debouncedFilter.oracleText,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    JSON.stringify([...debouncedFilter.colors].sort()),
+  ]);
 
-  const loadMore = useCallback(async () => {
-    const url = nextUrl ?? cardPage?.nextUrl;
-    if (url == null) return;
-    setLoadingMore(true);
-    try {
-      const page = await fetchCardsPage(url);
-      setExtraCards(prev => [...prev, ...page.cards]);
-      setNextUrl(page.nextUrl);
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [nextUrl, cardPage]);
-
-  const cards = useMemo(
-    () => [...(cardPage?.cards ?? []), ...extraCards],
-    [cardPage, extraCards],
-  );
+  const cards = searchResult?.data ?? [];
+  const totalPages = searchResult?.meta.pages ?? 1;
 
   // Fetch all collection_card nodes at runtime.
   const { data: collectionCards = [], isLoading: collectionLoading } = useQuery<CollectionCard[]>({
@@ -157,14 +153,8 @@ const CollectionPage: React.FC = () => {
     });
   }
 
-  // Client-side type filter on already-fetched cards (server filters name/cmc/color).
-  const filteredCards = useMemo(() => {
-    if (filter.type === 'All') return cards;
-    return cards.filter(card => {
-      const type = classifyType(card.attributes.field_type_line ?? '');
-      return type === filter.type;
-    });
-  }, [cards, filter.type]);
+  // All filtering is done server-side by Solr; cards is the current page result.
+  const filteredCards = cards;
 
   // Collection summary stats.
   const { totalCards, totalUnique, totalFoil } = useMemo(() => {
@@ -321,15 +311,24 @@ const CollectionPage: React.FC = () => {
           })}
         </div>
 
-        {(nextUrl != null || (cardPage?.nextUrl != null && extraCards.length === 0)) && (
-          <div style={{ textAlign: 'center', padding: '1rem' }}>
+        {totalPages > 1 && (
+          <div style={{ textAlign: 'center', padding: '1rem', display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center' }}>
             <button
               type="button"
-              onClick={() => { void loadMore(); }}
-              disabled={loadingMore}
-              style={{ padding: '0.5rem 1.5rem' }}
+              onClick={() => setPage(p => Math.max(0, p - 1))}
+              disabled={page === 0}
+              style={{ padding: '0.5rem 1rem' }}
             >
-              {loadingMore ? 'Loading...' : 'Load more cards'}
+              Previous
+            </button>
+            <span>Page {page + 1} of {totalPages}</span>
+            <button
+              type="button"
+              onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1}
+              style={{ padding: '0.5rem 1rem' }}
+            >
+              Next
             </button>
           </div>
         )}

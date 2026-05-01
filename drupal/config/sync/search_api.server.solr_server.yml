@@ -1,0 +1,41 @@
+uuid: 3f8a1d2e-9c4b-4e7f-b5a6-1d2e3f4a5b6c
+langcode: en
+status: true
+dependencies:
+  module:
+    - search_api_solr
+_core:
+  default_config_hash: mtg_solr_server_v1
+id: solr_server
+name: 'Solr Server'
+description: 'Apache Solr 9 standalone server in DDEV'
+backend: search_api_solr
+backend_config:
+  retrieve_data: false
+  highlight_data: false
+  site_hash: false
+  server_prefix: ''
+  domain: ''
+  connector: standard
+  connector_config:
+    scheme: http
+    host: solr
+    port: 8983
+    path: /
+    core: mtg_card_search
+    timeout: 5
+    index_timeout: 30
+    optimize_timeout: 10
+    finalize_timeout: 30
+    skip_schema_check: false
+    solr_version: '9'
+    http_method: AUTO
+    commit_within: 1000
+    jmx: false
+    jts: false
+  optimize: false
+  fallback_multiple: false
+  rows: 10
+  index_single_documents_fallback_count: 10
+  index_empty_text_fields: false
+  suppress_missing_languages: false

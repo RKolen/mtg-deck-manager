@@ -1,0 +1,23 @@
+services:
+  solr:
+    container_name: ddev-${DDEV_SITENAME}-solr
+    image: solr:9
+    pull_policy: always
+    command: solr-precreate mtg_card_search
+    environment:
+      SOLR_MODULES: extraction,langid,ltr,analysis-extras
+      HTTP_EXPOSE: 8983:8983
+      HTTPS_EXPOSE: 8943:8983
+      VIRTUAL_HOST: ${DDEV_HOSTNAME}
+    volumes:
+      - ./solr-core:/var/solr/data/mtg_card_search
+    expose:
+      - 8983
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail -s localhost:8983/solr/"]
+    labels:
+      com.ddev.site-name: ${DDEV_SITENAME}
+      com.ddev.approot: ${DDEV_APPROOT}
+    x-ddev:
+      describe-info: "Solr 9 standalone, core: mtg_card_search, port 8983"
+      ssh-shell: bash

@@ -1,7 +1,10 @@
+includes:
+  - vendor/mglaman/phpstan-drupal/extension.neon
+
 parameters:
   level: 6
   paths:
-    - web/modules/custom/mtg_scryfall_sync
+    - web/modules/custom
   treatPhpDocTypesAsCertain: false
   ignoreErrors:
     # ContentEntityInterface extends Traversable so PHPStan flags it as an
