@@ -10,7 +10,7 @@ path: node/deck
 resourceType: node--deck
 resourceFields:
   nid:
-    disabled: true
+    disabled: false
     fieldName: nid
     publicName: nid
     enhancer:

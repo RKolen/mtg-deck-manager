@@ -60,6 +60,7 @@ export interface DeckAttributes {
   title: string;
   field_format: string;
   field_notes: string | null;
+  nid: number;
 }
 
 // DeckCardAttributes is no longer used — decks reference mtg_card nodes

@@ -1,0 +1,17 @@
+{
+    "_hash": "fbffb121269806fd093bc9816c2142309edc082e0aba9db78b38dabf0b69ac44",
+    "patches": {
+        "drupal/ai_provider_ollama": [
+            {
+                "package": "drupal/ai_provider_ollama",
+                "description": "Fix embeddingsContextSize for non-Llama embedding models (e.g. nomic-embed-text)",
+                "url": "patches/ai_provider_ollama-non-llama-embeddings-context-length.patch",
+                "sha256": "f1fd72c85cf8f45446da7516a0aa4645459441f9c6028a7d876635cae18ec2b4",
+                "depth": 1,
+                "extra": {
+                    "provenance": "root"
+                }
+            }
+        ]
+    }
+}

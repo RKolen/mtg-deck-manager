@@ -1,0 +1,123 @@
+uuid: b2c3d4e5-f6a7-8901-bcde-f12345678901
+langcode: en
+status: true
+dependencies:
+  config:
+    - search_api.server.milvus_card_search
+  module:
+    - node
+id: milvus_card_index
+name: 'Milvus Card Index'
+description: 'Indexes MTG card nodes for semantic AI search via Milvus.'
+read_only: false
+field_settings:
+  field_mana_cost:
+    label: 'Mana Cost'
+    datasource_id: 'entity:node'
+    property_path: field_mana_cost
+    type: string
+    dependencies:
+      module:
+        - node
+  field_oracle_text:
+    label: 'Oracle Text'
+    datasource_id: 'entity:node'
+    property_path: field_oracle_text
+    type: text
+    dependencies:
+      module:
+        - node
+  field_type_line:
+    label: 'Type Line'
+    datasource_id: 'entity:node'
+    property_path: field_type_line
+    type: string
+    dependencies:
+      module:
+        - node
+  nid:
+    label: 'Node ID'
+    datasource_id: 'entity:node'
+    property_path: nid
+    type: integer
+    dependencies:
+      module:
+        - node
+  status:
+    label: 'Publishing status'
+    datasource_id: 'entity:node'
+    property_path: status
+    type: boolean
+    dependencies:
+      module:
+        - node
+  title:
+    label: Title
+    datasource_id: 'entity:node'
+    property_path: title
+    type: text
+    dependencies:
+      module:
+        - node
+datasource_settings:
+  'entity:node':
+    bundles:
+      default: false
+      selected:
+        - mtg_card
+    languages:
+      default: true
+      selected: {  }
+processor_settings:
+  add_url:
+    weights:
+      preprocess_index: -30
+  aggregated_field: {  }
+  auto_aggregated_fulltext_field: {  }
+  entity_type: {  }
+  html_filter:
+    weights:
+      preprocess_index: -10
+      preprocess_query: -10
+    all_fields: false
+    fields: {  }
+    title: true
+    alt: true
+    tags: {  }
+  ignorecase:
+    weights:
+      preprocess_index: -10
+      preprocess_query: -10
+    all_fields: false
+    fields:
+      - field_oracle_text
+      - title
+  language_with_fallback: {  }
+  rendered_item: {  }
+  tokenizer:
+    weights:
+      preprocess_index: -6
+      preprocess_query: -6
+    all_fields: false
+    fields:
+      - field_oracle_text
+      - title
+    spaces: ''
+    ignored: ''
+    overlap_cjk: 1
+    minimum_word_size: '3'
+    overlap: 3
+  transliteration:
+    weights:
+      preprocess_index: -4
+      preprocess_query: -4
+    all_fields: false
+tracker_settings:
+  default:
+    indexing_order: fifo
+options:
+  cron_limit: 50
+  delete_on_fail: true
+  index_directly: true
+  track_changes_in_references: false
+server: milvus_card_search

@@ -1,0 +1,11 @@
+services:
+  logger.channel.mtg_card_suggestions:
+    parent: logger.channel_base
+    arguments: ['mtg_card_suggestions']
+
+  mtg_card_suggestions.suggester:
+    class: Drupal\mtg_card_suggestions\Service\CardSuggester
+    arguments:
+      - '@ai.provider'
+      - '@entity_type.manager'
+      - '@logger.channel.mtg_card_suggestions'

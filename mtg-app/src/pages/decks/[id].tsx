@@ -33,6 +33,7 @@ import {
   removeCardFromDeck,
   updateDeck,
 } from '../../services/drupalApi';
+import { fetchCardSuggestions, type CardSuggestion } from '../../services/deckSuggestions';
 import type { DeckCardWithCard } from '../../types/drupal';
 import { slugify } from '../../utils/slugify';
 import {
@@ -668,6 +669,97 @@ const DeckAnalysis: React.FC<{ cards: DeckCardWithCard[] }> = ({ cards }) => {
 };
 
 // ---------------------------------------------------------------------------
+// Suggestions tab
+// ---------------------------------------------------------------------------
+
+const DeckSuggestions: React.FC<{ deckNid: number }> = ({ deckNid }) => {
+  const [limit, setLimit] = useState(10);
+
+  const { data: suggestions = [], isFetching, isError, refetch } = useQuery<CardSuggestion[]>({
+    queryKey: ['deckSuggestions', deckNid, limit],
+    queryFn: () => fetchCardSuggestions(deckNid, limit),
+    enabled: false,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  return (
+    <div>
+      <p style={{ margin: '0 0 1rem', color: '#555' }}>
+        AI-powered card suggestions based on the deck's semantic profile.
+        Results come from Milvus vector search and are ranked by Ollama.
+      </p>
+
+      <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginBottom: '1.25rem' }}>
+        <label htmlFor="sugg-limit" style={{ fontSize: '0.9rem' }}>
+          Suggestions:
+        </label>
+        <select
+          id="sugg-limit"
+          value={limit}
+          onChange={e => setLimit(Number(e.target.value))}
+          style={{ padding: '0.25rem 0.5rem', fontSize: '0.9rem' }}
+        >
+          {[5, 10, 20, 30].map(n => (
+            <option key={n} value={n}>{n}</option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={() => void refetch()}
+          disabled={isFetching}
+          style={{
+            padding: '0.35rem 1rem',
+            cursor: isFetching ? 'default' : 'pointer',
+            background: '#333',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 4,
+            fontSize: '0.9rem',
+          }}
+        >
+          {isFetching ? 'Thinking...' : 'Get Suggestions'}
+        </button>
+      </div>
+
+      {isError && (
+        <p style={{ color: '#c00' }}>
+          Could not load suggestions. Make sure the Milvus index has items and Ollama is running.
+        </p>
+      )}
+
+      {suggestions.length === 0 && !isFetching && !isError && (
+        <p style={{ color: '#777', fontStyle: 'italic' }}>Click 'Get Suggestions' to start.</p>
+      )}
+
+      {suggestions.length > 0 && (
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+          <thead>
+            <tr style={{ borderBottom: '2px solid #ccc' }}>
+              <th style={{ textAlign: 'left', padding: '0.4rem 0.5rem' }}>#</th>
+              <th style={{ textAlign: 'left', padding: '0.4rem 0.5rem' }}>Card</th>
+              <th style={{ textAlign: 'left', padding: '0.4rem 0.5rem' }}>Why it fits</th>
+              <th style={{ textAlign: 'right', padding: '0.4rem 0.5rem' }}>Score</th>
+            </tr>
+          </thead>
+          <tbody>
+            {suggestions.map((s, i) => (
+              <tr key={s.card.nid} style={{ borderBottom: '1px solid #eee' }}>
+                <td style={{ padding: '0.5rem 0.5rem', color: '#888', width: 30 }}>{i + 1}</td>
+                <td style={{ padding: '0.5rem 0.5rem', fontWeight: 500 }}>{s.card.name}</td>
+                <td style={{ padding: '0.5rem 0.5rem', color: '#444' }}>{s.reason}</td>
+                <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', color: '#666' }}>
+                  {(s.score * 100).toFixed(1)}%
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // Deck header (editable title / format)
 // ---------------------------------------------------------------------------
 
@@ -758,7 +850,7 @@ const DeckHeader: React.FC<DeckHeaderProps> = ({ deckId, title, format }) => {
 
 const DeckPage: React.FC<DeckPageProps> = ({ params }) => {
   const { id: slug } = params;
-  const [tab, setTab] = useState<'editor' | 'analysis'>('editor');
+  const [tab, setTab] = useState<'editor' | 'analysis' | 'suggestions'>('editor');
 
   const { data: deck, isLoading: deckLoading } = useQuery({
     queryKey: ['deck', slug],
@@ -821,14 +913,23 @@ const DeckPage: React.FC<DeckPageProps> = ({ params }) => {
         >
           Analysis
         </button>
+        <button
+          type="button"
+          style={tabStyle(tab === 'suggestions')}
+          onClick={() => setTab('suggestions')}
+        >
+          Suggestions
+        </button>
       </div>
 
-      {cardsLoading ? (
+      {cardsLoading && tab !== 'suggestions' ? (
         <p>Loading cards...</p>
       ) : tab === 'editor' ? (
         <DeckEditor deckId={deckId!} cards={deckCards} />
-      ) : (
+      ) : tab === 'analysis' ? (
         <DeckAnalysis cards={deckCards} />
+      ) : (
+        <DeckSuggestions deckNid={deck.attributes.nid} />
       )}
     </main>
   );

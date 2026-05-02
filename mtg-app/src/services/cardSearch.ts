@@ -5,18 +5,11 @@
  * the JSON:API structure so existing JsonApiResource types can be reused.
  */
 
-import axios, { type AxiosInstance } from 'axios';
+import type { AxiosInstance } from 'axios';
 import type { JsonApiResource, MtgCardAttributes } from '../types/drupal';
+import { createDrupalClient } from './httpClient';
 
-const DRUPAL_URL = process.env.GATSBY_DRUPAL_URL ?? 'https://mtg-deck-manager.ddev.site';
-
-const client: AxiosInstance = axios.create({
-  baseURL: `${DRUPAL_URL}/api`,
-  auth: {
-    username: process.env.GATSBY_DRUPAL_USER ?? 'admin',
-    password: process.env.GATSBY_DRUPAL_PASS ?? 'admin',
-  },
-});
+const client: AxiosInstance = createDrupalClient('/api');
 
 // ---------------------------------------------------------------------------
 // Types

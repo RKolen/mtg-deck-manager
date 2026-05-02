@@ -6,7 +6,7 @@
  * decks, collection quantities, and deck-card relationships.
  */
 
-import axios, { type AxiosInstance } from 'axios';
+import type { AxiosInstance } from 'axios';
 import type {
   CollectionCardAttributes,
   DeckAttributes,
@@ -17,22 +17,12 @@ import type {
   JsonApiSingleResponse,
   MtgCardAttributes,
 } from '../types/drupal';
+import { createDrupalClient } from './httpClient';
 import { slugify } from '../utils/slugify';
 
-const DRUPAL_URL = process.env.GATSBY_DRUPAL_URL ?? 'https://mtg-deck-manager.ddev.site';
-
-const client: AxiosInstance = axios.create({
-  baseURL: `${DRUPAL_URL}/jsonapi`,
-  headers: {
-    'Content-Type': 'application/vnd.api+json',
-    Accept: 'application/vnd.api+json',
-  },
-  // Single-user app — use Basic Auth for simplicity.
-  // Credentials are read from env vars so they are not hard-coded.
-  auth: {
-    username: process.env.GATSBY_DRUPAL_USER ?? 'admin',
-    password: process.env.GATSBY_DRUPAL_PASS ?? 'admin',
-  },
+const client: AxiosInstance = createDrupalClient('/jsonapi', {
+  'Content-Type': 'application/vnd.api+json',
+  Accept: 'application/vnd.api+json',
 });
 
 // ---------------------------------------------------------------------------

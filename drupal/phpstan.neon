@@ -14,3 +14,7 @@ parameters:
     # mglaman/phpstan-drupal extension is required for full coverage.
     - identifier: method.notFound
       path: web/modules/custom/mtg_scryfall_sync/src/ScryfallImporter.php
+    # ProviderProxy delegates method calls via __call(); PHPStan cannot infer
+    # the chat() method from the AI provider interface at static analysis time.
+    - identifier: method.notFound
+      path: web/modules/custom/mtg_card_suggestions/src/Service/CardSuggester.php

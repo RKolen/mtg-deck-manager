@@ -1,0 +1,22 @@
+uuid: c6cc6775-02ce-4bd1-8b47-1566e5763145
+langcode: en
+status: true
+dependencies:
+  module:
+    - basic_auth
+    - mtg_card_suggestions
+    - serialization
+    - user
+_core:
+  default_config_hash: K6UHXV4v5wQJyGDOBX6Bi63mkGcZaTCfY_XrU2wbhws
+id: mtg_card_suggestions
+plugin_id: mtg_card_suggestions
+granularity: resource
+configuration:
+  methods:
+    - GET
+  formats:
+    - json
+  authentication:
+    - cookie
+    - basic_auth

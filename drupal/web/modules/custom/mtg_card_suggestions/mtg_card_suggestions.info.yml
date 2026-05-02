@@ -1,0 +1,12 @@
+name: 'MTG Card Suggestions'
+description: 'AI-powered deck suggestions via Milvus semantic search and Ollama reasoning.'
+type: module
+core_version_requirement: ^11
+package: Custom
+dependencies:
+  - drupal:node
+  - drupal:rest
+  - drupal:serialization
+  - drupal:search_api
+  - drupal:ai
+  - drupal:ai_vdb_provider_milvus

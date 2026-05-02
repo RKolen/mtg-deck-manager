@@ -1,0 +1,27 @@
+uuid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+langcode: en
+status: true
+dependencies:
+  module:
+    - ai_search
+    - ai_vdb_provider_milvus
+id: milvus_card_search
+name: 'Milvus Card Search'
+description: 'Semantic search server backed by Milvus vector database and Ollama embeddings.'
+backend: search_api_ai_search
+backend_config:
+  chat_model: ollama__qwen3_4b
+  database: milvus
+  database_settings:
+    database_name: default
+    collection: mtg_cards
+    metric: cosine_similarity
+  embeddings_engine: ollama__nomic_embed_text_latest
+  embeddings_engine_configuration:
+    set_dimensions: false
+    dimensions: 768
+  embedding_strategy: contextual_chunks
+  embedding_strategy_configuration:
+    chunk_size: '500'
+    chunk_min_overlap: '100'
+  include_raw_embedding_vector: false

@@ -2,6 +2,7 @@ _core:
   default_config_hash: 4GIX5Esnc_umpXUBj4IIocRX7Mt5fPhm4AgXfE3E56E
 module:
   ai: 0
+  ai_provider_ollama: 0
   ai_search: 0
   ai_vdb_provider_milvus: 0
   basic_auth: 0
@@ -26,6 +27,7 @@ module:
   media_library: 0
   migrate: 0
   migrate_plus: 0
+  mtg_card_suggestions: 0
   mtg_scryfall_sync: 0
   mysql: 0
   node: 0

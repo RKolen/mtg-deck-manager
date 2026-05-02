@@ -1,0 +1,13 @@
+id: mtg_card_suggestions
+plugin_id: mtg_card_suggestions
+plugin_label: 'MTG Card Suggestions'
+status: true
+granularity: resource
+configuration:
+  methods:
+    - GET
+  formats:
+    - json
+  authentication:
+    - cookie
+    - basic_auth

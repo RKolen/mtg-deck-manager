@@ -1,0 +1,22 @@
+diff --git a/src/OllamaControlApi.php b/src/OllamaControlApi.php
+--- a/src/OllamaControlApi.php
++++ b/src/OllamaControlApi.php
+@@ -102,9 +102,16 @@ class OllamaControlApi {
+    *   Input context max size.
+    */
+   public function embeddingsContextSize(string $model): int {
+-    return Json::decode($this->makeRequest("api/show", [], 'POST', [
++    $data = Json::decode($this->makeRequest("api/show", [], 'POST', [
+       'model' => $model,
+-    ]))['model_info']['llama.context_length'];
++    ]));
++    foreach ($data['model_info'] ?? [] as $key => $value) {
++      if (str_ends_with($key, 'context_length') && is_numeric($value)) {
++        return (int) $value;
++      }
++    }
++
++    return 8192;
+   }
+
+   /**
