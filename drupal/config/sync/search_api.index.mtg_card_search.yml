@@ -81,7 +81,7 @@ field_settings:
   field_oracle_text:
     label: 'Oracle Text'
     datasource_id: 'entity:node'
-    property_path: field_oracle_text.value
+    property_path: field_oracle_text
     type: text
     boost: 1.0
     type_locked: false

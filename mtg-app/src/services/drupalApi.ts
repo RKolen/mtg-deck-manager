@@ -126,8 +126,15 @@ export async function fetchCardBySlug(
   slug: string,
 ): Promise<JsonApiResource<MtgCardAttributes> | null> {
   const firstWord = slug.split('-')[0] ?? slug;
+  // If the first slug word ends in 's', it may be due to a possessive
+  // apostrophe being stripped (e.g. "Prey's" -> "preys"). Removing the
+  // trailing 's' gives a prefix that matches the original title.
+  const prefixWord =
+    firstWord.endsWith('s') && firstWord.length > 2
+      ? firstWord.slice(0, -1)
+      : firstWord;
   const searchPrefix =
-    firstWord.charAt(0).toUpperCase() + firstWord.slice(1);
+    prefixWord.charAt(0).toUpperCase() + prefixWord.slice(1);
 
   const response = await client.get<JsonApiCollectionResponse<MtgCardAttributes>>(
     '/node/mtg_card',
