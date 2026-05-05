@@ -34,6 +34,8 @@ export interface CardSearchParams {
   colorIdentity?: string[];
   /** Filter to mana-producing cards only. */
   manaProducer?: boolean;
+  /** Filter by rarity: common | uncommon | rare | mythic. */
+  rarity?: string;
   /** Zero-based page number. */
   page?: number;
   /** Number of results per page (max 100). */
@@ -64,6 +66,7 @@ function buildParams(params: CardSearchParams): Record<string, string | string[]
   if (params.colors && params.colors.length > 0) out['colors[]'] = params.colors;
   if (params.colorIdentity && params.colorIdentity.length > 0) out['color_identity[]'] = params.colorIdentity;
   if (params.manaProducer != null) out['mana_producer'] = params.manaProducer ? '1' : '0';
+  if (params.rarity) out['rarity'] = params.rarity;
   if (params.page != null) out['page'] = String(params.page);
   if (params.limit != null) out['limit'] = String(params.limit);
 

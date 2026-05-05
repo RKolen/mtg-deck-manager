@@ -15,6 +15,7 @@ import CollectionSidebar from '../../components/CollectionSidebar';
 import { searchCards } from '../../services/cardSearch';
 import {
   fetchCollectionCards,
+  fetchCollectionValue,
   upsertCollectionCard,
 } from '../../services/drupalApi';
 import type { CollectionCard, JsonApiResource, MtgCardAttributes } from '../../types/drupal';
@@ -34,6 +35,7 @@ const CollectionPage: React.FC = () => {
     maxCmc: null,
     legalIn: '',
     oracleText: '',
+    rarity: '',
   });
   const [modalCard, setModalCard] = useState<CardResource | null>(null);
 
@@ -58,6 +60,7 @@ const CollectionPage: React.FC = () => {
     maxCmc: debouncedFilter.maxCmc,
     legalIn: debouncedFilter.legalIn,
     oracleText: debouncedFilter.oracleText,
+    rarity: debouncedFilter.rarity,
     page,
   });
   const {
@@ -73,6 +76,7 @@ const CollectionPage: React.FC = () => {
         cmcMax: debouncedFilter.maxCmc ?? undefined,
         legalIn: debouncedFilter.legalIn || undefined,
         oracleText: debouncedFilter.oracleText || undefined,
+        rarity: debouncedFilter.rarity || undefined,
         page,
         limit: 50,
       }),
@@ -87,9 +91,16 @@ const CollectionPage: React.FC = () => {
     debouncedFilter.maxCmc,
     debouncedFilter.legalIn,
     debouncedFilter.oracleText,
+    debouncedFilter.rarity,
     // eslint-disable-next-line react-hooks/exhaustive-deps
     JSON.stringify([...debouncedFilter.colors].sort()),
   ]);
+
+  const { data: estValue = null } = useQuery<number>({
+    queryKey: ['collectionValue'],
+    queryFn: fetchCollectionValue,
+    staleTime: 5 * 60 * 1000,
+  });
 
   const cards = searchResult?.data ?? [];
   const totalPages = searchResult?.meta.pages ?? 1;
@@ -341,6 +352,7 @@ const CollectionPage: React.FC = () => {
           totalFoil={totalFoil}
           filtered={filteredCopies}
           filteredUnique={filteredCards.length}
+          estValue={estValue}
         />
       </div>
 
@@ -360,6 +372,10 @@ const CollectionPage: React.FC = () => {
             field_is_mana_producer: modalCard.attributes.field_is_mana_producer ?? null,
             field_produced_mana: modalCard.attributes.field_produced_mana ?? null,
             field_legal_formats: modalCard.attributes.field_legal_formats ?? null,
+            field_price_usd: modalCard.attributes.field_price_usd ?? null,
+            field_price_usd_foil: modalCard.attributes.field_price_usd_foil ?? null,
+            field_set_name: modalCard.attributes.field_set_name ?? null,
+            field_rarity: modalCard.attributes.field_rarity ?? null,
           } as CardData}
           quantityOwned={modalEntry?.attributes.field_quantity_owned}
           quantityFoil={modalEntry?.attributes.field_quantity_foil}

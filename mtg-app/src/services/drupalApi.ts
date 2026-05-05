@@ -50,7 +50,10 @@ async function fetchAll<T>(url: string): Promise<JsonApiResource<T>[]> {
 // ---------------------------------------------------------------------------
 
 const CARD_FIELDS =
-  'title,field_mana_cost,field_cmc,field_type_line,field_colors,field_color_identity,field_oracle_text,field_image_uri,field_is_mana_producer,field_produced_mana,field_legal_formats';
+  'title,field_mana_cost,field_cmc,field_type_line,field_colors,field_color_identity,' +
+  'field_oracle_text,field_image_uri,field_is_mana_producer,field_produced_mana,' +
+  'field_legal_formats,field_price_usd,field_price_usd_foil,field_set_code,' +
+  'field_set_name,field_rarity,field_collector_number';
 
 // Full field set used on the card detail page — includes P/T and loyalty.
 const CARD_DETAIL_FIELDS =
@@ -410,8 +413,53 @@ export async function fetchCollectionCards(): Promise<
   JsonApiResource<CollectionCardAttributes>[]
 > {
   return fetchAll<CollectionCardAttributes>(
-    '/node/collection_card?include=field_card&fields[node--collection_card]=field_quantity_owned,field_quantity_foil,field_card&fields[node--mtg_card]=title,field_mana_cost,field_cmc,field_type_line,field_colors,field_image_uri',
+    '/node/collection_card?include=field_card' +
+    '&fields[node--collection_card]=field_quantity_owned,field_quantity_foil,field_card' +
+    '&fields[node--mtg_card]=title,field_mana_cost,field_cmc,field_type_line,field_colors,field_image_uri,field_price_usd',
   );
+}
+
+/**
+ * Returns the estimated total USD value of all owned collection cards.
+ *
+ * Paginates through all collection_card nodes, fetching only quantity and
+ * price, to avoid loading full card attributes for 108k records.
+ */
+export async function fetchCollectionValue(): Promise<number> {
+  let total = 0;
+  let next: string | null =
+    '/node/collection_card?include=field_card' +
+    '&fields[node--collection_card]=field_quantity_owned,field_card' +
+    '&fields[node--mtg_card]=field_price_usd' +
+    '&page[limit]=200';
+
+  while (next !== null) {
+    // eslint-disable-next-line no-await-in-loop
+    const page: {
+      data: JsonApiResource<{ field_quantity_owned: number }>[];
+      included?: JsonApiResource<{ field_price_usd: string | null }>[];
+      links: { next?: { href: string } };
+    } = (await client.get(next)).data;
+
+    const priceByCardId = new Map<string, number>(
+      (page.included ?? []).map((c: JsonApiResource<{ field_price_usd: string | null }>) => [
+        c.id,
+        parseFloat(c.attributes.field_price_usd ?? '0') || 0,
+      ]),
+    );
+
+    for (const cc of page.data) {
+      const ref = cc.relationships?.field_card?.data;
+      if (ref == null || Array.isArray(ref)) continue;
+      const price = priceByCardId.get(ref.id) ?? 0;
+      const qty = cc.attributes.field_quantity_owned ?? 0;
+      total += price * qty;
+    }
+
+    next = page.links.next?.href ?? null;
+  }
+
+  return Math.round(total * 100) / 100;
 }
 
 export async function upsertCollectionCard(

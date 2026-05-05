@@ -1,0 +1,13 @@
+id: deck_coach
+plugin_id: deck_coach
+plugin_label: 'MTG Deck Coach'
+status: true
+granularity: resource
+configuration:
+  methods:
+    - POST
+  formats:
+    - json
+  authentication:
+    - cookie
+    - basic_auth

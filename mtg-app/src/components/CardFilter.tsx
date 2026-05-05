@@ -8,6 +8,7 @@ export interface FilterState {
   maxCmc: number | null;
   legalIn: string;
   oracleText: string;
+  rarity: string;
 }
 
 interface CardFilterProps {
@@ -178,10 +179,29 @@ const CardFilter: React.FC<CardFilterProps> = ({ filter, onChange }) => {
         </select>
       </div>
 
+      <div style={{ marginBottom: '1rem' }}>
+        <label htmlFor="rarity-select">
+          <strong>Rarity</strong>
+        </label>
+        <br />
+        <select
+          id="rarity-select"
+          value={filter.rarity}
+          onChange={e => onChange({ ...filter, rarity: e.target.value })}
+          style={{ width: '100%', marginTop: 4 }}
+        >
+          <option value="">Any</option>
+          <option value="common">Common</option>
+          <option value="uncommon">Uncommon</option>
+          <option value="rare">Rare</option>
+          <option value="mythic">Mythic</option>
+        </select>
+      </div>
+
       <button
         type="button"
         onClick={() =>
-          onChange({ name: '', colors: new Set(), type: 'All', maxCmc: null, legalIn: '', oracleText: '' })
+          onChange({ name: '', colors: new Set(), type: 'All', maxCmc: null, legalIn: '', oracleText: '', rarity: '' })
         }
         style={{ width: '100%' }}
       >

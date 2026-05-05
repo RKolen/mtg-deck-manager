@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\mtg_card_suggestions\Plugin\rest\resource;
 
+use Drupal\Core\Cache\CacheableMetadata;
 use Drupal\Core\Entity\EntityStorageInterface;
 use Drupal\mtg_card_suggestions\Service\CardSuggester;
 use Drupal\rest\Plugin\ResourceBase;
@@ -100,7 +101,9 @@ class CardSuggestionsResource extends ResourceBase {
       'data' => $suggestions,
       'meta' => ['count' => count($suggestions)],
     ]);
-    $response->addCacheableDependency(['#cache' => ['max-age' => 0]]);
+    $cache = new CacheableMetadata();
+    $cache->setCacheMaxAge(0);
+    $response->addCacheableDependency($cache);
     return $response;
   }
 

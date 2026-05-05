@@ -155,4 +155,54 @@ class ScryfallCommands extends DrushCommands {
     $this->output()->writeln('Import progress reset. The next batch will start from the beginning.');
   }
 
+  /**
+   * Imports all cards from a single Scryfall set and refreshes legalities.
+   *
+   * Fetches ~200-300 cards for the given set via the Scryfall search API
+   * (no bulk file download) then runs a legality refresh pass over all
+   * printings of every card name added or updated.
+   *
+   * @param string $setCode
+   *   Scryfall set code, e.g. "mh3" or "dsk".
+   *
+   * @command mtg:import-set
+   * @aliases mtg-set
+   * @usage ddev drush mtg:import-set mh3
+   * @usage ddev drush mtg:import-set dsk --skip-legality
+   *
+   * @option skip-legality Skip the legality refresh pass.
+   */
+  public function importSet(string $setCode, array $options = ['skip-legality' => FALSE]): void {
+    $setCode = strtolower(trim($setCode));
+    if ($setCode === '') {
+      $this->logger()->error('Set code is required.');
+      return;
+    }
+
+    $this->output()->writeln(sprintf('Importing set "%s" from Scryfall...', $setCode));
+
+    try {
+      $result = $this->importer->importSet($setCode);
+    }
+    catch (\RuntimeException $e) {
+      $this->logger()->error('Import failed: @msg', ['@msg' => $e->getMessage()]);
+      return;
+    }
+
+    $this->output()->writeln(sprintf(
+      'Set import complete: %d cards added, %d updated.',
+      $result['added'],
+      $result['updated'],
+    ));
+
+    if (!$options['skip-legality'] && $result['names'] !== []) {
+      $this->output()->writeln(sprintf(
+        'Running legality refresh for %d unique card names...',
+        count($result['names']),
+      ));
+      $refreshed = $this->importer->refreshLegalitiesByName($result['names']);
+      $this->output()->writeln(sprintf('Legality refresh complete: %d nodes updated.', $refreshed));
+    }
+  }
+
 }

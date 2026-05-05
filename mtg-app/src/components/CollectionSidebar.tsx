@@ -6,6 +6,7 @@ interface CollectionSidebarProps {
   totalFoil: number;
   filtered: number;
   filteredUnique: number;
+  estValue: number | null;
 }
 
 const CollectionSidebar: React.FC<CollectionSidebarProps> = ({
@@ -14,6 +15,7 @@ const CollectionSidebar: React.FC<CollectionSidebarProps> = ({
   totalFoil,
   filtered,
   filteredUnique,
+  estValue,
 }) => (
   <aside
     style={{
@@ -31,6 +33,12 @@ const CollectionSidebar: React.FC<CollectionSidebarProps> = ({
       <dd style={{ marginLeft: 0, fontWeight: 'bold' }}>{totalUnique}</dd>
       <dt>Foil copies</dt>
       <dd style={{ marginLeft: 0, fontWeight: 'bold' }}>{totalFoil}</dd>
+      {estValue != null && (
+        <>
+          <dt>Est. value (USD)</dt>
+          <dd style={{ marginLeft: 0, fontWeight: 'bold' }}>${estValue.toFixed(2)}</dd>
+        </>
+      )}
     </dl>
     {(filtered !== totalUnique) && (
       <>

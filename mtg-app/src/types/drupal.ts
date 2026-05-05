@@ -54,6 +54,15 @@ export interface MtgCardAttributes {
   field_power: string | null;
   field_toughness: string | null;
   field_loyalty: string | null;
+  // Phase 9
+  field_price_usd: string | null;
+  field_price_usd_foil: string | null;
+  field_price_eur: string | null;
+  field_set_code: string;
+  field_set_name: string;
+  field_rarity: string;
+  field_collector_number: string;
+  field_combo_pieces: string[];
 }
 
 export interface DeckAttributes {

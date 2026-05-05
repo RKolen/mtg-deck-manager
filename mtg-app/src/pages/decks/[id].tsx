@@ -34,6 +34,7 @@ import {
   updateDeck,
 } from '../../services/drupalApi';
 import { fetchCardSuggestions, type CardSuggestion } from '../../services/deckSuggestions';
+import { fetchDeckCoaching, type DeckCoachMetrics } from '../../services/deckCoach';
 import type { DeckCardWithCard } from '../../types/drupal';
 import { slugify } from '../../utils/slugify';
 import {
@@ -52,6 +53,7 @@ import {
   manaHandProbability,
   manaColoredCardRatio,
   maxCopiesAllowed,
+  isLand,
   type MtgColor,
   classifyType,
 } from '../../utils/deckAnalysis';
@@ -388,7 +390,7 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, cards }) => {
 // Analysis tab
 // ---------------------------------------------------------------------------
 
-const DeckAnalysis: React.FC<{ cards: DeckCardWithCard[] }> = ({ cards }) => {
+const DeckAnalysis: React.FC<{ cards: DeckCardWithCard[]; format: string; deckTitle: string }> = ({ cards, format, deckTitle }) => {
   const [selectedColor, setSelectedColor] = useState<MtgColor>('W');
 
   const main = mainDeck(cards);
@@ -664,6 +666,8 @@ const DeckAnalysis: React.FC<{ cards: DeckCardWithCard[] }> = ({ cards }) => {
           </tbody>
         </table>
       </section>
+
+      <CoachPanel cards={cards} format={format} deckTitle={deckTitle} />
     </div>
   );
 };
@@ -760,6 +764,152 @@ const DeckSuggestions: React.FC<{ deckNid: number }> = ({ deckNid }) => {
 };
 
 // ---------------------------------------------------------------------------
+// Coach panel (Phase 8b)
+// ---------------------------------------------------------------------------
+
+interface CoachPanelProps {
+  cards: DeckCardWithCard[];
+  format: string;
+  deckTitle: string;
+}
+
+const CoachPanel: React.FC<CoachPanelProps> = ({ cards, format, deckTitle }) => {
+  const [open, setOpen] = React.useState(false);
+
+  const buildMetrics = React.useCallback((): DeckCoachMetrics => {
+    const main = mainDeck(cards);
+    const dist = manaColorDistribution(main);
+    const sources = effectiveManaSources(main);
+    const histogram = cmcHistogram(main);
+
+    // CMC histogram with string keys for the PHP endpoint.
+    const histStr: Record<string, number> = {};
+    for (const [k, v] of Object.entries(histogram)) {
+      histStr[Number(k) >= 7 ? '7+' : k] = (histStr[Number(k) >= 7 ? '7+' : k] ?? 0) + v;
+    }
+
+    // P(≥1 source of colour C) at turns 2 and 3 for each colour with sources.
+    const manaHandProb: Record<string, { turn2: number; turn3: number }> = {};
+    for (const c of ALL_COLORS) {
+      if (sources[c] > 0) {
+        const table = manaHandProbability(main, c);
+        // turns = [1,2,3,4,5,6,7]; turn2 index = 1, turn3 index = 2; sourcesNeeded[0] = 1
+        manaHandProb[c] = {
+          turn2: table.table[1]?.[0] ?? 0,
+          turn3: table.table[2]?.[0] ?? 0,
+        };
+      }
+    }
+
+    // Non-land mana producers and their card types.
+    const nonLandProducers = main.filter(
+      dc => dc.card.field_is_mana_producer && !isLand(dc.card.field_type_line ?? ''),
+    );
+    const producerTypeSet = new Set<string>();
+    for (const dc of nonLandProducers) {
+      const tl = dc.card.field_type_line ?? '';
+      if (/creature/i.test(tl)) producerTypeSet.add('creature');
+      if (/artifact/i.test(tl)) producerTypeSet.add('artifact');
+      if (/planeswalker/i.test(tl)) producerTypeSet.add('planeswalker');
+      if (/enchantment/i.test(tl)) producerTypeSet.add('enchantment');
+    }
+    const landCount = main.filter(dc => isLand(dc.card.field_type_line ?? '')).reduce(
+      (s, dc) => s + dc.quantity, 0,
+    );
+
+    return {
+      avgCmc: averageCmc(main),
+      landCount,
+      totalManaSources: totalManaSources(main),
+      colorSourcePct: Object.fromEntries(
+        ALL_COLORS.map(c => [c, dist.colorSourcePct[c]]),
+      ),
+      colorPipPct: Object.fromEntries(
+        ALL_COLORS.map(c => [c, dist.colorPipPct[c]]),
+      ),
+      cmcHistogram: histStr,
+      manaHandProb,
+      manaSources: {
+        lands: landCount,
+        nonLandProducers: nonLandProducers.reduce((s, dc) => s + dc.quantity, 0),
+        producerTypes: [...producerTypeSet],
+      },
+    };
+  }, [cards]);
+
+  const coaching = useQuery({
+    queryKey: ['deckCoach', deckTitle, format, cards.length],
+    queryFn: () => fetchDeckCoaching({ format, deckTitle, metrics: buildMetrics() }),
+    enabled: false,
+    staleTime: 10 * 60 * 1000,
+  });
+
+  return (
+    <section style={{ marginTop: '2rem', borderTop: '1px solid #ddd', paddingTop: '1rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: open ? '0.75rem' : 0 }}>
+        <h3 style={{ margin: 0 }}>Coach's notes</h3>
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(o => !o);
+            if (!open && !coaching.data && !coaching.isFetching) void coaching.refetch();
+          }}
+          style={{ fontSize: '0.85rem', padding: '0.2rem 0.6rem' }}
+        >
+          {open ? 'Hide' : 'Show'}
+        </button>
+        {!open && !coaching.data && (
+          <button
+            type="button"
+            onClick={() => { setOpen(true); void coaching.refetch(); }}
+            disabled={coaching.isFetching}
+            style={{ fontSize: '0.85rem', padding: '0.2rem 0.6rem', background: '#333', color: '#fff', border: 'none', borderRadius: 3, cursor: coaching.isFetching ? 'default' : 'pointer' }}
+          >
+            {coaching.isFetching ? 'Analysing…' : 'Ask coach'}
+          </button>
+        )}
+      </div>
+
+      {open && (
+        <div>
+          {coaching.isFetching && (
+            <p style={{ color: '#888', fontStyle: 'italic' }}>Ollama is thinking…</p>
+          )}
+          {coaching.isError && (
+            <p style={{ color: '#c00' }}>Could not reach the coach. Make sure Ollama is running.</p>
+          )}
+          {coaching.data != null && (
+            <div
+              style={{
+                background: '#f8f8f5',
+                border: '1px solid #ddd',
+                borderRadius: 4,
+                padding: '0.75rem 1rem',
+                lineHeight: 1.6,
+                fontSize: '0.9rem',
+                whiteSpace: 'pre-wrap',
+              }}
+            >
+              {coaching.data}
+            </div>
+          )}
+          {coaching.data != null && (
+            <button
+              type="button"
+              onClick={() => void coaching.refetch()}
+              disabled={coaching.isFetching}
+              style={{ marginTop: '0.5rem', fontSize: '0.8rem' }}
+            >
+              Re-analyse
+            </button>
+          )}
+        </div>
+      )}
+    </section>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // Deck header (editable title / format)
 // ---------------------------------------------------------------------------
 
@@ -784,7 +934,6 @@ const DeckHeader: React.FC<DeckHeaderProps> = ({ deckId, title, format }) => {
       updateDeck(deckId, {
         title: draftTitle,
         field_format: draftFormat,
-        field_notes: null,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['deck', deckId] });
@@ -927,7 +1076,7 @@ const DeckPage: React.FC<DeckPageProps> = ({ params }) => {
       ) : tab === 'editor' ? (
         <DeckEditor deckId={deckId!} cards={deckCards} />
       ) : tab === 'analysis' ? (
-        <DeckAnalysis cards={deckCards} />
+        <DeckAnalysis cards={deckCards} format={deck.attributes.field_format} deckTitle={deck.attributes.title} />
       ) : (
         <DeckSuggestions deckNid={deck.attributes.nid} />
       )}

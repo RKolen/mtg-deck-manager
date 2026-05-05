@@ -14,6 +14,11 @@ export interface CardData {
   field_is_mana_producer?: boolean | null;
   field_produced_mana?: string[] | null;
   field_legal_formats?: string[] | null;
+  // Phase 9
+  field_price_usd?: string | null;
+  field_price_usd_foil?: string | null;
+  field_set_name?: string | null;
+  field_rarity?: string | null;
 }
 
 interface CardModalProps {
@@ -128,6 +133,21 @@ const CardModal: React.FC<CardModalProps> = ({
                 <strong>Produces:</strong> {card.field_produced_mana.join(', ')}
               </p>
             )}
+
+          {(card.field_set_name || card.field_rarity) && (
+            <p style={{ margin: '0.25rem 0', fontSize: '0.85rem', color: '#666' }}>
+              {card.field_set_name}
+              {card.field_rarity && ` · ${card.field_rarity.charAt(0).toUpperCase()}${card.field_rarity.slice(1)}`}
+            </p>
+          )}
+
+          {(card.field_price_usd || card.field_price_usd_foil) && (
+            <p style={{ margin: '0.25rem 0', fontSize: '0.85rem' }}>
+              {card.field_price_usd && <><strong>USD:</strong> ${card.field_price_usd}</>}
+              {card.field_price_usd && card.field_price_usd_foil && ' · '}
+              {card.field_price_usd_foil && <><strong>Foil:</strong> ${card.field_price_usd_foil}</>}
+            </p>
+          )}
 
           <hr />
           <p style={{ margin: 0, fontSize: '0.9rem' }}>

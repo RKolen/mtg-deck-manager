@@ -272,9 +272,17 @@ class ScryfallImporter {
     $new_byte_offset = ftell($fh);
     fclose($fh);
 
+    if ($new_byte_offset === FALSE) {
+      $this->loggerFactory->get('mtg_scryfall_sync')->warning(
+        'ftell() failed after batch @from-@to; next batch will restart from byte 0.',
+        ['@from' => $offset + 1, '@to' => $offset + $processed],
+      );
+      $new_byte_offset = 0;
+    }
+
     $new_offset = $offset + $processed;
     $this->state->set(self::STATE_OFFSET, $new_offset);
-    $this->state->set(self::STATE_BYTE_OFFSET, $new_byte_offset !== FALSE ? $new_byte_offset : 0);
+    $this->state->set(self::STATE_BYTE_OFFSET, $new_byte_offset);
 
     $logger->info('Scryfall batch: processed lines @from-@to of @total.', [
       '@from' => $offset + 1,
@@ -404,9 +412,6 @@ class ScryfallImporter {
     $node->set('field_loyalty', $card['loyalty'] ?? NULL);
 
     // Legalities: store only the format keys where the card is "legal".
-    // Formats with "not_legal", "banned", or "restricted" are omitted so the
-    // field can be queried as an inclusion list (e.g. "is 'modern' in the
-    // field?" means the card is legal in Modern).
     $legal_formats = [];
     foreach ($card['legalities'] ?? [] as $format => $status) {
       if ($status === 'legal') {
@@ -415,7 +420,188 @@ class ScryfallImporter {
     }
     $node->set('field_legal_formats', $legal_formats);
 
+    // Phase 9 fields — pricing and set metadata.
+    $prices = $card['prices'] ?? [];
+    $node->set('field_price_usd', isset($prices['usd']) ? (string) $prices['usd'] : NULL);
+    $node->set('field_price_usd_foil', isset($prices['usd_foil']) ? (string) $prices['usd_foil'] : NULL);
+    $node->set('field_price_eur', isset($prices['eur']) ? (string) $prices['eur'] : NULL);
+    $node->set('field_set_code', $card['set'] ?? '');
+    $node->set('field_set_name', $card['set_name'] ?? '');
+    $node->set('field_rarity', $card['rarity'] ?? '');
+    $node->set('field_collector_number', $card['collector_number'] ?? '');
+
+    // Combo pieces: Scryfall IDs of cards sharing a known combo relationship.
+    $combo_pieces = [];
+    foreach ($card['all_parts'] ?? [] as $part) {
+      if (($part['component'] ?? '') === 'combo_piece' && isset($part['id'])) {
+        $combo_pieces[] = $part['id'];
+      }
+    }
+    $node->set('field_combo_pieces', $combo_pieces);
+
     $node->save();
+  }
+
+  /**
+   * Imports all cards from a single Scryfall set via the search API.
+   *
+   * This is dramatically faster than a full default_cards re-download for
+   * routine new-set additions (~200-300 cards vs 114k).
+   *
+   * @param string $setCode
+   *   Scryfall set code, e.g. "mh3" or "dsk".
+   *
+   * @return array{added: int, updated: int, names: string[]}
+   *   Import summary and the list of unique card names added/updated (used by
+   *   the caller to run a legality refresh on affected printings).
+   *
+   * @throws \RuntimeException
+   *   When the Scryfall API returns an unexpected response.
+   */
+  public function importSet(string $setCode): array {
+    $logger = $this->loggerFactory->get('mtg_scryfall_sync');
+    $storage = $this->entityTypeManager->getStorage('node');
+
+    $added = 0;
+    $updated = 0;
+    $names = [];
+
+    // Scryfall search: all unique printings in this set.
+    $url = 'https://api.scryfall.com/cards/search?q=e%3A' . urlencode($setCode) . '&unique=prints';
+
+    do {
+      $response = $this->httpClient->get($url, [
+        'headers' => [
+          'User-Agent' => self::USER_AGENT,
+          'Accept'     => 'application/json',
+        ],
+      ]);
+      $body = json_decode((string) $response->getBody(), TRUE, 512, JSON_THROW_ON_ERROR);
+
+      if (($body['object'] ?? '') === 'error') {
+        throw new \RuntimeException(
+          sprintf('Scryfall search failed for set "%s": %s', $setCode, $body['details'] ?? 'unknown error'),
+        );
+      }
+
+      $wasNew = 0;
+      $wasExisting = 0;
+      foreach ($body['data'] ?? [] as $card) {
+        $scryfall_id = $card['id'] ?? NULL;
+        if ($scryfall_id === NULL) {
+          continue;
+        }
+        $existing = $storage->loadByProperties(['field_scryfall_id' => $scryfall_id]);
+        $isNew = $existing === [];
+        $this->upsertCard($card, $storage);
+        if ($isNew) {
+          $wasNew++;
+        }
+        else {
+          $wasExisting++;
+        }
+        $names[] = $card['name'] ?? '';
+      }
+
+      $added += $wasNew;
+      $updated += $wasExisting;
+
+      $hasMore = (bool) ($body['has_more'] ?? FALSE);
+      $url = $hasMore ? ($body['next_page'] ?? '') : '';
+
+      if ($hasMore) {
+        // Respect Scryfall's rate limit (10 req/s).
+        usleep(150_000);
+      }
+    } while ($hasMore && $url !== '');
+
+    $logger->info(
+      'Set import "@set": @added added, @updated updated.',
+      ['@set' => $setCode, '@added' => $added, '@updated' => $updated],
+    );
+
+    return [
+      'added'  => $added,
+      'updated' => $updated,
+      'names'  => array_values(array_unique(array_filter($names))),
+    ];
+  }
+
+  /**
+   * Refreshes field_legal_formats on all printings of the given card names.
+   *
+   * Called after importSet() to propagate legality changes caused by reprints
+   * (e.g. a card reprinted into Modern gets all its printings updated).
+   *
+   * @param string[] $names
+   *   Canonical card names, e.g. ["Lightning Bolt", "Birds of Paradise"].
+   *
+   * @return int
+   *   Number of mtg_card nodes updated.
+   */
+  public function refreshLegalitiesByName(array $names): int {
+    if ($names === []) {
+      return 0;
+    }
+
+    $logger = $this->loggerFactory->get('mtg_scryfall_sync');
+    $storage = $this->entityTypeManager->getStorage('node');
+    $updated = 0;
+
+    foreach ($names as $name) {
+      try {
+        $response = $this->httpClient->get(
+          'https://api.scryfall.com/cards/named?exact=' . urlencode($name),
+          [
+            'headers' => [
+              'User-Agent' => self::USER_AGENT,
+              'Accept'     => 'application/json',
+            ],
+          ],
+        );
+        $card = json_decode((string) $response->getBody(), TRUE, 512, JSON_THROW_ON_ERROR);
+        if (($card['object'] ?? '') === 'error') {
+          $logger->warning('Scryfall cards/named not found: @name', ['@name' => $name]);
+          continue;
+        }
+
+        $legal_formats = [];
+        foreach ($card['legalities'] ?? [] as $format => $status) {
+          if ($status === 'legal') {
+            $legal_formats[] = $format;
+          }
+        }
+
+        // Update all printings of this card by title.
+        $nids = $storage->getQuery()
+          ->accessCheck(FALSE)
+          ->condition('type', 'mtg_card')
+          ->condition('title', $name)
+          ->execute();
+
+        foreach ($storage->loadMultiple(array_values($nids)) as $node) {
+          $node->set('field_legal_formats', $legal_formats);
+          $node->save();
+          $updated++;
+        }
+
+        // Rate limit: ~6 req/s to stay well under Scryfall's 10/s cap.
+        usleep(160_000);
+      }
+      catch (\Throwable $e) {
+        $logger->warning(
+          'Legality refresh failed for "@name": @msg',
+          ['@name' => $name, '@msg' => $e->getMessage()],
+        );
+      }
+    }
+
+    $logger->info('Legality refresh: updated @n nodes across @names cards.', [
+      '@n'     => $updated,
+      '@names' => count($names),
+    ]);
+
+    return $updated;
   }
 
 }

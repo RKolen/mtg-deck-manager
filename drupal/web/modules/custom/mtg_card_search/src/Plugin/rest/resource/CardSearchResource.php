@@ -181,6 +181,14 @@ final class CardSearchResource extends ResourceBase {
   /**
    * Applies fulltext search keys to the query.
    *
+   * Handles two independent text inputs:
+   *   q            — searches card name and oracle text simultaneously.
+   *   oracle_text  — searches oracle text only (used when q is not set).
+   *
+   * Search API supports only one keys() call per query, so when q is present
+   * it takes priority (it already covers oracle text). When only oracle_text
+   * is provided the keys are scoped to field_oracle_text alone.
+   *
    * @param \Drupal\search_api\Query\QueryInterface $query
    *   The search query.
    * @param \Symfony\Component\HttpFoundation\Request $request
@@ -191,9 +199,15 @@ final class CardSearchResource extends ResourceBase {
     Request $request,
   ): void {
     $q = trim($request->query->getString('q', ''));
+    $oracleText = trim($request->query->getString('oracle_text', ''));
+
     if ($q !== '') {
       $query->keys($q);
       $query->setFulltextFields(['title', 'field_oracle_text']);
+    }
+    elseif ($oracleText !== '') {
+      $query->keys($oracleText);
+      $query->setFulltextFields(['field_oracle_text']);
     }
   }
 
@@ -252,6 +266,12 @@ final class CardSearchResource extends ResourceBase {
     $manaProducer = $request->query->get('mana_producer');
     if ($manaProducer !== NULL) {
       $conditions->addCondition('field_is_mana_producer', (bool) (int) $manaProducer);
+      $hasCondition = TRUE;
+    }
+
+    $rarity = trim($request->query->getString('rarity', ''));
+    if ($rarity !== '' && in_array($rarity, ['common', 'uncommon', 'rare', 'mythic'], TRUE)) {
+      $conditions->addCondition('field_rarity', $rarity);
       $hasCondition = TRUE;
     }
 
@@ -333,6 +353,14 @@ final class CardSearchResource extends ResourceBase {
         'field_power' => $node->get('field_power')->value,
         'field_toughness' => $node->get('field_toughness')->value,
         'field_loyalty' => $node->get('field_loyalty')->value,
+        'field_price_usd' => $node->get('field_price_usd')->value,
+        'field_price_usd_foil' => $node->get('field_price_usd_foil')->value,
+        'field_price_eur' => $node->get('field_price_eur')->value,
+        'field_set_code' => (string) ($node->get('field_set_code')->value ?? ''),
+        'field_set_name' => (string) ($node->get('field_set_name')->value ?? ''),
+        'field_rarity' => (string) ($node->get('field_rarity')->value ?? ''),
+        'field_collector_number' => (string) ($node->get('field_collector_number')->value ?? ''),
+        'field_combo_pieces' => array_column($node->get('field_combo_pieces')->getValue(), 'value'),
       ],
     ];
   }

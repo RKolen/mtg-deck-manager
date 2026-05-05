@@ -13,6 +13,8 @@ import {
   findCardsByName,
   createDeck,
   importCardToDeck,
+  upsertCollectionCard,
+  fetchCollectionCards,
 } from '../../services/drupalApi';
 
 // ---------------------------------------------------------------------------
@@ -30,6 +32,7 @@ interface MatchedRow extends ParsedRow {
   matchId: string | null;
   matchTitle: string | null;
   candidates: { id: string; title: string }[];
+  addToCollection: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -242,6 +245,7 @@ const ImportPage: React.FC = () => {
               exact?.attributes.title ??
               results[0]?.attributes.title ??
               null,
+            addToCollection: true,
             candidates: results.map(r => ({
               id: r.id,
               title: r.attributes.title,
@@ -293,6 +297,12 @@ const ImportPage: React.FC = () => {
     setRows(prev => prev.filter((_, i) => i !== index));
   }
 
+  function toggleCollection(index: number): void {
+    setRows(prev =>
+      prev.map((r, i) => (i === index ? { ...r, addToCollection: !r.addToCollection } : r)),
+    );
+  }
+
   // ----- Step 3: Import -----
 
   async function handleImport(): Promise<void> {
@@ -327,6 +337,34 @@ const ImportPage: React.FC = () => {
           row.isSideboard,
           row.name,
         );
+      }
+
+      const toCollect = toImport.filter(r => r.addToCollection);
+      if (toCollect.length > 0) {
+        setProgress('Fetching existing collection...');
+        // eslint-disable-next-line no-await-in-loop
+        const existing = await fetchCollectionCards();
+        const existingIdByCardId = new Map<string, string>(
+          existing.flatMap(cc => {
+            const ref = cc.relationships?.field_card?.data;
+            if (ref == null || Array.isArray(ref)) return [];
+            return [[ref.id, cc.id]];
+          }),
+        );
+
+        setProgress(`Adding ${toCollect.length} cards to collection...`);
+        let j = 0;
+        for (const row of toCollect) {
+          j++;
+          setProgress(`Updating collection ${j} / ${toCollect.length}: ${row.name}`);
+          // eslint-disable-next-line no-await-in-loop
+          await upsertCollectionCard(
+            row.matchId!,
+            row.isFoil ? 0 : row.quantity,
+            row.isFoil ? row.quantity : 0,
+            existingIdByCardId.get(row.matchId!),
+          );
+        }
       }
 
       setCreatedDeckId(deck.id);
@@ -463,6 +501,7 @@ const ImportPage: React.FC = () => {
                 <th style={{ padding: '0.4rem', textAlign: 'left' }}>Matched card</th>
                 <th style={{ padding: '0.4rem' }}>SB</th>
                 <th style={{ padding: '0.4rem' }}>Foil</th>
+                <th style={{ padding: '0.4rem' }} title="Add to collection">Collect</th>
                 <th style={{ padding: '0.4rem' }}></th>
               </tr>
             </thead>
@@ -500,6 +539,15 @@ const ImportPage: React.FC = () => {
                   </td>
                   <td style={{ padding: '0.3rem 0.4rem', textAlign: 'center' }}>
                     {row.isFoil ? 'F' : ''}
+                  </td>
+                  <td style={{ padding: '0.3rem 0.4rem', textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={row.addToCollection}
+                      disabled={row.matchId == null}
+                      onChange={() => toggleCollection(i)}
+                      aria-label="Add to collection"
+                    />
                   </td>
                   <td style={{ padding: '0.3rem 0.4rem', textAlign: 'center' }}>
                     <button

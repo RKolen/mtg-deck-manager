@@ -1,0 +1,105 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * @file
+ * Install, update, and uninstall functions for the MTG Scryfall Sync module.
+ */
+
+use Drupal\field\Entity\FieldConfig;
+use Drupal\field\Entity\FieldStorageConfig;
+
+/**
+ * Adds pricing, set metadata, rarity, collector number, and combo piece fields.
+ *
+ * Run via: ddev drush updb -y
+ */
+function mtg_scryfall_sync_update_9001(array &$sandbox): string {
+  $fields = [
+    [
+      'name'        => 'field_price_usd',
+      'type'        => 'decimal',
+      'label'       => 'Price (USD)',
+      'cardinality' => 1,
+      'settings'    => ['precision' => 10, 'scale' => 2],
+    ],
+    [
+      'name'        => 'field_price_usd_foil',
+      'type'        => 'decimal',
+      'label'       => 'Price Foil (USD)',
+      'cardinality' => 1,
+      'settings'    => ['precision' => 10, 'scale' => 2],
+    ],
+    [
+      'name'        => 'field_price_eur',
+      'type'        => 'decimal',
+      'label'       => 'Price (EUR)',
+      'cardinality' => 1,
+      'settings'    => ['precision' => 10, 'scale' => 2],
+    ],
+    [
+      'name'        => 'field_set_code',
+      'type'        => 'string',
+      'label'       => 'Set Code',
+      'cardinality' => 1,
+      'settings'    => ['max_length' => 16],
+    ],
+    [
+      'name'        => 'field_set_name',
+      'type'        => 'string',
+      'label'       => 'Set Name',
+      'cardinality' => 1,
+      'settings'    => ['max_length' => 255],
+    ],
+    [
+      'name'        => 'field_rarity',
+      'type'        => 'string',
+      'label'       => 'Rarity',
+      'cardinality' => 1,
+      'settings'    => ['max_length' => 20],
+    ],
+    [
+      'name'        => 'field_collector_number',
+      'type'        => 'string',
+      'label'       => 'Collector Number',
+      'cardinality' => 1,
+      'settings'    => ['max_length' => 16],
+    ],
+    [
+      'name'        => 'field_combo_pieces',
+      'type'        => 'string',
+      'label'       => 'Combo Piece IDs',
+      'cardinality' => -1,
+      'settings'    => ['max_length' => 36],
+    ],
+  ];
+
+  $created = [];
+  foreach ($fields as $def) {
+    if (!FieldStorageConfig::loadByName('node', $def['name'])) {
+      FieldStorageConfig::create([
+        'field_name'  => $def['name'],
+        'entity_type' => 'node',
+        'type'        => $def['type'],
+        'cardinality' => $def['cardinality'],
+        'settings'    => $def['settings'],
+      ])->save();
+    }
+
+    if (!FieldConfig::loadByName('node', 'mtg_card', $def['name'])) {
+      FieldConfig::create([
+        'field_name'  => $def['name'],
+        'entity_type' => 'node',
+        'bundle'      => 'mtg_card',
+        'label'       => $def['label'],
+        'required'    => FALSE,
+      ])->save();
+      $created[] = $def['name'];
+    }
+  }
+
+  return $created !== []
+    ? 'Created fields: ' . implode(', ', $created)
+    : 'All Phase 9 fields already exist.';
+}
