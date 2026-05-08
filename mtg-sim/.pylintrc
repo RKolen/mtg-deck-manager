@@ -1,0 +1,9 @@
+[MASTER]
+ignore=.venv,__pycache__
+init-hook=
+    import sys
+    sys.path.insert(0, 'mtg-sim/sim')
+    sys.path.insert(0, 'mtg-sim/classifier')
+
+[FORMAT]
+max-line-length=100

@@ -9,3 +9,10 @@ services:
       - '@ai.provider'
       - '@entity_type.manager'
       - '@logger.channel.mtg_card_suggestions'
+
+  mtg_card_suggestions.matchup_advisor:
+    class: Drupal\mtg_card_suggestions\Service\MatchupAdvisor
+    arguments:
+      - '@ai.provider'
+      - '@entity_type.manager'
+      - '@logger.channel.mtg_card_suggestions'

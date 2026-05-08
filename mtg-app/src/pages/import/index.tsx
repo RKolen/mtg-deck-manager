@@ -329,7 +329,6 @@ const ImportPage: React.FC = () => {
       for (const row of toImport) {
         i++;
         setProgress(`Adding card ${i} / ${toImport.length}: ${row.name}`);
-        // eslint-disable-next-line no-await-in-loop
         await importCardToDeck(
           deck.id,
           row.matchId!,
@@ -342,7 +341,6 @@ const ImportPage: React.FC = () => {
       const toCollect = toImport.filter(r => r.addToCollection);
       if (toCollect.length > 0) {
         setProgress('Fetching existing collection...');
-        // eslint-disable-next-line no-await-in-loop
         const existing = await fetchCollectionCards();
         const existingIdByCardId = new Map<string, string>(
           existing.flatMap(cc => {
@@ -357,7 +355,6 @@ const ImportPage: React.FC = () => {
         for (const row of toCollect) {
           j++;
           setProgress(`Updating collection ${j} / ${toCollect.length}: ${row.name}`);
-          // eslint-disable-next-line no-await-in-loop
           await upsertCollectionCard(
             row.matchId!,
             row.isFoil ? 0 : row.quantity,

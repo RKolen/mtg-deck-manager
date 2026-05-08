@@ -7,7 +7,7 @@
  * Route: /decks/:id  (Gatsby client-only route via [id].tsx)
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { Link } from 'gatsby';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -35,6 +35,15 @@ import {
 } from '../../services/drupalApi';
 import { fetchCardSuggestions, type CardSuggestion } from '../../services/deckSuggestions';
 import { fetchDeckCoaching, type DeckCoachMetrics } from '../../services/deckCoach';
+import { runSimulation, type SimulationResult, type TopKiller } from '../../services/simulationApi';
+import {
+  fetchMetaDecks,
+  fetchMatchupAdvice,
+  classifyPlays,
+  type MetaDeck,
+  type MatchupAdvice,
+  type ArchetypeProbability,
+} from '../../services/metaApi';
 import type { DeckCardWithCard } from '../../types/drupal';
 import { slugify } from '../../utils/slugify';
 import {
@@ -673,6 +682,209 @@ const DeckAnalysis: React.FC<{ cards: DeckCardWithCard[]; format: string; deckTi
 };
 
 // ---------------------------------------------------------------------------
+// Simulate tab (Phase 10B)
+// ---------------------------------------------------------------------------
+
+interface DeckSimulateProps {
+  deckNid: number;
+  format: string;
+  deckTitle: string;
+}
+
+const GAME_COUNT_OPTIONS = [50, 200] as const;
+
+const DeckSimulate: React.FC<DeckSimulateProps> = ({ deckNid, format, deckTitle }) => {
+  const [selectedArchetype, setSelectedArchetype] = useState('');
+  const [games, setGames] = useState<50 | 200>(50);
+  const [useLlm, setUseLlm] = useState(false);
+  const [result, setResult] = useState<SimulationResult | null>(null);
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const { data: metaDecks = [] } = useQuery({
+    queryKey: ['metaDecks', format],
+    queryFn: () => import('../../services/metaApi').then(m => m.fetchMetaDecks(format)),
+    staleTime: 10 * 60 * 1000,
+  });
+
+  async function handleRun(): Promise<void> {
+    if (!selectedArchetype) return;
+    setRunning(true);
+    setError(null);
+    setResult(null);
+    try {
+      const r = await runSimulation({
+        playerDeckId: deckNid,
+        opponentArchetype: selectedArchetype,
+        format,
+        games,
+        useLlm,
+      });
+      setResult(r);
+    } catch (e) {
+      setError(
+        'Simulation failed. Make sure the Python sim service is running: ' +
+        'cd mtg-sim/sim && uvicorn main:app --port 8002',
+      );
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  const winPct = result ? (result.winRate * 100).toFixed(1) : null;
+  const playPct = result ? (result.onThePlay.winRate * 100).toFixed(1) : null;
+  const drawPct = result ? (result.onTheDraw.winRate * 100).toFixed(1) : null;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      <p style={{ margin: 0, fontSize: '0.9rem', color: '#555' }}>
+        Simulate {deckTitle} against a meta archetype using the Forge rules engine.
+        Requires <code>mtg-sim/sim/main.py</code> running on port 8002.
+      </p>
+
+      {/* Controls */}
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span style={{ fontSize: '0.85rem', fontWeight: 'bold' }}>Opponent archetype</span>
+          <select
+            value={selectedArchetype}
+            onChange={e => setSelectedArchetype(e.target.value)}
+            style={{ minWidth: 200 }}
+          >
+            <option value="">Select archetype…</option>
+            {metaDecks.map(d => (
+              <option key={d.id} value={d.attributes.title}>{d.attributes.title}</option>
+            ))}
+          </select>
+        </label>
+
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span style={{ fontSize: '0.85rem', fontWeight: 'bold' }}>Games</span>
+          <select
+            value={games}
+            onChange={e => setGames(Number(e.target.value) as 50 | 200)}
+          >
+            {GAME_COUNT_OPTIONS.map(n => (
+              <option key={n} value={n}>{n}</option>
+            ))}
+          </select>
+        </label>
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem' }}>
+          <input
+            type="checkbox"
+            checked={useLlm}
+            onChange={e => setUseLlm(e.target.checked)}
+          />
+          LLM board eval (slower)
+        </label>
+
+        <button
+          type="button"
+          onClick={() => void handleRun()}
+          disabled={!selectedArchetype || running}
+          style={{
+            padding: '0.4rem 1.25rem',
+            background: '#333', color: '#fff',
+            border: 'none', borderRadius: 4,
+            cursor: selectedArchetype && !running ? 'pointer' : 'default',
+          }}
+        >
+          {running ? 'Simulating…' : 'Run simulation'}
+        </button>
+      </div>
+
+      {running && (
+        <p style={{ color: '#888', fontStyle: 'italic' }}>
+          Running {games} games — this may take several minutes…
+        </p>
+      )}
+
+      {error && <p style={{ color: '#c00' }}>{error}</p>}
+
+      {/* Results */}
+      {result && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+
+          {/* Win-rate summary */}
+          <section style={{ background: '#f8f8f5', border: '1px solid #ddd', borderRadius: 4, padding: '1rem' }}>
+            <h3 style={{ margin: '0 0 0.75rem' }}>
+              {result.playerDeck} vs {result.opponentArchetype} — {result.games} games
+            </h3>
+            <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
+              {[
+                ['Overall', winPct, result.wins, result.losses],
+                ['On the play', playPct, result.onThePlay.wins, result.onThePlay.games - result.onThePlay.wins],
+                ['On the draw', drawPct, result.onTheDraw.wins, result.onTheDraw.games - result.onTheDraw.wins],
+              ].map(([label, pct, wins, losses]) => (
+                <div key={String(label)} style={{ textAlign: 'center' }}>
+                  <div
+                    style={{
+                      fontSize: '2rem',
+                      fontWeight: 'bold',
+                      color: Number(pct) >= 50 ? '#27ae60' : '#c0392b',
+                    }}
+                  >
+                    {pct}%
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: '#666' }}>{label}</div>
+                  <div style={{ fontSize: '0.8rem', color: '#888' }}>{wins}W / {losses}L</div>
+                </div>
+              ))}
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{result.avgTurnWin}</div>
+                <div style={{ fontSize: '0.8rem', color: '#666' }}>Avg turn (win)</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{result.avgTurnLoss}</div>
+                <div style={{ fontSize: '0.8rem', color: '#666' }}>Avg turn (loss)</div>
+              </div>
+            </div>
+          </section>
+
+          {/* Top killers */}
+          {result.topKillers.length > 0 && (
+            <section>
+              <h3 style={{ margin: '0 0 0.5rem' }}>Top opponent threats in losses</h3>
+              <table style={{ borderCollapse: 'collapse', fontSize: '0.9rem', width: '100%', maxWidth: 500 }}>
+                <thead>
+                  <tr style={{ background: '#f5f5f0' }}>
+                    <th style={{ padding: '0.3rem 0.5rem', textAlign: 'left' }}>Card</th>
+                    <th style={{ padding: '0.3rem 0.5rem', textAlign: 'right' }}>Games</th>
+                    <th style={{ padding: '0.3rem 0.5rem', textAlign: 'right' }}>Loss contribution</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.topKillers.map((k: TopKiller) => (
+                    <tr key={k.card} style={{ borderTop: '1px solid #eee' }}>
+                      <td style={{ padding: '0.3rem 0.5rem' }}>{k.card}</td>
+                      <td style={{ padding: '0.3rem 0.5rem', textAlign: 'right' }}>{k.appearances}</td>
+                      <td style={{ padding: '0.3rem 0.5rem', textAlign: 'right' }}>
+                        {(k.lossContribution * 100).toFixed(0)}%
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          )}
+
+          {/* Key moments */}
+          {result.keyMoments.length > 0 && (
+            <section>
+              <h3 style={{ margin: '0 0 0.5rem' }}>Key patterns</h3>
+              <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '0.9rem' }}>
+                {result.keyMoments.map((m, i) => <li key={i}>{m}</li>)}
+              </ul>
+            </section>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // Suggestions tab
 // ---------------------------------------------------------------------------
 
@@ -759,6 +971,239 @@ const DeckSuggestions: React.FC<{ deckNid: number }> = ({ deckNid }) => {
           </tbody>
         </table>
       )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Meta Matchup tab (Phase 10A)
+// ---------------------------------------------------------------------------
+
+interface DeckMetaMatchupProps {
+  deckNid: number;
+  format: string;
+}
+
+const DeckMetaMatchup: React.FC<DeckMetaMatchupProps> = ({ deckNid, format }) => {
+  // --- meta share chart ---
+  const { data: metaDecks = [], isLoading: metaLoading } = useQuery<MetaDeck[]>({
+    queryKey: ['metaDecks', format],
+    queryFn: () => fetchMetaDecks(format),
+    staleTime: 10 * 60 * 1000,
+  });
+
+  // --- matchup advisor ---
+  const [selectedArchetype, setSelectedArchetype] = useState('');
+  const [advice, setAdvice] = useState<MatchupAdvice | null>(null);
+  const [adviceLoading, setAdviceLoading] = useState(false);
+  const [adviceError, setAdviceError] = useState<string | null>(null);
+
+  async function handleGetAdvice(): Promise<void> {
+    if (!selectedArchetype) return;
+    setAdviceLoading(true);
+    setAdviceError(null);
+    setAdvice(null);
+    const confidence = classifierResults.find(r => r.name === selectedArchetype)?.probability ?? 1.0;
+    try {
+      const result = await fetchMatchupAdvice({ playerDeckId: deckNid, opponentArchetype: selectedArchetype, confidence, format });
+      setAdvice(result);
+    } catch {
+      setAdviceError('Could not reach the matchup advisor. Make sure Ollama is running.');
+    } finally {
+      setAdviceLoading(false);
+    }
+  }
+
+  // --- deck deduction ---
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [observedInput, setObservedInput] = useState('');
+  const [observedPlays, setObservedPlays] = useState<{ card_name: string }[]>([]);
+  const [classifierResults, setClassifierResults] = useState<ArchetypeProbability[]>([]);
+  const [classifierRunning, setClassifierRunning] = useState(false);
+
+  function addPlay(): void {
+    const name = observedInput.trim();
+    if (!name) return;
+    const next = [...observedPlays, { card_name: name }];
+    setObservedPlays(next);
+    setObservedInput('');
+    inputRef.current?.focus();
+    void runClassifier(next);
+  }
+
+  async function runClassifier(plays: { card_name: string }[]): Promise<void> {
+    if (plays.length === 0) { setClassifierResults([]); return; }
+    setClassifierRunning(true);
+    const results = await classifyPlays(plays);
+    setClassifierResults(results.slice(0, 5));
+    setClassifierRunning(false);
+  }
+
+  const topArchetypes = metaDecks
+    .filter(d => d.attributes.field_meta_share != null)
+    .slice(0, 12);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+
+      {/* Meta share bar chart */}
+      <section>
+        <h3 style={{ marginTop: 0 }}>Current {format} meta</h3>
+        {metaLoading && <p style={{ color: '#888' }}>Loading meta data…</p>}
+        {!metaLoading && topArchetypes.length === 0 && (
+          <p style={{ color: '#888', fontStyle: 'italic' }}>
+            No meta_deck nodes found for {format}. Run the MTGGoldfish scraper script to populate them.
+          </p>
+        )}
+        {topArchetypes.length > 0 && (
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={topArchetypes.map(d => ({
+              name: d.attributes.title,
+              share: parseFloat(d.attributes.field_meta_share ?? '0'),
+            }))} layout="vertical" margin={{ left: 120 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis type="number" tickFormatter={v => `${v}%`} domain={[0, 'dataMax + 2']} />
+              <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 12 }} />
+              <Tooltip formatter={(v: number) => `${v}%`} />
+              <Bar dataKey="share" name="Meta share" fill="#4a90d9" />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </section>
+
+      {/* Deck deduction */}
+      <section>
+        <h3>Deck deduction</h3>
+        <p style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', color: '#555' }}>
+          Enter cards you've seen the opponent play — the classifier updates P(archetype) live.
+          {classifierResults.length === 0 && ' (Requires the Python classifier to be running on port 8001.)'}
+        </p>
+        <div style={{ display: 'flex', gap: 8, marginBottom: '0.75rem' }}>
+          <input
+            ref={inputRef}
+            type="text"
+            value={observedInput}
+            onChange={e => setObservedInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') addPlay(); }}
+            placeholder="Card name…"
+            style={{ flex: 1 }}
+          />
+          <button type="button" onClick={addPlay}>Add play</button>
+          <button type="button" onClick={() => { setObservedPlays([]); setClassifierResults([]); }}>
+            Reset
+          </button>
+        </div>
+        {observedPlays.length > 0 && (
+          <p style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', color: '#444' }}>
+            Observed: {observedPlays.map(p => p.card_name).join(', ')}
+          </p>
+        )}
+        {classifierRunning && <p style={{ color: '#888', fontStyle: 'italic' }}>Classifying…</p>}
+        {classifierResults.length > 0 && (
+          <table style={{ borderCollapse: 'collapse', fontSize: '0.85rem', width: '100%', maxWidth: 400 }}>
+            <thead>
+              <tr style={{ background: '#f5f5f0' }}>
+                <th style={{ padding: '0.3rem 0.5rem', textAlign: 'left' }}>Archetype</th>
+                <th style={{ padding: '0.3rem 0.5rem', textAlign: 'right' }}>P(match)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {classifierResults.map(r => (
+                <tr key={r.name} style={{ borderTop: '1px solid #eee' }}>
+                  <td style={{ padding: '0.3rem 0.5rem' }}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedArchetype(r.name)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0, color: '#333' }}
+                    >
+                      {r.name}
+                    </button>
+                  </td>
+                  <td style={{ padding: '0.3rem 0.5rem', textAlign: 'right' }}>
+                    {(r.probability * 100).toFixed(1)}%
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      {/* Matchup advisor */}
+      <section>
+        <h3>Matchup advice</h3>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+          <select
+            value={selectedArchetype}
+            onChange={e => setSelectedArchetype(e.target.value)}
+            style={{ flex: 1, minWidth: 160 }}
+          >
+            <option value="">Select opponent archetype…</option>
+            {metaDecks.map(d => (
+              <option key={d.id} value={d.attributes.title}>{d.attributes.title}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => void handleGetAdvice()}
+            disabled={!selectedArchetype || adviceLoading}
+            style={{ padding: '0.35rem 1rem', background: '#333', color: '#fff', border: 'none', borderRadius: 4, cursor: selectedArchetype && !adviceLoading ? 'pointer' : 'default' }}
+          >
+            {adviceLoading ? 'Thinking…' : 'Get advice'}
+          </button>
+        </div>
+
+        {adviceError && <p style={{ color: '#c00' }}>{adviceError}</p>}
+
+        {advice && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div style={{ background: '#f8f8f5', border: '1px solid #ddd', borderRadius: 4, padding: '0.75rem 1rem' }}>
+              <strong>Matchup dynamic</strong>
+              <p style={{ margin: '0.25rem 0 0' }}>{advice.dynamic}</p>
+            </div>
+
+            {advice.threats.length > 0 && (
+              <div style={{ background: '#fff5f5', border: '1px solid #fcc', borderRadius: 4, padding: '0.75rem 1rem' }}>
+                <strong>Key threats</strong>
+                <ul style={{ margin: '0.25rem 0 0', paddingLeft: '1.25rem' }}>
+                  {advice.threats.map(t => <li key={t}>{t}</li>)}
+                </ul>
+              </div>
+            )}
+
+            {(advice.sideboard.in.length > 0 || advice.sideboard.out.length > 0) && (
+              <div style={{ background: '#f5f8ff', border: '1px solid #cce', borderRadius: 4, padding: '0.75rem 1rem' }}>
+                <strong>Sideboard</strong>
+                <div style={{ display: 'flex', gap: '2rem', marginTop: '0.25rem', flexWrap: 'wrap' }}>
+                  {advice.sideboard.in.length > 0 && (
+                    <div>
+                      <em>IN:</em>
+                      <ul style={{ margin: '0.25rem 0 0', paddingLeft: '1.25rem' }}>
+                        {advice.sideboard.in.map(c => <li key={c}>{c}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                  {advice.sideboard.out.length > 0 && (
+                    <div>
+                      <em>OUT:</em>
+                      <ul style={{ margin: '0.25rem 0 0', paddingLeft: '1.25rem' }}>
+                        {advice.sideboard.out.map(c => <li key={c}>{c}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {advice.keyPlay && (
+              <div style={{ background: '#f5fff5', border: '1px solid #cec', borderRadius: 4, padding: '0.75rem 1rem' }}>
+                <strong>Key play pattern</strong>
+                <p style={{ margin: '0.25rem 0 0' }}>{advice.keyPlay}</p>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
     </div>
   );
 };
@@ -999,7 +1444,7 @@ const DeckHeader: React.FC<DeckHeaderProps> = ({ deckId, title, format }) => {
 
 const DeckPage: React.FC<DeckPageProps> = ({ params }) => {
   const { id: slug } = params;
-  const [tab, setTab] = useState<'editor' | 'analysis' | 'suggestions'>('editor');
+  const [tab, setTab] = useState<'editor' | 'analysis' | 'suggestions' | 'meta' | 'simulate'>('editor');
 
   const { data: deck, isLoading: deckLoading } = useQuery({
     queryKey: ['deck', slug],
@@ -1069,16 +1514,34 @@ const DeckPage: React.FC<DeckPageProps> = ({ params }) => {
         >
           Suggestions
         </button>
+        <button
+          type="button"
+          style={tabStyle(tab === 'meta')}
+          onClick={() => setTab('meta')}
+        >
+          Meta
+        </button>
+        <button
+          type="button"
+          style={tabStyle(tab === 'simulate')}
+          onClick={() => setTab('simulate')}
+        >
+          Simulate
+        </button>
       </div>
 
-      {cardsLoading && tab !== 'suggestions' ? (
+      {cardsLoading && tab === 'editor' ? (
         <p>Loading cards...</p>
       ) : tab === 'editor' ? (
         <DeckEditor deckId={deckId!} cards={deckCards} />
       ) : tab === 'analysis' ? (
         <DeckAnalysis cards={deckCards} format={deck.attributes.field_format} deckTitle={deck.attributes.title} />
-      ) : (
+      ) : tab === 'suggestions' ? (
         <DeckSuggestions deckNid={deck.attributes.nid} />
+      ) : tab === 'meta' ? (
+        <DeckMetaMatchup deckNid={deck.attributes.nid} format={deck.attributes.field_format} />
+      ) : (
+        <DeckSimulate deckNid={deck.attributes.nid} format={deck.attributes.field_format} deckTitle={deck.attributes.title} />
       )}
     </main>
   );

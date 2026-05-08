@@ -2,7 +2,7 @@
 *.xlsx
 *.xls
 *.ods
-
+!Magic Deck Spreadsheet v2.xlsx
 # Planning notes (local only)
 plan.md
 
@@ -57,6 +57,16 @@ mtg-app/.env.production.local
 .env
 .env.local
 *.env.local
+
+# ============================================================
+# Python sim services
+# ============================================================
+mtg-sim/**/.venv/
+mtg-sim/**/model.joblib
+mtg-sim/**/__pycache__/
+mtg-sim/**/*.pyc
+mtg-sim/**/pyrightconfig.json
+pyrightconfig.json
 
 # ============================================================
 # OS & editor

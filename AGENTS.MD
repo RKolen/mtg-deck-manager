@@ -151,8 +151,65 @@ should be committed and with what message if asked.
 | New DDEV service | this AGENTS.md infrastructure section |
 | Changed infrastructure | `docs/architecture.md` |
 
----
+### 10. Pylint Score: 10.00/10 Required
 
+All code must achieve a perfect 10.00/10 Pylint score. Never use:
+
+- `# pylint: disable=...`
+- `# noqa`
+- `# pragma` comments
+
+Instead, fix the underlying issue. If Pylint complains, there is usually a
+legitimate code quality issue to address.
+
+Any style warnings are considered violations and must be fixed.
+
+- never edit `pyproject.toml`
+
+### 11. Full Pylint Output for Big Changes
+
+For significant changes, always run the full Pylint checks:
+
+```bash
+python3 -m pylint mtg-sim/
+```
+
+Never use flags or pipes.
+No issue is acceptable even if score is 10/10.
+
+**All pylint output lines must be zero — including R0801 (duplicate-code).**
+Never dismiss any warning as "informational only". If pylint reports it, fix it.
+Duplicate code goes in in a shared file as a shared fixture helper.
+
+#### 11.1 Pylance also needs to be happy
+
+VsCode Pylance must also be happy with the code.
+
+For 11 never use the excuse these are pre existing issues, they must be fixed.
+
+### 12. No Hardcoded Configuration Values
+
+Never hardcode values that should be configurable. This includes:
+
+- API keys, base URLs, or model names for AI services
+- Wiki URLs for RAG system
+- Default themes or display settings
+- Any value that users should be able to configure
+
+Instead, use the centralized configuration system in `src/config/`:
+
+```python
+# Wrong - hardcoded value
+model: str = "gpt-3.5-turbo"
+
+# Correct - use empty string, configure via config file or env
+model: str = ""
+```
+
+The configuration system supports defaults through config files or environment
+variables. See `src/config/config_types.py` for the configuration schema.
+
+---
 
 ## Project Setup
 

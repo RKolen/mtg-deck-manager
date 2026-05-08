@@ -1,0 +1,11 @@
+[MASTER]
+ignore=.venv,node_modules,__pycache__,vendor
+ignore-paths=.*/.venv/.*,.*/__pycache__/.*
+init-hook=
+    import sys
+    sys.path.insert(0, 'mtg-sim/sim')
+    sys.path.insert(0, 'mtg-sim/classifier')
+    sys.path.insert(0, 'mtg-sim/.venv/lib/python3.11/site-packages')
+
+[FORMAT]
+max-line-length=100

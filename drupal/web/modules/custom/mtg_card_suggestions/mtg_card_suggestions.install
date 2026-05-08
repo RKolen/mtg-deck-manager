@@ -1,0 +1,207 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * @file
+ * Install, update, and uninstall functions for the MTG Card Suggestions module.
+ */
+
+use Drupal\field\Entity\FieldConfig;
+use Drupal\field\Entity\FieldStorageConfig;
+use Drupal\node\Entity\NodeType;
+
+/**
+ * Creates the meta_deck content type and its fields.
+ *
+ * Run via: ddev drush updb -y
+ *
+ * The meta_deck type stores canonical archetype decklists scraped from
+ * MTGGoldfish. Each node represents one archetype in one format at a
+ * point in time (field_fetched_at).
+ */
+function mtg_card_suggestions_update_10001(array &$sandbox): string {
+  // ------------------------------------------------------------------
+  // Content type
+  // ------------------------------------------------------------------
+  if (!NodeType::load('meta_deck')) {
+    NodeType::create([
+      'type'        => 'meta_deck',
+      'name'        => 'Meta Deck',
+      'description' => 'Canonical meta archetype decklist snapshot.',
+    ])->save();
+  }
+
+  // ------------------------------------------------------------------
+  // Field definitions
+  // ------------------------------------------------------------------
+  $fields = [
+    [
+      'name'        => 'field_format',
+      'entity_type' => 'node',
+      'type'        => 'string',
+      'label'       => 'Format',
+      'cardinality' => 1,
+      'settings'    => ['max_length' => 32],
+      'bundles'     => ['meta_deck'],
+    ],
+    [
+      'name'        => 'field_meta_share',
+      'entity_type' => 'node',
+      'type'        => 'decimal',
+      'label'       => 'Meta Share (%)',
+      'cardinality' => 1,
+      'settings'    => ['precision' => 5, 'scale' => 2],
+      'bundles'     => ['meta_deck'],
+    ],
+    [
+      'name'        => 'field_cards',
+      'entity_type' => 'node',
+      'type'        => 'text_long',
+      'label'       => 'Cards (JSON)',
+      'cardinality' => 1,
+      'settings'    => [],
+      'bundles'     => ['meta_deck'],
+    ],
+    [
+      'name'        => 'field_archetype_tags',
+      'entity_type' => 'node',
+      'type'        => 'string',
+      'label'       => 'Archetype Tags',
+      'cardinality' => -1,
+      'settings'    => ['max_length' => 32],
+      'bundles'     => ['meta_deck'],
+    ],
+    [
+      'name'        => 'field_fetched_at',
+      'entity_type' => 'node',
+      'type'        => 'datetime',
+      'label'       => 'Fetched At',
+      'cardinality' => 1,
+      'settings'    => ['datetime_type' => 'datetime'],
+      'bundles'     => ['meta_deck'],
+    ],
+    [
+      'name'        => 'field_sideboard_guide',
+      'entity_type' => 'node',
+      'type'        => 'text_long',
+      'label'       => 'Sideboard Guide',
+      'cardinality' => 1,
+      'settings'    => [],
+      'bundles'     => ['meta_deck'],
+    ],
+    // field_key_cards is an entity reference to mtg_card nodes.
+    // Created separately below because it needs handler_settings.
+  ];
+
+  $created = [];
+
+  foreach ($fields as $def) {
+    if (!FieldStorageConfig::loadByName($def['entity_type'], $def['name'])) {
+      FieldStorageConfig::create([
+        'field_name'  => $def['name'],
+        'entity_type' => $def['entity_type'],
+        'type'        => $def['type'],
+        'cardinality' => $def['cardinality'],
+        'settings'    => $def['settings'],
+      ])->save();
+    }
+
+    foreach ($def['bundles'] as $bundle) {
+      if (!FieldConfig::loadByName($def['entity_type'], $bundle, $def['name'])) {
+        FieldConfig::create([
+          'field_name'  => $def['name'],
+          'entity_type' => $def['entity_type'],
+          'bundle'      => $bundle,
+          'label'       => $def['label'],
+          'required'    => FALSE,
+        ])->save();
+        $created[] = $def['name'] . ' on ' . $bundle;
+      }
+    }
+  }
+
+  // Entity reference field for key cards (references mtg_card nodes).
+  if (!FieldStorageConfig::loadByName('node', 'field_key_cards')) {
+    FieldStorageConfig::create([
+      'field_name'  => 'field_key_cards',
+      'entity_type' => 'node',
+      'type'        => 'entity_reference',
+      'cardinality' => -1,
+      'settings'    => ['target_type' => 'node'],
+    ])->save();
+  }
+  if (!FieldConfig::loadByName('node', 'meta_deck', 'field_key_cards')) {
+    FieldConfig::create([
+      'field_name'  => 'field_key_cards',
+      'entity_type' => 'node',
+      'bundle'      => 'meta_deck',
+      'label'       => 'Key Cards',
+      'required'    => FALSE,
+      'settings'    => [
+        'handler'          => 'default:node',
+        'handler_settings' => [
+          'target_bundles' => ['mtg_card' => 'mtg_card'],
+        ],
+      ],
+    ])->save();
+    $created[] = 'field_key_cards on meta_deck';
+  }
+
+  return $created !== []
+    ? 'Created: ' . implode(', ', $created)
+    : 'meta_deck content type and all fields already exist.';
+}
+
+/**
+ * Creates the simulation_result content type and its fields.
+ *
+ * Stores historical simulation runs for comparison across deck iterations.
+ * Run via: ddev drush updb -y
+ */
+function mtg_card_suggestions_update_10002(array &$sandbox): string {
+  if (!NodeType::load('simulation_result')) {
+    NodeType::create([
+      'type'        => 'simulation_result',
+      'name'        => 'Simulation Result',
+      'description' => 'Stored MTG game simulation outcome.',
+    ])->save();
+  }
+
+  $fields = [
+    ['name' => 'field_sim_player_deck_nid', 'type' => 'integer',   'label' => 'Player Deck NID',       'cardinality' => 1, 'settings' => []],
+    ['name' => 'field_sim_opponent',        'type' => 'string',    'label' => 'Opponent Archetype',    'cardinality' => 1, 'settings' => ['max_length' => 128]],
+    ['name' => 'field_sim_format',          'type' => 'string',    'label' => 'Format',                'cardinality' => 1, 'settings' => ['max_length' => 32]],
+    ['name' => 'field_sim_games',           'type' => 'integer',   'label' => 'Games Played',          'cardinality' => 1, 'settings' => []],
+    ['name' => 'field_sim_wins',            'type' => 'integer',   'label' => 'Wins',                  'cardinality' => 1, 'settings' => []],
+    ['name' => 'field_sim_win_rate',        'type' => 'decimal',   'label' => 'Win Rate',              'cardinality' => 1, 'settings' => ['precision' => 5, 'scale' => 4]],
+    ['name' => 'field_sim_result_json',     'type' => 'text_long', 'label' => 'Full Result JSON',      'cardinality' => 1, 'settings' => []],
+  ];
+
+  $created = [];
+  foreach ($fields as $def) {
+    if (!FieldStorageConfig::loadByName('node', $def['name'])) {
+      FieldStorageConfig::create([
+        'field_name'  => $def['name'],
+        'entity_type' => 'node',
+        'type'        => $def['type'],
+        'cardinality' => $def['cardinality'],
+        'settings'    => $def['settings'],
+      ])->save();
+    }
+    if (!FieldConfig::loadByName('node', 'simulation_result', $def['name'])) {
+      FieldConfig::create([
+        'field_name'  => $def['name'],
+        'entity_type' => 'node',
+        'bundle'      => 'simulation_result',
+        'label'       => $def['label'],
+        'required'    => FALSE,
+      ])->save();
+      $created[] = $def['name'];
+    }
+  }
+
+  return $created !== []
+    ? 'Created simulation_result fields: ' . implode(', ', $created)
+    : 'simulation_result fields already exist.';
+}

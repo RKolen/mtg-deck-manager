@@ -434,7 +434,6 @@ export async function fetchCollectionValue(): Promise<number> {
     '&page[limit]=200';
 
   while (next !== null) {
-    // eslint-disable-next-line no-await-in-loop
     const page: {
       data: JsonApiResource<{ field_quantity_owned: number }>[];
       included?: JsonApiResource<{ field_price_usd: string | null }>[];

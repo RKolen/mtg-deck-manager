@@ -11,7 +11,8 @@ database:
     version: "8.0"
 use_dns_when_possible: true
 composer_version: "2"
-web_environment: []
+web_environment:
+    - MTG_SIM_SERVICE_URL=
 corepack_enable: true
 
 # Key features of DDEV's config.yaml:

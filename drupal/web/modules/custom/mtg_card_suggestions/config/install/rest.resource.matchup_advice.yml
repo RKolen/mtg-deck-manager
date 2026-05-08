@@ -1,0 +1,13 @@
+id: matchup_advice
+plugin_id: matchup_advice
+plugin_label: 'MTG Matchup Advice'
+status: true
+granularity: resource
+configuration:
+  methods:
+    - POST
+  formats:
+    - json
+  authentication:
+    - cookie
+    - basic_auth
