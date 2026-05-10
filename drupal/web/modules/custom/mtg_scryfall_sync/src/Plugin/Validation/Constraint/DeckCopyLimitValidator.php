@@ -9,26 +9,21 @@ use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\ConstraintValidator;
 
 /**
- * Validates the DeckCopyLimit constraint.
+ * Validates the DeckCopyLimit constraint on a deck node.
  *
- * Checks both field_main_cards and field_sideboard_cards on a deck node.
- * The allowed copy count per card is determined by:
- *   1. "Basic Land" in field_type_line          -> unlimited
- *   2. "A deck can have any number" in oracle   -> unlimited
- *   3. "A deck can have up to N" in oracle      -> N copies
- *   4. Default                                  -> 4 copies.
+ * Reads card slots from field_deck_cards (paragraph--deck_card entities).
+ * Rules enforced:
+ *   1. Sideboard total must not exceed 15 cards.
+ *   2. "Basic Land" in field_type_line          -> unlimited copies
+ *   3. "A deck can have any number" in oracle   -> unlimited copies
+ *   4. "A deck can have up to N" in oracle      -> N copies
+ *   5. Default                                  -> 4 copies (main + sideboard combined).
  */
 class DeckCopyLimitValidator extends ConstraintValidator {
 
-  /**
-   * Regex: cards explicitly allowed in any quantity.
-   */
   private const ANY_NUMBER_PATTERN = '/a deck can have any number/i';
-
-  /**
-   * Regex: cards with a custom numeric limit (e.g. Seven Dwarves -> 7).
-   */
   private const CUSTOM_LIMIT_PATTERN = '/a deck can have up to (\d+)/i';
+  private const MAX_SIDEBOARD = 15;
 
   /**
    * {@inheritdoc}
@@ -39,36 +34,66 @@ class DeckCopyLimitValidator extends ConstraintValidator {
    *   The constraint definition.
    */
   public function validate(mixed $entity, Constraint $constraint): void {
-    // Only applies to deck nodes.
     if (!$entity instanceof ContentEntityInterface || $entity->bundle() !== 'deck') {
+      return;
+    }
+
+    if (!$entity->hasField('field_deck_cards')) {
       return;
     }
 
     /** @var \Drupal\mtg_scryfall_sync\Plugin\Validation\Constraint\DeckCopyLimit $constraint */
 
-    // Collect all referenced card IDs from both fields.
-    $all_refs = array_merge(
-      $this->collectRefs($entity, 'field_main_cards'),
-      $this->collectRefs($entity, 'field_sideboard_cards'),
-    );
+    // Aggregate quantity per card (main+sideboard combined) and total sideboard count.
+    $cardQuantities = [];
+    $sideboardTotal = 0;
 
-    if (empty($all_refs)) {
-      return;
-    }
-
-    // Count occurrences per card node ID.
-    $counts = array_count_values($all_refs);
-
-    foreach ($counts as $card_id => $count) {
-      $card = \Drupal::entityTypeManager()->getStorage('node')->load($card_id);
-      if (!$card instanceof ContentEntityInterface) {
+    foreach ($entity->get('field_deck_cards') as $item) {
+      /** @var \Drupal\paragraphs\Entity\Paragraph|null $para */
+      $para = $item->entity;
+      if ($para === NULL) {
         continue;
       }
 
+      $qty = (int) ($para->hasField('field_quantity') ? $para->get('field_quantity')->value : 1);
+      $isSideboard = (bool) ($para->hasField('field_is_sideboard') ? $para->get('field_is_sideboard')->value : FALSE);
+      $cardRef = $para->hasField('field_card') ? $para->get('field_card') : NULL;
+      if ($cardRef === NULL || $cardRef->isEmpty()) {
+        continue;
+      }
+
+      $cardId = (int) $cardRef->target_id;
+      $cardQuantities[$cardId] = ($cardQuantities[$cardId] ?? 0) + $qty;
+
+      if ($isSideboard) {
+        $sideboardTotal += $qty;
+      }
+    }
+
+    // Rule 1: sideboard size.
+    if ($sideboardTotal > self::MAX_SIDEBOARD) {
+      $this->context->addViolation($constraint->sideboardTooLarge, [
+        '%count' => $sideboardTotal,
+        '%max' => self::MAX_SIDEBOARD,
+      ]);
+    }
+
+    // Rules 2-5: per-card copy limits.
+    if (empty($cardQuantities)) {
+      return;
+    }
+
+    $cards = \Drupal::entityTypeManager()->getStorage('node')->loadMultiple(array_keys($cardQuantities));
+
+    foreach ($cardQuantities as $cardId => $totalQty) {
+      $card = $cards[$cardId] ?? NULL;
+      if (!$card instanceof ContentEntityInterface) {
+        continue;
+      }
       $max = $this->maxAllowed($card);
-      if ($count > $max) {
+      if ($totalQty > $max) {
         $this->context->addViolation($constraint->tooManyCopies, [
-          '%count' => $count,
+          '%count' => $totalQty,
           '%name' => $card->label(),
           '%max' => $max === PHP_INT_MAX ? 'unlimited' : $max,
         ]);
@@ -76,59 +101,19 @@ class DeckCopyLimitValidator extends ConstraintValidator {
     }
   }
 
-  /**
-   * Collects target entity IDs for a multi-value entity_reference field.
-   *
-   * @param \Drupal\Core\Entity\ContentEntityInterface $entity
-   *   The deck node.
-   * @param string $field_name
-   *   The field to read from.
-   *
-   * @return int[]
-   *   Flat list of referenced entity IDs (may contain duplicates).
-   */
-  private function collectRefs(ContentEntityInterface $entity, string $field_name): array {
-    if (!$entity->hasField($field_name)) {
-      return [];
-    }
-    $ids = [];
-    foreach ($entity->get($field_name) as $item) {
-      if (!empty($item->target_id)) {
-        $ids[] = (int) $item->target_id;
-      }
-    }
-    return $ids;
-  }
-
-  /**
-   * Returns the maximum number of copies allowed for a given card node.
-   *
-   * @param \Drupal\Core\Entity\ContentEntityInterface $card
-   *   The mtg_card node.
-   *
-   * @return int
-   *   Maximum allowed copies. PHP_INT_MAX means unlimited.
-   */
   private function maxAllowed(ContentEntityInterface $card): int {
     $type_line = (string) $card->get('field_type_line')->value;
     $oracle = (string) $card->get('field_oracle_text')->value;
 
-    // Rule 1: Basic lands are unlimited.
     if (preg_match('/\bBasic\b.*\bLand\b/i', $type_line)) {
       return PHP_INT_MAX;
     }
-
-    // Rule 2: "A deck can have any number of cards named X.".
     if (preg_match(self::ANY_NUMBER_PATTERN, $oracle)) {
       return PHP_INT_MAX;
     }
-
-    // Rule 3: "A deck can have up to N cards named X.".
     if (preg_match(self::CUSTOM_LIMIT_PATTERN, $oracle, $matches)) {
       return (int) $matches[1];
     }
-
-    // Rule 4: Standard four-copy rule.
     return 4;
   }
 

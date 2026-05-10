@@ -13,9 +13,8 @@ import {
   findCardsByName,
   createDeck,
   importCardToDeck,
-  upsertCollectionCard,
-  fetchCollectionCards,
 } from '../../services/drupalApi';
+import { slugify } from '../../utils/slugify';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -325,46 +324,17 @@ const ImportPage: React.FC = () => {
       });
 
       setProgress(`Adding ${toImport.length} cards...`);
-      let i = 0;
-      for (const row of toImport) {
-        i++;
-        setProgress(`Adding card ${i} / ${toImport.length}: ${row.name}`);
-        await importCardToDeck(
-          deck.id,
-          row.matchId!,
-          row.quantity,
-          row.isSideboard,
-          row.name,
-        );
-      }
+      await importCardToDeck(
+        deck.id,
+        toImport.map(row => ({
+          cardId: row.matchId!,
+          cardName: row.matchTitle ?? row.name,
+          quantity: row.quantity,
+          isSideboard: row.isSideboard,
+        })),
+      );
 
-      const toCollect = toImport.filter(r => r.addToCollection);
-      if (toCollect.length > 0) {
-        setProgress('Fetching existing collection...');
-        const existing = await fetchCollectionCards();
-        const existingIdByCardId = new Map<string, string>(
-          existing.flatMap(cc => {
-            const ref = cc.relationships?.field_card?.data;
-            if (ref == null || Array.isArray(ref)) return [];
-            return [[ref.id, cc.id]];
-          }),
-        );
-
-        setProgress(`Adding ${toCollect.length} cards to collection...`);
-        let j = 0;
-        for (const row of toCollect) {
-          j++;
-          setProgress(`Updating collection ${j} / ${toCollect.length}: ${row.name}`);
-          await upsertCollectionCard(
-            row.matchId!,
-            row.isFoil ? 0 : row.quantity,
-            row.isFoil ? row.quantity : 0,
-            existingIdByCardId.get(row.matchId!),
-          );
-        }
-      }
-
-      setCreatedDeckId(deck.id);
+      setCreatedDeckId(slugify(deckTitle));
       setStep('done');
       setProgress('');
     } catch (err) {

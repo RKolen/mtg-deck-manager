@@ -1,0 +1,19 @@
+uuid: 1f10b02a-4945-4ced-bb89-64c6f352687c
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_sim_opponent
+    - node.type.simulation_result
+id: node.simulation_result.field_sim_opponent
+field_name: field_sim_opponent
+entity_type: node
+bundle: simulation_result
+label: Opponent
+description: 'Archetype name of the simulated opponent.'
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: string

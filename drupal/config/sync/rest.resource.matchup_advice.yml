@@ -1,0 +1,20 @@
+uuid: 3ba7c757-6dca-4001-b038-32e585670c57
+langcode: en
+status: true
+dependencies:
+  module:
+    - basic_auth
+    - mtg_card_suggestions
+    - serialization
+    - user
+id: matchup_advice
+plugin_id: matchup_advice
+granularity: resource
+configuration:
+  methods:
+    - POST
+  formats:
+    - json
+  authentication:
+    - cookie
+    - basic_auth

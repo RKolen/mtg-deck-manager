@@ -49,7 +49,7 @@ mtg-app/.env.local
 mtg-app/.env.development
 mtg-app/.env.development.local
 mtg-app/.env.production.local
-.gatsby.log
+*.log
 
 # ============================================================
 # Environment & secrets

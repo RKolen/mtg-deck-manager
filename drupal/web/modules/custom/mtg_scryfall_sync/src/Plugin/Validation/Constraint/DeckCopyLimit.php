@@ -7,13 +7,14 @@ namespace Drupal\mtg_scryfall_sync\Plugin\Validation\Constraint;
 use Symfony\Component\Validator\Constraint;
 
 /**
- * Enforces the four-copy rule on deck main-deck and sideboard fields.
+ * Enforces MTG deck construction rules on the deck node.
  *
- * Cards with "Basic Land" in their type line are unlimited.
- * Cards whose oracle text contains "A deck can have any number" are unlimited.
- * Cards whose oracle text contains "A deck can have up to N" allow N copies.
- * All other cards are limited to 4 copies across main deck and sideboard
- * combined (matching competitive Magic rules).
+ * Reads card slots from field_deck_cards (paragraph--deck_card entities).
+ * - Sideboard may not exceed 15 cards.
+ * - Basic lands are unlimited.
+ * - Cards with "a deck can have any number" in oracle are unlimited.
+ * - Cards with "a deck can have up to N" in oracle allow N copies.
+ * - All other cards are limited to 4 copies (main + sideboard combined).
  *
  * @Constraint(
  *   id = "DeckCopyLimit",
@@ -23,9 +24,8 @@ use Symfony\Component\Validator\Constraint;
  */
 class DeckCopyLimit extends Constraint {
 
-  /**
-   * Violation message for the four-copy rule.
-   */
   public string $tooManyCopies = 'The deck contains %count copies of "%name", but the maximum allowed is %max.';
+
+  public string $sideboardTooLarge = 'The sideboard contains %count cards, but the maximum is %max.';
 
 }

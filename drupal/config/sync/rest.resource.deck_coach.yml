@@ -1,0 +1,20 @@
+uuid: adb4a542-80fb-4fc3-823e-dcb7c4c7e3b5
+langcode: en
+status: true
+dependencies:
+  module:
+    - basic_auth
+    - mtg_card_suggestions
+    - serialization
+    - user
+id: deck_coach
+plugin_id: deck_coach
+granularity: resource
+configuration:
+  methods:
+    - POST
+  formats:
+    - json
+  authentication:
+    - cookie
+    - basic_auth

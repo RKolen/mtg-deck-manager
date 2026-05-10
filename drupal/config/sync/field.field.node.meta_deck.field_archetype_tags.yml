@@ -1,0 +1,19 @@
+uuid: efa3f10a-0033-4b37-b79b-aae5f63fe4dc
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_archetype_tags
+    - node.type.meta_deck
+id: node.meta_deck.field_archetype_tags
+field_name: field_archetype_tags
+entity_type: node
+bundle: meta_deck
+label: 'Archetype Tags'
+description: 'Strategy tags, e.g. aggro, midrange, combo, control, tempo.'
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: string

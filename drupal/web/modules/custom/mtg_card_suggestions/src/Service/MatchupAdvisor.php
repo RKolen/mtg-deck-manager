@@ -67,7 +67,7 @@ class MatchupAdvisor {
   }
 
   /**
-   * Loads and summarises cards from a deck's deck_card nodes.
+   * Loads and summarises main-deck cards via field_deck_cards paragraphs.
    *
    * @param int $deckNid
    *   Deck node ID.
@@ -75,19 +75,12 @@ class MatchupAdvisor {
    * @return array{list: string, avgCmc: float, colors: list<string>, landCount: int, oneDrop: int}
    */
   private function loadDeckCards(int $deckNid): array {
-    $deckCardNids = $this->nodeStorage
-      ->getQuery()
-      ->accessCheck(FALSE)
-      ->condition('type', 'deck_card')
-      ->condition('field_deck', $deckNid)
-      ->condition('field_is_sideboard', FALSE)
-      ->execute();
-
-    if ($deckCardNids === []) {
-      return ['list' => '(empty deck)', 'avgCmc' => 0.0, 'colors' => [], 'landCount' => 0, 'oneDrop' => 0];
+    /** @var \Drupal\node\NodeInterface|null $deck */
+    $deck = $this->nodeStorage->load($deckNid);
+    $empty = ['list' => '(empty deck)', 'avgCmc' => 0.0, 'colors' => [], 'landCount' => 0, 'oneDrop' => 0];
+    if ($deck === NULL || !$deck->hasField('field_deck_cards')) {
+      return $empty;
     }
-
-    $deckCardNodes = $this->nodeStorage->loadMultiple(array_values($deckCardNids));
 
     $lines = [];
     $totalCmc = 0.0;
@@ -96,21 +89,32 @@ class MatchupAdvisor {
     $landCount = 0;
     $oneDrop = 0;
 
-    foreach ($deckCardNodes as $deckCard) {
+    foreach ($deck->get('field_deck_cards') as $item) {
+      /** @var \Drupal\paragraphs\Entity\Paragraph|null $para */
+      $para = $item->entity;
+      if ($para === NULL) {
+        continue;
+      }
+      $isSideboard = (bool) ($para->hasField('field_is_sideboard') ? $para->get('field_is_sideboard')->value : FALSE);
+      if ($isSideboard) {
+        continue;
+      }
+      $cardRef = $para->hasField('field_card') ? $para->get('field_card') : NULL;
+      if ($cardRef === NULL || $cardRef->isEmpty()) {
+        continue;
+      }
       /** @var \Drupal\node\NodeInterface|null $card */
-      $card = $deckCard->get('field_card')->entity;
+      $card = $cardRef->entity;
       if ($card === NULL) {
         continue;
       }
-
-      $qty = (int) ($deckCard->get('field_quantity')->value ?? 1);
+      $qty = (int) ($para->hasField('field_quantity') ? $para->get('field_quantity')->value : 1);
       $name = (string) $card->label();
-      $cmc = (float) ($card->get('field_cmc')->value ?? 0);
-      $typeLine = (string) ($card->get('field_type_line')->value ?? '');
+      $cmc = (float) ($card->hasField('field_cmc') ? $card->get('field_cmc')->value : 0);
+      $typeLine = (string) ($card->hasField('field_type_line') ? $card->get('field_type_line')->value : '');
       $isLand = stripos($typeLine, 'land') !== FALSE;
 
       $lines[] = "{$qty}x {$name}";
-
       if ($isLand) {
         $landCount += $qty;
       }
@@ -121,17 +125,16 @@ class MatchupAdvisor {
           $oneDrop += $qty;
         }
       }
-
-      foreach ($card->get('field_colors')->getValue() as $c) {
-        $colorSet[$c['value']] = TRUE;
+      if ($card->hasField('field_colors')) {
+        foreach ($card->get('field_colors')->getValue() as $c) {
+          $colorSet[$c['value']] = TRUE;
+        }
       }
     }
 
-    $avgCmc = $totalNonLand > 0 ? round($totalCmc / $totalNonLand, 2) : 0.0;
-
     return [
       'list'      => implode(', ', $lines),
-      'avgCmc'    => $avgCmc,
+      'avgCmc'    => $totalNonLand > 0 ? round($totalCmc / $totalNonLand, 2) : 0.0,
       'colors'    => array_keys($colorSet),
       'landCount' => $landCount,
       'oneDrop'   => $oneDrop,

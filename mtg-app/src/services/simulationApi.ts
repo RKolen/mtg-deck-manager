@@ -1,8 +1,5 @@
 /**
  * Client for POST /api/simulate — MTG game simulation service (Phase 10B).
- *
- * Drupal proxies the request to the Python mtg-sim service and persists
- * the result as a simulation_result node.
  */
 
 import { createDrupalClient } from './httpClient';
@@ -17,9 +14,7 @@ export interface SimulateRequest {
   playerDeckId: number;
   opponentArchetype: string;
   format?: string;
-  /** Number of games to run, 1–200 (default 50). */
   games?: number;
-  /** Use Ollama for MCTS board evaluation — significantly slower. */
   useLlm?: boolean;
 }
 
@@ -33,6 +28,53 @@ export interface TopKiller {
   card: string;
   appearances: number;
   lossContribution: number;
+}
+
+export interface MulliganStats {
+  avgPlayerMulligan: number;
+  avgOpponentMulligan: number;
+  distribution: Record<string, number>;
+  keepRate: number;
+}
+
+export interface TurnBreakdownRow {
+  turn: number;
+  avgCreatures: number;
+  avgBoardPower: number;
+  avgHandSize: number;
+  avgDamageDealt: number;
+}
+
+export interface LifeProgressionRow {
+  turn: number;
+  avgPlayerLife: number;
+  avgOppLife: number;
+}
+
+export interface TurnEvent {
+  turn: number;
+  player: number;           // 0 = simulated player, 1 = opponent
+  manaAvailable: number;
+  plays: string[];
+  damageDealt: number;
+  lifeTotals: [number, number];
+  handSize: number;
+  creaturesInPlay: number;
+  boardPower: number;
+}
+
+export interface GameLog {
+  gameIndex: number;
+  onThePlay: boolean;
+  playerMulligan: number;
+  opponentMulligan: number;
+  playerOpeningHand: string[];
+  winner: number;
+  finalTurn: number;
+  playerFinalLife: number;
+  opponentFinalLife: number;
+  winCondition: string;
+  turns: TurnEvent[];
 }
 
 export interface SimulationResult {
@@ -49,20 +91,23 @@ export interface SimulationResult {
   avgTurnLoss: number;
   topKillers: TopKiller[];
   keyMoments: string[];
+  mulliganStats: MulliganStats;
+  avgMulliganCount: number;
+  manaEfficiency: number;
+  lifeProgression: LifeProgressionRow[];
+  turnBreakdown: TurnBreakdownRow[];
+  winConditions: Record<string, number>;
+  gameLogs: GameLog[];
 }
 
 // ---------------------------------------------------------------------------
 // API call
 // ---------------------------------------------------------------------------
 
-/**
- * Runs a simulation and returns aggregate statistics.
- * Can take several minutes for 200 games with MCTS enabled.
- */
 export async function runSimulation(req: SimulateRequest): Promise<SimulationResult> {
   const response = await client.post<SimulationResult>('/simulate', req, {
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    timeout: 660_000, // 11 min — matches Drupal's 600 s proxy timeout + buffer
+    timeout: 660_000,
   });
   return response.data;
 }

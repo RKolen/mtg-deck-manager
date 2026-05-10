@@ -181,7 +181,7 @@ export async function findCardsByName(
 
 export async function fetchDecks(): Promise<JsonApiResource<DeckAttributes>[]> {
   return fetchAll<DeckAttributes>(
-    '/node/deck?fields[node--deck]=title,field_format,field_notes',
+    '/node/deck?fields[node--deck]=title,field_format,field_notes,drupal_internal__nid',
   );
 }
 
@@ -242,15 +242,16 @@ export async function deleteDeck(id: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Deck cards — deck_card node model
+// Deck cards — paragraph--deck_card, owned by deck via field_deck_cards
 //
-// Each card slot is a `deck_card` node with:
-//   field_card          entity reference → mtg_card
-//   field_deck          entity reference → deck
-//   field_quantity      integer (how many copies)
-//   field_is_sideboard  boolean
+// The DECK references its cards (deck → paragraph.deck_card → mtg_card).
+// Each paragraph has field_card, field_quantity, field_is_sideboard.
+// No back-reference from card to deck — the same card can appear in any
+// number of decks independently.
 //
-// To fetch a deck's cards: filter deck_card nodes by field_deck.id.
+// Reads:    JSON:API include on the deck node
+// Mutations: POST /api/deck-cards (DeckCardsResource) — handles paragraph
+//            lifecycle inside Drupal, bypassing JSON:API access restrictions.
 // ---------------------------------------------------------------------------
 
 const DECK_CARD_FIELDS =
@@ -258,151 +259,144 @@ const DECK_CARD_FIELDS =
   'field_colors,field_color_identity,field_oracle_text,field_image_uri,' +
   'field_is_mana_producer,field_produced_mana,field_legal_formats';
 
-interface DeckCardNodeAttributes {
-  title: string;
+interface ParagraphDeckCardAttributes {
   field_quantity: number;
   field_is_sideboard: boolean;
 }
 
+const deckCardsClient = createDrupalClient('/api');
+
+async function deckCardAction(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const res = await deckCardsClient.post<Record<string, unknown>>(
+    '/deck-cards?_format=json',
+    payload,
+    { headers: { 'Content-Type': 'application/json', Accept: 'application/json' } },
+  );
+  return res.data;
+}
+
 /**
- * Fetches all deck_card nodes for a deck, including the referenced mtg_card
- * nodes, and returns them as DeckCardWithCard slots.
+ * Fetches all card slots for a deck by reading field_deck_cards paragraphs
+ * and their referenced mtg_card nodes in a single JSON:API request.
  */
 export async function fetchDeckCardsWithCards(
   deckId: string,
 ): Promise<DeckCardWithCard[]> {
   const response = await client.get<{
-    data: JsonApiResource<DeckCardNodeAttributes>[];
-    included?: JsonApiResource<MtgCardAttributes>[];
+    data: JsonApiResource<Record<string, never>> & {
+      relationships?: {
+        field_deck_cards?: { data: Array<{ type: string; id: string }> };
+      };
+    };
+    included?: JsonApiResource<Record<string, unknown>>[];
   }>(
-    `/node/deck_card` +
-    `?filter[field_deck.id]=${deckId}` +
-    `&include=field_card` +
-    `&fields[node--deck_card]=field_quantity,field_is_sideboard,field_card` +
-    `&fields[node--mtg_card]=${DECK_CARD_FIELDS}` +
-    `&page[limit]=200`,
+    `/node/deck/${deckId}` +
+    `?include=field_deck_cards,field_deck_cards.field_card` +
+    `&fields[node--deck]=field_deck_cards` +
+    `&fields[paragraph--deck_card]=field_card,field_quantity,field_is_sideboard` +
+    `&fields[node--mtg_card]=${DECK_CARD_FIELDS}`,
   );
 
-  const cardMap = new Map<string, MtgCardAttributes & { id: string }>(
-    (response.data.included ?? []).map(c => [c.id, { id: c.id, ...c.attributes }]),
-  );
+  const included = response.data.included ?? [];
+  const cardMap = new Map<string, MtgCardAttributes & { id: string }>();
+  const paraMap = new Map<string, JsonApiResource<ParagraphDeckCardAttributes>>();
 
-  return response.data.data.flatMap(node => {
-    const cardRef = (node.relationships?.field_card?.data) as JsonApiResourceIdentifier | null;
+  for (const item of included) {
+    if (item.type === 'node--mtg_card') {
+      cardMap.set(item.id, { id: item.id, ...(item.attributes as unknown as MtgCardAttributes) });
+    } else if (item.type === 'paragraph--deck_card') {
+      paraMap.set(item.id, item as unknown as JsonApiResource<ParagraphDeckCardAttributes>);
+    }
+  }
+
+  const paraRefs = response.data.data.relationships?.field_deck_cards?.data ?? [];
+
+  return paraRefs.flatMap(ref => {
+    const para = paraMap.get(ref.id);
+    if (!para) return [];
+    const cardRef = (para.relationships?.field_card?.data) as JsonApiResourceIdentifier | null;
     if (!cardRef) return [];
     const card = cardMap.get(cardRef.id);
     if (!card) return [];
     return [{
-      id: node.id,
-      quantity: node.attributes.field_quantity ?? 1,
-      isSideboard: node.attributes.field_is_sideboard ?? false,
+      id: para.id,
+      quantity: para.attributes.field_quantity ?? 1,
+      isSideboard: para.attributes.field_is_sideboard ?? false,
       card,
     }];
   });
 }
 
 /**
- * Creates a deck_card node with a specific quantity in one call.
- * Used by the import page.
+ * Bulk-imports cards into a deck. Calls the deck-cards endpoint once per
+ * card so the import page can show per-card progress.
+ * Deck cards are completely separate from collection_card nodes —
+ * you can deck cards you don't own.
  */
 export async function importCardToDeck(
   deckId: string,
-  cardId: string,
-  quantity: number,
-  isSideboard: boolean,
-  cardName: string,
+  cards: { cardId: string; quantity: number; isSideboard: boolean; cardName: string }[],
 ): Promise<void> {
-  await client.post<JsonApiSingleResponse<DeckCardNodeAttributes>>(
-    '/node/deck_card',
-    {
-      data: {
-        type: 'node--deck_card',
-        attributes: {
-          title: cardName,
-          status: true,
-          field_quantity: quantity,
-          field_is_sideboard: isSideboard,
-        },
-        relationships: {
-          field_card: { data: { type: 'node--mtg_card', id: cardId } },
-          field_deck: { data: { type: 'node--deck', id: deckId } },
-        },
-      },
-    },
-  );
+  for (const c of cards) {
+    await deckCardAction({
+      action: 'add',
+      deckUuid: deckId,
+      cardUuid: c.cardId,
+      quantity: c.quantity,
+      isSideboard: c.isSideboard,
+    });
+  }
 }
 
 /**
- * Adds a card slot to a deck. If a deck_card node already exists for this
- * card in the same zone, increments its quantity instead.
+ * Adds one card to a deck. Increments the existing paragraph's quantity if
+ * the card is already in the same zone; otherwise creates a new paragraph.
  */
 export async function addCardToDeck(
   deckId: string,
   cardId: string,
   isSideboard = false,
   existingSlots: DeckCardWithCard[] = [],
-  cardName = 'Unknown card',
+  _cardName = '',
 ): Promise<void> {
   const existing = existingSlots.find(
     s => s.card.id === cardId && s.isSideboard === isSideboard,
   );
 
   if (existing != null) {
-    await setCardQuantityInDeck(
-      cardId, existing.quantity + 1, isSideboard, existingSlots,
-    );
+    await setCardQuantityInDeck(existing.id, existing.quantity + 1, deckId, existingSlots);
     return;
   }
 
-  await importCardToDeck(deckId, cardId, 1, isSideboard, cardName);
+  await deckCardAction({ action: 'add', deckUuid: deckId, cardUuid: cardId, quantity: 1, isSideboard });
 }
 
 /**
- * Updates the quantity on an existing deck_card node.
- * If quantity reaches 0, deletes the node instead.
+ * Updates the quantity on an existing paragraph--deck_card.
+ * Removes the slot when quantity reaches 0.
  */
 export async function setCardQuantityInDeck(
-  cardId: string,
+  slotId: string,
   quantity: number,
-  isSideboard: boolean,
+  deckId: string,
   allSlots: DeckCardWithCard[],
 ): Promise<void> {
-  const slot = allSlots.find(
-    s => s.card.id === cardId && s.isSideboard === isSideboard,
-  );
-  if (!slot) return;
-
   if (quantity <= 0) {
-    await removeCardFromDeck(cardId, isSideboard, allSlots);
+    await removeCardFromDeck(slotId, deckId, allSlots);
     return;
   }
-
-  await client.patch(
-    `/node/deck_card/${slot.id}`,
-    {
-      data: {
-        type: 'node--deck_card',
-        id: slot.id,
-        attributes: { field_quantity: quantity },
-      },
-    },
-  );
+  await deckCardAction({ action: 'update', deckUuid: deckId, paraUuid: slotId, quantity });
 }
 
 /**
- * Deletes a deck_card node entirely.
+ * Removes a card slot from the deck and deletes its paragraph.
  */
 export async function removeCardFromDeck(
-  cardId: string,
-  isSideboard: boolean,
-  allSlots: DeckCardWithCard[],
+  slotId: string,
+  deckId: string,
+  _allSlots: DeckCardWithCard[],
 ): Promise<void> {
-  const slot = allSlots.find(
-    s => s.card.id === cardId && s.isSideboard === isSideboard,
-  );
-  if (!slot) return;
-
-  await client.delete(`/node/deck_card/${slot.id}`);
+  await deckCardAction({ action: 'remove', deckUuid: deckId, paraUuid: slotId });
 }
 
 // ---------------------------------------------------------------------------
@@ -463,6 +457,7 @@ export async function fetchCollectionValue(): Promise<number> {
 
 export async function upsertCollectionCard(
   cardId: string,
+  cardName: string,
   quantityOwned: number,
   quantityFoil = 0,
   existingId?: string,
@@ -475,6 +470,7 @@ export async function upsertCollectionCard(
         type: 'node--collection_card',
         id: existingId,
         attributes: {
+          title: cardName,
           field_quantity_owned: quantityOwned,
           field_quantity_foil: quantityFoil,
         },
@@ -489,7 +485,7 @@ export async function upsertCollectionCard(
     data: {
       type: 'node--collection_card',
       attributes: {
-        title: `collection_${cardId}`,
+        title: cardName,
         field_quantity_owned: quantityOwned,
         field_quantity_foil: quantityFoil,
         status: true,
@@ -500,4 +496,19 @@ export async function upsertCollectionCard(
     },
   });
   return response.data.data;
+}
+
+/**
+ * Fetches the collection_card node for a specific mtg_card UUID, if owned.
+ */
+export async function fetchCollectionCardByCardId(
+  cardId: string,
+): Promise<JsonApiResource<CollectionCardAttributes> | null> {
+  const response = await client.get<JsonApiCollectionResponse<CollectionCardAttributes>>(
+    `/node/collection_card` +
+    `?filter[field_card.id]=${cardId}` +
+    `&fields[node--collection_card]=field_quantity_owned,field_quantity_foil,field_card` +
+    `&page[limit]=1`,
+  );
+  return response.data.data[0] ?? null;
 }

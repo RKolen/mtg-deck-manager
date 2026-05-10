@@ -1,0 +1,20 @@
+uuid: 5f621cd4-9453-43f6-85d9-117f5766d6b9
+langcode: en
+status: true
+dependencies:
+  module:
+    - basic_auth
+    - mtg_card_suggestions
+    - serialization
+    - user
+id: deck_cards
+plugin_id: deck_cards
+granularity: resource
+configuration:
+  methods:
+    - POST
+  formats:
+    - json
+  authentication:
+    - cookie
+    - basic_auth

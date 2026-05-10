@@ -1,4 +1,4 @@
-uuid: 1dc9a1b6-a6c7-4318-b94f-9f4131a84399
+uuid: 34734734-723c-4409-88da-c2b2390c45a5
 langcode: en
 status: true
 dependencies:
@@ -13,7 +13,9 @@ label: 'Is Sideboard'
 description: ''
 required: false
 translatable: true
-default_value: {  }
+default_value:
+  -
+    value: 0
 default_value_callback: ''
 settings:
   on_label: 'On'

@@ -1,4 +1,4 @@
-uuid: 98688839-cfaa-474e-9c84-9f30a69be19b
+uuid: 0c2c5311-cf16-4710-a575-41f9ebf50dcc
 langcode: en
 status: true
 dependencies:
@@ -13,7 +13,9 @@ label: Quantity
 description: ''
 required: true
 translatable: true
-default_value: {  }
+default_value:
+  -
+    value: 1
 default_value_callback: ''
 settings:
   min: null

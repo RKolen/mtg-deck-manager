@@ -1,0 +1,19 @@
+uuid: c7677439-a63b-4586-b0d7-797b6fe44036
+langcode: en
+status: true
+dependencies:
+  module:
+    - node
+id: node.field_sim_result_json
+field_name: field_sim_result_json
+entity_type: node
+type: string_long
+settings:
+  case_sensitive: false
+module: core
+locked: false
+cardinality: 1
+translatable: false
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

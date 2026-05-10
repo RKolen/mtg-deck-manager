@@ -1,0 +1,11 @@
+uuid: 59e635f6-748b-41cf-a22c-ea8a429ea70a
+langcode: en
+status: true
+dependencies: {  }
+name: 'Simulation Result'
+type: simulation_result
+description: 'Persisted result of a Forge game simulation run.'
+help: null
+new_revision: false
+preview_mode: 1
+display_submitted: false

@@ -1,0 +1,23 @@
+uuid: 05ee9f63-10f8-43ae-8859-5b8841f74b77
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_meta_share
+    - node.type.meta_deck
+id: node.meta_deck.field_meta_share
+field_name: field_meta_share
+entity_type: node
+bundle: meta_deck
+label: 'Meta Share %'
+description: 'Percentage of meta representation from the latest snapshot (e.g. 8.50).'
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings:
+  min: null
+  max: null
+  prefix: ''
+  suffix: ''
+field_type: decimal

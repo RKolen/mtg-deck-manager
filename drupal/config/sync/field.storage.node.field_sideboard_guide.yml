@@ -1,18 +1,18 @@
-uuid: 9a648ad7-0c1a-4b24-b42e-a12e002b0f1d
+uuid: 5026babc-ead8-42f1-b121-4fc16dee5766
 langcode: en
 status: true
 dependencies:
   module:
     - node
-id: node.field_main_cards
-field_name: field_main_cards
+id: node.field_sideboard_guide
+field_name: field_sideboard_guide
 entity_type: node
-type: entity_reference
+type: string_long
 settings:
-  target_type: node
+  case_sensitive: false
 module: core
 locked: false
-cardinality: 60
+cardinality: 1
 translatable: true
 indexes: {  }
 persist_with_no_fields: false

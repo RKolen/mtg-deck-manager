@@ -1,0 +1,23 @@
+uuid: 2307af3b-4180-4707-aecf-69ea33ade5a1
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_sim_games
+    - node.type.simulation_result
+id: node.simulation_result.field_sim_games
+field_name: field_sim_games
+entity_type: node
+bundle: simulation_result
+label: 'Games Played'
+description: ''
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings:
+  min: null
+  max: null
+  prefix: ''
+  suffix: ''
+field_type: integer

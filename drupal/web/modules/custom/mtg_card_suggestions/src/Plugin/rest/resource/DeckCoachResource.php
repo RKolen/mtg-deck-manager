@@ -93,11 +93,15 @@ final class DeckCoachResource extends ResourceBase {
       );
     }
 
+    $cards = is_array($data['cards'] ?? NULL) ? $data['cards'] : [];
+    $archetype = $this->detectArchetype($data['metrics'], $cards);
+
     $coaching = $this->runOllama(
       $this->buildPrompt(
         (string) $data['format'],
         (string) $data['deckTitle'],
         $data['metrics'],
+        $archetype,
       ),
     );
 
@@ -121,29 +125,97 @@ final class DeckCoachResource extends ResourceBase {
    * @return string
    *   The prompt string for Ollama.
    */
-  private function buildPrompt(string $format, string $deckTitle, array $metrics): string {
+  /**
+   * Classifies the deck's archetype from metrics and card list.
+   *
+   * @param array<string, mixed> $metrics
+   *   Analysis metrics from the frontend.
+   * @param list<array<string, mixed>> $cards
+   *   Card list sent from the frontend (name, type, cmc).
+   *
+   * @return array<string, string>
+   *   Archetype descriptor: speed, label, landNorm, caveats.
+   */
+  private function detectArchetype(array $metrics, array $cards): array {
+    $avgCmc = (float) ($metrics['avgCmc'] ?? 2.5);
+    $landCount = (int) ($metrics['landCount'] ?? 24);
+
+    // Detect keywords from card list
+    $keywords = [];
+    foreach ($cards as $card) {
+      $oracle = strtolower((string) ($card['oracle'] ?? $card['oracle_text'] ?? ''));
+      $type = strtolower((string) ($card['type'] ?? $card['type_line'] ?? ''));
+      foreach (['heroic', 'prowess', 'trample', 'haste', 'infect', 'storm'] as $kw) {
+        if (str_contains($oracle, $kw) || str_contains($type, $kw)) {
+          $keywords[$kw] = ($keywords[$kw] ?? 0) + 1;
+        }
+      }
+    }
+    arsort($keywords);
+    $topKeyword = array_key_first($keywords) ?? '';
+
+    if ($avgCmc < 1.6) {
+      return [
+        'speed' => 'ultra-fast aggro',
+        'label' => "ultra-fast aggro ({$topKeyword})",
+        'landNorm' => '14–18 lands is CORRECT for this archetype — the deck is designed to empty its hand by turn 3.',
+        'cmcNorm' => "An average CMC of {$avgCmc} is intentional — this deck wins BECAUSE of its low curve, not despite it.",
+        'coachingFocus' => 'Identify mana screw/flood risks on the specific early turns this deck needs. Do NOT recommend more lands, higher CMC cards, or a different game plan.',
+        'winCon' => 'attack for lethal by turn 3–4, typically by pumping a creature with heroic or prowess triggers',
+      ];
+    }
+    if ($avgCmc < 2.2) {
+      return [
+        'speed' => 'aggressive',
+        'label' => 'aggressive',
+        'landNorm' => '18–22 lands is normal for this archetype.',
+        'cmcNorm' => "An average CMC of {$avgCmc} is appropriate for an aggressive deck.",
+        'coachingFocus' => 'Focus on consistency of early plays and reliability of the colour sources for key spells.',
+        'winCon' => 'apply consistent early pressure and close out by turns 4–6',
+      ];
+    }
+    if ($avgCmc > 3.5) {
+      return [
+        'speed' => 'midrange or control',
+        'label' => 'midrange/control',
+        'landNorm' => '24–26 lands is standard.',
+        'cmcNorm' => "An average CMC of {$avgCmc} requires reliable mana development.",
+        'coachingFocus' => 'Evaluate whether colour sources match spell requirements across all stages of the game.',
+        'winCon' => 'grind resources and win in the mid-to-late game',
+      ];
+    }
+    return [
+      'speed' => 'midrange',
+      'label' => 'midrange',
+      'landNorm' => '22–24 lands is typical.',
+      'cmcNorm' => "An average CMC of {$avgCmc} is standard for midrange.",
+      'coachingFocus' => 'Check that colour sources match pip demands at each point on the curve.',
+      'winCon' => 'balance early plays with late-game threats',
+    ];
+  }
+
+  private function buildPrompt(string $format, string $deckTitle, array $metrics, array $archetype): string {
     $avgCmc = number_format((float) ($metrics['avgCmc'] ?? 0), 1);
     $landCount = (int) ($metrics['landCount'] ?? 0);
     $totalSources = number_format((float) ($metrics['totalManaSources'] ?? 0), 1);
 
-    // Colour source / pip lines — only include colours with any presence.
+    // Only show colours that are actually significant (>5% pip demand).
     $colorSourcePct = is_array($metrics['colorSourcePct'] ?? NULL) ? $metrics['colorSourcePct'] : [];
     $colorPipPct = is_array($metrics['colorPipPct'] ?? NULL) ? $metrics['colorPipPct'] : [];
-    $colors = array_unique(array_merge(array_keys($colorSourcePct), array_keys($colorPipPct)));
-
+    $mainColors = array_filter($colorPipPct, static fn($v) => (float) $v >= 5.0);
     $colorLines = [];
-    foreach ($colors as $c) {
+    foreach ($mainColors as $c => $pip) {
       $src = round((float) ($colorSourcePct[$c] ?? 0), 1);
-      $pip = round((float) ($colorPipPct[$c] ?? 0), 1);
-      $colorLines[] = "  {$c}: {$src}% sources, {$pip}% pip demand";
+      $pip = round((float) $pip, 1);
+      $colorLines[] = "  {$c}: {$src}% sources vs {$pip}% pip demand";
     }
-    $colorBlock = $colorLines !== [] ? implode("\n", $colorLines) : '  (no coloured sources)';
+    $colorBlock = $colorLines !== [] ? implode("\n", $colorLines) : '  (no significant coloured sources)';
 
-    // Mana hand probabilities.
+    // Mana hand probabilities — only for main colours.
     $manaHandProb = is_array($metrics['manaHandProb'] ?? NULL) ? $metrics['manaHandProb'] : [];
     $handLines = [];
     foreach ($manaHandProb as $c => $turns) {
-      if (!is_array($turns)) {
+      if (!is_array($turns) || !isset($mainColors[$c])) {
         continue;
       }
       $t2 = isset($turns['turn2']) ? round((float) $turns['turn2'] * 100, 1) . '%' : 'n/a';
@@ -152,50 +224,56 @@ final class DeckCoachResource extends ResourceBase {
     }
     $handBlock = $handLines !== [] ? implode("\n", $handLines) : '  (no data)';
 
-    // CMC curve summary.
+    // Curve.
     $histogram = is_array($metrics['cmcHistogram'] ?? NULL) ? $metrics['cmcHistogram'] : [];
     $curveParts = [];
-    for ($i = 0; $i <= 6; $i++) {
+    for ($i = 0; $i <= 5; $i++) {
       $count = (int) ($histogram[(string) $i] ?? $histogram[$i] ?? 0);
       if ($count > 0) {
-        $curveParts[] = "{$count} at CMC {$i}";
+        $curveParts[] = "{$count}× CMC{$i}";
       }
-    }
-    $high = (int) ($histogram['7+'] ?? 0);
-    if ($high > 0) {
-      $curveParts[] = "{$high} at CMC 7+";
     }
     $curveStr = $curveParts !== [] ? implode(', ', $curveParts) : 'no data';
 
-    // Non-land producer context.
     $manaSources = is_array($metrics['manaSources'] ?? NULL) ? $metrics['manaSources'] : [];
     $nonLand = (int) ($manaSources['nonLandProducers'] ?? 0);
-    $producerTypes = implode(', ', (array) ($manaSources['producerTypes'] ?? []));
     $sourceNote = $nonLand > 0
-      ? "{$landCount} lands + {$nonLand} non-land producers ({$producerTypes}) = {$totalSources} effective sources"
-      : "{$landCount} lands = {$totalSources} effective sources";
+      ? "{$landCount} lands + {$nonLand} non-land mana sources = {$totalSources} effective"
+      : "{$landCount} lands";
+
+    $archetypeLabel = $archetype['label'] ?? 'unknown';
+    $landNorm = $archetype['landNorm'] ?? '';
+    $cmcNorm = $archetype['cmcNorm'] ?? '';
+    $coachFocus = $archetype['coachingFocus'] ?? '';
+    $winCon = $archetype['winCon'] ?? 'win the game';
 
     return <<<PROMPT
-You are a Magic: The Gathering deck-building coach.
+You are a Magic: The Gathering deck-building coach who understands diverse archetypes.
 
-Format: {$format}. Deck: "{$deckTitle}".
+CONTEXT — read this carefully before analysing:
+Deck: "{$deckTitle}" — Format: {$format}
+Archetype: {$archetypeLabel}
+Win condition: {$winCon}
+{$landNorm}
+{$cmcNorm}
+Coaching focus for this archetype: {$coachFocus}
 
-Mana analysis:
+MANA DATA:
 - Average CMC: {$avgCmc}
-- {$sourceNote}
-- Colour source % vs pip demand %:
+- Mana sources: {$sourceNote}
+- Colour sources vs pip demand (main colours only):
 {$colorBlock}
-- Probability of drawing at least one source of each colour:
+- Probability of drawing ≥1 source of each main colour:
 {$handBlock}
 - Curve: {$curveStr}
 
-Interpret these numbers for a {$format} player. Be specific:
-1. Is the manabase well-calibrated for the pip demand?
-2. Are any colour splashes reliable enough to cast spells on curve?
-3. Is the CMC curve appropriate for the format?
-4. What is the single biggest mana risk in this deck?
+Coaching task — answer these four questions specifically for this {$archetypeLabel} deck:
+1. Are the colour sources well-matched to the specific spells this deck casts on turns 1, 2, and 3?
+2. Could the deck be colour-screwed on its key early plays, and if so, which colours are the bottleneck?
+3. Given the archetype and win condition, is there any meaningful risk from the current land count?
+4. What is the ONE most impactful improvement to the manabase for THIS specific strategy?
 
-Keep the response to four short paragraphs. Use plain language, no bullet points.
+Keep the response to four short paragraphs. Focus exclusively on this deck's actual game plan. Do not give generic MTG advice.
 PROMPT;
   }
 

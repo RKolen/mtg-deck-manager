@@ -1,0 +1,20 @@
+uuid: 6888ec5b-0aa3-4ade-87ad-bd3742d72895
+langcode: en
+status: true
+dependencies:
+  module:
+    - basic_auth
+    - mtg_card_suggestions
+    - serialization
+    - user
+id: simulation
+plugin_id: simulation
+granularity: resource
+configuration:
+  methods:
+    - POST
+  formats:
+    - json
+  authentication:
+    - cookie
+    - basic_auth

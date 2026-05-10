@@ -5,9 +5,7 @@ dependencies:
   config:
     - field.field.node.deck.field_deck_cards
     - field.field.node.deck.field_format
-    - field.field.node.deck.field_main_cards
     - field.field.node.deck.field_notes
-    - field.field.node.deck.field_sideboard_cards
     - node.type.deck
   module:
     - field_group
@@ -88,32 +86,12 @@ content:
       size: 60
       placeholder: ''
     third_party_settings: {  }
-  field_main_cards:
-    type: entity_reference_autocomplete
-    weight: 10
-    region: content
-    settings:
-      match_operator: CONTAINS
-      match_limit: 10
-      size: 60
-      placeholder: ''
-    third_party_settings: {  }
   field_notes:
     type: text_textarea
     weight: 2
     region: content
     settings:
       rows: 5
-      placeholder: ''
-    third_party_settings: {  }
-  field_sideboard_cards:
-    type: entity_reference_autocomplete
-    weight: 11
-    region: content
-    settings:
-      match_operator: CONTAINS
-      match_limit: 10
-      size: 60
       placeholder: ''
     third_party_settings: {  }
   langcode:

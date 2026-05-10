@@ -7,7 +7,9 @@
  */
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { Link } from 'gatsby';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { slugify } from '../../utils/slugify';
 
 import CardFilter, { type FilterState } from '../../components/CardFilter';
 import CardModal, { type CardData } from '../../components/CardModal';
@@ -129,15 +131,17 @@ const CollectionPage: React.FC = () => {
   const upsert = useMutation({
     mutationFn: ({
       cardId,
+      cardName,
       owned,
       foil,
       existingId,
     }: {
       cardId: string;
+      cardName: string;
       owned: number;
       foil: number;
       existingId?: string;
-    }) => upsertCollectionCard(cardId, owned, foil, existingId),
+    }) => upsertCollectionCard(cardId, cardName, owned, foil, existingId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['collectionCards'] }),
   });
 
@@ -158,6 +162,7 @@ const CollectionPage: React.FC = () => {
 
     upsert.mutate({
       cardId,
+      cardName: card.attributes.title,
       owned: nextOwned,
       foil: nextFoil,
       existingId: existing?.id,
@@ -290,7 +295,12 @@ const CollectionPage: React.FC = () => {
                     }}
                     title={title}
                   >
-                    {title}
+                    <Link
+                      to={`/collection/card/${slugify(title)}`}
+                      style={{ color: 'inherit', textDecoration: 'none' }}
+                    >
+                      {title}
+                    </Link>
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>

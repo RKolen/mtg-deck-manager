@@ -1,0 +1,23 @@
+uuid: c8857dce-5d72-4a1a-8623-9ffa2764180a
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_sim_player_deck_nid
+    - node.type.simulation_result
+id: node.simulation_result.field_sim_player_deck_nid
+field_name: field_sim_player_deck_nid
+entity_type: node
+bundle: simulation_result
+label: 'Player Deck NID'
+description: 'Drupal node ID of the player deck that was simulated.'
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings:
+  min: null
+  max: null
+  prefix: ''
+  suffix: ''
+field_type: integer

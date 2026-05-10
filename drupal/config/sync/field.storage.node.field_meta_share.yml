@@ -1,0 +1,20 @@
+uuid: 1c811fa8-8332-43d0-be1a-cdd68a817ecc
+langcode: en
+status: true
+dependencies:
+  module:
+    - node
+id: node.field_meta_share
+field_name: field_meta_share
+entity_type: node
+type: decimal
+settings:
+  precision: 5
+  scale: 2
+module: core
+locked: false
+cardinality: 1
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

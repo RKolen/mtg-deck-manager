@@ -1,0 +1,19 @@
+uuid: 8b98e498-0e16-49d0-b05c-5486b5513666
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_cards_json
+    - node.type.meta_deck
+id: node.meta_deck.field_cards_json
+field_name: field_cards_json
+entity_type: node
+bundle: meta_deck
+label: 'Card List (JSON)'
+description: "Full 75-card list as JSON: [{name, quantity, sideboard}]. Cards reference the full Scryfall card pool — not limited to the user's collection."
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: string_long

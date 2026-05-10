@@ -163,13 +163,12 @@ export function countPips(manaCost: string, color: MtgColor): number {
     }
   }
 
-  // Phyrexian hybrid pips: {W/P}, etc.
-  const phyrexianRe = /\{([WUBRG])\/P\}/g;
-  while ((m = phyrexianRe.exec(manaCost)) !== null) {
-    if (m[1] === color) {
-      count += 0.5;
-    }
-  }
+  // Phyrexian hybrid pips: {W/P}, {G/P}, etc.
+  // These are paid with life in practice — counted only when the deck already
+  // produces that colour naturally (i.e. the caller passes the deck's colour set).
+  // Since countPips is called per-colour without that context, we treat them as 0
+  // because the life-payment option means no coloured mana source is needed.
+  // (A dedicated RG deck with {W/P} cards pays life, never W mana.)
 
   return count;
 }
@@ -219,18 +218,33 @@ export function effectiveManaSources(
 ): Record<MtgColor, number> {
   const result: Record<MtgColor, number> = { W: 0, U: 0, B: 0, R: 0, G: 0 };
 
+  // Determine which colours the deck's spells actually demand (non-zero pip demand).
+  // Fetchlands that CAN produce B should not be attributed as B sources in a deck
+  // whose spells have zero B pip demand — the player simply fetches an RG land.
+  const spellPips = manaRequirement(cards);
+  const deckSpellColors = new Set(
+    (Object.keys(spellPips) as MtgColor[]).filter(c => spellPips[c] > 0),
+  );
+
   for (const dc of mainDeck(cards)) {
     const card = dc.card;
     const produced = (card.field_produced_mana ?? []) as string[];
 
     if (isLand(card.field_type_line ?? '')) {
-      // Use Scryfall produced_mana when available, otherwise derive colours
-      // from fetchland oracle text.  Utility lands produce no colours and
-      // are skipped entirely.
-      const landColors =
+      const rawColors =
         produced.length > 0
           ? produced
           : fetchlandColors(getOracleText(card));
+
+      // For fetchlands (and other flexible lands), restrict attributed colours
+      // to those the deck's spells actually need. This prevents Bloodstained Mire
+      // from counting as a B source in a deck that never casts B spells — the
+      // player simply fetches an RG dual instead.
+      const landColors =
+        rawColors.length > 1
+          ? rawColors.filter(c => deckSpellColors.has(c as MtgColor))
+          : rawColors; // single-colour lands always count as-is
+
       for (const color of landColors) {
         if (color in result) {
           result[color as MtgColor] += dc.quantity;

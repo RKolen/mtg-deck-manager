@@ -35,7 +35,12 @@ import {
 } from '../../services/drupalApi';
 import { fetchCardSuggestions, type CardSuggestion } from '../../services/deckSuggestions';
 import { fetchDeckCoaching, type DeckCoachMetrics } from '../../services/deckCoach';
-import { runSimulation, type SimulationResult, type TopKiller } from '../../services/simulationApi';
+import {
+  runSimulation,
+  type SimulationResult,
+  type TopKiller,
+  type GameLog,
+} from '../../services/simulationApi';
 import {
   fetchMetaDecks,
   fetchMatchupAdvice,
@@ -118,21 +123,14 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, cards }) => {
   const qc = useQueryClient();
 
   const updateQty = useMutation({
-    mutationFn: ({
-      cardId,
-      qty,
-      isSideboard,
-    }: {
-      cardId: string;
-      qty: number;
-      isSideboard: boolean;
-    }) => setCardQuantityInDeck(cardId, qty, isSideboard, cards),
+    mutationFn: ({ slotId, qty }: { slotId: string; qty: number }) =>
+      setCardQuantityInDeck(slotId, qty, deckId, cards),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['deckCards', deckId] }),
   });
 
   const remove = useMutation({
-    mutationFn: ({ cardId, isSideboard }: { cardId: string; isSideboard: boolean }) =>
-      removeCardFromDeck(cardId, isSideboard, cards),
+    mutationFn: ({ slotId }: { slotId: string }) =>
+      removeCardFromDeck(slotId, deckId, cards),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['deckCards', deckId] }),
   });
 
@@ -208,9 +206,7 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, cards }) => {
         <td style={{ padding: '0.25rem 0.5rem', textAlign: 'center' }}>
           <button
             type="button"
-            onClick={() =>
-              updateQty.mutate({ cardId: dc.card.id, qty: dc.quantity - 1, isSideboard: dc.isSideboard })
-            }
+            onClick={() => updateQty.mutate({ slotId: dc.id, qty: dc.quantity - 1 })}
             disabled={dc.quantity <= 1}
             style={{ width: 24 }}
           >
@@ -219,9 +215,7 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, cards }) => {
           <span style={{ margin: '0 0.5rem' }}>{dc.quantity}</span>
           <button
             type="button"
-            onClick={() =>
-              updateQty.mutate({ cardId: dc.card.id, qty: dc.quantity + 1, isSideboard: dc.isSideboard })
-            }
+            onClick={() => updateQty.mutate({ slotId: dc.id, qty: dc.quantity + 1 })}
             disabled={atMax}
             title={atMax ? `Max ${maxCopies === Infinity ? 'unlimited' : maxCopies} copies` : undefined}
             style={{ width: 24 }}
@@ -233,7 +227,7 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, cards }) => {
           <button
             type="button"
             onClick={() => {
-              void remove.mutateAsync({ cardId: dc.card.id, isSideboard: dc.isSideboard }).then(() =>
+              void remove.mutateAsync({ slotId: dc.id }).then(() =>
                 addCard.mutate({ cardId: dc.card.id, cardName: dc.card.title, isSideboard: !dc.isSideboard }),
               );
             }}
@@ -246,7 +240,7 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, cards }) => {
         <td style={{ padding: '0.25rem 0.5rem', textAlign: 'center' }}>
           <button
             type="button"
-            onClick={() => remove.mutate({ cardId: dc.card.id, isSideboard: dc.isSideboard })}
+            onClick={() => remove.mutate({ slotId: dc.id })}
             aria-label="Remove card"
           >
             x
@@ -259,14 +253,14 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, cards }) => {
   return (
     <div>
       {/* Card count banner */}
-      <p
-        style={{
-          fontWeight: 'bold',
-          color: mainCount === 60 ? 'green' : mainCount > 60 ? 'red' : '#555',
-        }}
-      >
-        Main deck: {mainCount} / 60
-        {sbCount > 0 && `  |  Sideboard: ${sbCount}`}
+      <p style={{ fontWeight: 'bold', margin: '0 0 0.75rem' }}>
+        <span style={{ color: mainCount >= 60 ? (mainCount > 60 ? 'red' : 'green') : '#555' }}>
+          Main: {mainCount} / 60
+        </span>
+        {'  |  '}
+        <span style={{ color: sbCount > 15 ? 'red' : sbCount > 0 ? 'green' : '#aaa' }}>
+          Sideboard: {sbCount} / 15
+        </span>
       </p>
 
       {/* Search */}
@@ -693,6 +687,93 @@ interface DeckSimulateProps {
 
 const GAME_COUNT_OPTIONS = [50, 200] as const;
 
+/** Single expandable game log panel */
+const GameLogPanel: React.FC<{ log: GameLog; index: number }> = ({ log, index }) => {
+  const [open, setOpen] = useState(false);
+  const label = `Game ${index + 1}: ${log.onThePlay ? 'on the play' : 'on the draw'} — ${log.winner === 0 ? '✓ WIN' : '✗ LOSS'} on turn ${log.finalTurn}`;
+  const labelColor = log.winner === 0 ? '#27ae60' : '#c0392b';
+
+  return (
+    <div style={{ border: '1px solid #ddd', borderRadius: 4, marginBottom: 6 }}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: '100%', textAlign: 'left', background: '#f9f9f6',
+          padding: '0.5rem 0.75rem', border: 'none', cursor: 'pointer',
+          fontSize: '0.88rem', fontWeight: 500, color: labelColor,
+          display: 'flex', justifyContent: 'space-between',
+        }}
+      >
+        <span>{label}</span>
+        <span>{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div style={{ padding: '0.75rem', fontSize: '0.85rem' }}>
+          {/* Opening hand */}
+          <div style={{ marginBottom: '0.75rem' }}>
+            <strong>Opening hand</strong>
+            {log.playerMulligan > 0 && (
+              <span style={{ color: '#888', marginLeft: 8 }}>({log.playerMulligan} mulligan{log.playerMulligan > 1 ? 's' : ''})</span>
+            )}
+            <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {log.playerOpeningHand.map((card, i) => (
+                <span key={i} style={{
+                  background: '#e8f0fe', padding: '2px 6px', borderRadius: 3, fontSize: '0.8rem',
+                }}>
+                  {card}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Turn-by-turn log */}
+          <div>
+            <strong>Turn log</strong>
+            <div style={{ marginTop: 6, display: 'grid', gridTemplateColumns: '80px 1fr', gap: '2px 12px', alignItems: 'start' }}>
+              {log.turns.map((ev, i) => {
+                const isPlayer = ev.player === 0;
+                const lifeStr = `${ev.lifeTotals[0]}↔${ev.lifeTotals[1]}`;
+                return (
+                  <React.Fragment key={i}>
+                    <div style={{ color: isPlayer ? '#2c5f8a' : '#8a2c2c', fontWeight: 500, paddingTop: 2, whiteSpace: 'nowrap' }}>
+                      T{ev.turn} {isPlayer ? 'You' : 'Opp'}
+                    </div>
+                    <div style={{ paddingTop: 2 }}>
+                      {ev.plays.length === 0 ? (
+                        <span style={{ color: '#aaa' }}>pass</span>
+                      ) : (
+                        ev.plays.map((p, j) => (
+                          <span key={j} style={{ marginRight: 8, color: '#333' }}>{p}</span>
+                        ))
+                      )}
+                      {ev.damageDealt > 0 && (
+                        <span style={{ color: '#b03030', marginLeft: 4 }}>
+                          ⚔ {ev.damageDealt} dmg
+                        </span>
+                      )}
+                      <span style={{ color: '#999', marginLeft: 8, fontSize: '0.78rem' }}>
+                        ♥ {lifeStr} | hand {ev.handSize} | board {ev.creaturesInPlay} ({ev.boardPower}⚔)
+                      </span>
+                    </div>
+                  </React.Fragment>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Final state */}
+          <div style={{ marginTop: 8, color: '#555', fontSize: '0.82rem' }}>
+            Final life: You {log.playerFinalLife} / Opp {log.opponentFinalLife}
+            {log.winCondition && <span style={{ marginLeft: 8 }}>({log.winCondition})</span>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const DeckSimulate: React.FC<DeckSimulateProps> = ({ deckNid, format, deckTitle }) => {
   const [selectedArchetype, setSelectedArchetype] = useState('');
   const [games, setGames] = useState<50 | 200>(50);
@@ -713,19 +794,15 @@ const DeckSimulate: React.FC<DeckSimulateProps> = ({ deckNid, format, deckTitle 
     setError(null);
     setResult(null);
     try {
-      const r = await runSimulation({
-        playerDeckId: deckNid,
-        opponentArchetype: selectedArchetype,
-        format,
-        games,
-        useLlm,
-      });
+      const r = await runSimulation({ playerDeckId: deckNid, opponentArchetype: selectedArchetype, format, games, useLlm });
       setResult(r);
-    } catch (e) {
-      setError(
-        'Simulation failed. Make sure the Python sim service is running: ' +
-        'cd mtg-sim/sim && uvicorn main:app --port 8002',
-      );
+    } catch (e: unknown) {
+      const axiosErr = e as { response?: { status: number; data?: unknown }; message?: string };
+      const status = axiosErr?.response?.status;
+      const detail = axiosErr?.response?.data
+        ? JSON.stringify(axiosErr.response.data).slice(0, 200)
+        : axiosErr?.message ?? 'unknown error';
+      setError(`Simulation failed (${status ?? 'network error'}): ${detail}`);
     } finally {
       setRunning(false);
     }
@@ -737,110 +814,148 @@ const DeckSimulate: React.FC<DeckSimulateProps> = ({ deckNid, format, deckTitle 
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      <p style={{ margin: 0, fontSize: '0.9rem', color: '#555' }}>
-        Simulate {deckTitle} against a meta archetype using the Forge rules engine.
-        Requires <code>mtg-sim/sim/main.py</code> running on port 8002.
-      </p>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        <p style={{ margin: 0, fontSize: '0.9rem', color: '#555' }}>
+          Simulate {deckTitle} against a meta archetype, or play an interactive game.
+          Requires <code>mtg-sim/sim/main.py</code> on port 8002.
+        </p>
+        {selectedArchetype && (
+          <a
+            href={`/play?deckId=${deckNid}&vs=${encodeURIComponent(selectedArchetype)}&format=${encodeURIComponent(format)}&play=1`}
+            target="_blank"
+            rel="noreferrer"
+            style={{ display: 'inline-block', padding: '0.4rem 1rem', background: '#1a3a1a', color: '#2ecc71', border: '1px solid #2ecc71', borderRadius: 4, fontWeight: 600, fontSize: '0.88rem', textDecoration: 'none' }}
+          >
+            🃏 Play vs {selectedArchetype}
+          </a>
+        )}
+      </div>
 
       {/* Controls */}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span style={{ fontSize: '0.85rem', fontWeight: 'bold' }}>Opponent archetype</span>
-          <select
-            value={selectedArchetype}
-            onChange={e => setSelectedArchetype(e.target.value)}
-            style={{ minWidth: 200 }}
-          >
+          <select value={selectedArchetype} onChange={e => setSelectedArchetype(e.target.value)} style={{ minWidth: 200 }}>
             <option value="">Select archetype…</option>
             {metaDecks.map(d => (
               <option key={d.id} value={d.attributes.title}>{d.attributes.title}</option>
             ))}
           </select>
         </label>
-
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span style={{ fontSize: '0.85rem', fontWeight: 'bold' }}>Games</span>
-          <select
-            value={games}
-            onChange={e => setGames(Number(e.target.value) as 50 | 200)}
-          >
-            {GAME_COUNT_OPTIONS.map(n => (
-              <option key={n} value={n}>{n}</option>
-            ))}
+          <select value={games} onChange={e => setGames(Number(e.target.value) as 50 | 200)}>
+            {GAME_COUNT_OPTIONS.map(n => <option key={n} value={n}>{n}</option>)}
           </select>
         </label>
-
         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem' }}>
-          <input
-            type="checkbox"
-            checked={useLlm}
-            onChange={e => setUseLlm(e.target.checked)}
-          />
-          LLM board eval (slower)
+          <input type="checkbox" checked={useLlm} onChange={e => setUseLlm(e.target.checked)} />
+          LLM key moments
         </label>
-
         <button
-          type="button"
-          onClick={() => void handleRun()}
+          type="button" onClick={() => void handleRun()}
           disabled={!selectedArchetype || running}
-          style={{
-            padding: '0.4rem 1.25rem',
-            background: '#333', color: '#fff',
-            border: 'none', borderRadius: 4,
-            cursor: selectedArchetype && !running ? 'pointer' : 'default',
-          }}
+          style={{ padding: '0.4rem 1.25rem', background: '#333', color: '#fff', border: 'none', borderRadius: 4, cursor: selectedArchetype && !running ? 'pointer' : 'default' }}
         >
           {running ? 'Simulating…' : 'Run simulation'}
         </button>
       </div>
 
-      {running && (
-        <p style={{ color: '#888', fontStyle: 'italic' }}>
-          Running {games} games — this may take several minutes…
-        </p>
-      )}
+      {running && <p style={{ color: '#888', fontStyle: 'italic' }}>Running {games} games…</p>}
+      {error && <p style={{ color: '#c00', fontSize: '0.88rem' }}>{error}</p>}
 
-      {error && <p style={{ color: '#c00' }}>{error}</p>}
-
-      {/* Results */}
       {result && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
           {/* Win-rate summary */}
           <section style={{ background: '#f8f8f5', border: '1px solid #ddd', borderRadius: 4, padding: '1rem' }}>
-            <h3 style={{ margin: '0 0 0.75rem' }}>
-              {result.playerDeck} vs {result.opponentArchetype} — {result.games} games
-            </h3>
+            <h3 style={{ margin: '0 0 0.75rem' }}>{result.playerDeck} vs {result.opponentArchetype} — {result.games} games</h3>
             <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
               {[
                 ['Overall', winPct, result.wins, result.losses],
                 ['On the play', playPct, result.onThePlay.wins, result.onThePlay.games - result.onThePlay.wins],
                 ['On the draw', drawPct, result.onTheDraw.wins, result.onTheDraw.games - result.onTheDraw.wins],
-              ].map(([label, pct, wins, losses]) => (
+              ].map(([label, pct, w, l]) => (
                 <div key={String(label)} style={{ textAlign: 'center' }}>
-                  <div
-                    style={{
-                      fontSize: '2rem',
-                      fontWeight: 'bold',
-                      color: Number(pct) >= 50 ? '#27ae60' : '#c0392b',
-                    }}
-                  >
-                    {pct}%
-                  </div>
+                  <div style={{ fontSize: '2rem', fontWeight: 'bold', color: Number(pct) >= 50 ? '#27ae60' : '#c0392b' }}>{pct}%</div>
                   <div style={{ fontSize: '0.8rem', color: '#666' }}>{label}</div>
-                  <div style={{ fontSize: '0.8rem', color: '#888' }}>{wins}W / {losses}L</div>
+                  <div style={{ fontSize: '0.8rem', color: '#888' }}>{w}W / {l}L</div>
                 </div>
               ))}
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{result.avgTurnWin}</div>
-                <div style={{ fontSize: '0.8rem', color: '#666' }}>Avg turn (win)</div>
+                <div style={{ fontSize: '0.8rem', color: '#666' }}>Avg win turn</div>
               </div>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{result.avgTurnLoss}</div>
-                <div style={{ fontSize: '0.8rem', color: '#666' }}>Avg turn (loss)</div>
+                <div style={{ fontSize: '0.8rem', color: '#666' }}>Avg loss turn</div>
               </div>
             </div>
           </section>
+
+          {/* Aggregate game stats */}
+          {result.mulliganStats && (
+            <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+              {[
+                ['Avg mulligans', result.mulliganStats.avgPlayerMulligan.toFixed(2)],
+                ['7-card keep rate', `${result.mulliganStats.keepRate}%`],
+                ['Opp avg mulligans', result.mulliganStats.avgOpponentMulligan.toFixed(2)],
+                ['Mana efficiency', `${result.manaEfficiency}%`],
+              ].map(([label, val]) => (
+                <div key={label} style={{ background: '#f5f5f0', borderRadius: 4, padding: '0.6rem 0.8rem' }}>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 600 }}>{val}</div>
+                  <div style={{ fontSize: '0.78rem', color: '#666' }}>{label}</div>
+                </div>
+              ))}
+            </section>
+          )}
+
+          {/* Life progression chart */}
+          {result.lifeProgression && result.lifeProgression.length > 0 && (
+            <section>
+              <h3 style={{ margin: '0 0 0.5rem' }}>Average life totals by turn</h3>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={result.lifeProgression} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="turn" label={{ value: 'Turn', position: 'insideBottom', offset: -2 }} tick={{ fontSize: 11 }} />
+                  <YAxis domain={[0, 20]} tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="avgPlayerLife" name="You" fill="#2c7bb6" />
+                  <Bar dataKey="avgOppLife" name="Opponent" fill="#d7191c" />
+                </BarChart>
+              </ResponsiveContainer>
+            </section>
+          )}
+
+          {/* Turn-by-turn board development */}
+          {result.turnBreakdown && result.turnBreakdown.length > 0 && (
+            <section>
+              <h3 style={{ margin: '0 0 0.5rem' }}>Board development (your side, avg per game)</h3>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ borderCollapse: 'collapse', fontSize: '0.85rem', minWidth: 500 }}>
+                  <thead>
+                    <tr style={{ background: '#f5f5f0' }}>
+                      {['Turn', 'Avg creatures', 'Avg power', 'Avg hand', 'Avg dmg dealt'].map(h => (
+                        <th key={h} style={{ padding: '0.3rem 0.6rem', textAlign: h === 'Turn' ? 'left' : 'right' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {result.turnBreakdown.map(row => (
+                      <tr key={row.turn} style={{ borderTop: '1px solid #eee' }}>
+                        <td style={{ padding: '0.3rem 0.6rem' }}>{row.turn}</td>
+                        <td style={{ padding: '0.3rem 0.6rem', textAlign: 'right' }}>{row.avgCreatures}</td>
+                        <td style={{ padding: '0.3rem 0.6rem', textAlign: 'right' }}>{row.avgBoardPower}</td>
+                        <td style={{ padding: '0.3rem 0.6rem', textAlign: 'right' }}>{row.avgHandSize}</td>
+                        <td style={{ padding: '0.3rem 0.6rem', textAlign: 'right' }}>{row.avgDamageDealt}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
 
           {/* Top killers */}
           {result.topKillers.length > 0 && (
@@ -859,9 +974,7 @@ const DeckSimulate: React.FC<DeckSimulateProps> = ({ deckNid, format, deckTitle 
                     <tr key={k.card} style={{ borderTop: '1px solid #eee' }}>
                       <td style={{ padding: '0.3rem 0.5rem' }}>{k.card}</td>
                       <td style={{ padding: '0.3rem 0.5rem', textAlign: 'right' }}>{k.appearances}</td>
-                      <td style={{ padding: '0.3rem 0.5rem', textAlign: 'right' }}>
-                        {(k.lossContribution * 100).toFixed(0)}%
-                      </td>
+                      <td style={{ padding: '0.3rem 0.5rem', textAlign: 'right' }}>{(k.lossContribution * 100).toFixed(0)}%</td>
                     </tr>
                   ))}
                 </tbody>
@@ -876,6 +989,16 @@ const DeckSimulate: React.FC<DeckSimulateProps> = ({ deckNid, format, deckTitle 
               <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '0.9rem' }}>
                 {result.keyMoments.map((m, i) => <li key={i}>{m}</li>)}
               </ul>
+            </section>
+          )}
+
+          {/* Sample game logs */}
+          {result.gameLogs && result.gameLogs.length > 0 && (
+            <section>
+              <h3 style={{ margin: '0 0 0.5rem' }}>Sample game logs (first {result.gameLogs.length})</h3>
+              {result.gameLogs.map((log, i) => (
+                <GameLogPanel key={i} log={log} index={i} />
+              ))}
             </section>
           )}
         </div>
@@ -1282,9 +1405,19 @@ const CoachPanel: React.FC<CoachPanelProps> = ({ cards, format, deckTitle }) => 
     };
   }, [cards]);
 
+  const cardSummaries = React.useMemo(() =>
+    cards.map(dc => ({
+      name: dc.card.title,
+      type: dc.card.field_type_line ?? '',
+      cmc: dc.card.field_cmc ?? 0,
+      oracle: (typeof dc.card.field_oracle_text === 'object'
+        ? dc.card.field_oracle_text?.value
+        : dc.card.field_oracle_text) ?? '',
+    })), [cards]);
+
   const coaching = useQuery({
     queryKey: ['deckCoach', deckTitle, format, cards.length],
-    queryFn: () => fetchDeckCoaching({ format, deckTitle, metrics: buildMetrics() }),
+    queryFn: () => fetchDeckCoaching({ format, deckTitle, metrics: buildMetrics(), cards: cardSummaries }),
     enabled: false,
     staleTime: 10 * 60 * 1000,
   });
@@ -1537,11 +1670,11 @@ const DeckPage: React.FC<DeckPageProps> = ({ params }) => {
       ) : tab === 'analysis' ? (
         <DeckAnalysis cards={deckCards} format={deck.attributes.field_format} deckTitle={deck.attributes.title} />
       ) : tab === 'suggestions' ? (
-        <DeckSuggestions deckNid={deck.attributes.nid} />
+        <DeckSuggestions deckNid={deck.attributes.drupal_internal__nid} />
       ) : tab === 'meta' ? (
-        <DeckMetaMatchup deckNid={deck.attributes.nid} format={deck.attributes.field_format} />
+        <DeckMetaMatchup deckNid={deck.attributes.drupal_internal__nid} format={deck.attributes.field_format} />
       ) : (
-        <DeckSimulate deckNid={deck.attributes.nid} format={deck.attributes.field_format} deckTitle={deck.attributes.title} />
+        <DeckSimulate deckNid={deck.attributes.drupal_internal__nid} format={deck.attributes.field_format} deckTitle={deck.attributes.title} />
       )}
     </main>
   );

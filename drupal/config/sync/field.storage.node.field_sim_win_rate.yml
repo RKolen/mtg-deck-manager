@@ -1,0 +1,20 @@
+uuid: 687f272d-56ca-4ba4-8ba1-ee26ba5c0f94
+langcode: en
+status: true
+dependencies:
+  module:
+    - node
+id: node.field_sim_win_rate
+field_name: field_sim_win_rate
+entity_type: node
+type: decimal
+settings:
+  precision: 5
+  scale: 4
+module: core
+locked: false
+cardinality: 1
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

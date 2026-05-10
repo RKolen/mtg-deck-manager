@@ -1,0 +1,43 @@
+uuid: 48aa2ac5-643e-4da0-a498-b7ab1cb57c6b
+langcode: en
+status: true
+dependencies:
+  config:
+    - paragraphs.paragraphs_type.deck_card
+  module:
+    - paragraphs
+id: paragraph--deck_card
+disabled: false
+path: paragraph/deck_card
+resourceType: paragraph--deck_card
+resourceFields:
+  drupal_internal__id:
+    disabled: false
+    fieldName: drupal_internal__id
+    publicName: drupal_internal__id
+    enhancer:
+      id: ''
+  drupal_internal__revision_id:
+    disabled: false
+    fieldName: drupal_internal__revision_id
+    publicName: drupal_internal__revision_id
+    enhancer:
+      id: ''
+  field_card:
+    disabled: false
+    fieldName: field_card
+    publicName: field_card
+    enhancer:
+      id: ''
+  field_quantity:
+    disabled: false
+    fieldName: field_quantity
+    publicName: field_quantity
+    enhancer:
+      id: ''
+  field_is_sideboard:
+    disabled: false
+    fieldName: field_is_sideboard
+    publicName: field_is_sideboard
+    enhancer:
+      id: ''

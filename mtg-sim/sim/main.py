@@ -4,9 +4,10 @@ MTG Game Simulation Service — FastAPI app.
 Start:  SIM_HOST= SIM_PORT= python main.py
 Or:     uvicorn main:app --host $SIM_HOST --port $SIM_PORT
 
-Required environment variables (for python main.py only):
+Required environment variables (all defined in .env):
   SIM_HOST       - Bind host
   SIM_PORT       - Bind port
+  CORS_ORIGINS   - Comma-separated allowed origins
 
 Forge environment variables (all required to enable real Forge mode):
   FORGE_JAR      - Absolute path to the built forge-ai JAR
@@ -31,14 +32,24 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import pathlib
 import sim_statistics
+
+# Load .env from the same directory as this file (if python-dotenv is installed).
+try:
+    from dotenv import load_dotenv
+    load_dotenv(pathlib.Path(__file__).parent / ".env")
+except ImportError:
+    pass
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from deck_registry import fetch_meta_deck, fetch_player_deck
 from forge_adapter import ForgeAdapter
+from game_engine import create_game, get_game, remove_game
 from mcts import MctsAgent, RandomAgent
 
 logging.basicConfig(level=logging.INFO)
@@ -48,6 +59,19 @@ app = FastAPI(
     title="MTG Simulation Service",
     description="Runs MTG games via Forge and returns win-rate statistics.",
     version="1.0.0",
+)
+
+_allow_origins = [
+    o.strip()
+    for o in os.environ.get("CORS_ORIGINS", "").split(",")
+    if o.strip()
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_allow_origins,
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 # Module-level container avoids the global statement while keeping a single
@@ -130,9 +154,130 @@ async def simulate(req: SimulateRequest) -> dict:
     )
 
 
+# ---------------------------------------------------------------------------
+# Interactive game routes
+# ---------------------------------------------------------------------------
+
+class StartGameRequest(BaseModel):
+    """Request body for POST /game/start."""
+
+    playerDeckId: int
+    opponentArchetype: str
+    format: str = "Modern"
+    onThePlay: bool = True
+
+
+class GameActionRequest(BaseModel):
+    """Request body for POST /game/action.
+
+    Valid actions: keep, mulligan, draw, play_land, cast, go_to_attack,
+    toggle_attacker, confirm_attack, skip_attack, end_turn.
+    """
+
+    gameId: str
+    action: str
+    handIdx: int | None = None
+    targetUid: str | None = None
+    targetPlayer: int | None = None
+    permanentUid: str | None = None
+
+
+@app.post("/game/start")
+async def game_start(req: StartGameRequest) -> dict:
+    """Create a new interactive game session and return the initial state."""
+    try:
+        player_deck = await asyncio.to_thread(fetch_player_deck, req.playerDeckId)
+    except Exception as exc:
+        raise HTTPException(502, f"Could not fetch player deck: {exc}") from exc
+    if not player_deck:
+        raise HTTPException(404, f"Deck {req.playerDeckId} has no cards.")
+
+    try:
+        opponent_deck = await asyncio.to_thread(fetch_meta_deck, req.opponentArchetype, req.format)
+    except Exception as exc:
+        raise HTTPException(502, f"Could not fetch meta deck: {exc}") from exc
+    if not opponent_deck:
+        raise HTTPException(404, f"No meta_deck for '{req.opponentArchetype}' in {req.format}.")
+
+    game = create_game(
+        player_deck, opponent_deck,
+        player_name="You",
+        opponent_name=req.opponentArchetype,
+        on_the_play=req.onThePlay,
+    )
+    return game.to_client()
+
+
+async def _dispatch_action(game, req: GameActionRequest) -> dict:
+    """Dispatch a single game action and return the updated state dict.
+
+    Simple actions (no arguments) are resolved via a lookup table.
+    Actions that require request parameters are handled explicitly.
+    """
+    simple: dict[str, object] = {
+        "keep": game.action_keep,
+        "mulligan": game.action_mulligan,
+        "draw": game.action_draw,
+        "go_to_attack": game.action_go_to_attack,
+        "confirm_attack": game.action_confirm_attack,
+        "skip_attack": game.action_skip_attack,
+    }
+    if req.action in simple:
+        return simple[req.action]()  # type: ignore[operator]
+    if req.action == "play_land":
+        assert req.handIdx is not None
+        return game.action_play_land(req.handIdx)
+    if req.action == "cast":
+        assert req.handIdx is not None
+        return game.action_cast(req.handIdx, req.targetUid, req.targetPlayer)
+    if req.action == "toggle_attacker":
+        assert req.permanentUid is not None
+        return game.action_toggle_attacker(req.permanentUid)
+    if req.action == "end_turn":
+        return await asyncio.to_thread(game.action_end_turn)
+    raise HTTPException(400, f"Unknown action '{req.action}'")
+
+
+@app.post("/game/action")
+async def game_action(req: GameActionRequest) -> dict:
+    """Submit a player action and return the updated game state."""
+    game = get_game(req.gameId)
+    if game is None:
+        raise HTTPException(404, f"Game {req.gameId} not found.")
+    try:
+        return await _dispatch_action(game, req)
+    except AssertionError as exc:
+        raise HTTPException(
+            400, f"Invalid action '{req.action}' in phase '{game.phase}'"
+        ) from exc
+
+
+@app.get("/game/state/{game_id}")
+async def game_state(game_id: str) -> dict:
+    """Return the current state of an active game session."""
+    game = get_game(game_id)
+    if game is None:
+        raise HTTPException(404, f"Game {game_id} not found.")
+    return game.to_client()
+
+
+@app.get("/game/log/{game_id}")
+async def game_log(game_id: str) -> dict:
+    """Return the full turn-by-turn log for a game session."""
+    game = get_game(game_id)
+    if game is None:
+        raise HTTPException(404, f"Game {game_id} not found.")
+    return {"gameId": game_id, "log": game.full_log()}
+
+
+@app.delete("/game/{game_id}")
+async def game_delete(game_id: str) -> dict:
+    """Remove a game session and free its memory."""
+    remove_game(game_id)
+    return {"deleted": game_id}
+
+
 if __name__ == "__main__":
     host = os.environ.get("SIM_HOST", "")
-    port_str = os.environ.get("SIM_PORT", "")
-    if not host or not port_str:
-        raise RuntimeError("Set SIM_HOST and SIM_PORT env vars before starting.")
-    uvicorn.run("main:app", host=host, port=int(port_str))
+    port = int(os.environ.get("SIM_PORT", "0"))
+    uvicorn.run("main:app", host=host, port=port)

@@ -3,6 +3,6 @@ _core:
 prompt_logging: false
 prompt_logging_tags: ''
 default_providers: {  }
-request_timeout: 60
+request_timeout: 300
 allowed_hosts: {  }
 allowed_hosts_rewrite_links: false

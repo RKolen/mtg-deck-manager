@@ -1,0 +1,11 @@
+uuid: ab540e5c-fcba-4a5b-b258-f359172b7df1
+langcode: en
+status: true
+dependencies: {  }
+name: 'Format Archetype'
+type: meta_deck
+description: 'A canonical meta archetype decklist for a given format (e.g. "Jund Midrange" in Modern). Used for matchup analysis and opponent deck deduction.'
+help: null
+new_revision: false
+preview_mode: 1
+display_submitted: false

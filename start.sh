@@ -22,7 +22,7 @@ set -o allexport
 source "$ENV_FILE"
 set +o allexport
 
-for var in GATSBY_PORT DRUPAL_URL OLLAMA_PORT MILVUS_PORT; do
+for var in GATSBY_PORT DRUPAL_URL OLLAMA_PORT MILVUS_PORT SIM_PORT; do
   if [[ -z "${!var:-}" ]]; then
     echo "ERROR: $var is not set in .env"
     exit 1
@@ -39,6 +39,14 @@ if [[ "${1:-}" == "--stop" ]]; then
     kill "$OLD_GATSBY" 2>/dev/null && echo "    Gatsby stopped."
   else
     echo "    Gatsby was not running."
+  fi
+
+  echo "==> Stopping sim service..."
+  OLD_SIM=$(lsof -ti :"$SIM_PORT" 2>/dev/null || true)
+  if [[ -n "$OLD_SIM" ]]; then
+    kill "$OLD_SIM" 2>/dev/null && echo "    Sim service stopped."
+  else
+    echo "    Sim service was not running."
   fi
 
   echo "==> Stopping Ollama..."
@@ -91,7 +99,27 @@ fi
 echo "    Milvus:  localhost:$MILVUS_PORT"
 
 # ---------------------------------------------------------------------------
-# 4. Gatsby frontend (dev server in background)
+# 4. Python simulation service (mtg-sim/sim, background)
+# ---------------------------------------------------------------------------
+echo ""
+echo "==> Starting Python simulation service..."
+SIM_DIR="$SCRIPT_DIR/mtg-sim"
+if lsof -ti :"$SIM_PORT" > /dev/null 2>&1; then
+  echo "    Sim service already running on port $SIM_PORT."
+elif [[ ! -f "$SIM_DIR/.venv/bin/python" ]]; then
+  echo "    WARNING: $SIM_DIR/.venv not found."
+  echo "    Run: cd mtg-sim && python3 -m venv .venv && source .venv/bin/activate && pip install -r sim/requirements.txt"
+else
+  cd "$SIM_DIR/sim"
+  SIM_PORT="$SIM_PORT" "$SIM_DIR/.venv/bin/python" main.py \
+    > "$SCRIPT_DIR/.sim.log" 2>&1 &
+  cd "$SCRIPT_DIR"
+  echo "    Sim service started on port $SIM_PORT (logs: .sim.log)."
+fi
+echo "    Sim API:  http://localhost:$SIM_PORT"
+
+# ---------------------------------------------------------------------------
+# 5. Gatsby frontend (dev server in background)
 # ---------------------------------------------------------------------------
 echo ""
 cd "$FRONTEND_DIR"
@@ -127,6 +155,7 @@ echo "All services started."
 echo ""
 echo "  Drupal admin:  $DRUPAL_URL/user"
 echo "  Frontend:      http://localhost:$GATSBY_PORT"
+echo "  Sim API:       http://localhost:$SIM_PORT"
 echo "  Ollama:        http://localhost:$OLLAMA_PORT"
 echo "  Milvus:        localhost:$MILVUS_PORT"
 echo ""

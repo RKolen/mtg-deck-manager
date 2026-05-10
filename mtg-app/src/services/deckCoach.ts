@@ -34,10 +34,18 @@ export interface DeckCoachMetrics {
   };
 }
 
+export interface CardSummary {
+  name: string;
+  type: string;
+  cmc: number;
+  oracle: string;
+}
+
 export interface DeckCoachRequest {
   format: string;
   deckTitle: string;
   metrics: DeckCoachMetrics;
+  cards?: CardSummary[];
 }
 
 // ---------------------------------------------------------------------------

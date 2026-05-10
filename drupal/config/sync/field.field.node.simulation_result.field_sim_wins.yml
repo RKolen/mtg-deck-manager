@@ -1,0 +1,23 @@
+uuid: ca9a7efd-756d-45aa-881c-dda1ee94daa2
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_sim_wins
+    - node.type.simulation_result
+id: node.simulation_result.field_sim_wins
+field_name: field_sim_wins
+entity_type: node
+bundle: simulation_result
+label: Wins
+description: ''
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings:
+  min: null
+  max: null
+  prefix: ''
+  suffix: ''
+field_type: integer

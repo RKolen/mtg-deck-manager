@@ -1,18 +1,20 @@
-uuid: aa165d7e-277c-4104-8f81-946eaab564f5
+uuid: bce534b5-5f53-4324-bb9a-3ac9eaf92c6f
 langcode: en
 status: true
 dependencies:
   module:
     - node
-id: node.field_sideboard_cards
-field_name: field_sideboard_cards
+id: node.field_sim_opponent
+field_name: field_sim_opponent
 entity_type: node
-type: entity_reference
+type: string
 settings:
-  target_type: node
+  max_length: 255
+  case_sensitive: false
+  is_ascii: false
 module: core
 locked: false
-cardinality: 15
+cardinality: 1
 translatable: true
 indexes: {  }
 persist_with_no_fields: false

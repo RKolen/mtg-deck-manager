@@ -69,11 +69,11 @@ export interface DeckAttributes {
   title: string;
   field_format: string;
   field_notes: string | null;
-  nid: number;
+  drupal_internal__nid: number;
 }
 
-// DeckCardAttributes is no longer used — decks reference mtg_card nodes
-// directly via field_main_cards and field_sideboard_cards on the deck node.
+// Deck cards are stored as paragraph--deck_card entities embedded in
+// node--deck.field_deck_cards (entity_reference_revisions, unlimited cardinality).
 
 export interface CollectionCardAttributes {
   field_quantity_owned: number;
@@ -86,21 +86,8 @@ export type Deck = JsonApiResource<DeckAttributes>;
 export type CollectionCard = JsonApiResource<CollectionCardAttributes>;
 
 /**
- * A card slot in a deck — one entry per copy of a card.
- * Derived from the deck's field_main_cards or field_sideboard_cards.
- */
-export interface DeckCardSlot {
-  /** The mtg_card node ID. */
-  cardId: string;
-  /** Whether this slot is in the sideboard. */
-  isSideboard: boolean;
-  /** Full card attributes resolved from the JSON:API include. */
-  card: MtgCardAttributes & { id: string };
-}
-
-/**
- * A card grouped with its copy count — used by the analysis engine.
- * Not a Drupal resource; derived client-side from DeckCardSlot[].
+ * A card slot in a deck, backed by a paragraph--deck_card entity.
+ * id is the paragraph UUID, used by the /api/deck-cards mutations.
  */
 export interface DeckCardWithCard {
   id: string;

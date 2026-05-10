@@ -1,0 +1,19 @@
+uuid: 21d4deb2-f6eb-43ce-90a0-b55ab13c6948
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_fetched_at
+    - node.type.meta_deck
+id: node.meta_deck.field_fetched_at
+field_name: field_fetched_at
+entity_type: node
+bundle: meta_deck
+label: 'Fetched At'
+description: 'When this meta snapshot was last imported (ISO 8601 string).'
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: string

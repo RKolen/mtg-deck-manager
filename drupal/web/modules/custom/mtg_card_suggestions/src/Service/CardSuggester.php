@@ -15,7 +15,7 @@ use Drupal\Core\Logger\LoggerChannelInterface;
  * Generates AI-powered card suggestions for a deck.
  *
  * Pipeline:
- *  1. Fetch all cards in the deck via deck_card entity references.
+ *  1. Fetch all cards in the deck via field_deck_cards paragraphs.
  *  2. Build a semantic query string from card names + oracle text.
  *  3. Run a Milvus vector search (via Search API) to find similar cards.
  *  4. Send candidates + deck context to Ollama for ranked suggestions.
@@ -75,46 +75,49 @@ class CardSuggester {
       return [];
     }
 
-    $semanticQuery = $this->buildSemanticQuery($deckCards);
-    $candidates = $this->runMilvusSearch($semanticQuery, $limit * 5);
+    $archetype = $this->detectArchetype($deckCards);
+    $semanticQuery = $this->buildSemanticQuery($deckCards, $archetype);
+    $candidates = $this->runMilvusSearch($semanticQuery, $limit * 8);
     $candidates = $this->filterAlreadyInDeck($candidates, $deckCards);
+    $candidates = $this->filterByColorIdentity($candidates, $archetype['colors']);
     $candidates = array_slice($candidates, 0, $limit * 2);
 
     if ($candidates === []) {
       return [];
     }
 
-    return $this->rankWithOllama($deckCards, $candidates, $limit);
+    return $this->rankWithOllama($deckCards, $candidates, $limit, $archetype);
   }
 
   /**
-   * Loads all card nodes that belong to a deck.
+   * Loads all main-deck cards for a deck via field_deck_cards paragraphs.
    *
    * @param int $deckNid
    *   The deck node ID.
    *
-   * @return list<array{nid: int, name: string, oracle_text: string, type_line: string}>
-   *   Simplified card data for prompt building.
+   * @return list<array{nid: int, name: string, oracle_text: string, type_line: string, cmc: float, colors: list<string>, quantity: int}>
+   *   Simplified card data for prompt building (main deck only).
    */
   private function fetchDeckCards(int $deckNid): array {
-    $deckCardNids = $this->nodeStorage
-      ->getQuery()
-      ->accessCheck(FALSE)
-      ->condition('type', 'deck_card')
-      ->condition('field_deck', $deckNid)
-      ->execute();
-
-    if ($deckCardNids === []) {
+    /** @var \Drupal\node\NodeInterface|null $deck */
+    $deck = $this->nodeStorage->load($deckNid);
+    if ($deck === NULL || !$deck->hasField('field_deck_cards')) {
       return [];
     }
 
-    /** @var list<\Drupal\node\NodeInterface> $deckCardNodes */
-    $deckCardNodes = $this->nodeStorage->loadMultiple(array_values($deckCardNids));
-
     $cards = [];
-    foreach ($deckCardNodes as $deckCard) {
-      $cardRef = $deckCard->get('field_card');
-      if ($cardRef->isEmpty()) {
+    foreach ($deck->get('field_deck_cards') as $item) {
+      /** @var \Drupal\paragraphs\Entity\Paragraph|null $para */
+      $para = $item->entity;
+      if ($para === NULL) {
+        continue;
+      }
+      $isSideboard = (bool) ($para->hasField('field_is_sideboard') ? $para->get('field_is_sideboard')->value : FALSE);
+      if ($isSideboard) {
+        continue;
+      }
+      $cardRef = $para->hasField('field_card') ? $para->get('field_card') : NULL;
+      if ($cardRef === NULL || $cardRef->isEmpty()) {
         continue;
       }
       /** @var \Drupal\node\NodeInterface|null $card */
@@ -122,15 +125,203 @@ class CardSuggester {
       if ($card === NULL) {
         continue;
       }
+      $qty = (int) ($para->hasField('field_quantity') ? $para->get('field_quantity')->value : 1);
+      $colors = [];
+      if ($card->hasField('field_colors')) {
+        foreach ($card->get('field_colors') as $colorItem) {
+          $colors[] = (string) $colorItem->value;
+        }
+      }
       $cards[] = [
         'nid' => (int) $card->id(),
         'name' => (string) $card->label(),
         'oracle_text' => (string) ($card->hasField('field_oracle_text') ? $card->get('field_oracle_text')->value : ''),
         'type_line' => (string) ($card->hasField('field_type_line') ? $card->get('field_type_line')->value : ''),
+        'cmc' => (float) ($card->hasField('field_cmc') ? $card->get('field_cmc')->value : 0),
+        'colors' => $colors,
+        'quantity' => $qty,
       ];
     }
 
     return $cards;
+  }
+
+  /**
+   * Derives the deck's archetype from its card composition.
+   *
+   * Returns a structured description used to frame both the Milvus query
+   * and the Ollama ranking prompt so that suggestions stay within the deck's
+   * actual game plan.
+   *
+   * @param list<array<string, mixed>> $deckCards
+   *   Enriched deck card data (includes cmc, colors, type_line, quantity).
+   *
+   * @return array<string, mixed>
+   *   Archetype descriptor: speed, colors, win_condition, key_roles, label.
+   */
+  private function detectArchetype(array $deckCards): array {
+    $totalQty = 0;
+    $totalCmc = 0.0;
+    $nonLandQty = 0;
+    $creatureQty = 0;
+    $instantSorcQty = 0;
+    $colorCounts = [];
+
+    foreach ($deckCards as $card) {
+      $qty = (int) ($card['quantity'] ?? 1);
+      $totalQty += $qty;
+      $cmc = (float) ($card['cmc'] ?? 0);
+      $typeLine = (string) ($card['type_line'] ?? '');
+
+      if (stripos($typeLine, 'Land') === FALSE) {
+        $totalCmc += $cmc * $qty;
+        $nonLandQty += $qty;
+        if (stripos($typeLine, 'Creature') !== FALSE) {
+          $creatureQty += $qty;
+        }
+        if (stripos($typeLine, 'Instant') !== FALSE || stripos($typeLine, 'Sorcery') !== FALSE) {
+          $instantSorcQty += $qty;
+        }
+      }
+
+      foreach (($card['colors'] ?? []) as $color) {
+        $colorCounts[$color] = ($colorCounts[$color] ?? 0) + $qty;
+      }
+    }
+
+    $avgCmc = $nonLandQty > 0 ? $totalCmc / $nonLandQty : 2.5;
+    arsort($colorCounts);
+    $deckColors = array_keys($colorCounts);
+
+    // Classify by speed
+    if ($avgCmc < 1.6) {
+      $speed = 'ultra-fast aggro';
+      $winCondition = 'attack for lethal by turns 3–4 before the opponent stabilises';
+      $keyRoles = ['aggressive 1-drop and 2-drop creatures', 'cheap pump spells that trigger heroic or prowess', 'targeted removal to clear blockers'];
+      $keyConstraints = 'Low CMC is a feature, not a bug. Do NOT suggest cards above CMC 3. Do NOT suggest mana fixing or ramp. Do NOT suggest late-game threats.';
+    }
+    elseif ($avgCmc < 2.2) {
+      $speed = 'aggressive';
+      $winCondition = 'apply early pressure and close out by turns 4–6';
+      $keyRoles = ['efficient threats', 'disruption or burn spells', 'cards that generate card advantage'];
+      $keyConstraints = 'Prioritise efficiency. Avoid expensive finishers or slow value engines.';
+    }
+    elseif ($avgCmc > 3.5) {
+      $speed = 'midrange or control';
+      $winCondition = 'grind value and win in the mid-to-late game';
+      $keyRoles = ['resilient threats', 'interaction', 'card advantage engines'];
+      $keyConstraints = 'Card quality and resilience matter more than raw speed.';
+    }
+    else {
+      $speed = 'midrange';
+      $winCondition = 'balance early pressure with late-game threats';
+      $keyRoles = ['efficient 2-for-1 threats', 'flexible interaction'];
+      $keyConstraints = 'Balance is key — avoid cards that are too slow or too narrow.';
+    }
+
+    // Map color codes to names
+    $colorNames = ['W' => 'White', 'U' => 'Blue', 'B' => 'Black', 'R' => 'Red', 'G' => 'Green'];
+    $colorLabel = implode('/', array_map(static fn($c) => $colorNames[$c] ?? $c, $deckColors));
+
+    // Detect key keywords from oracle text
+    $keywords = [];
+    $keywordCounts = [];
+    $keywordMap = [
+      'heroic' => 'heroic',
+      'prowess' => 'prowess',
+      'pump' => '+1/+1',
+      'trample' => 'trample',
+      'lifelink' => 'lifelink',
+    ];
+    foreach ($deckCards as $card) {
+      $text = strtolower((string) ($card['oracle_text'] ?? ''));
+      foreach ($keywordMap as $label => $trigger) {
+        if (str_contains($text, $trigger)) {
+          $keywordCounts[$label] = ($keywordCounts[$label] ?? 0) + (int) ($card['quantity'] ?? 1);
+        }
+      }
+    }
+    arsort($keywordCounts);
+    $keywords = array_keys(array_slice($keywordCounts, 0, 3));
+
+    return [
+      'speed' => $speed,
+      'avgCmc' => round($avgCmc, 1),
+      'colors' => $deckColors,
+      'colorLabel' => $colorLabel,
+      'winCondition' => $winCondition,
+      'keyRoles' => $keyRoles,
+      'keyConstraints' => $keyConstraints,
+      'keywords' => $keywords,
+      'label' => "{$colorLabel} {$speed}",
+    ];
+  }
+
+  /**
+   * Filters Milvus candidates to those within the deck's color identity.
+   *
+   * A candidate is allowed if it is colorless OR shares at least one color
+   * with the deck. This prevents off-color suggestions like Blue cards
+   * appearing in a Red/Green aggro deck.
+   *
+   * @param list<array{nid: int, name: string, score: float}> $candidates
+   *   Raw Milvus candidates.
+   * @param list<string> $deckColors
+   *   The deck's color identity (e.g. ['R', 'G']).
+   *
+   * @return list<array{nid: int, name: string, score: float}>
+   *   Filtered candidates.
+   */
+  private function filterByColorIdentity(array $candidates, array $deckColors): array {
+    if ($deckColors === [] || $candidates === []) {
+      return $candidates;
+    }
+
+    $deckColorSet = array_flip($deckColors);
+    $nids = array_column($candidates, 'nid');
+
+    // Batch-load all candidate nodes in one query.
+    /** @var array<int, \Drupal\node\NodeInterface> $nodes */
+    $nodes = $this->nodeStorage->loadMultiple($nids);
+
+    // Build a nid → card-colors map from the batch.
+    $colorMap = [];
+    foreach ($nodes as $nid => $node) {
+      if (!$node->hasField('field_color_identity')) {
+        $colorMap[$nid] = [];
+        continue;
+      }
+      $cardColors = [];
+      foreach ($node->get('field_color_identity') as $item) {
+        $cardColors[] = (string) $item->value;
+      }
+      $colorMap[$nid] = $cardColors;
+    }
+
+    $filtered = [];
+    foreach ($candidates as $c) {
+      $cardColors = $colorMap[$c['nid']] ?? [];
+
+      if ($cardColors === []) {
+        // Colorless — always eligible.
+        $filtered[] = $c;
+        continue;
+      }
+
+      // Include only if every color of the card is in the deck's palette.
+      $offColor = FALSE;
+      foreach ($cardColors as $color) {
+        if (!isset($deckColorSet[$color])) {
+          $offColor = TRUE;
+          break;
+        }
+      }
+      if (!$offColor) {
+        $filtered[] = $c;
+      }
+    }
+
+    return $filtered;
   }
 
   /**
@@ -142,15 +333,42 @@ class CardSuggester {
    * @return string
    *   A space-joined string of card names and type lines.
    */
-  private function buildSemanticQuery(array $deckCards): string {
-    $parts = [];
-    foreach (array_slice($deckCards, 0, 20) as $card) {
-      $parts[] = $card['name'];
-      if ($card['type_line'] !== '') {
-        $parts[] = $card['type_line'];
+  /**
+   * Builds a Milvus semantic query that encodes the deck's game plan,
+   * not just card names, so vector search finds strategically relevant cards.
+   *
+   * @param list<array<string, mixed>> $deckCards
+   *   Enriched deck card data.
+   * @param array<string, mixed> $archetype
+   *   Archetype descriptor from detectArchetype().
+   *
+   * @return string
+   *   Query string for the Milvus embedding search.
+   */
+  private function buildSemanticQuery(array $deckCards, array $archetype): string {
+    // Lead with the archetype so the embedding captures the strategic intent.
+    $parts = [
+      $archetype['label'],
+      $archetype['winCondition'],
+      implode(' ', $archetype['keywords']),
+    ];
+
+    // Add the deck's key non-land card names (those with highest quantity first).
+    usort($deckCards, static fn($a, $b) => ($b['quantity'] ?? 1) <=> ($a['quantity'] ?? 1));
+    foreach (array_slice($deckCards, 0, 15) as $card) {
+      if (stripos((string) ($card['type_line'] ?? ''), 'Land') === FALSE) {
+        $parts[] = $card['name'];
+        // Pull the most relevant keyword phrases from oracle text.
+        $oracle = strtolower((string) ($card['oracle_text'] ?? ''));
+        foreach (['heroic', 'prowess', 'trample', 'haste', '+1/+1 counter'] as $kw) {
+          if (str_contains($oracle, $kw)) {
+            $parts[] = $kw;
+          }
+        }
       }
     }
-    return implode(' ', $parts);
+
+    return implode(' ', array_unique($parts));
   }
 
   /**
@@ -212,10 +430,25 @@ class CardSuggester {
   private function filterAlreadyInDeck(array $candidates, array $deckCards): array {
     $deckNids = array_column($deckCards, 'nid');
     $deckNidSet = array_flip($deckNids);
+    $deckNames = array_map('strtolower', array_column($deckCards, 'name'));
+    $deckNameSet = array_flip($deckNames);
 
-    return array_values(
-      array_filter($candidates, static fn(array $c) => !isset($deckNidSet[$c['nid']]))
-    );
+    // Also deduplicate candidates by card name — Milvus indexes multiple
+    // printings of the same card so the same name can appear many times.
+    $seenNames = [];
+    $result = [];
+    foreach ($candidates as $c) {
+      if (isset($deckNidSet[$c['nid']])) {
+        continue;
+      }
+      $nameLower = strtolower($c['name']);
+      if (isset($deckNameSet[$nameLower]) || isset($seenNames[$nameLower])) {
+        continue;
+      }
+      $seenNames[$nameLower] = TRUE;
+      $result[] = $c;
+    }
+    return $result;
   }
 
   /**
@@ -233,7 +466,7 @@ class CardSuggester {
    * @return list<array{card: array<string, mixed>, reason: string, score: float}>
    *   Ranked suggestions.
    */
-  private function rankWithOllama(array $deckCards, array $candidates, int $limit): array {
+  private function rankWithOllama(array $deckCards, array $candidates, int $limit, array $archetype = []): array {
     $default = $this->aiProvider->getDefaultProviderForOperationType('chat');
     if (!is_array($default) || empty($default['provider_id'])) {
       return $this->buildFallbackSuggestions($candidates, $limit);
@@ -242,8 +475,8 @@ class CardSuggester {
     try {
       $provider = $this->aiProvider->createInstance($default['provider_id']);
       $input = new ChatInput([
-        new ChatMessage('system', $this->buildSystemPrompt()),
-        new ChatMessage('user', $this->buildUserPrompt($deckCards, $candidates, $limit)),
+        new ChatMessage('system', $this->buildSystemPrompt($archetype)),
+        new ChatMessage('user', $this->buildUserPrompt($deckCards, $candidates, $limit, $archetype)),
       ]);
 
       /** @var \Drupal\ai\OperationType\Chat\ChatOutput $output */
@@ -268,35 +501,76 @@ class CardSuggester {
    * @return string
    *   The system prompt.
    */
-  private function buildSystemPrompt(): string {
-    return <<<PROMPT
-You are a Magic: The Gathering deck-building assistant.
-Given a list of cards already in a deck and a list of candidate cards,
-return a JSON array of the best additions ranked by synergy.
+  private function buildSystemPrompt(array $archetype): string {
+    $label = $archetype['label'] ?? 'unknown archetype';
+    $winCon = $archetype['winCondition'] ?? 'win the game';
+    $constraints = $archetype['keyConstraints'] ?? '';
+    $rolesStr = implode('; ', $archetype['keyRoles'] ?? []);
 
-Respond ONLY with valid JSON — no explanation outside the JSON.
-Format: [{"name": "Card Name", "reason": "One-sentence explanation of synergy"}, ...]
+    return <<<PROMPT
+You are a Magic: The Gathering deck-building expert specialising in optimising existing strategies.
+
+CRITICAL: This deck is a {$label} deck. Its goal is to {$winCon}.
+
+What this deck needs: {$rolesStr}.
+
+Constraints you MUST respect:
+{$constraints}
+
+Given the deck's current cards and a list of candidates filtered to the correct colors and strategy,
+return ONLY the candidates that genuinely fit this specific deck's game plan.
+Reject any candidate that contradicts the archetype (e.g. slow finishers in an ultra-fast deck,
+off-strategy value engines, or cards that require a different win condition).
+
+Respond ONLY with valid JSON — no text outside the array.
+Format: [{"name": "Card Name", "reason": "One sentence: which specific role in THIS deck this card fills"}, ...]
 PROMPT;
   }
 
   /**
-   * Builds the user message listing deck cards and candidates.
+   * Builds the user message with full archetype framing.
    *
-   * @param list<array{nid: int, name: string, oracle_text: string, type_line: string}> $deckCards
-   *   Cards in the deck.
+   * @param list<array<string, mixed>> $deckCards
+   *   Cards in the deck (enriched with cmc, colors, quantity).
    * @param list<array{nid: int, name: string, score: float}> $candidates
-   *   Candidate cards.
+   *   Filtered candidates.
    * @param int $limit
    *   How many suggestions to request.
+   * @param array<string, mixed> $archetype
+   *   Archetype descriptor.
    *
    * @return string
    *   The user prompt.
    */
-  private function buildUserPrompt(array $deckCards, array $candidates, int $limit): string {
-    $deckList = implode(', ', array_column($deckCards, 'name'));
-    $candidateList = implode(', ', array_column($candidates, 'name'));
+  private function buildUserPrompt(array $deckCards, array $candidates, int $limit, array $archetype = []): string {
+    // Show the deck's key spells (non-lands, by quantity desc) to anchor context.
+    $keyCards = array_filter($deckCards, static fn($c) => stripos((string) ($c['type_line'] ?? ''), 'Land') === FALSE);
+    usort($keyCards, static fn($a, $b) => ($b['quantity'] ?? 1) <=> ($a['quantity'] ?? 1));
+    $keyCardLines = [];
+    foreach (array_slice($keyCards, 0, 12) as $card) {
+      $qty = (int) ($card['quantity'] ?? 1);
+      $cmc = number_format((float) ($card['cmc'] ?? 0), 1);
+      $keyCardLines[] = "  {$qty}x {$card['name']} (CMC {$cmc}, {$card['type_line']})";
+    }
+    $deckContext = implode("\n", $keyCardLines);
 
-    return "Deck contains: {$deckList}\n\nCandidate additions: {$candidateList}\n\nReturn the top {$limit} suggestions as JSON.";
+    $candidateList = implode(', ', array_column($candidates, 'name'));
+    $avgCmc = $archetype['avgCmc'] ?? '?';
+    $label = $archetype['label'] ?? 'deck';
+
+    return <<<PROMPT
+This is a {$label} deck (avg CMC {$avgCmc}).
+
+Key spells already in the deck:
+{$deckContext}
+
+Candidate cards (already filtered to correct colors):
+{$candidateList}
+
+Select the {$limit} candidates that best serve THIS deck's specific game plan.
+Explain exactly how each card contributes to the win condition.
+Return JSON only.
+PROMPT;
   }
 
   /**

@@ -1,0 +1,23 @@
+uuid: c6d51776-0bc0-4b63-ae7c-c4a1a4891508
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_sim_win_rate
+    - node.type.simulation_result
+id: node.simulation_result.field_sim_win_rate
+field_name: field_sim_win_rate
+entity_type: node
+bundle: simulation_result
+label: 'Win Rate'
+description: ''
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings:
+  min: null
+  max: null
+  prefix: ''
+  suffix: ''
+field_type: decimal
