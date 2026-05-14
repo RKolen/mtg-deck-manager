@@ -31,6 +31,8 @@ type Query {
   collectionValue: Float!
 
   pages: [Page!]!
+
+  metaDecks(format: String!): [MetaDeck!]!
 }
 
 type Mutation {
@@ -106,4 +108,13 @@ type CollectionCard {
   quantityOwned: Int!
   quantityFoil: Int!
   card: MtgCard
+}
+
+type MetaDeck {
+  id: ID!
+  title: String!
+  format: String!
+  metaShare: Float
+  archetypeTags: [String!]!
+  fetchedAt: String
 }

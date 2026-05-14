@@ -13,6 +13,6 @@ services:
   mtg_card_suggestions.matchup_advisor:
     class: Drupal\mtg_card_suggestions\Service\MatchupAdvisor
     arguments:
-      - '@ai.provider'
+      - '@http_client'
       - '@entity_type.manager'
       - '@logger.channel.mtg_card_suggestions'

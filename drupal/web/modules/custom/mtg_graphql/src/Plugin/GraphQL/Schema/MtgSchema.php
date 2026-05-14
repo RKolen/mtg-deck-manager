@@ -32,6 +32,7 @@ class MtgSchema extends SdlSchemaPluginBase {
     $this->addDeckCardResolvers($registry, $builder);
     $this->addCollectionCardResolvers($registry, $builder);
     $this->addPageResolvers($registry, $builder);
+    $this->addMetaDeckResolvers($registry, $builder);
   }
 
   // ---------------------------------------------------------------------------
@@ -432,6 +433,55 @@ class MtgSchema extends SdlSchemaPluginBase {
           ->getAliasByPath('/node/' . $n->id(), $n->language()->getId());
         return $alias !== '/node/' . $n->id() ? $alias : NULL;
       })
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Meta deck resolvers
+  // ---------------------------------------------------------------------------
+
+  private function addMetaDeckResolvers(ResolverRegistryInterface $registry, ResolverBuilder $builder): void {
+    $registry->addFieldResolver('Query', 'metaDecks',
+      $builder->callback(function ($value, array $args): array {
+        $format  = $args['format'];
+        $storage = \Drupal::entityTypeManager()->getStorage('node');
+        $ids = \Drupal::entityQuery('node')
+          ->condition('type', 'meta_deck')
+          ->condition('status', 1)
+          ->condition('field_format', $format)
+          ->accessCheck(FALSE)
+          ->sort('field_meta_share', 'DESC')
+          ->execute();
+        return array_values($storage->loadMultiple($ids));
+      })
+    );
+
+    $registry->addFieldResolver('MetaDeck', 'id',
+      $builder->callback(fn($n) => $n->uuid())
+    );
+    $registry->addFieldResolver('MetaDeck', 'title',
+      $builder->callback(fn($n) => $n->getTitle())
+    );
+    $registry->addFieldResolver('MetaDeck', 'format',
+      $builder->callback(fn($n) => $n->get('field_format')->value ?? '')
+    );
+    $registry->addFieldResolver('MetaDeck', 'metaShare',
+      $builder->callback(function ($n): ?float {
+        $val = $n->get('field_meta_share')->value;
+        return $val !== NULL ? (float) $val : NULL;
+      })
+    );
+    $registry->addFieldResolver('MetaDeck', 'archetypeTags',
+      $builder->callback(function ($n): array {
+        $out = [];
+        foreach ($n->get('field_archetype_tags') as $item) {
+          $out[] = $item->value;
+        }
+        return $out;
+      })
+    );
+    $registry->addFieldResolver('MetaDeck', 'fetchedAt',
+      $builder->callback(fn($n) => $n->get('field_fetched_at')->value)
     );
   }
 

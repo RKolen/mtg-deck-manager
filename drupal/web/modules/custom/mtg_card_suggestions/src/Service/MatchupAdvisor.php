@@ -4,13 +4,12 @@ declare(strict_types=1);
 
 namespace Drupal\mtg_card_suggestions\Service;
 
-use Drupal\ai\AiProviderPluginManager;
-use Drupal\ai\OperationType\Chat\ChatInput;
-use Drupal\ai\OperationType\Chat\ChatMessage;
 use Drupal\Core\Entity\EntityStorageInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Logger\LoggerChannelInterface;
 use Drupal\node\NodeInterface;
+use GuzzleHttp\ClientInterface;
+use GuzzleHttp\Exception\GuzzleException;
 
 /**
  * Generates LLM-powered matchup advice for a player deck vs a meta archetype.
@@ -27,7 +26,7 @@ class MatchupAdvisor {
   private readonly EntityStorageInterface $nodeStorage;
 
   public function __construct(
-    private readonly AiProviderPluginManager $aiProvider,
+    private readonly ClientInterface $httpClient,
     EntityTypeManagerInterface $entityTypeManager,
     private readonly LoggerChannelInterface $logger,
   ) {
@@ -198,8 +197,13 @@ class MatchupAdvisor {
       $playerCards['oneDrop'] > 0 ? "{$playerCards['oneDrop']} one-drops" : '',
     ]));
 
-    // Opponent archetype.
-    $opponentCards = (string) ($metaDeck->get('field_cards')->value ?? '');
+    // Opponent archetype — field_cards_json holds a JSON array of {name, quantity, sideboard}.
+    $rawJson = (string) ($metaDeck->get('field_cards_json')->value ?? '[]');
+    $cardEntries = json_decode($rawJson, TRUE) ?? [];
+    $opponentCards = implode(', ', array_map(
+      fn(array $c) => ($c['quantity'] ?? 1) . 'x ' . ($c['name'] ?? ''),
+      array_filter($cardEntries, fn(array $c) => empty($c['sideboard'])),
+    ));
     $sideboardGuide = (string) ($metaDeck->get('field_sideboard_guide')->value ?? '');
     $archetype_tags = implode(', ', array_column($metaDeck->get('field_archetype_tags')->getValue(), 'value'));
     $confidencePct = round($confidence * 100);
@@ -255,26 +259,37 @@ PROMPT;
   }
 
   /**
-   * Sends the prompt to Ollama and parses the JSON response.
+   * Sends the prompt to Ollama via direct HTTP and parses the JSON response.
    *
-   * Falls back to an error advice structure rather than throwing.
+   * Requires OLLAMA_HOST, OLLAMA_PORT, and OLLAMA_CHAT_MODEL env vars.
    *
    * @return array{dynamic: string, threats: list<string>, sideboard: array{in: list<string>, out: list<string>}, keyPlay: string}
    */
   private function runOllama(string $prompt): array {
-    $default = $this->aiProvider->getDefaultProviderForOperationType('chat');
-    if (!is_array($default) || empty($default['provider_id'])) {
-      return $this->errorAdvice('AI provider not configured.');
+    $host  = getenv('OLLAMA_HOST');
+    $port  = getenv('OLLAMA_PORT');
+    $model = getenv('OLLAMA_CHAT_MODEL');
+
+    if (!$host || !$port || !$model) {
+      return $this->errorAdvice('Ollama not configured: set OLLAMA_HOST, OLLAMA_PORT, and OLLAMA_CHAT_MODEL env vars.');
     }
 
+    $url = rtrim($host, '/') . ':' . $port . '/api/chat';
+
     try {
-      $provider = $this->aiProvider->createInstance($default['provider_id']);
-      $input = new ChatInput([new ChatMessage('user', $prompt)]);
-      $output = $provider->chat($input, (string) $default['model_id']);
-      $text = (string) $output->getNormalized()->getText();
+      $response = $this->httpClient->request('POST', $url, [
+        'json' => [
+          'model'  => $model,
+          'stream' => FALSE,
+          'messages' => [['role' => 'user', 'content' => $prompt]],
+        ],
+        'timeout' => 120,
+      ]);
+      $body = json_decode((string) $response->getBody(), TRUE);
+      $text = (string) ($body['message']['content'] ?? '');
       return $this->parseAdvice($text);
     }
-    catch (\Throwable $e) {
+    catch (GuzzleException $e) {
       $this->logger->warning('Matchup advisor Ollama call failed: @msg', ['@msg' => $e->getMessage()]);
       return $this->errorAdvice('Could not reach Ollama: ' . $e->getMessage());
     }
@@ -286,8 +301,10 @@ PROMPT;
    * @return array{dynamic: string, threats: list<string>, sideboard: array{in: list<string>, out: list<string>}, keyPlay: string}
    */
   private function parseAdvice(string $text): array {
+    // Strip qwen3/deepseek thinking blocks before extracting JSON.
+    $cleaned = (string) preg_replace('/<think>.*?<\/think>/s', '', $text);
     // Strip markdown code fences.
-    $cleaned = (string) preg_replace('/```(?:json)?\s*|\s*```/', '', $text);
+    $cleaned = (string) preg_replace('/```(?:json)?\s*|\s*```/', '', $cleaned);
     $cleaned = trim($cleaned);
 
     // Extract the first JSON object.

@@ -468,12 +468,12 @@ class InteractiveGame:
         assert self.phase in ("main1", "main2", "attack")
         self._log("player", "end_turn", f"End of turn {self.turn}")
         self.phase = "opp_turn"
-        result = self._opponent_full_turn()
+        self._opponent_full_turn()
         if self._check_game_over():
             return self.to_client()
         self.turn += 1
         self.phase = "draw"
-        return result
+        return self.to_client()
 
     # -------------------------------------------------------------------------
     # Opponent (AI) full turn

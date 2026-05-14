@@ -2,16 +2,17 @@
  * Clients for Phase 10A — Pro Meta Analyst.
  *
  * Three backends:
- *   Drupal JSON:API  — meta_deck node catalogue
+ *   Drupal GraphQL   — meta_deck node catalogue  (/graphql)
  *   Drupal REST      — POST /api/matchup-advice  (LLM matchup advisor)
  *   Python service   — POST /classify            (deck deduction classifier)
  */
 
 import axios from 'axios';
+import { gql } from 'graphql-request';
 import { createDrupalClient } from './httpClient';
-import type { JsonApiCollectionResponse, JsonApiResource } from '../types/drupal';
+import { getGraphQLClient } from './graphqlClient';
+import type { JsonApiResource } from '../types/drupal';
 
-const drupalClient = createDrupalClient('/jsonapi');
 const drupalApi = createDrupalClient('/api');
 
 // ---------------------------------------------------------------------------
@@ -57,23 +58,42 @@ export interface ArchetypeProbability {
 // Meta deck catalogue
 // ---------------------------------------------------------------------------
 
+interface GqlMetaDeck {
+  id: string;
+  title: string;
+  format: string;
+  metaShare: number | null;
+  archetypeTags: string[];
+  fetchedAt: string | null;
+}
+
+function toMetaDeck(d: GqlMetaDeck): MetaDeck {
+  return {
+    id: d.id,
+    type: 'node--meta_deck',
+    attributes: {
+      title: d.title,
+      field_format: d.format,
+      field_meta_share: d.metaShare != null ? String(d.metaShare) : null,
+      field_archetype_tags: d.archetypeTags,
+      field_fetched_at: d.fetchedAt,
+    },
+  };
+}
+
 /**
- * Fetches all meta_deck nodes for a given format, sorted by meta share desc.
+ * Fetches all meta_deck nodes for a given format via GraphQL, sorted by meta share desc.
  */
 export async function fetchMetaDecks(format: string): Promise<MetaDeck[]> {
-  const response = await drupalClient.get<JsonApiCollectionResponse<MetaDeckAttributes>>(
-    '/node/meta_deck',
-    {
-      params: {
-        'filter[field_format]': format,
-        'fields[node--meta_deck]':
-          'title,field_format,field_meta_share,field_archetype_tags,field_fetched_at',
-        'sort': '-field_meta_share',
-        'page[limit]': '50',
-      },
-    },
-  );
-  return response.data.data;
+  const query = gql`
+    query GetMetaDecks($format: String!) {
+      metaDecks(format: $format) {
+        id title format metaShare archetypeTags fetchedAt
+      }
+    }
+  `;
+  const data = await getGraphQLClient().request<{ metaDecks: GqlMetaDeck[] }>(query, { format });
+  return data.metaDecks.map(toMetaDeck);
 }
 
 // ---------------------------------------------------------------------------
