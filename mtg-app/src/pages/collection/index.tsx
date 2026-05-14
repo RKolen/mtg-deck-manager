@@ -84,6 +84,11 @@ const CollectionPage: React.FC = () => {
       }),
   });
 
+  const colorsKey = useMemo(
+    () => [...debouncedFilter.colors].sort().join(','),
+    [debouncedFilter.colors],
+  );
+
   // Reset to first page when filters change.
   useEffect(() => {
     setPage(0);
@@ -94,8 +99,7 @@ const CollectionPage: React.FC = () => {
     debouncedFilter.legalIn,
     debouncedFilter.oracleText,
     debouncedFilter.rarity,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    JSON.stringify([...debouncedFilter.colors].sort()),
+    colorsKey,
   ]);
 
   const { data: estValue = null } = useQuery<number>({

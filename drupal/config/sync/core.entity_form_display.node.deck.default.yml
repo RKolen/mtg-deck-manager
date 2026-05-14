@@ -9,6 +9,7 @@ dependencies:
     - node.type.deck
   module:
     - field_group
+    - paragraphs
     - text
 third_party_settings:
   field_group:
@@ -22,7 +23,6 @@ third_party_settings:
       weight: 1
       format_type: tabs
       format_settings:
-        label: ''
         classes: ''
         id: ''
         direction: horizontal
@@ -30,13 +30,13 @@ third_party_settings:
       children:
         - title
         - field_format
+        - field_deck_cards
       label: Details
       region: content
       parent_name: group_deck_tabs
       weight: 0
       format_type: tab
       format_settings:
-        label: Details
         classes: ''
         show_empty_fields: false
         id: ''
@@ -51,7 +51,6 @@ third_party_settings:
       weight: 1
       format_type: tab
       format_settings:
-        label: Notes
         classes: ''
         show_empty_fields: false
         id: ''
@@ -69,14 +68,22 @@ content:
     settings: {  }
     third_party_settings: {  }
   field_deck_cards:
-    type: entity_reference_autocomplete
-    weight: 12
+    type: paragraphs
+    weight: 2
     region: content
     settings:
-      match_operator: CONTAINS
-      match_limit: 10
-      size: 60
-      placeholder: ''
+      title: Paragraph
+      title_plural: Paragraphs
+      edit_mode: open
+      closed_mode: summary
+      autocollapse: none
+      closed_mode_threshold: 0
+      add_mode: dropdown
+      form_display_mode: default
+      default_paragraph_type: ''
+      features:
+        collapse_edit_all: collapse_edit_all
+        duplicate: duplicate
     third_party_settings: {  }
   field_format:
     type: string_textfield

@@ -1,0 +1,109 @@
+schema {
+  query: Query
+  mutation: Mutation
+}
+
+type Query {
+  cards(
+    page: Int
+    limit: Int
+    name: String
+    colors: [String!]
+    type: String
+    maxCmc: Float
+    titlePrefix: String
+  ): CardPage!
+
+  card(slug: String!): MtgCard
+
+  cardsByName(name: String!): [MtgCard!]!
+
+  decks: [Deck!]!
+
+  deck(id: ID!): Deck
+
+  deckCards(deckId: ID!): [DeckCard!]!
+
+  collectionCards: [CollectionCard!]!
+
+  collectionCardByCardId(cardId: ID!): CollectionCard
+
+  collectionValue: Float!
+
+  pages: [Page!]!
+}
+
+type Mutation {
+  createDeck(title: String!, format: String!, notes: String): Deck!
+
+  updateDeck(id: ID!, title: String, format: String, notes: String): Deck!
+
+  deleteDeck(id: ID!): Boolean!
+
+  upsertCollectionCard(
+    cardId: ID!
+    cardName: String!
+    quantityOwned: Int!
+    quantityFoil: Int
+    existingId: ID
+  ): CollectionCard!
+}
+
+type CardPage {
+  cards: [MtgCard!]!
+  nextCursor: String
+  total: Int!
+}
+
+type MtgCard {
+  id: ID!
+  title: String!
+  manaCost: String
+  cmc: Float
+  typeLine: String
+  colors: [String!]!
+  colorIdentity: [String!]!
+  oracleText: String
+  imageUri: String
+  isManaProducer: Boolean!
+  producedMana: [String!]!
+  legalFormats: [String!]!
+  priceUsd: String
+  priceUsdFoil: String
+  setCode: String
+  setName: String
+  rarity: String
+  collectorNumber: String
+  power: String
+  toughness: String
+  loyalty: String
+}
+
+type Deck {
+  id: ID!
+  nid: Int!
+  title: String!
+  format: String!
+  notes: String
+}
+
+type DeckCard {
+  id: ID!
+  quantity: Int!
+  isSideboard: Boolean!
+  card: MtgCard!
+}
+
+type Page {
+  id: ID!
+  title: String!
+  body: String
+  pathAlias: String
+}
+
+type CollectionCard {
+  id: ID!
+  quantityOwned: Int!
+  quantityFoil: Int!
+  card: MtgCard
+}
