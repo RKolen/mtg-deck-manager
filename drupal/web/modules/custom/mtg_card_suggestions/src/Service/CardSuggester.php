@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace Drupal\mtg_card_suggestions\Service;
 
-use Drupal\ai\AiProviderPluginManager;
-use Drupal\ai\OperationType\Chat\ChatInput;
-use Drupal\ai\OperationType\Chat\ChatMessage;
 use Drupal\Core\Entity\EntityStorageInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Logger\LoggerChannelInterface;
+use GuzzleHttp\ClientInterface;
+use GuzzleHttp\Exception\GuzzleException;
 
 /**
  * Generates AI-powered card suggestions for a deck.
@@ -39,8 +38,8 @@ class CardSuggester {
   /**
    * Constructs a CardSuggester.
    *
-   * @param \Drupal\ai\AiProviderPluginManager $aiProvider
-   *   The AI provider plugin manager.
+   * @param \GuzzleHttp\ClientInterface $httpClient
+   *   HTTP client for direct Ollama calls.
    * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entityTypeManager
    *   The entity type manager.
    * @param \Drupal\Core\Logger\LoggerChannelInterface $logger
@@ -50,7 +49,7 @@ class CardSuggester {
    * @throws \Drupal\Component\Plugin\Exception\PluginNotFoundException
    */
   public function __construct(
-    private readonly AiProviderPluginManager $aiProvider,
+    private readonly ClientInterface $httpClient,
     EntityTypeManagerInterface $entityTypeManager,
     private readonly LoggerChannelInterface $logger,
   ) {
@@ -284,9 +283,13 @@ class CardSuggester {
     /** @var array<int, \Drupal\node\NodeInterface> $nodes */
     $nodes = $this->nodeStorage->loadMultiple($nids);
 
-    // Build a nid → card-colors map from the batch.
+    // Build a nid → card-colors and image_uri map from the batch.
     $colorMap = [];
+    $imageMap = [];
     foreach ($nodes as $nid => $node) {
+      $imageMap[$nid] = $node->hasField('field_image_uri')
+        ? ((string) ($node->get('field_image_uri')->value ?? '')) ?: NULL
+        : NULL;
       if (!$node->hasField('field_color_identity')) {
         $colorMap[$nid] = [];
         continue;
@@ -300,6 +303,7 @@ class CardSuggester {
 
     $filtered = [];
     foreach ($candidates as $c) {
+      $c['image_uri'] = $imageMap[$c['nid']] ?? NULL;
       $cardColors = $colorMap[$c['nid']] ?? [];
 
       if ($cardColors === []) {
@@ -467,28 +471,40 @@ class CardSuggester {
    *   Ranked suggestions.
    */
   private function rankWithOllama(array $deckCards, array $candidates, int $limit, array $archetype = []): array {
-    $default = $this->aiProvider->getDefaultProviderForOperationType('chat');
-    if (!is_array($default) || empty($default['provider_id'])) {
+    $host  = getenv('OLLAMA_HOST');
+    $port  = getenv('OLLAMA_PORT');
+    $model = getenv('OLLAMA_CHAT_MODEL');
+
+    if (!$host || !$port || !$model) {
       return $this->buildFallbackSuggestions($candidates, $limit);
     }
 
-    try {
-      $provider = $this->aiProvider->createInstance($default['provider_id']);
-      $input = new ChatInput([
-        new ChatMessage('system', $this->buildSystemPrompt($archetype)),
-        new ChatMessage('user', $this->buildUserPrompt($deckCards, $candidates, $limit, $archetype)),
-      ]);
+    $url = rtrim($host, '/') . ':' . $port . '/api/chat';
 
-      /** @var \Drupal\ai\OperationType\Chat\ChatOutput $output */
-      $output = $provider->chat($input, (string) $default['model_id']);
-      $text = (string) $output->getNormalized()->getText();
+    try {
+      $response = $this->httpClient->request('POST', $url, [
+        'json' => [
+          'model'  => $model,
+          'stream' => FALSE,
+          'messages' => [
+            ['role' => 'system', 'content' => $this->buildSystemPrompt($archetype)],
+            ['role' => 'user', 'content' => $this->buildUserPrompt($deckCards, $candidates, $limit, $archetype)],
+          ],
+          'options' => ['num_ctx' => 4096],
+        ],
+        'timeout' => 600,
+      ]);
+      $body = json_decode((string) $response->getBody(), TRUE);
+      $text = (string) ($body['message']['content'] ?? '');
+      // Strip thinking blocks from qwen3 models.
+      $text = (string) preg_replace('/<think>.*?<\/think>/s', '', $text);
       $ranked = $this->parseSuggestions($text, $candidates);
 
       if ($ranked !== []) {
         return array_slice($ranked, 0, $limit);
       }
     }
-    catch (\Throwable $e) {
+    catch (GuzzleException $e) {
       $this->logger->warning('Ollama ranking failed: @msg', ['@msg' => $e->getMessage()]);
     }
 
@@ -620,8 +636,9 @@ PROMPT;
       }
       $suggestions[] = [
         'card' => [
-          'nid' => $candidate['nid'],
-          'name' => $candidate['name'],
+          'nid'       => $candidate['nid'],
+          'name'      => $candidate['name'],
+          'image_uri' => $candidate['image_uri'] ?? NULL,
         ],
         'reason' => (string) ($row['reason'] ?? ''),
         'score' => $candidate['score'],
@@ -647,8 +664,9 @@ PROMPT;
     foreach (array_slice($candidates, 0, $limit) as $c) {
       $suggestions[] = [
         'card' => [
-          'nid' => $c['nid'],
-          'name' => $c['name'],
+          'nid'       => $c['nid'],
+          'name'      => $c['name'],
+          'image_uri' => $c['image_uri'] ?? NULL,
         ],
         'reason' => 'Semantically similar to cards already in your deck.',
         'score' => $c['score'],

@@ -1,7 +1,9 @@
 /**
- * Client for POST /api/simulate — MTG game simulation service (Phase 10B).
+ * Client for POST /api/simulate and simulation history via GraphQL.
  */
 
+import { gql } from 'graphql-request';
+import { getGraphQLClient } from './graphqlClient';
 import { createDrupalClient } from './httpClient';
 
 const client = createDrupalClient('/api');
@@ -100,8 +102,20 @@ export interface SimulationResult {
   gameLogs: GameLog[];
 }
 
+export interface SimulationHistoryEntry {
+  id: string;
+  nid: number;
+  opponent: string;
+  format: string;
+  games: number;
+  wins: number;
+  winRate: number;
+  resultJson: string;
+  created: string;
+}
+
 // ---------------------------------------------------------------------------
-// API call
+// API calls
 // ---------------------------------------------------------------------------
 
 export async function runSimulation(req: SimulateRequest): Promise<SimulationResult> {
@@ -110,4 +124,21 @@ export async function runSimulation(req: SimulateRequest): Promise<SimulationRes
     timeout: 660_000,
   });
   return response.data;
+}
+
+export async function fetchSimulationHistory(
+  deckNid: number,
+  limit = 20,
+): Promise<SimulationHistoryEntry[]> {
+  const query = gql`
+    query GetSimHistory($deckNid: Int!, $limit: Int) {
+      simulationHistory(deckNid: $deckNid, limit: $limit) {
+        id nid opponent format games wins winRate resultJson created
+      }
+    }
+  `;
+  const data = await getGraphQLClient().request<{
+    simulationHistory: SimulationHistoryEntry[];
+  }>(query, { deckNid, limit });
+  return data.simulationHistory;
 }

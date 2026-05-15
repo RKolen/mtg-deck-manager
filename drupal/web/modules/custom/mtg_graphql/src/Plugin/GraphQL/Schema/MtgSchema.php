@@ -33,6 +33,7 @@ class MtgSchema extends SdlSchemaPluginBase {
     $this->addCollectionCardResolvers($registry, $builder);
     $this->addPageResolvers($registry, $builder);
     $this->addMetaDeckResolvers($registry, $builder);
+    $this->addSimulationResultResolvers($registry, $builder);
   }
 
   // ---------------------------------------------------------------------------
@@ -482,6 +483,57 @@ class MtgSchema extends SdlSchemaPluginBase {
     );
     $registry->addFieldResolver('MetaDeck', 'fetchedAt',
       $builder->callback(fn($n) => $n->get('field_fetched_at')->value)
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Simulation result resolvers
+  // ---------------------------------------------------------------------------
+
+  private function addSimulationResultResolvers(ResolverRegistryInterface $registry, ResolverBuilder $builder): void {
+    $registry->addFieldResolver('Query', 'simulationHistory',
+      $builder->callback(function ($value, array $args): array {
+        $deckNid = (int) $args['deckNid'];
+        $limit   = (int) ($args['limit'] ?? 20);
+        $storage = \Drupal::entityTypeManager()->getStorage('node');
+        $ids = \Drupal::entityQuery('node')
+          ->condition('type', 'simulation_result')
+          ->condition('status', 1)
+          ->condition('field_sim_player_deck_nid', $deckNid)
+          ->accessCheck(FALSE)
+          ->sort('created', 'DESC')
+          ->range(0, $limit)
+          ->execute();
+        return array_values($storage->loadMultiple($ids));
+      })
+    );
+
+    $registry->addFieldResolver('SimulationResult', 'id',
+      $builder->callback(fn($n) => $n->uuid())
+    );
+    $registry->addFieldResolver('SimulationResult', 'nid',
+      $builder->callback(fn($n) => (int) $n->id())
+    );
+    $registry->addFieldResolver('SimulationResult', 'opponent',
+      $builder->callback(fn($n) => (string) ($n->get('field_sim_opponent')->value ?? ''))
+    );
+    $registry->addFieldResolver('SimulationResult', 'format',
+      $builder->callback(fn($n) => (string) ($n->get('field_sim_format')->value ?? ''))
+    );
+    $registry->addFieldResolver('SimulationResult', 'games',
+      $builder->callback(fn($n) => (int) ($n->get('field_sim_games')->value ?? 0))
+    );
+    $registry->addFieldResolver('SimulationResult', 'wins',
+      $builder->callback(fn($n) => (int) ($n->get('field_sim_wins')->value ?? 0))
+    );
+    $registry->addFieldResolver('SimulationResult', 'winRate',
+      $builder->callback(fn($n) => (float) ($n->get('field_sim_win_rate')->value ?? 0.0))
+    );
+    $registry->addFieldResolver('SimulationResult', 'resultJson',
+      $builder->callback(fn($n) => (string) ($n->get('field_sim_result_json')->value ?? '{}'))
+    );
+    $registry->addFieldResolver('SimulationResult', 'created',
+      $builder->callback(fn($n) => date('c', (int) $n->getCreatedTime()))
     );
   }
 

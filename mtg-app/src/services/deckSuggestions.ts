@@ -15,6 +15,7 @@ export interface SuggestedCard {
   nid: number;
   name: string;
   score: number;
+  image_uri: string | null;
 }
 
 export interface CardSuggestion {

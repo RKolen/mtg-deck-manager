@@ -1,51 +1,47 @@
 """
-ForgeAdapter — manages the Forge headless subprocess and socket protocol.
+ForgeAdapter — runs MTG simulations via Forge or the built-in mock engine.
 
-When FORGE_JAR, FORGE_HOST, and FORGE_PORT are all set the adapter launches
-Forge and routes decisions through the socket. Otherwise it runs in mock mode,
-simulating games from actual deck composition (CMC, card types, power/toughness).
+Real mode (FORGE_JAR set):
+  Writes temporary .dck files and invokes Forge's built-in 'sim' command as a
+  subprocess.  Forge handles full MTG rules; we parse its stdout for results.
 
-The mock engine models:
-  - Opening hand drawing and mulligan decisions (2–5 lands to keep)
-  - Turn-by-turn land drops and spell casting (cheapest spells first)
-  - Combat: all creatures attack, opponent blocks to minimise damage
-  - Life-total tracking through the game
-  - Creature summoning sickness (don't attack turn they enter)
+Mock mode (FORGE_JAR not set):
+  Uses MockGameEngine — a lightweight Python engine that models land drops,
+  spell casting, combat and mulligan decisions from actual card CMC/type data.
+
+Deck format (.dck):
+  [metadata]
+  Name=DeckName
+  [Main]
+  4 Card Name
+  [Sideboard]
+  2 Sideboard Card
 """
 
 from __future__ import annotations
 
-import json
 import logging
 import os
+import pathlib
 import random
-import socket
+import re
 import subprocess
-import time
 import uuid
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Optional, Protocol, cast
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from deck_registry import CardInfo
 
 logger = logging.getLogger(__name__)
 
-
-class _SocketFile(Protocol):
-    def write(self, buffer: bytes, /) -> int: ...
-    def flush(self) -> None: ...
-    def readline(self) -> bytes: ...
-    def close(self) -> None: ...
-
-
 FORGE_JAR: str = os.environ.get("FORGE_JAR", "")
-FORGE_HOST: str = os.environ.get("FORGE_HOST", "")
-FORGE_PORT: str = os.environ.get("FORGE_PORT", "")
+FORGE_JAVA: str = os.environ.get("FORGE_JAVA", "java")
 
 
 def _forge_available() -> bool:
-    return bool(FORGE_JAR and FORGE_HOST and FORGE_PORT and os.path.isfile(FORGE_JAR))
+    """Return True when FORGE_JAR points to an existing file."""
+    return bool(FORGE_JAR and os.path.isfile(FORGE_JAR))
 
 
 # ---------------------------------------------------------------------------
@@ -55,36 +51,39 @@ def _forge_available() -> bool:
 @dataclass
 class TurnEvent:
     """One player's full turn within a game."""
+
     turn: int
-    player: int                  # 0 = simulated player, 1 = opponent
+    player: int
     mana_available: int
-    plays: list[str]             # e.g. ["[Land] Stomping Ground", "[Creature] Ragavan"]
-    damage_dealt: int            # damage pushed through to the opponent this turn
-    life_totals: list[int]       # [player_life, opp_life] after this turn
+    plays: list[str]
+    damage_dealt: int
+    life_totals: list[int]
     hand_size: int
-    creatures_in_play: int       # count of own creatures after this turn
-    board_power: int             # total attack power on board (own side)
+    creatures_in_play: int
+    board_power: int
 
 
 @dataclass
 class GameLog:
     """Complete record of a single simulated game."""
+
     game_index: int
     on_the_play: bool
     player_mulligan: int
     opponent_mulligan: int
-    player_opening_hand: list[str]   # card names
+    player_opening_hand: list[str]
     turns: list[TurnEvent]
-    winner: int                      # 0 = player, 1 = opponent
+    winner: int
     final_turn: int
     player_final_life: int
     opponent_final_life: int
-    win_condition: str               # "aggro beatdown" | "control" | "combo" | "time"
+    win_condition: str
 
 
 @dataclass
 class SimResult:
     """Outcome of a single simulated game — passed to sim_statistics."""
+
     winner: int
     turns: int
     player_life: int
@@ -97,38 +96,158 @@ class SimResult:
 
     @property
     def player_won(self) -> bool:
+        """True when the player (index 0) won this game."""
         return self.winner == 0
 
 
 # ---------------------------------------------------------------------------
-# Mock game engine
+# .dck export
+# ---------------------------------------------------------------------------
+
+def _write_dck(cards: list["CardInfo"], name: str, path: pathlib.Path) -> None:
+    """Write a list of CardInfo objects as a Forge .dck file."""
+    lines = ["[metadata]", f"Name={name}", "[Main]"]
+    for c in cards:
+        if not c.sideboard:
+            lines.append(f"{c.quantity} {c.name}")
+    sideboard = [c for c in cards if c.sideboard]
+    if sideboard:
+        lines.append("[Sideboard]")
+        for c in sideboard:
+            lines.append(f"{c.quantity} {c.name}")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Forge subprocess simulation
+# ---------------------------------------------------------------------------
+
+def _parse_forge_output(stdout: str, player_name: str) -> list[SimResult]:
+    """
+    Parse Forge sim stdout into SimResult objects.
+
+    Forge prints one line per game:
+      Game Result: Game N ended in X ms. PlayerName has won!
+      Game Result: Game N ended in a Draw! Took X ms.
+    """
+    results: list[SimResult] = []
+    pattern = re.compile(
+        r"Game Result: Game (\d+) ended.*?(?:(\S.*?) has won!|a Draw)",
+        re.IGNORECASE,
+    )
+    for match in pattern.finditer(stdout):
+        game_num = int(match.group(1))
+        winner_name = match.group(2)
+        on_the_play = game_num % 2 == 1
+        if winner_name is None:
+            winner = random.randint(0, 1)  # draw → coin flip for stats
+        else:
+            # Forge prefixes "Ai(N)-" to the deck name in game results.
+            winner = 0 if player_name in winner_name else 1
+        results.append(SimResult(
+            winner=winner,
+            turns=0,
+            player_life=0,
+            opponent_life=0,
+            on_the_play=on_the_play,
+        ))
+    return results
+
+
+_FORGE_DECK_DIR = pathlib.Path.home() / ".forge" / "decks" / "constructed"
+
+
+def run_forge_batch(
+    player_cards: list["CardInfo"],
+    opponent_cards: list["CardInfo"],
+    n_games: int,
+    player_name: str = "Player",
+    opponent_name: str = "Opponent",
+) -> list[SimResult]:
+    """
+    Run n_games via Forge's built-in sim command.
+
+    Writes temporary .dck files into ~/.forge/decks/constructed/ (where Forge's
+    deckFromCommandLineParameter expects them), invokes the JAR as a subprocess,
+    and parses stdout for per-game winners.
+    """
+    _FORGE_DECK_DIR.mkdir(parents=True, exist_ok=True)
+    run_id = uuid.uuid4().hex[:8]
+    p_name = f"sim_p_{run_id}"
+    o_name = f"sim_o_{run_id}"
+    p_dck = _FORGE_DECK_DIR / f"{p_name}.dck"
+    o_dck = _FORGE_DECK_DIR / f"{o_name}.dck"
+
+    try:
+        _write_dck(player_cards, player_name, p_dck)
+        _write_dck(opponent_cards, opponent_name, o_dck)
+
+        # Forge's sim deckFromCommandLineParameter prepends DECK_CONSTRUCTED_DIR
+        # to the filename when the name ends with a 3-char extension.
+        cmd = [
+            FORGE_JAVA, "-jar", FORGE_JAR,
+            "sim",
+            "-d", f"{p_name}.dck", f"{o_name}.dck",
+            "-n", str(n_games),
+            "-q",
+            "-c", "60",
+        ]
+        logger.info("Running Forge: %s", " ".join(cmd))
+        try:
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=n_games * 90,
+                check=False,
+                cwd=str(pathlib.Path(FORGE_JAR).parent),
+            )
+        except subprocess.TimeoutExpired:
+            logger.error("Forge simulation timed out after %d games", n_games)
+            return []
+        except FileNotFoundError:
+            logger.error("Java not found. Set FORGE_JAVA to the java binary path.")
+            return []
+
+        if proc.returncode != 0:
+            logger.error("Forge exited %d: %s", proc.returncode, proc.stderr[:500])
+
+        results = _parse_forge_output(proc.stdout, player_name)
+        if not results:
+            logger.warning(
+                "Forge produced no parseable results.\nstdout: %s", proc.stdout[:1000]
+            )
+        return results
+    finally:
+        p_dck.unlink(missing_ok=True)
+        o_dck.unlink(missing_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# Mock game engine (used when Forge is not available)
 # ---------------------------------------------------------------------------
 
 class _BoardSide:
-    """Tracks one player's in-game state."""
+    """Tracks one player's in-game state for the mock engine."""
 
     def __init__(self, cards: list["CardInfo"]) -> None:
+        """Initialise with a shuffled library of expanded card instances."""
         self.library: list["CardInfo"] = cards.copy()
         random.shuffle(self.library)
         self.hand: list["CardInfo"] = []
         self.lands: list["CardInfo"] = []
         self.creatures: list["CardInfo"] = []
-        # Summoning sickness: creatures added this turn can't attack
         self.fresh_creatures: list["CardInfo"] = []
-        self.graveyard: list["CardInfo"] = []
         self.life: int = 20
         self.mulligan_count: int = 0
 
-    # --- Opening hand --------------------------------------------------
-
     def draw_opening_hand(self) -> None:
-        """Draw 7 and mulligan until hand quality is acceptable (≤3 attempts)."""
+        """Draw 7 cards and mulligan until hand quality is acceptable."""
         for attempt in range(4):
             hand_size = 7 - attempt
             random.shuffle(self.library)
             hand = self.library[:hand_size]
             land_count = sum(1 for c in hand if c.is_land)
-            # Keep if 2..5 lands (loosen for small hands)
             lo = 2 if hand_size >= 6 else 1
             hi = min(hand_size - 1, 5)
             if lo <= land_count <= hi or attempt == 3:
@@ -138,16 +257,16 @@ class _BoardSide:
                 return
 
     def draw(self) -> None:
+        """Draw one card from the top of the library."""
         if self.library:
             self.hand.append(self.library.pop(0))
 
-    # --- Turn actions --------------------------------------------------
-
     def clear_sickness(self) -> None:
+        """Remove summoning sickness from creatures that entered last turn."""
         self.fresh_creatures.clear()
 
     def play_land(self) -> Optional["CardInfo"]:
-        """Play one land from hand if available."""
+        """Play the first land found in hand; return it or None."""
         for c in self.hand:
             if c.is_land:
                 self.hand.remove(c)
@@ -155,12 +274,11 @@ class _BoardSide:
                 return c
         return None
 
-    def cast_spells(self, turn: int) -> list["CardInfo"]:
+    def cast_spells(self) -> list["CardInfo"]:
         """Cast as many affordable non-land spells as possible (cheapest first)."""
         mana = len(self.lands)
         spent = 0
         cast: list["CardInfo"] = []
-        # Sort by CMC so we maximise card count, then CMC descending for value
         affordable = sorted(
             [c for c in self.hand if not c.is_land and c.cmc <= mana - spent],
             key=lambda c: c.cmc,
@@ -175,26 +293,23 @@ class _BoardSide:
                     self.fresh_creatures.append(card)
         return cast
 
-    def attack_power(self) -> int:
-        """Return total power of untapped (non-sick) creatures."""
-        eligible = [c for c in self.creatures if c not in self.fresh_creatures]
-        return sum(c.numeric_power for c in eligible)
-
     def attackers(self) -> list["CardInfo"]:
+        """Return creatures not affected by summoning sickness."""
         return [c for c in self.creatures if c not in self.fresh_creatures]
 
+    def attack_power(self) -> int:
+        """Return total power of eligible attackers."""
+        return sum(c.numeric_power for c in self.attackers())
+
     def take_damage(self, damage: int) -> None:
+        """Reduce life total by damage, minimum zero."""
         self.life = max(0, self.life - damage)
 
-    def total_toughness(self) -> int:
-        return sum(c.numeric_toughness for c in self.creatures)
 
-
-def _resolve_combat(attacker_side: _BoardSide, defender_side: _BoardSide) -> int:
+def _resolve_mock_combat(attacker_side: _BoardSide, defender_side: _BoardSide) -> int:
     """
     Simplified combat: all eligible creatures attack, defender blocks to absorb
-    as much damage as possible (blocks strongest creatures first).
-    Returns damage dealt to the defending player.
+    as much damage as possible.  Returns damage dealt to the defending player.
     """
     attackers = attacker_side.attackers()
     if not attackers:
@@ -202,29 +317,44 @@ def _resolve_combat(attacker_side: _BoardSide, defender_side: _BoardSide) -> int
 
     defenders = sorted(defender_side.creatures, key=lambda c: c.numeric_toughness, reverse=True)
     sorted_attackers = sorted(attackers, key=lambda c: c.numeric_power, reverse=True)
-
     remaining_block = sum(c.numeric_toughness for c in defenders)
     damage_through = 0
 
     for atk in sorted_attackers:
-        if remaining_block >= atk.numeric_power:
-            remaining_block -= atk.numeric_power  # fully blocked
+        has_trample = "trample" in (atk.oracle_text or "").lower()
+        if remaining_block > 0:
+            absorbed = min(remaining_block, atk.numeric_power)
+            remaining_block -= absorbed
+            if has_trample:
+                damage_through += atk.numeric_power - absorbed
         else:
-            damage_through += atk.numeric_power - max(0, remaining_block)
-            remaining_block = 0
+            damage_through += atk.numeric_power
 
     return max(0, damage_through)
+
+
+def _make_turn_event(side: _BoardSide, turn: int, player: int,
+                     plays: list[str], damage: int) -> TurnEvent:
+    """Build a TurnEvent snapshot from the current board state."""
+    return TurnEvent(
+        turn=turn,
+        player=player,
+        mana_available=len(side.lands),
+        plays=plays,
+        damage_dealt=damage,
+        life_totals=[side.life, 0],   # opponent life set by caller
+        hand_size=len(side.hand),
+        creatures_in_play=len(side.creatures),
+        board_power=side.attack_power(),
+    )
 
 
 class MockGameEngine:
     """
     Simulates MTG games from actual deck card data without the Forge rules engine.
 
-    The simulation models:
-    - Realistic opening-hand mulligan decisions
-    - Turn-by-turn land drops and spell casting
-    - Simplified combat damage (all-in attacks, optimal blocking)
-    - Creatures having summoning sickness the turn they enter
+    Models: mulligan decisions, land drops, spell casting, summoning sickness,
+    trample, and simplified combat.
     """
 
     MAX_TURNS = 12
@@ -236,118 +366,43 @@ class MockGameEngine:
         on_the_play: bool,
         game_index: int = 0,
     ) -> SimResult:
-        # Expand quantities into individual card instances
-        p_lib = self._expand(player_cards)
-        o_lib = self._expand(opponent_cards)
-
-        player = _BoardSide(p_lib)
-        opponent = _BoardSide(o_lib)
-
+        """Simulate one full game and return the outcome."""
+        player = _BoardSide(self._expand(player_cards))
+        opponent = _BoardSide(self._expand(opponent_cards))
         player.draw_opening_hand()
         opponent.draw_opening_hand()
-
         player_opening_hand = [c.name for c in player.hand]
         turn_events: list[TurnEvent] = []
 
-        winner = 1  # default: opponent wins if time runs out with lower life
+        winner = 1
         final_turn = self.MAX_TURNS
         win_condition = "time"
 
         for turn in range(1, self.MAX_TURNS + 1):
-            # Resolve summoning sickness from previous turn
             player.clear_sickness()
             opponent.clear_sickness()
 
-            # --- Player's turn ---
-            player.draw()
-            land = player.play_land()
-            cast = player.cast_spells(turn)
-
-            plays: list[str] = []
-            if land:
-                plays.append(f"[Land] {land.name}")
-            for c in cast:
-                plays.append(f"[{c.short_type()}] {c.name}")
-
-            # Combat (player attacks opponent)
-            dmg_to_opp = _resolve_combat(player, opponent)
-            opponent.take_damage(dmg_to_opp)
-
-            turn_events.append(TurnEvent(
-                turn=turn,
-                player=0,
-                mana_available=len(player.lands),
-                plays=plays,
-                damage_dealt=dmg_to_opp,
-                life_totals=[player.life, opponent.life],
-                hand_size=len(player.hand),
-                creatures_in_play=len(player.creatures),
-                board_power=player.attack_power(),
-            ))
-
+            # Player's turn (no draw on turn 1 when on the play)
+            result = self._run_half_turn(player, opponent, turn, 0, turn == 1 and on_the_play)
+            turn_events.append(result)
             if opponent.life <= 0:
-                winner = 0
-                final_turn = turn
-                win_condition = self._classify_win(player_cards)
+                winner, final_turn, win_condition = 0, turn, self._classify_win(player_cards)
                 break
 
-            # --- Opponent's turn ---
-            opponent.draw()
-            land = opponent.play_land()
-            o_cast = opponent.cast_spells(turn)
-
-            o_plays: list[str] = []
-            if land:
-                o_plays.append(f"[Land] {land.name}")
-            for c in o_cast:
-                o_plays.append(f"[{c.short_type()}] {c.name}")
-
-            dmg_to_player = _resolve_combat(opponent, player)
-            player.take_damage(dmg_to_player)
-
-            turn_events.append(TurnEvent(
-                turn=turn,
-                player=1,
-                mana_available=len(opponent.lands),
-                plays=o_plays,
-                damage_dealt=dmg_to_player,
-                life_totals=[player.life, opponent.life],
-                hand_size=len(opponent.hand),
-                creatures_in_play=len(opponent.creatures),
-                board_power=opponent.attack_power(),
-            ))
-
+            # Opponent's turn
+            result = self._run_half_turn(opponent, player, turn, 1, False)
+            turn_events.append(result)
             if player.life <= 0:
-                winner = 1
-                final_turn = turn
-                win_condition = self._classify_win(opponent_cards)
+                winner, final_turn, win_condition = 1, turn, self._classify_win(opponent_cards)
                 break
         else:
-            # Game went to time
             winner = 0 if player.life > opponent.life else 1
-            win_condition = "time"
 
-        # Cards on the board when opponent won (top threats)
         key_cards: list[str] = []
-        if winner == 1:
+        if winner == 1 and opponent.creatures:
             key_cards = random.sample(
-                [c.name for c in opponent.creatures],
-                k=min(3, len(opponent.creatures)),
-            ) if opponent.creatures else []
-
-        log = GameLog(
-            game_index=game_index,
-            on_the_play=on_the_play,
-            player_mulligan=player.mulligan_count,
-            opponent_mulligan=opponent.mulligan_count,
-            player_opening_hand=player_opening_hand,
-            turns=turn_events,
-            winner=winner,
-            final_turn=final_turn,
-            player_final_life=player.life,
-            opponent_final_life=opponent.life,
-            win_condition=win_condition,
-        )
+                [c.name for c in opponent.creatures], k=min(3, len(opponent.creatures))
+            )
 
         return SimResult(
             winner=winner,
@@ -358,16 +413,61 @@ class MockGameEngine:
             on_the_play=on_the_play,
             player_mulligan=player.mulligan_count,
             opponent_mulligan=opponent.mulligan_count,
-            log=log,
+            log=GameLog(
+                game_index=game_index,
+                on_the_play=on_the_play,
+                player_mulligan=player.mulligan_count,
+                opponent_mulligan=opponent.mulligan_count,
+                player_opening_hand=player_opening_hand,
+                turns=turn_events,
+                winner=winner,
+                final_turn=final_turn,
+                player_final_life=player.life,
+                opponent_final_life=opponent.life,
+                win_condition=win_condition,
+            ),
         )
 
     @staticmethod
-    def _expand(cards: list["CardInfo"]) -> list["CardInfo"]:
-        result: list["CardInfo"] = []
+    def _run_half_turn(
+        active: _BoardSide,
+        passive: _BoardSide,
+        turn: int,
+        player_idx: int,
+        skip_draw: bool,
+    ) -> TurnEvent:
+        """Execute one player's half-turn; return the resulting TurnEvent."""
+        if not skip_draw:
+            active.draw()
+        land = active.play_land()
+        cast = active.cast_spells()
+
+        plays: list[str] = []
+        if land:
+            plays.append(f"[Land] {land.name}")
+        for c in cast:
+            plays.append(f"[{c.short_type()}] {c.name}")
+
+        damage = _resolve_mock_combat(active, passive)
+        passive.take_damage(damage)
+
+        ev = _make_turn_event(active, turn, player_idx, plays, damage)
+        ev.life_totals = [active.life, passive.life]
+        return ev
+
+    @staticmethod
+    def expand_deck(cards: list["CardInfo"]) -> list["CardInfo"]:
+        """Expand a compact card list (with quantities) into individual instances."""
+        result = []
         for c in cards:
             if not c.sideboard:
                 result.extend([c] * c.quantity)
         return result
+
+    @staticmethod
+    def _expand(cards: list["CardInfo"]) -> list["CardInfo"]:
+        """Private alias kept for internal use."""
+        return MockGameEngine.expand_deck(cards)
 
     @staticmethod
     def _classify_win(winning_deck: list["CardInfo"]) -> str:
@@ -389,118 +489,84 @@ class MockGameEngine:
 
 
 # ---------------------------------------------------------------------------
-# ForgeAdapter
+# ForgeAdapter — public interface
 # ---------------------------------------------------------------------------
 
 class ForgeAdapter:
     """
-    Routes games through the Forge JAR (real mode) or MockGameEngine (mock mode).
+    Routes batch simulations through Forge (real mode) or MockGameEngine.
+
+    Real mode: FORGE_JAR must point to the built forge-gui-desktop JAR.
+    Mock mode: used automatically when FORGE_JAR is not set or the file
+               does not exist.
     """
 
-    def __init__(self, mock: bool = False) -> None:
-        self._mock: bool = mock or not _forge_available()
-        self._proc: Optional["subprocess.Popen[bytes]"] = None
-        self._sock: Optional[socket.socket] = None
-        self._sock_file: Optional[_SocketFile] = None
-        # game_id → (player_deck, opponent_deck) for mock games
-        self._mock_decks: dict[str, tuple[list, list]] = {}
+    def __init__(self) -> None:
+        """Initialise, selecting Forge or mock mode based on environment."""
+        self._mock = not _forge_available()
         self._mock_engine = MockGameEngine()
+        self._mock_decks: dict[str, tuple[list, list]] = {}
         self._game_counter: int = 0
 
-        if not self._mock:
-            self._launch_forge()
+        if self._mock:
+            logger.info(
+                "ForgeAdapter MOCK mode — set FORGE_JAR to the Forge desktop JAR "
+                "and ensure 'java' is on PATH to enable real simulation."
+            )
         else:
-            logger.info("ForgeAdapter MOCK mode — set FORGE_JAR/FORGE_HOST/FORGE_PORT to enable Forge.")
+            logger.info("ForgeAdapter FORGE mode — JAR: %s", FORGE_JAR)
 
     @property
     def is_mock(self) -> bool:
+        """True when running without the Forge JAR."""
         return self._mock
 
+    def run_simulation(
+        self,
+        player_cards: list["CardInfo"],
+        opponent_cards: list["CardInfo"],
+        n_games: int,
+        deck_names: tuple[str, str] = ("Player", "Opponent"),
+    ) -> list[SimResult]:
+        """
+        Run n_games and return one SimResult per game.
+
+        Uses Forge when available, MockGameEngine otherwise.
+        deck_names is (player_name, opponent_name) used for .dck metadata.
+        """
+        player_name, opponent_name = deck_names
+        if not self._mock:
+            results = run_forge_batch(
+                player_cards, opponent_cards, n_games, player_name, opponent_name,
+            )
+            if results:
+                return results
+            logger.warning("Forge returned no results — falling back to mock engine")
+
+        return [
+            self._mock_engine.run(
+                player_cards, opponent_cards,
+                on_the_play=i % 2 == 0,
+                game_index=i,
+            )
+            for i in range(n_games)
+        ]
+
+    # ------------------------------------------------------------------
+    # Legacy single-game API retained for the interactive game path
+    # ------------------------------------------------------------------
+
     def start_game(self, player_deck: list, opponent_deck: list) -> str:
+        """Register a game session and return its ID."""
         game_id = str(uuid.uuid4())
-        if self._mock:
-            self._mock_decks[game_id] = (player_deck, opponent_deck)
-            return game_id
-        self._send({"type": "start_game", "game_id": game_id,
-                    "player_deck": [{"name": c.name, "quantity": c.quantity} for c in player_deck],
-                    "opponent_deck": [{"name": c.name, "quantity": c.quantity} for c in opponent_deck]})
-        resp = self._recv()
-        if resp.get("type") != "game_started":
-            raise RuntimeError(f"Unexpected start_game response: {resp}")
+        self._mock_decks[game_id] = (player_deck, opponent_deck)
         return game_id
 
-    def run_game(self, game_id: str, player_agent, opponent_agent, on_the_play: bool = True) -> SimResult:
-        if self._mock:
-            player_deck, opponent_deck = self._mock_decks.pop(game_id, ([], []))
-            self._game_counter += 1
-            return self._mock_engine.run(player_deck, opponent_deck, on_the_play, self._game_counter)
-        return self._live_game(game_id, player_agent, opponent_agent)
+    def run_game(self, game_id: str, on_the_play: bool = True) -> SimResult:
+        """Run one registered game via MockGameEngine and return the result."""
+        player_deck, opponent_deck = self._mock_decks.pop(game_id, ([], []))
+        self._game_counter += 1
+        return self._mock_engine.run(player_deck, opponent_deck, on_the_play, self._game_counter)
 
     def close(self) -> None:
-        for obj in (self._sock_file, self._sock):
-            if obj is not None:
-                try:
-                    obj.close()
-                except OSError:
-                    pass
-        if self._proc is not None:
-            self._proc.terminate()
-
-    def _live_game(self, game_id: str, player_agent, opponent_agent) -> SimResult:
-        agents = [player_agent, opponent_agent]
-        turns = 0
-        while True:
-            msg = self._recv()
-            msg_type = msg.get("type", "")
-            if msg_type in ("choose_ability", "declare_attackers", "declare_blockers"):
-                player_idx = int(msg.get("player", 0))
-                options = msg.get("options", ["pass"])
-                index = agents[player_idx](options, msg.get("state", {}))
-                self._send({"type": "choice", "game_id": game_id, "index": index})
-                turns = msg.get("state", {}).get("turn", turns)
-            elif msg_type == "game_over":
-                winner = int(msg.get("winner", 1))
-                life = msg.get("life", [0, 20])
-                key_cards = msg.get("key_cards_on_loss", [])
-                return SimResult(
-                    winner=winner,
-                    turns=turns,
-                    player_life=life[0] if life else 0,
-                    opponent_life=life[1] if len(life) > 1 else 0,
-                    key_cards_on_loss=key_cards,
-                    on_the_play=False,
-                )
-            elif msg_type == "error":
-                raise RuntimeError(f"Forge error: {msg.get('message', '?')}")
-
-    def _launch_forge(self) -> None:
-        port = int(FORGE_PORT)
-        self._proc = subprocess.Popen(
-            ["java", "-jar", FORGE_JAR, "--sim-server", "--port", str(port)],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        )
-        logger.info("Launched Forge pid=%d", self._proc.pid)
-        for _ in range(20):
-            time.sleep(0.5)
-            try:
-                self._connect()
-                return
-            except OSError:
-                pass
-        raise RuntimeError(f"Could not connect to Forge at {FORGE_HOST}:{FORGE_PORT}")
-
-    def _connect(self) -> None:
-        self._sock = socket.create_connection((FORGE_HOST, int(FORGE_PORT)), timeout=5)
-        self._sock_file = cast(_SocketFile, self._sock.makefile("rwb"))
-
-    def _send(self, data: dict) -> None:
-        assert self._sock_file is not None
-        self._sock_file.write((json.dumps(data) + "\n").encode())
-        self._sock_file.flush()
-
-    def _recv(self) -> dict:
-        assert self._sock_file is not None
-        line = self._sock_file.readline()
-        if not line:
-            raise EOFError("Forge socket closed.")
-        return json.loads(line.decode().strip())
+        """No-op; provided for interface symmetry."""

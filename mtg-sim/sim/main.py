@@ -9,10 +9,9 @@ Required environment variables (all defined in .env):
   SIM_PORT       - Bind port
   CORS_ORIGINS   - Comma-separated allowed origins
 
-Forge environment variables (all required to enable real Forge mode):
-  FORGE_JAR      - Absolute path to the built forge-ai JAR
-  FORGE_HOST     - Hostname of the Forge socket server
-  FORGE_PORT     - Port of the Forge socket server
+Forge environment variables:
+  FORGE_JAR      - Absolute path to the built forge-gui-desktop JAR
+  FORGE_JAVA     - Path to java binary (defaults to "java" on PATH)
 
 Drupal environment variables:
   DRUPAL_URL     - Drupal backend URL for deck/meta data
@@ -23,8 +22,8 @@ Optional AI environment variables:
   OLLAMA_URL     - Ollama base URL (enables key-moments summary)
   OLLAMA_MODEL   - Chat model for key moments
 
-When Forge env vars are not set the service runs in mock mode — games return
-random outcomes for validating the statistics pipeline and Gatsby UI.
+When FORGE_JAR is not set the service runs in mock mode using the built-in
+Python engine (faster, less accurate). Set FORGE_JAR to enable real simulation.
 """
 
 from __future__ import annotations
@@ -50,7 +49,6 @@ from pydantic import BaseModel, Field
 from deck_registry import fetch_meta_deck, fetch_player_deck
 from forge_adapter import ForgeAdapter
 from game_engine import create_game, get_game, remove_game
-from mcts import MctsAgent, RandomAgent
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -135,14 +133,19 @@ async def simulate(req: SimulateRequest) -> dict:
             ),
         )
 
-    player_agent = MctsAgent(rollouts_per_action=15, use_llm=req.useLlm, player_idx=0)
-    opponent_agent = RandomAgent()
+    results = await asyncio.to_thread(
+        adapter.run_simulation,
+        player_deck,
+        opponent_deck,
+        req.games,
+        (f"Deck #{req.playerDeckId}", req.opponentArchetype),
+    )
 
-    results = []
-    for i in range(req.games):
-        game_id = adapter.start_game(player_deck, opponent_deck)
-        result = adapter.run_game(game_id, player_agent, opponent_agent, on_the_play=i % 2 == 0)
-        results.append(result)
+    if not results:
+        raise HTTPException(
+            status_code=500,
+            detail="Simulation returned no results. Check sim service logs.",
+        )
 
     return await asyncio.to_thread(
         sim_statistics.compute_statistics,
@@ -150,7 +153,7 @@ async def simulate(req: SimulateRequest) -> dict:
         f"Deck #{req.playerDeckId}",
         req.opponentArchetype,
         req.format,
-        True,
+        not adapter.is_mock,
     )
 
 

@@ -33,6 +33,8 @@ type Query {
   pages: [Page!]!
 
   metaDecks(format: String!): [MetaDeck!]!
+
+  simulationHistory(deckNid: Int!, limit: Int): [SimulationResult!]!
 }
 
 type Mutation {
@@ -117,4 +119,16 @@ type MetaDeck {
   metaShare: Float
   archetypeTags: [String!]!
   fetchedAt: String
+}
+
+type SimulationResult {
+  id: ID!
+  nid: Int!
+  opponent: String!
+  format: String!
+  games: Int!
+  wins: Int!
+  winRate: Float!
+  resultJson: String!
+  created: String!
 }

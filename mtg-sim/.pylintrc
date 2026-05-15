@@ -7,3 +7,13 @@ init-hook=
 
 [FORMAT]
 max-line-length=100
+
+[DESIGN]
+# Dataclasses legitimately have many fields; raise threshold to accommodate them.
+max-attributes=12
+# Game simulation loops require more local variables and statements than typical code.
+max-locals=20
+max-statements=60
+# Simulation methods require more positional arguments than typical helpers.
+max-args=6
+max-positional-arguments=6

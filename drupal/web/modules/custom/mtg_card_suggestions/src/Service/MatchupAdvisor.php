@@ -282,8 +282,9 @@ PROMPT;
           'model'  => $model,
           'stream' => FALSE,
           'messages' => [['role' => 'user', 'content' => $prompt]],
+          'options' => ['num_ctx' => 4096],
         ],
-        'timeout' => 120,
+        'timeout' => 600,
       ]);
       $body = json_decode((string) $response->getBody(), TRUE);
       $text = (string) ($body['message']['content'] ?? '');

@@ -402,7 +402,7 @@ const PlayPage: React.FC = () => {
             )}
 
             {phase === 'main1' && <>
-              {!canPlayLand && !waitingTarget && (
+              {!waitingTarget && (
                 <button type="button" onClick={() => void act('go_to_attack')} style={btnStyle('#e67e22')}>
                   ⚔ Go to combat
                 </button>

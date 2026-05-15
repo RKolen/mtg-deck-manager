@@ -37,7 +37,9 @@ import { fetchCardSuggestions, type CardSuggestion } from '../../services/deckSu
 import { fetchDeckCoaching, type DeckCoachMetrics } from '../../services/deckCoach';
 import {
   runSimulation,
+  fetchSimulationHistory,
   type SimulationResult,
+  type SimulationHistoryEntry,
   type TopKiller,
   type GameLog,
 } from '../../services/simulationApi';
@@ -774,7 +776,11 @@ const GameLogPanel: React.FC<{ log: GameLog; index: number }> = ({ log, index })
   );
 };
 
+const PCT_COLOR = (pct: number) =>
+  pct >= 55 ? '#27ae60' : pct >= 45 ? '#e67e22' : '#e74c3c';
+
 const DeckSimulate: React.FC<DeckSimulateProps> = ({ deckNid, format, deckTitle }) => {
+  const queryClient = useQueryClient();
   const [selectedArchetype, setSelectedArchetype] = useState('');
   const [games, setGames] = useState<50 | 200>(50);
   const [useLlm, setUseLlm] = useState(false);
@@ -788,14 +794,23 @@ const DeckSimulate: React.FC<DeckSimulateProps> = ({ deckNid, format, deckTitle 
     staleTime: 10 * 60 * 1000,
   });
 
-  async function handleRun(): Promise<void> {
-    if (!selectedArchetype) return;
+  const historyKey = ['simHistory', deckNid];
+  const { data: history = [] } = useQuery<SimulationHistoryEntry[]>({
+    queryKey: historyKey,
+    queryFn: () => fetchSimulationHistory(deckNid, 20),
+    staleTime: 0,
+  });
+
+  async function handleRun(archetype = selectedArchetype): Promise<void> {
+    if (!archetype) return;
+    setSelectedArchetype(archetype);
     setRunning(true);
     setError(null);
     setResult(null);
     try {
-      const r = await runSimulation({ playerDeckId: deckNid, opponentArchetype: selectedArchetype, format, games, useLlm });
+      const r = await runSimulation({ playerDeckId: deckNid, opponentArchetype: archetype, format, games, useLlm });
       setResult(r);
+      void queryClient.invalidateQueries({ queryKey: historyKey });
     } catch (e: unknown) {
       const axiosErr = e as { response?: { status: number; data?: unknown }; message?: string };
       const status = axiosErr?.response?.status;
@@ -861,7 +876,7 @@ const DeckSimulate: React.FC<DeckSimulateProps> = ({ deckNid, format, deckTitle 
         </button>
       </div>
 
-      {running && <p style={{ color: '#888', fontStyle: 'italic' }}>Running {games} games…</p>}
+      {running && <p style={{ color: '#888', fontStyle: 'italic' }}>Running {games} games against {selectedArchetype}…</p>}
       {error && <p style={{ color: '#c00', fontSize: '0.88rem' }}>{error}</p>}
 
       {result && (
@@ -1003,6 +1018,58 @@ const DeckSimulate: React.FC<DeckSimulateProps> = ({ deckNid, format, deckTitle 
           )}
         </div>
       )}
+
+      {/* Simulation history */}
+      {history.length > 0 && (
+        <section>
+          <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem' }}>Simulation history</h3>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid #ddd', textAlign: 'left' }}>
+                <th style={{ padding: '0.3rem 0.5rem' }}>Opponent</th>
+                <th style={{ padding: '0.3rem 0.5rem', textAlign: 'right' }}>Games</th>
+                <th style={{ padding: '0.3rem 0.5rem', textAlign: 'right' }}>Win %</th>
+                <th style={{ padding: '0.3rem 0.5rem', textAlign: 'right' }}>Play</th>
+                <th style={{ padding: '0.3rem 0.5rem', textAlign: 'right' }}>Draw</th>
+                <th style={{ padding: '0.3rem 0.5rem', textAlign: 'right' }}>Date</th>
+                <th style={{ padding: '0.3rem 0.5rem' }} />
+              </tr>
+            </thead>
+            <tbody>
+              {history.map(h => {
+                const parsed = (() => {
+                  try { return JSON.parse(h.resultJson) as SimulationResult; }
+                  catch { return null; }
+                })();
+                const wp = (h.winRate * 100).toFixed(1);
+                const pp = parsed ? (parsed.onThePlay.winRate * 100).toFixed(1) : '—';
+                const dp = parsed ? (parsed.onTheDraw.winRate * 100).toFixed(1) : '—';
+                const date = new Date(h.created).toLocaleDateString();
+                return (
+                  <tr key={h.id} style={{ borderBottom: '1px solid #eee' }}>
+                    <td style={{ padding: '0.4rem 0.5rem', fontWeight: 500 }}>{h.opponent}</td>
+                    <td style={{ padding: '0.4rem 0.5rem', textAlign: 'right', color: '#666' }}>{h.games}</td>
+                    <td style={{ padding: '0.4rem 0.5rem', textAlign: 'right', fontWeight: 700, color: PCT_COLOR(parseFloat(wp)) }}>{wp}%</td>
+                    <td style={{ padding: '0.4rem 0.5rem', textAlign: 'right', color: '#555' }}>{pp !== '—' ? `${pp}%` : '—'}</td>
+                    <td style={{ padding: '0.4rem 0.5rem', textAlign: 'right', color: '#555' }}>{dp !== '—' ? `${dp}%` : '—'}</td>
+                    <td style={{ padding: '0.4rem 0.5rem', textAlign: 'right', color: '#888', fontSize: '0.8rem' }}>{date}</td>
+                    <td style={{ padding: '0.4rem 0.5rem' }}>
+                      <button
+                        type="button"
+                        onClick={() => void handleRun(h.opponent)}
+                        disabled={running}
+                        style={{ padding: '0.2rem 0.6rem', fontSize: '0.78rem', background: '#f0f0f0', border: '1px solid #ccc', borderRadius: 3, cursor: running ? 'default' : 'pointer' }}
+                      >
+                        Simulate more
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </section>
+      )}
     </div>
   );
 };
@@ -1013,6 +1080,7 @@ const DeckSimulate: React.FC<DeckSimulateProps> = ({ deckNid, format, deckTitle 
 
 const DeckSuggestions: React.FC<{ deckNid: number }> = ({ deckNid }) => {
   const [limit, setLimit] = useState(10);
+  const [modalCard, setModalCard] = useState<{ name: string; imageUri: string } | null>(null);
 
   const { data: suggestions = [], isFetching, isError, refetch } = useQuery<CardSuggestion[]>({
     queryKey: ['deckSuggestions', deckNid, limit],
@@ -1023,15 +1091,45 @@ const DeckSuggestions: React.FC<{ deckNid: number }> = ({ deckNid }) => {
 
   return (
     <div>
+      {/* Card image modal */}
+      {modalCard && (
+        <div
+          role="dialog"
+          aria-label={modalCard.name}
+          onClick={() => setModalCard(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000,
+            background: 'rgba(0,0,0,0.75)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <div onClick={e => e.stopPropagation()} style={{ position: 'relative' }}>
+            <img
+              src={modalCard.imageUri}
+              alt={modalCard.name}
+              style={{ borderRadius: 12, maxHeight: '80vh', boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}
+            />
+            <button
+              type="button"
+              onClick={() => setModalCard(null)}
+              style={{
+                position: 'absolute', top: -12, right: -12,
+                background: '#333', color: '#fff', border: 'none',
+                borderRadius: '50%', width: 28, height: 28,
+                cursor: 'pointer', fontSize: '1rem', lineHeight: '28px', textAlign: 'center',
+              }}
+            >×</button>
+          </div>
+        </div>
+      )}
+
       <p style={{ margin: '0 0 1rem', color: '#555' }}>
         AI-powered card suggestions based on the deck's semantic profile.
         Results come from Milvus vector search and are ranked by Ollama.
       </p>
 
       <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginBottom: '1.25rem' }}>
-        <label htmlFor="sugg-limit" style={{ fontSize: '0.9rem' }}>
-          Suggestions:
-        </label>
+        <label htmlFor="sugg-limit" style={{ fontSize: '0.9rem' }}>Suggestions:</label>
         <select
           id="sugg-limit"
           value={limit}
@@ -1047,13 +1145,8 @@ const DeckSuggestions: React.FC<{ deckNid: number }> = ({ deckNid }) => {
           onClick={() => void refetch()}
           disabled={isFetching}
           style={{
-            padding: '0.35rem 1rem',
-            cursor: isFetching ? 'default' : 'pointer',
-            background: '#333',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 4,
-            fontSize: '0.9rem',
+            padding: '0.35rem 1rem', cursor: isFetching ? 'default' : 'pointer',
+            background: '#333', color: '#fff', border: 'none', borderRadius: 4, fontSize: '0.9rem',
           }}
         >
           {isFetching ? 'Thinking...' : 'Get Suggestions'}
@@ -1065,7 +1158,6 @@ const DeckSuggestions: React.FC<{ deckNid: number }> = ({ deckNid }) => {
           Could not load suggestions. Make sure the Milvus index has items and Ollama is running.
         </p>
       )}
-
       {suggestions.length === 0 && !isFetching && !isError && (
         <p style={{ color: '#777', fontStyle: 'italic' }}>Click 'Get Suggestions' to start.</p>
       )}
@@ -1081,16 +1173,29 @@ const DeckSuggestions: React.FC<{ deckNid: number }> = ({ deckNid }) => {
             </tr>
           </thead>
           <tbody>
-            {suggestions.map((s, i) => (
-              <tr key={s.card.nid} style={{ borderBottom: '1px solid #eee' }}>
-                <td style={{ padding: '0.5rem 0.5rem', color: '#888', width: 30 }}>{i + 1}</td>
-                <td style={{ padding: '0.5rem 0.5rem', fontWeight: 500 }}>{s.card.name}</td>
-                <td style={{ padding: '0.5rem 0.5rem', color: '#444' }}>{s.reason}</td>
-                <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', color: '#666' }}>
-                  {(s.score * 100).toFixed(1)}%
-                </td>
-              </tr>
-            ))}
+            {suggestions.map((s, i) => {
+              const hasImage = Boolean(s.card.image_uri);
+              return (
+                <tr
+                  key={s.card.nid}
+                  style={{ borderBottom: '1px solid #eee', cursor: hasImage ? 'pointer' : 'default' }}
+                  onClick={() => {
+                    if (hasImage) setModalCard({ name: s.card.name, imageUri: s.card.image_uri! });
+                  }}
+                  title={hasImage ? `Click to preview ${s.card.name}` : undefined}
+                >
+                  <td style={{ padding: '0.5rem 0.5rem', color: '#888', width: 30 }}>{i + 1}</td>
+                  <td style={{ padding: '0.5rem 0.5rem', fontWeight: 500 }}>
+                    {s.card.name}
+                    {hasImage && <span style={{ marginLeft: 6, color: '#aaa', fontSize: '0.78rem' }}>🖼</span>}
+                  </td>
+                  <td style={{ padding: '0.5rem 0.5rem', color: '#444' }}>{s.reason}</td>
+                  <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', color: '#666' }}>
+                    {(s.score * 100).toFixed(1)}%
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}

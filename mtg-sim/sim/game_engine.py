@@ -23,7 +23,7 @@ import random
 import re
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from deck_registry import CardInfo
@@ -87,19 +87,22 @@ class Permanent:
     card: "CardInfo"
     tapped: bool = False
     sick: bool = True
-    power_bonus: int = 0
+    power_bonus: int = 0       # permanent: auras, equipment, +1/+1 effects that last
     toughness_bonus: int = 0
+    temp_power: int = 0        # until-end-of-turn: pump spells, prowess triggers
+    temp_toughness: int = 0
     damage: int = 0
     counters: dict[str, int] = field(default_factory=dict)
+    attached_to: Optional[str] = None  # uid of enchanted permanent (auras only)
 
     @property
     def effective_power(self) -> int:
-        return max(0, self.card.numeric_power + self.power_bonus
+        return max(0, self.card.numeric_power + self.power_bonus + self.temp_power
                    + self.counters.get("+1/+1", 0))
 
     @property
     def effective_toughness(self) -> int:
-        return max(1, self.card.numeric_toughness + self.toughness_bonus
+        return max(1, self.card.numeric_toughness + self.toughness_bonus + self.temp_toughness
                    + self.counters.get("+1/+1", 0))
 
     def can_attack(self) -> bool:
@@ -175,8 +178,8 @@ class PlayerState:
         for p in self.battlefield:
             p.tapped = False
             p.sick = False
-            p.power_bonus = 0
-            p.toughness_bonus = 0
+            p.temp_power = 0
+            p.temp_toughness = 0
             p.damage = 0
         self.mana_spent = 0
         self.land_played = False
@@ -226,6 +229,7 @@ class InteractiveGame:
     opponent: PlayerState
     turn: int = 1
     phase: str = "mulligan"
+    on_the_play: bool = True
     winner: Optional[int] = None   # 0=player, 1=opponent
     log: list[LogEntry] = field(default_factory=list)
     pending_attackers: list[str] = field(default_factory=list)  # Permanent uids
@@ -268,9 +272,10 @@ class InteractiveGame:
             return ["auto_draw"]
         actions = []
         if self.phase in ("main1", "main2"):
-            if not self.player.land_played:
+            if not self.player.land_played and any(c.is_land for c in self.player.hand):
                 actions.append("play_land")
-            actions.append("cast_spell")
+            if any(not c.is_land for c in self.player.hand):
+                actions.append("cast_spell")
             if self.phase == "main1":
                 actions.append("go_to_attack")
             actions.append("end_turn")
@@ -306,12 +311,15 @@ class InteractiveGame:
         return self.to_client()
 
     def action_draw(self) -> dict:
-        """Start of turn draw."""
+        """Start of turn draw. Skipped on turn 1 when on the play (MTG rule)."""
         assert self.phase == "draw"
-        drawn = self.player.draw(1)
-        name = drawn[0].name if drawn else "—"
-        self._log("player", "draw", f"Drew: {name}")
         self.player.begin_turn()
+        if self.turn == 1 and self.on_the_play:
+            self._log("system", "no_draw", "No draw — on the play, turn 1")
+        else:
+            drawn = self.player.draw(1)
+            name = drawn[0].name if drawn else "—"
+            self._log("player", "draw", f"Drew: {name}")
         self.phase = "main1"
         return self.to_client()
 
@@ -322,7 +330,6 @@ class InteractiveGame:
         assert card.is_land
         self.player.battlefield.append(_new_permanent(card))
         self.player.land_played = True
-        self.player.mana_spent = 0  # refresh pool with new land
         self._log("player", "land", card.name)
         return self.to_client()
 
@@ -340,11 +347,11 @@ class InteractiveGame:
         self.player.hand.pop(hand_idx)
         self.player.spells_cast_this_turn += 1
 
-        # Prowess: +1/+1 to each creature with prowess until EOT
+        # Prowess: +1/+1 until end of turn to each creature with prowess
         for p in self.player.creatures():
             if "prowess" in (p.card.oracle_text or "").lower():
-                p.power_bonus += 1
-                p.toughness_bonus += 1
+                p.temp_power += 1
+                p.temp_toughness += 1
 
         category = _spell_category(card)
         detail = f"Cast {card.name}"
@@ -380,15 +387,15 @@ class InteractiveGame:
                 target = self.player.creatures()[-1]
             if target:
                 if "base power and toughness" in (card.oracle_text or "").lower():
-                    target.power_bonus = pp - target.card.numeric_power
-                    target.toughness_bonus = pt - target.card.numeric_toughness
+                    target.temp_power = pp - target.card.numeric_power
+                    target.temp_toughness = pt - target.card.numeric_toughness
                 else:
-                    target.power_bonus += pp
-                    target.toughness_bonus += pt
-                # Heroic trigger
+                    target.temp_power += pp
+                    target.temp_toughness += pt
+                # Heroic trigger grants a permanent +1/+1 counter
                 if "heroic" in (target.card.oracle_text or "").lower():
                     target.counters["+1/+1"] = target.counters.get("+1/+1", 0) + 1
-                detail = f"{card.name} → {target.card.name} gets +{pp}/+{pt}"
+                detail = f"{card.name} → {target.card.name} gets +{pp}/+{pt} until EOT"
             self.player.graveyard.append(card)
 
         elif category == "removal":
@@ -409,8 +416,9 @@ class InteractiveGame:
         elif category == "aura":
             perm = _new_permanent(card)
             perm.sick = False
+            perm.attached_to = target_uid
             self.player.battlefield.append(perm)
-            # Apply pump if aura has it
+            # Aura buffs are permanent — use power_bonus/toughness_bonus, not temp
             pp, pt = _parse_pump(card.oracle_text or "")
             if pp or pt:
                 target = self._find_permanent(self.player.battlefield, target_uid)
@@ -557,10 +565,6 @@ class InteractiveGame:
             if self._check_game_over():
                 return self.to_client()
 
-        # Mark new creatures as no longer sick for opponent's side
-        for p in opp.battlefield:
-            p.sick = False
-
         return self.to_client()
 
     # -------------------------------------------------------------------------
@@ -588,15 +592,20 @@ class InteractiveGame:
         damage_through = 0
         for atk in sorted_attackers:
             atk.tapped = True
+            has_trample = "trample" in (atk.card.oracle_text or "").lower()
             if blockers:
                 blk = blockers.pop(0)
-                # First-strike / trample simplified: just deal damage both ways
                 atk.damage += blk.effective_power
                 blk.damage += atk.effective_power
                 if blk.is_dead():
                     if blk in defender_side.battlefield:
                         defender_side.battlefield.remove(blk)
                         defender_side.graveyard.append(blk.card)
+                    if has_trample:
+                        # Excess damage beyond what was lethal carries through
+                        excess = atk.effective_power - blk.effective_toughness
+                        if excess > 0:
+                            damage_through += excess
                 if atk.is_dead():
                     if atk in self.player.battlefield:
                         self.player.battlefield.remove(atk)
@@ -629,6 +638,10 @@ class InteractiveGame:
         for p in dead:
             side.battlefield.remove(p)
             side.graveyard.append(p.card)
+            # Auras attached to this creature also go to the graveyard
+            for aura in [a for a in side.battlefield if a.attached_to == p.uid]:
+                side.battlefield.remove(aura)
+                side.graveyard.append(aura.card)
 
     def _check_game_over(self) -> bool:
         if self.opponent.life <= 0:
@@ -695,6 +708,7 @@ def create_game(player_cards: list["CardInfo"], opponent_cards: list["CardInfo"]
         opponent=opponent,
         turn=1,
         phase="mulligan",
+        on_the_play=on_the_play,
     )
     _sessions[game_id] = game
     return game
