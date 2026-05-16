@@ -11,7 +11,7 @@ import json
 import logging
 import os
 import urllib.parse
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 
 import requests
@@ -24,8 +24,15 @@ DRUPAL_PASS: str = os.environ.get("DRUPAL_PASS", "")
 
 _CARD_FIELDS = (
     "title,field_cmc,field_type_line,field_power,field_toughness,"
-    "field_oracle_text,field_mana_cost"
+    "field_oracle_text,field_mana_cost,field_produced_mana"
 )
+
+
+def _parse_list_field(value: object) -> list[str]:
+    """Parse a JSON:API multi-value field into a list of strings."""
+    if isinstance(value, list):
+        return [str(v) for v in value if v is not None]
+    return []
 
 
 def _get_auth() -> tuple[str, str]:
@@ -49,6 +56,7 @@ class CardInfo:
     pt: str = "0/0"
     oracle_text: str = ""
     mana_cost: str = ""
+    produced_mana: list[str] = field(default_factory=list)
 
     @property
     def is_land(self) -> bool:
@@ -107,6 +115,7 @@ def _parse_card_attrs(attrs: dict) -> dict:
         "pt": f"{power}/{toughness}",
         "oracle_text": str(attrs.get("field_oracle_text") or ""),
         "mana_cost": str(attrs.get("field_mana_cost") or ""),
+        "produced_mana": _parse_list_field(attrs.get("field_produced_mana")),
     }
 
 
@@ -121,6 +130,7 @@ def _card_info_from(info: dict, quantity: int, sideboard: bool) -> CardInfo:
         pt=info.get("pt", "0/0"),
         oracle_text=info.get("oracle_text", ""),
         mana_cost=info.get("mana_cost", ""),
+        produced_mana=info.get("produced_mana", []),
     )
 
 
