@@ -20,6 +20,7 @@ module:
   gin_toolbar: 0
   graphql: 0
   image: 0
+  jsonapi: 0
   key: 0
   language: 0
   media: 0

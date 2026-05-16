@@ -1,0 +1,22 @@
+uuid: 2eff9cb1-475e-4c72-801d-5ba52ba868ba
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_cards
+    - node.type.meta_deck
+  module:
+    - text
+id: node.meta_deck.field_cards
+field_name: field_cards
+entity_type: node
+bundle: meta_deck
+label: 'Cards (JSON)'
+description: ''
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings:
+  allowed_formats: {  }
+field_type: text_long

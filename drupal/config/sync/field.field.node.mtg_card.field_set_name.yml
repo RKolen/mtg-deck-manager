@@ -1,0 +1,19 @@
+uuid: 4b6ce486-a3a6-474d-846a-532f4b430123
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_set_name
+    - node.type.mtg_card
+id: node.mtg_card.field_set_name
+field_name: field_set_name
+entity_type: node
+bundle: mtg_card
+label: 'Set Name'
+description: ''
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: string

@@ -1,0 +1,23 @@
+uuid: 09fb35a5-6fd3-483c-a0c8-650dad47c832
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_price_usd_foil
+    - node.type.mtg_card
+id: node.mtg_card.field_price_usd_foil
+field_name: field_price_usd_foil
+entity_type: node
+bundle: mtg_card
+label: 'Price Foil (USD)'
+description: ''
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings:
+  min: null
+  max: null
+  prefix: ''
+  suffix: ''
+field_type: decimal

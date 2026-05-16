@@ -1,0 +1,23 @@
+uuid: 7a81969c-4cda-4eb6-af17-8abf5b694747
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_price_eur
+    - node.type.mtg_card
+id: node.mtg_card.field_price_eur
+field_name: field_price_eur
+entity_type: node
+bundle: mtg_card
+label: 'Price (EUR)'
+description: ''
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings:
+  min: null
+  max: null
+  prefix: ''
+  suffix: ''
+field_type: decimal

@@ -4,8 +4,10 @@ status: true
 dependencies:
   config:
     - field.field.node.mtg_card.field_cmc
+    - field.field.node.mtg_card.field_collector_number
     - field.field.node.mtg_card.field_color_identity
     - field.field.node.mtg_card.field_colors
+    - field.field.node.mtg_card.field_combo_pieces
     - field.field.node.mtg_card.field_image_uri
     - field.field.node.mtg_card.field_is_mana_producer
     - field.field.node.mtg_card.field_legal_formats
@@ -13,8 +15,14 @@ dependencies:
     - field.field.node.mtg_card.field_mana_cost
     - field.field.node.mtg_card.field_oracle_text
     - field.field.node.mtg_card.field_power
+    - field.field.node.mtg_card.field_price_eur
+    - field.field.node.mtg_card.field_price_usd
+    - field.field.node.mtg_card.field_price_usd_foil
     - field.field.node.mtg_card.field_produced_mana
+    - field.field.node.mtg_card.field_rarity
     - field.field.node.mtg_card.field_scryfall_id
+    - field.field.node.mtg_card.field_set_code
+    - field.field.node.mtg_card.field_set_name
     - field.field.node.mtg_card.field_toughness
     - field.field.node.mtg_card.field_type_line
     - node.type.mtg_card
@@ -249,5 +257,13 @@ content:
       placeholder: ''
     third_party_settings: {  }
 hidden:
+  field_collector_number: true
+  field_combo_pieces: true
+  field_price_eur: true
+  field_price_usd: true
+  field_price_usd_foil: true
+  field_rarity: true
+  field_set_code: true
+  field_set_name: true
   promote: true
   sticky: true

@@ -1,0 +1,20 @@
+uuid: d450ff22-25c2-4233-bb3f-2c10f947a395
+langcode: en
+status: true
+dependencies:
+  module:
+    - node
+id: node.field_price_usd_foil
+field_name: field_price_usd_foil
+entity_type: node
+type: decimal
+settings:
+  precision: 10
+  scale: 2
+module: core
+locked: false
+cardinality: 1
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

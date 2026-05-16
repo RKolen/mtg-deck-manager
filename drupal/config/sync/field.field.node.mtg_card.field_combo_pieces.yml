@@ -1,0 +1,19 @@
+uuid: 82fd21db-9ac6-470f-9bc4-aa25af4d7d82
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_combo_pieces
+    - node.type.mtg_card
+id: node.mtg_card.field_combo_pieces
+field_name: field_combo_pieces
+entity_type: node
+bundle: mtg_card
+label: 'Combo Piece IDs'
+description: ''
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: string

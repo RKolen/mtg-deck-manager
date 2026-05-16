@@ -1,0 +1,20 @@
+uuid: b0b13783-e7f6-4768-87a6-21d3f247e06c
+langcode: en
+status: true
+dependencies:
+  module:
+    - node
+id: node.field_price_eur
+field_name: field_price_eur
+entity_type: node
+type: decimal
+settings:
+  precision: 10
+  scale: 2
+module: core
+locked: false
+cardinality: 1
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

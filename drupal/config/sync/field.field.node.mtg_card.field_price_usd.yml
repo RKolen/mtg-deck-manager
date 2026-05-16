@@ -1,0 +1,23 @@
+uuid: 2236cf14-2cd1-4d94-9f36-317c05a46d24
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_price_usd
+    - node.type.mtg_card
+id: node.mtg_card.field_price_usd
+field_name: field_price_usd
+entity_type: node
+bundle: mtg_card
+label: 'Price (USD)'
+description: ''
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings:
+  min: null
+  max: null
+  prefix: ''
+  suffix: ''
+field_type: decimal

@@ -1,0 +1,19 @@
+uuid: 3e44ef10-f71e-4b7a-a6ea-c9480ec3c64f
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_collector_number
+    - node.type.mtg_card
+id: node.mtg_card.field_collector_number
+field_name: field_collector_number
+entity_type: node
+bundle: mtg_card
+label: 'Collector Number'
+description: ''
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: string
