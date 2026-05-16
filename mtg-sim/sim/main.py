@@ -174,7 +174,8 @@ class GameActionRequest(BaseModel):
     """Request body for POST /game/action.
 
     Valid actions: keep, mulligan, draw, play_land, cast, go_to_attack,
-    toggle_attacker, confirm_attack, skip_attack, end_turn.
+    toggle_attacker, confirm_attack, skip_attack, end_turn,
+    assign_blocker, unassign_blocker, confirm_blocks.
     """
 
     gameId: str
@@ -183,6 +184,8 @@ class GameActionRequest(BaseModel):
     targetUid: str | None = None
     targetPlayer: int | None = None
     permanentUid: str | None = None
+    blockerUid: str | None = None
+    attackerUid: str | None = None
 
 
 @app.post("/game/start")
@@ -209,6 +212,19 @@ async def game_start(req: StartGameRequest) -> dict:
         on_the_play=req.onThePlay,
     )
     return game.to_client()
+
+
+def _dispatch_blocker_action(game, req: GameActionRequest) -> dict | None:
+    """Dispatch declare-blockers phase actions; return None if action not recognised."""
+    if req.action == "assign_blocker":
+        assert req.blockerUid is not None and req.attackerUid is not None
+        return game.action_assign_blocker(req.blockerUid, req.attackerUid)
+    if req.action == "unassign_blocker":
+        assert req.blockerUid is not None
+        return game.action_unassign_blocker(req.blockerUid)
+    if req.action == "confirm_blocks":
+        return game.action_confirm_blocks()
+    return None
 
 
 async def _dispatch_action(game, req: GameActionRequest) -> dict:
@@ -238,6 +254,9 @@ async def _dispatch_action(game, req: GameActionRequest) -> dict:
         return game.action_toggle_attacker(req.permanentUid)
     if req.action == "end_turn":
         return await asyncio.to_thread(game.action_end_turn)
+    blocker_result = _dispatch_blocker_action(game, req)
+    if blocker_result is not None:
+        return blocker_result
     raise HTTPException(400, f"Unknown action '{req.action}'")
 
 

@@ -24,6 +24,7 @@ export interface CardInHand {
   category: 'land' | 'creature' | 'burn' | 'pump' | 'removal' | 'draw' | 'aura' | 'spell';
   isLand: boolean;
   isCreature: boolean;
+  affordable: boolean;
 }
 
 export interface PermanentOnBoard {

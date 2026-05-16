@@ -23,10 +23,7 @@ import random
 import re
 import uuid
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from deck_registry import CardInfo
+from deck_registry import CardInfo
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +57,20 @@ def _parse_draw(text: str) -> int:
     word = m.group(1).lower()
     word_map = {"a": 1, "an": 1, "one": 1, "two": 2, "three": 3}
     return word_map.get(word, int(word) if word.isdigit() else 1)
+
+
+def _spell_is_affordable(card: CardInfo, available_mana: int) -> bool:
+    """True when the player can currently cast this spell.
+
+    Phyrexian mana pips ({W/P}, {G/P}, …) can each be paid with 2 life
+    instead of mana, so the minimum mana required is CMC minus the number
+    of phyrexian pips.
+    """
+    if card.is_land:
+        return False
+    phyrexian_pips = (card.mana_cost or "").upper().count("/P")
+    mana_needed = max(0, int(card.cmc) - phyrexian_pips)
+    return available_mana >= mana_needed
 
 
 _CATEGORY_CHECKS: list[tuple[str, str]] = [
@@ -211,6 +222,7 @@ class PlayerState:
 
     def hand_to_dict(self) -> list[dict]:
         """Serialise the hand to a list of JSON-safe card dicts."""
+        available = self.total_mana() - self.mana_spent
         return [
             {
                 "idx": i,
@@ -223,6 +235,7 @@ class PlayerState:
                 "category": _spell_category(c),
                 "isLand": c.is_land,
                 "isCreature": c.is_creature,
+                "affordable": _spell_is_affordable(c, available),
             }
             for i, c in enumerate(self.hand)
         ]
@@ -246,7 +259,10 @@ class LogEntry:
 # Interactive game
 # ---------------------------------------------------------------------------
 
-PHASES = ["mulligan", "draw", "main1", "attack", "main2", "end", "opp_turn", "game_over"]
+PHASES = [
+    "mulligan", "draw", "main1", "attack", "main2", "end",
+    "opp_turn", "declare_blockers", "game_over",
+]
 
 
 @dataclass
@@ -262,6 +278,8 @@ class InteractiveGame:
     winner: int | None = None
     log: list[LogEntry] = field(default_factory=list)
     pending_attackers: list[str] = field(default_factory=list)
+    pending_opp_attackers: list[str] = field(default_factory=list)
+    pending_blockers: dict[str, str] = field(default_factory=dict)
 
     # -------------------------------------------------------------------------
     # Serialisation
@@ -291,6 +309,11 @@ class InteractiveGame:
                 for e in self.log[-20:]
             ],
             "pendingAttackers": self.pending_attackers,
+            "opponentAttackers": [
+                p.to_dict() for p in self.opponent.battlefield
+                if p.uid in self.pending_opp_attackers
+            ],
+            "pendingBlockers": self.pending_blockers,
             "availableActions": self._available_actions(),
         }
 
@@ -302,11 +325,14 @@ class InteractiveGame:
             return []
         if self.phase == "draw":
             return ["auto_draw"]
+        if self.phase == "declare_blockers":
+            return ["assign_blocker", "unassign_blocker", "confirm_blocks"]
         actions = []
         if self.phase in ("main1", "main2"):
             if not self.player.land_played and any(c.is_land for c in self.player.hand):
                 actions.append("play_land")
-            if any(not c.is_land for c in self.player.hand):
+            available = self.player.total_mana() - self.player.mana_spent
+            if any(_spell_is_affordable(c, available) for c in self.player.hand):
                 actions.append("cast_spell")
             if self.phase == "main1":
                 actions.append("go_to_attack")
@@ -389,16 +415,23 @@ class InteractiveGame:
         card = self.player.hand[hand_idx]
         assert not card.is_land
 
-        cost = int(card.cmc) if card.cmc == int(card.cmc) else max(1, int(card.cmc))
-        if not self.player.tap_mana(cost):
+        phyrexian_pips = (card.mana_cost or "").upper().count("/P")
+        total_cmc = int(card.cmc) if card.cmc == int(card.cmc) else max(1, int(card.cmc))
+        mana_needed = max(0, total_cmc - phyrexian_pips)
+        life_cost = phyrexian_pips * 2
+
+        if not self.player.tap_mana(mana_needed):
             available = self.player.total_mana() - self.player.mana_spent
             return {
                 **self.to_client(),
-                "error": f"Not enough mana ({available} available, need {cost})",
+                "error": f"Not enough mana ({available} available, need {mana_needed})",
             }
 
         self.player.hand.pop(hand_idx)
         self.player.spells_cast_this_turn += 1
+        if life_cost:
+            self.player.life -= life_cost
+            self._log("player", "phyrexian", f"Paid {life_cost} life for {card.name}")
         self._trigger_prowess()
 
         category = _spell_category(card)
@@ -475,8 +508,7 @@ class InteractiveGame:
         else:
             target.temp_power += pp
             target.temp_toughness += pt
-        if "heroic" in (target.card.oracle_text or "").lower():
-            target.counters["+1/+1"] = target.counters.get("+1/+1", 0) + 1
+        self._maybe_trigger_heroic(target, target_uid)
         return f"{card.name} → {target.card.name} gets +{pp}/+{pt} until EOT"
 
     def _cast_removal(self, card: CardInfo, target_uid: str | None) -> str:
@@ -512,7 +544,72 @@ class InteractiveGame:
             return f"Enchanted with {card.name} (no target)"
         target.power_bonus += pp
         target.toughness_bonus += pt
+        self._maybe_trigger_heroic(target, target_uid)
         return f"Enchanted {target.card.name} with {card.name}"
+
+    def _maybe_trigger_heroic(self, perm: Permanent, target_uid: str | None) -> None:
+        """Fire the heroic trigger if perm has heroic and was the chosen target."""
+        if target_uid and "heroic" in (perm.card.oracle_text or "").lower():
+            self._resolve_heroic(perm)
+
+    def _resolve_heroic(self, perm: Permanent) -> None:
+        """Parse the heroic trigger text and apply the correct effect.
+
+        Heroic oracle text follows the pattern:
+          "Heroic — Whenever you cast a spell that targets ~, <effect>."
+        The effect is extracted by finding the first comma after "heroic" and
+        parsing what follows.
+        """
+        text = (perm.card.oracle_text or "").lower()
+        heroic_idx = text.find("heroic")
+        comma_idx = text.find(",", heroic_idx)
+        if heroic_idx == -1 or comma_idx == -1:
+            return
+        effect = text[comma_idx + 1:].strip().rstrip(".")
+
+        if "create" in effect and "token" in effect:
+            self._heroic_create_token(effect, perm)
+        elif "+1/+1 counter" in effect and "each creature" in effect:
+            for p in self.player.creatures():
+                p.counters["+1/+1"] = p.counters.get("+1/+1", 0) + 1
+            self._log("player", "heroic", f"{perm.card.name}: all creatures +1/+1")
+        elif "+1/+1 counter" in effect:
+            perm.counters["+1/+1"] = perm.counters.get("+1/+1", 0) + 1
+            self._log("player", "heroic", f"{perm.card.name}: +1/+1 counter")
+        elif "draw" in effect and "card" in effect:
+            n = _parse_draw(effect) or 1
+            drawn = self.player.draw(n)
+            self._log("player", "heroic", f"{perm.card.name}: drew {len(drawn)} card(s)")
+        elif "gain" in effect and "life" in effect:
+            m = re.search(r"gain (\d+) life", effect)
+            if m:
+                amount = int(m.group(1))
+                self.player.life += amount
+                self._log("player", "heroic", f"{perm.card.name}: gained {amount} life")
+
+    def _heroic_create_token(self, effect: str, source: Permanent) -> None:
+        """Create a creature token as directed by a heroic trigger effect text."""
+        m = re.search(r"create (?:a|an) (\d+)/(\d+) ([\w ]+?) creature token", effect)
+        if not m:
+            self._log("player", "heroic", f"{source.card.name}: token (unrecognised text)")
+            return
+        power, toughness, descriptor = m.group(1), m.group(2), m.group(3).strip()
+        color_words = {"white", "blue", "black", "red", "green", "colorless"}
+        subtype = " ".join(
+            w.title() for w in descriptor.split() if w not in color_words
+        )
+        token_info = CardInfo(
+            name=f"{subtype} Token",
+            quantity=1,
+            sideboard=False,
+            cmc=0,
+            type_line=f"Creature — {subtype}",
+            pt=f"{power}/{toughness}",
+            oracle_text="",
+        )
+        token_perm = _new_permanent(token_info)
+        self.player.battlefield.append(token_perm)
+        self._log("player", "heroic", f"{source.card.name}: created {token_info.name}")
 
     def action_go_to_attack(self) -> dict:
         """Transition from main phase 1 to the declare attackers step."""
@@ -558,22 +655,21 @@ class InteractiveGame:
         return self.to_client()
 
     def action_end_turn(self) -> dict:
-        """End the player's turn and run the opponent's full turn."""
+        """End the player's turn, run the opponent's main phase, then request blocks."""
         assert self.phase in ("main1", "main2", "attack")
         self._log("player", "end_turn", f"End of turn {self.turn}")
         self.phase = "opp_turn"
-        self._opponent_full_turn()
-        self._check_game_over()
-        self.turn += 1
-        self.phase = "draw"
+        self._opponent_main_phase()
+        if self.phase != "game_over":
+            self._start_opponent_attack()
         return self.to_client()
 
     # -------------------------------------------------------------------------
-    # Opponent (AI) full turn
+    # Opponent turn — split into main phase and combat so the player can block
     # -------------------------------------------------------------------------
 
-    def _opponent_full_turn(self) -> None:
-        """Run the opponent's complete turn: draw, play land, cast spells, attack."""
+    def _opponent_main_phase(self) -> None:
+        """Run the opponent's draw, land drop, and spell-casting steps."""
         opp = self.opponent
         opp.begin_turn()
 
@@ -604,15 +700,101 @@ class InteractiveGame:
             if self.phase == "game_over":
                 return
 
-        attackers = [p for p in opp.creatures() if p.can_attack()]
-        if attackers:
-            damage = self._resolve_combat(attackers, self.player, defender_side=self.player)
-            names = [a.card.name for a in attackers]
-            self._log(
-                "opponent", "attack",
-                f"Attacked with {names} → {damage} damage (your life: {self.player.life})",
-            )
-            self._check_game_over()
+    def _start_opponent_attack(self) -> None:
+        """Declare the opponent's attackers and hand priority to the player to block."""
+        attackers = [p for p in self.opponent.creatures() if p.can_attack()]
+        if not attackers:
+            self._finish_opponent_turn()
+            return
+        for perm in attackers:
+            perm.tapped = True
+        self.pending_opp_attackers = [p.uid for p in attackers]
+        names = [p.card.name for p in attackers]
+        self._log("opponent", "attack_declared", f"Attacks with {names}")
+        self.phase = "declare_blockers"
+
+    def action_assign_blocker(self, blocker_uid: str, attacker_uid: str) -> dict:
+        """Assign one of the player's creatures to block an opponent attacker."""
+        assert self.phase == "declare_blockers"
+        blocker = self._find_permanent(self.player.battlefield, blocker_uid)
+        attacker = self._find_permanent(self.opponent.battlefield, attacker_uid)
+        if blocker and attacker and not blocker.tapped:
+            self.pending_blockers[blocker_uid] = attacker_uid
+        return self.to_client()
+
+    def action_unassign_blocker(self, blocker_uid: str) -> dict:
+        """Remove a blocking assignment for one of the player's creatures."""
+        assert self.phase == "declare_blockers"
+        self.pending_blockers.pop(blocker_uid, None)
+        return self.to_client()
+
+    def action_confirm_blocks(self) -> dict:
+        """Confirm block assignments and resolve the opponent's combat step."""
+        assert self.phase == "declare_blockers"
+        self._resolve_opponent_combat()
+        self._finish_opponent_turn()
+        return self.to_client()
+
+    def _resolve_opponent_combat(self) -> None:
+        """Resolve the opponent's attack using the player's declared block assignments."""
+        attackers = [
+            p for p in self.opponent.battlefield if p.uid in self.pending_opp_attackers
+        ]
+        blockers_for = self._build_blocker_map()
+        damage_through = 0
+        for atk in attackers:
+            has_trample = "trample" in (atk.card.oracle_text or "").lower()
+            blockers = blockers_for.get(atk.uid, [])
+            damage_through += self._resolve_single_attack(atk, blockers, has_trample)
+
+        self.player.life -= damage_through
+        names = [a.card.name for a in attackers]
+        self._log(
+            "opponent", "attack",
+            f"Attacked with {names} → {damage_through} damage (your life: {self.player.life})",
+        )
+
+    def _build_blocker_map(self) -> dict[str, list[Permanent]]:
+        """Return a mapping of opponent attacker uid → list of assigned player blockers."""
+        blockers_for: dict[str, list[Permanent]] = {}
+        for blocker_uid, attacker_uid in self.pending_blockers.items():
+            blocker = self._find_permanent(self.player.battlefield, blocker_uid)
+            if blocker is not None:
+                blockers_for.setdefault(attacker_uid, []).append(blocker)
+        return blockers_for
+
+    def _resolve_single_attack(
+        self, atk: Permanent, blockers: list[Permanent], has_trample: bool
+    ) -> int:
+        """Resolve one attacker vs. its assigned blockers; return damage to the player.
+
+        All blockers deal their power to the attacker simultaneously.
+        The attacker's damage goes to the first blocker (simplified assignment;
+        proper multiple-blocker ordering is implemented in Phase E6).
+        """
+        if not blockers:
+            return atk.effective_power
+        for blk in blockers:
+            atk.damage += blk.effective_power
+        blockers[0].damage += atk.effective_power
+        self._remove_dead(self.player)
+        if atk.is_dead():
+            if atk in self.opponent.battlefield:
+                self.opponent.battlefield.remove(atk)
+                self.opponent.graveyard.append(atk.card)
+            return 0
+        if has_trample:
+            total_toughness = sum(b.effective_toughness for b in blockers)
+            return max(0, atk.effective_power - total_toughness)
+        return 0
+
+    def _finish_opponent_turn(self) -> None:
+        """Clean up combat state and advance to the player's next turn."""
+        self.pending_opp_attackers = []
+        self.pending_blockers = {}
+        if not self._check_game_over():
+            self.turn += 1
+            self.phase = "draw"
 
     def _opp_play_card(self, card: CardInfo, opp: PlayerState) -> None:
         """Resolve one spell cast by the AI opponent."""

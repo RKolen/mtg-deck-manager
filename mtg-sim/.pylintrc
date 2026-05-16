@@ -7,6 +7,7 @@ init-hook=
 
 [FORMAT]
 max-line-length=100
+max-module-lines=1200
 
 [DESIGN]
 # Dataclasses legitimately have many fields; raise threshold to accommodate them.

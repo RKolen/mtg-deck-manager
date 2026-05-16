@@ -204,7 +204,7 @@ const PlayPage: React.FC = () => {
   // ---- Handlers ----
 
   function handleHandClick(card: CardInHand, idx: number) {
-    if (!canCast && !(canPlayLand && card.isLand)) return;
+    if (!(canPlayLand && card.isLand) && !card.affordable) return;
     if (card.isLand && canPlayLand) {
       void act('play_land', { handIdx: idx });
       return;
@@ -455,7 +455,7 @@ const PlayPage: React.FC = () => {
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {gs.playerHand.map((card, idx) => {
-              const isSelectable = (canPlayLand && card.isLand) || (canCast && !card.isLand);
+              const isSelectable = (canPlayLand && card.isLand) || (!card.isLand && card.affordable);
               return (
                 <CardChip
                   key={`${card.name}-${idx}`}
