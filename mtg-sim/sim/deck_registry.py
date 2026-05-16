@@ -23,7 +23,8 @@ DRUPAL_USER: str = os.environ.get("DRUPAL_USER", "")
 DRUPAL_PASS: str = os.environ.get("DRUPAL_PASS", "")
 
 _CARD_FIELDS = (
-    "title,field_cmc,field_type_line,field_power,field_toughness,field_oracle_text"
+    "title,field_cmc,field_type_line,field_power,field_toughness,"
+    "field_oracle_text,field_mana_cost"
 )
 
 
@@ -47,6 +48,7 @@ class CardInfo:
     type_line: str = ""
     pt: str = "0/0"
     oracle_text: str = ""
+    mana_cost: str = ""
 
     @property
     def is_land(self) -> bool:
@@ -104,6 +106,7 @@ def _parse_card_attrs(attrs: dict) -> dict:
         "type_line": str(attrs.get("field_type_line") or ""),
         "pt": f"{power}/{toughness}",
         "oracle_text": str(attrs.get("field_oracle_text") or ""),
+        "mana_cost": str(attrs.get("field_mana_cost") or ""),
     }
 
 
@@ -117,6 +120,7 @@ def _card_info_from(info: dict, quantity: int, sideboard: bool) -> CardInfo:
         type_line=info.get("type_line", ""),
         pt=info.get("pt", "0/0"),
         oracle_text=info.get("oracle_text", ""),
+        mana_cost=info.get("mana_cost", ""),
     )
 
 
