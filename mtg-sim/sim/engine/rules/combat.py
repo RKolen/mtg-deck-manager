@@ -17,6 +17,16 @@ class CombatDamageResult:
     blocked_attackers: int = 0
 
 
+@dataclass(frozen=True)
+class _CombatContext:
+    """Shared data for a combat damage assignment."""
+
+    game: GameState
+    attacking_player_idx: int
+    defending_player_idx: int
+    result: CombatDamageResult
+
+
 def can_attack(perm: Permanent) -> bool:
     """Return whether a permanent can attack under current combat rules."""
     return (
@@ -70,27 +80,77 @@ def resolve_combat_damage(
     """Assign simplified combat damage for one attacking player."""
     attackers = _selected_attackers(game, attacking_player_idx, attacker_ids)
     result = CombatDamageResult(attackers=attackers)
+    context = _CombatContext(game, attacking_player_idx, defending_player_idx, result)
     tap_attackers(attackers)
 
     for attacker in attackers:
         blockers = _blockers_for(game, defending_player_idx, attacker, blocker_assignments)
-        attacker_power = power(attacker)
-        if not _has_enough_blockers(attacker, blockers):
-            result.damage_to_player += attacker_power
-            _apply_lifelink(game, attacking_player_idx, attacker, attacker_power)
-            continue
-        result.blocked_attackers += 1
-        player_damage = _assign_attacker_damage(attacker, blockers, attacker_power)
-        result.damage_to_player += player_damage
-        for blocker in blockers:
-            _mark_combat_damage(attacker, blocker, power(blocker))
-            _apply_lifelink(game, defending_player_idx, blocker, power(blocker))
-        _apply_lifelink(game, attacking_player_idx, attacker, attacker_power)
+        _resolve_first_strike_damage(context, attacker, blockers)
+        _resolve_regular_combat_damage(context, attacker, blockers)
 
     if result.damage_to_player:
         game.players[defending_player_idx].life -= result.damage_to_player
     game.check_sbas()
     return result
+
+
+def _resolve_first_strike_damage(
+    context: _CombatContext,
+    attacker: Permanent,
+    blockers: list[Permanent],
+) -> None:
+    """Resolve first-strike damage, then SBAs before regular damage."""
+    first_strikers = [perm for perm in [attacker, *blockers] if _has_first_strike(perm)]
+    if not first_strikers:
+        return
+    _assign_combat_damage(context, attacker, blockers, first_strike_step=True)
+    context.game.check_sbas()
+
+
+def _resolve_regular_combat_damage(
+    context: _CombatContext,
+    attacker: Permanent,
+    blockers: list[Permanent],
+) -> None:
+    """Resolve regular combat damage from surviving non-first-strikers."""
+    if attacker not in context.game.zones.battlefield:
+        return
+    live_blockers = [
+        blocker for blocker in blockers if blocker in context.game.zones.battlefield
+    ]
+    _assign_combat_damage(context, attacker, live_blockers, first_strike_step=False)
+
+
+def _assign_combat_damage(
+    context: _CombatContext,
+    attacker: Permanent,
+    blockers: list[Permanent],
+    first_strike_step: bool,
+) -> None:
+    attacker_deals = _deals_in_step(attacker, first_strike_step)
+    if not _has_enough_blockers(attacker, blockers):
+        if attacker_deals:
+            damage = power(attacker)
+            context.result.damage_to_player += damage
+            _apply_lifelink(
+                context.game,
+                context.attacking_player_idx,
+                attacker,
+                damage,
+            )
+        return
+    if not first_strike_step:
+        context.result.blocked_attackers += 1
+    if attacker_deals:
+        damage = power(attacker)
+        player_damage = _assign_attacker_damage(attacker, blockers, damage)
+        context.result.damage_to_player += player_damage
+        _apply_lifelink(context.game, context.attacking_player_idx, attacker, damage)
+    for blocker in blockers:
+        if _deals_in_step(blocker, first_strike_step):
+            damage = power(blocker)
+            _mark_combat_damage(attacker, blocker, damage)
+            _apply_lifelink(context.game, context.defending_player_idx, blocker, damage)
 
 
 def _selected_attackers(
@@ -129,6 +189,16 @@ def _has_enough_blockers(attacker: Permanent, blockers: list[Permanent]) -> bool
     if _has_keyword(attacker, "menace"):
         return len(blockers) >= 2
     return bool(blockers)
+
+
+def _deals_in_step(perm: Permanent, first_strike_step: bool) -> bool:
+    if first_strike_step:
+        return _has_first_strike(perm)
+    return not _has_first_strike(perm)
+
+
+def _has_first_strike(perm: Permanent) -> bool:
+    return _has_keyword(perm, "first strike")
 
 
 def _apply_lifelink(

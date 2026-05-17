@@ -249,6 +249,71 @@ def test_deathtouch_blocker_kills_larger_attacker():
     assert blocker not in game.zones.battlefield
 
 
+def test_first_strike_attacker_kills_blocker_before_return_damage():
+    """First strike damage kills a blocker before it deals regular combat damage."""
+    game = fresh_game()
+    attacker = place_on_battlefield(
+        make_creature("Fencer", 2, 2, oracle="First strike"),
+        1,
+        game.zones,
+    )
+    blocker = place_on_battlefield(make_creature("Bear", 2, 2), 0, game.zones)
+    result = resolve_combat_damage(
+        game,
+        attacking_player_idx=1,
+        defending_player_idx=0,
+        attacker_ids=[str(attacker.obj_id)],
+        blocker_assignments={str(blocker.obj_id): str(attacker.obj_id)},
+    )
+    assert result.damage_to_player == 0
+    assert blocker not in game.zones.battlefield
+    assert attacker in game.zones.battlefield
+    assert attacker.damage_marked == 0
+
+
+def test_first_strike_blocker_kills_attacker_before_regular_damage():
+    """A first strike blocker can kill an attacker before it deals damage."""
+    game = fresh_game()
+    attacker = place_on_battlefield(make_creature("Bear", 2, 2), 1, game.zones)
+    blocker = place_on_battlefield(
+        make_creature("Fencer", 2, 2, oracle="First strike"),
+        0,
+        game.zones,
+    )
+    result = resolve_combat_damage(
+        game,
+        attacking_player_idx=1,
+        defending_player_idx=0,
+        attacker_ids=[str(attacker.obj_id)],
+        blocker_assignments={str(blocker.obj_id): str(attacker.obj_id)},
+    )
+    assert result.damage_to_player == 0
+    assert attacker not in game.zones.battlefield
+    assert blocker in game.zones.battlefield
+    assert blocker.damage_marked == 0
+
+
+def test_first_strike_deathtouch_kills_before_return_damage():
+    """First strike plus deathtouch kills a larger blocker before it hits back."""
+    game = fresh_game()
+    attacker = place_on_battlefield(
+        make_creature("Assassin", 1, 1, oracle="First strike, deathtouch"),
+        1,
+        game.zones,
+    )
+    blocker = place_on_battlefield(make_creature("Wurm", 5, 5), 0, game.zones)
+    resolve_combat_damage(
+        game,
+        attacking_player_idx=1,
+        defending_player_idx=0,
+        attacker_ids=[str(attacker.obj_id)],
+        blocker_assignments={str(blocker.obj_id): str(attacker.obj_id)},
+    )
+    assert blocker not in game.zones.battlefield
+    assert attacker in game.zones.battlefield
+    assert attacker.damage_marked == 0
+
+
 def test_indestructible_survives_deathtouch_damage():
     """Indestructible still ignores lethal deathtouch damage."""
     game = fresh_game()
