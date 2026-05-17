@@ -1,6 +1,8 @@
 """Integration tests for the Phase B interactive game loop."""
 
 from engine.game import create_game, get_game, remove_game
+from engine.core.game_object import CardObject
+from engine.core.zones import Zone
 from tests.conftest import make_card, make_deck, make_land
 
 
@@ -62,6 +64,50 @@ def test_cast_zero_mana_creature_enters_battlefield():
     assert len(data["playerBattlefield"]) == 1
     assert data["playerBattlefield"][0]["name"] == "Memnite"
     assert len(data["playerHand"]) == 6
+    assert not data["stack"]
+
+
+def test_cast_uses_stack_before_auto_resolution():
+    """Casting a spell can expose the stack before priority passes resolve it."""
+    memnite = make_card(
+        name="Memnite",
+        type_line="Artifact Creature — Construct",
+        cmc=0,
+        pt="1/1",
+        mana_cost="",
+    )
+    game = create_game([memnite for _ in range(20)], make_deck(lands=20))
+    game.action_keep()
+    data = game.action_cast_to_stack(0)
+    assert data["stack"][0]["name"] == "Memnite"
+    assert len(data["playerBattlefield"]) == 0
+    game.action_pass_priority()
+    resolved = game.action_pass_priority()
+    assert not resolved["stack"]
+    assert resolved["playerBattlefield"][0]["name"] == "Memnite"
+
+
+def test_spell_with_illegal_target_fizzles_through_stack():
+    """Target legality is checked when the stack object resolves."""
+    shock = make_card(
+        name="Shock",
+        type_line="Instant",
+        cmc=0,
+        oracle="Shock deals 2 damage to any target.",
+        mana_cost="",
+    )
+    bear = make_card(name="Bear", type_line="Creature — Bear", cmc=2, pt="2/2")
+    game = create_game([shock for _ in range(20)], make_deck(lands=20))
+    game.action_keep()
+    target_card = CardObject(controller_idx=1, owner_idx=1, card_info=bear)
+    target = game.state.zones.enter_battlefield(target_card, 1, "test")
+    game.action_cast_to_stack(0, target_uid=str(target.obj_id))
+    game.state.zones.leave_battlefield(target, Zone.GRAVEYARD, "test")
+    game.action_pass_priority()
+    data = game.action_pass_priority()
+    assert not data["stack"]
+    assert data["opponentLife"] == 20
+    assert "Shock" in data["playerGraveyard"]
 
 
 def test_end_turn_returns_to_player_draw_when_opponent_has_no_attackers():

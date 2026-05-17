@@ -21,8 +21,9 @@ from engine.cards.oracle_parse import (
     spell_category,
 )
 from engine.core.game_object import CardObject, Permanent
+from engine.core.game_object import SpellOnStack, Target
 from engine.core.game_state import GameState, LogEntry, PlayerInfo
-from engine.core.turn_structure import TurnRunner
+from engine.core.turn_structure import PriorityPassOutcome, TurnRunner
 from engine.core.zones import Zone, ZoneManager
 from engine.rules.stack import Stack
 
@@ -74,6 +75,7 @@ class InteractiveGame:
                 if str(p.obj_id) in self.pending_opp_attackers
             ],
             "pendingBlockers": self.pending_blockers,
+            "stack": self.state.stack.to_client(),
             "availableActions": self._available_actions(),
         }
 
@@ -126,11 +128,27 @@ class InteractiveGame:
         hand_idx: int,
         target_uid: str | None = None,
         target_player: int | None = None,
-        modes: list[int] | None = None,
-        chosen_x: int = 0,
     ) -> dict:
-        """Cast and immediately resolve a spell for the first Phase B slice."""
-        del modes, chosen_x
+        """Cast a spell through the stack, auto-passing while no responses exist."""
+        return self._announce_cast(hand_idx, target_uid, target_player, auto_resolve=True)
+
+    def action_cast_to_stack(
+        self,
+        hand_idx: int,
+        target_uid: str | None = None,
+        target_player: int | None = None,
+    ) -> dict:
+        """Cast a spell and leave it on the stack for explicit priority passes."""
+        return self._announce_cast(hand_idx, target_uid, target_player, auto_resolve=False)
+
+    def _announce_cast(
+        self,
+        hand_idx: int,
+        target_uid: str | None,
+        target_player: int | None,
+        auto_resolve: bool,
+    ) -> dict:
+        """Pay costs and place a spell on the stack."""
         assert self.phase in ("main1", "main2")
         card = self._zones(0).hand[hand_idx]
         card_info = _require_card_info(card)
@@ -148,9 +166,25 @@ class InteractiveGame:
         if life_cost:
             self.state.players[0].life -= life_cost
             self._log("player", "phyrexian", f"Paid {life_cost} life for {card_info.name}")
-        detail = self._resolve_player_spell(card, target_uid, target_player)
-        self._log("player", "cast", detail)
-        self._check_game_over()
+        self._put_spell_on_stack(
+            card,
+            target_uid=target_uid,
+            target_player=target_player,
+        )
+        self._log("player", "cast", f"{card_info.name} on stack")
+        if auto_resolve:
+            self._auto_pass_stack()
+        return self.to_client()
+
+    def action_pass_priority(self) -> dict:
+        """Pass priority once; resolve or advance when both players pass."""
+        outcome = self.state.turn.pass_priority(self.state.stack.is_empty)
+        if outcome == PriorityPassOutcome.RESOLVE_TOP:
+            detail = self._resolve_top_of_stack()
+            if detail:
+                self._log("system", "resolve", detail)
+            self.state.turn.priority.reset(self.state.active_player_idx)
+            self._check_game_over()
         return self.to_client()
 
     def action_go_to_attack(self) -> dict:
@@ -233,6 +267,8 @@ class InteractiveGame:
 
     def _available_actions(self) -> list[str]:
         """Return action names legal in the current phase."""
+        if not self.state.stack.is_empty:
+            return ["pass_priority"]
         if self.phase == "mulligan":
             return ["keep", "mulligan"]
         if self.phase in ("game_over", "opp_turn"):
@@ -281,26 +317,53 @@ class InteractiveGame:
         player.land_played = False
         player.spells_cast_this_turn = 0
 
-    def _resolve_player_spell(
+    def _put_spell_on_stack(
         self,
         card: CardObject,
         target_uid: str | None,
         target_player: int | None,
-    ) -> str:
-        """Resolve a player spell using Phase A oracle categories."""
+    ) -> None:
+        """Move a cast spell from hand to the stack."""
+        targets = _targets_from_request(target_uid, target_player)
+        self.state.zones.play_from_hand(card, 0)
+        self.state.stack.push(SpellOnStack(
+            controller_idx=0,
+            owner_idx=card.owner_idx,
+            source=card,
+            targets=targets,
+        ))
+        self.state.turn.action_taken()
+
+    def _resolve_top_of_stack(self) -> str:
+        """Resolve the top stack object and apply its simple Phase B effect."""
+        result = self.state.stack.resolve_top(self.state.zones)
+        if result.obj is None:
+            return ""
+        if result.fizzled:
+            source = getattr(result.obj, "source", None)
+            name = _require_card_info(source).name if isinstance(source, CardObject) else "Object"
+            return f"{name} fizzled"
+        obj = result.obj
+        if isinstance(obj, SpellOnStack) and obj.source is not None:
+            return self._apply_spell(obj)
+        return "Resolved ability"
+
+    def _apply_spell(self, spell: SpellOnStack) -> str:
+        """Apply a resolved spell's effect."""
+        card = spell.source
+        assert card is not None
         card_info = _require_card_info(card)
         category = spell_category(card_info)
-        if category == "creature":
-            self.state.zones.enter_battlefield(card, 0, "cast", Zone.HAND)
+        if category == "creature" and spell.controller_idx == 0:
+            self.state.zones.enter_battlefield(card, 0, "resolve")
             return f"Cast creature {card_info.name}"
-        self.state.zones.play_from_hand(card, 0)
-        if category == "burn":
-            return self._resolve_burn(card, target_uid, target_player)
-        if category == "pump":
-            return self._resolve_pump(card, target_uid)
-        if category == "removal":
-            return self._resolve_removal(card, target_uid)
-        if category == "draw":
+        if category == "burn" and spell.controller_idx == 0:
+            return self._resolve_burn(card, spell.targets)
+        if category == "pump" and spell.controller_idx == 0:
+            return self._resolve_pump(card, spell.targets)
+        if category == "removal" and spell.controller_idx == 0:
+            return self._resolve_removal(card, spell.targets)
+        if category == "draw" and spell.controller_idx == 0:
             return self._resolve_draw(card)
         self._move_card_to_graveyard(card)
         return f"Cast {card_info.name}"
@@ -308,12 +371,13 @@ class InteractiveGame:
     def _resolve_burn(
         self,
         card: CardObject,
-        target_uid: str | None,
-        target_player: int | None,
+        targets: list[Target],
     ) -> str:
         card_info = _require_card_info(card)
         damage = parse_damage(card_info.oracle_text or "") or max(1, int(card_info.cmc))
         self._move_card_to_graveyard(card)
+        target_player = _target_player(targets)
+        target_uid = _target_uid(targets)
         if target_player == 1 or target_uid is None:
             self.state.players[1].life -= damage
             return f"{card_info.name} dealt {damage} damage to opponent"
@@ -324,11 +388,12 @@ class InteractiveGame:
         self.state.check_sbas()
         return f"{card_info.name} dealt {damage} damage to {target.name}"
 
-    def _resolve_pump(self, card: CardObject, target_uid: str | None) -> str:
+    def _resolve_pump(self, card: CardObject, targets: list[Target]) -> str:
         card_info = _require_card_info(card)
         power, toughness = parse_pump(card_info.oracle_text or "")
         if power == 0 and toughness == 0:
             power, toughness = 1, 1
+        target_uid = _target_uid(targets)
         target = self._find_permanent(target_uid) or _last_creature(self._permanents(0))
         self._move_card_to_graveyard(card)
         if target is None:
@@ -336,9 +401,10 @@ class InteractiveGame:
         target.counters["+1/+1"] = target.counters.get("+1/+1", 0) + max(power, toughness)
         return f"{card_info.name} pumped {target.name}"
 
-    def _resolve_removal(self, card: CardObject, target_uid: str | None) -> str:
+    def _resolve_removal(self, card: CardObject, targets: list[Target]) -> str:
         card_info = _require_card_info(card)
         self._move_card_to_graveyard(card)
+        target_uid = _target_uid(targets)
         target = self._find_permanent(target_uid)
         if target is None:
             return f"Cast {card_info.name} (target not found)"
@@ -546,6 +612,13 @@ class InteractiveGame:
         self._draw_cards(0, 7)
         self._draw_cards(1, 7)
 
+    def _auto_pass_stack(self) -> None:
+        """Auto-pass both players until the stack is empty."""
+        while not self.state.stack.is_empty:
+            self.action_pass_priority()
+            if not self.state.stack.is_empty:
+                self.action_pass_priority()
+
 
 _sessions: dict[str, InteractiveGame] = {}
 
@@ -635,6 +708,31 @@ def _require_card_info(card: CardObject) -> CardInfo:
 
 def _is_land(card: CardObject) -> bool:
     return _require_card_info(card).is_land
+
+
+def _targets_from_request(target_uid: str | None, target_player: int | None) -> list[Target]:
+    """Convert the legacy action payload target fields to stack targets."""
+    targets: list[Target] = []
+    if target_uid is not None:
+        try:
+            targets.append(Target(obj_id=int(target_uid)))
+        except ValueError:
+            return targets
+    if target_player is not None:
+        targets.append(Target(player_idx=target_player))
+    return targets
+
+
+def _target_uid(targets: list[Target]) -> str | None:
+    """Return the first permanent target as a legacy uid string."""
+    target = next((t for t in targets if t.obj_id is not None), None)
+    return str(target.obj_id) if target is not None else None
+
+
+def _target_player(targets: list[Target]) -> int | None:
+    """Return the first player target index."""
+    target = next((t for t in targets if t.player_idx is not None), None)
+    return target.player_idx if target is not None else None
 
 
 def _can_attack(perm: Permanent) -> bool:

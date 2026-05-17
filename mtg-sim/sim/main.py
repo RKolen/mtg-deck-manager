@@ -173,7 +173,7 @@ class StartGameRequest(BaseModel):
 class GameActionRequest(BaseModel):
     """Request body for POST /game/action.
 
-    Valid actions: keep, mulligan, draw, play_land, cast, go_to_attack,
+    Valid actions: keep, mulligan, draw, play_land, cast, pass_priority, go_to_attack,
     toggle_attacker, confirm_attack, skip_attack, end_turn,
     assign_blocker, unassign_blocker, confirm_blocks.
     """
@@ -237,6 +237,7 @@ async def _dispatch_action(game, req: GameActionRequest) -> dict:
         "keep": game.action_keep,
         "mulligan": game.action_mulligan,
         "draw": game.action_draw,
+        "pass_priority": game.action_pass_priority,
         "go_to_attack": game.action_go_to_attack,
         "confirm_attack": game.action_confirm_attack,
         "skip_attack": game.action_skip_attack,
