@@ -82,8 +82,8 @@ def resolve_combat_damage(
         blocker = blockers[0]
         blocker_power = power(blocker)
         result.blocked_attackers += 1
-        attacker.damage_marked += blocker_power
-        blocker.damage_marked += attacker_power
+        _mark_combat_damage(attacker, blocker, blocker_power)
+        _mark_combat_damage(blocker, attacker, attacker_power)
         _apply_lifelink(game, attacking_player_idx, attacker, attacker_power)
         _apply_lifelink(game, defending_player_idx, blocker, blocker_power)
 
@@ -139,6 +139,25 @@ def _apply_lifelink(
 ) -> None:
     if damage_dealt > 0 and _has_keyword(source, "lifelink"):
         game.players[controller_idx].life += damage_dealt
+
+
+def _mark_combat_damage(receiver: Permanent, source: Permanent, damage: int) -> None:
+    """Mark combat damage, treating deathtouch damage as lethal."""
+    if damage <= 0:
+        return
+    receiver.damage_marked += damage
+    if _has_keyword(source, "deathtouch"):
+        receiver.damage_marked = max(receiver.damage_marked, _toughness(receiver))
+
+
+def _toughness(perm: Permanent) -> int:
+    if perm.card_info is None:
+        return 0
+    return (
+        perm.card_info.numeric_toughness
+        + perm.counters.get("+1/+1", 0)
+        - perm.counters.get("-1/-1", 0)
+    )
 
 
 def _find_permanent(game: GameState, uid: str) -> Permanent | None:

@@ -209,6 +209,70 @@ def test_lifelink_attacker_and_blocker_gain_life_from_creature_damage():
     assert blocker.damage_marked == 3
 
 
+def test_deathtouch_attacker_kills_larger_blocker():
+    """Any combat damage from deathtouch is lethal to creatures."""
+    game = fresh_game()
+    attacker = place_on_battlefield(
+        make_creature("Assassin", 1, 1, oracle="Deathtouch"),
+        1,
+        game.zones,
+    )
+    blocker = place_on_battlefield(make_creature("Wurm", 5, 5), 0, game.zones)
+    resolve_combat_damage(
+        game,
+        attacking_player_idx=1,
+        defending_player_idx=0,
+        attacker_ids=[str(attacker.obj_id)],
+        blocker_assignments={str(blocker.obj_id): str(attacker.obj_id)},
+    )
+    assert blocker not in game.zones.battlefield
+    assert attacker not in game.zones.battlefield
+
+
+def test_deathtouch_blocker_kills_larger_attacker():
+    """Deathtouch works when the source is a blocker."""
+    game = fresh_game()
+    attacker = place_on_battlefield(make_creature("Wurm", 5, 5), 1, game.zones)
+    blocker = place_on_battlefield(
+        make_creature("Assassin", 1, 1, oracle="Deathtouch"),
+        0,
+        game.zones,
+    )
+    resolve_combat_damage(
+        game,
+        attacking_player_idx=1,
+        defending_player_idx=0,
+        attacker_ids=[str(attacker.obj_id)],
+        blocker_assignments={str(blocker.obj_id): str(attacker.obj_id)},
+    )
+    assert attacker not in game.zones.battlefield
+    assert blocker not in game.zones.battlefield
+
+
+def test_indestructible_survives_deathtouch_damage():
+    """Indestructible still ignores lethal deathtouch damage."""
+    game = fresh_game()
+    attacker = place_on_battlefield(
+        make_creature("Assassin", 1, 1, oracle="Deathtouch"),
+        1,
+        game.zones,
+    )
+    blocker = place_on_battlefield(
+        make_creature("God", 5, 5, oracle="Indestructible"),
+        0,
+        game.zones,
+    )
+    resolve_combat_damage(
+        game,
+        attacking_player_idx=1,
+        defending_player_idx=0,
+        attacker_ids=[str(attacker.obj_id)],
+        blocker_assignments={str(blocker.obj_id): str(attacker.obj_id)},
+    )
+    assert blocker in game.zones.battlefield
+    assert attacker not in game.zones.battlefield
+
+
 def test_menace_attacker_needs_two_blockers():
     """A menace creature is not blocked by only one creature."""
     game = fresh_game()
