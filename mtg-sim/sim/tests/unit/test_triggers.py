@@ -4,7 +4,7 @@ from engine.core.game_object import TriggeredAbilityOnStack
 from engine.core.game_state import GameState
 from engine.core.turn_structure import Step
 from engine.core.zones import Zone
-from engine.rules.triggers import TriggerKey, is_beginning_of_upkeep, is_dies
+from engine.rules.triggers import TriggerKey, is_attacks, is_beginning_of_upkeep, is_dies
 from engine.rules.triggers import is_enters_battlefield
 from tests.conftest import fresh_game, make_creature, place_on_battlefield
 
@@ -147,6 +147,44 @@ def test_upkeep_trigger_does_not_fire_during_draw_step():
     )
 
     game.fire_step_triggers(Step.DRAW)
+
+    assert game.stack.top is None
+
+
+def test_attack_trigger_goes_on_stack_from_declared_attacker():
+    """Attack triggers fire when an attacker is declared."""
+    game = fresh_game()
+    raider = place_on_battlefield(
+        make_creature("Raid Captain", 2, 2),
+        0,
+        game.zones,
+    )
+    attacker = place_on_battlefield(
+        make_creature("Goblin", 1, 1),
+        0,
+        game.zones,
+    )
+    game.trigger_registry.register(raider, TriggerKey.ATTACKS, is_attacks)
+
+    game.fire_attack_triggers(attacker)
+
+    trigger = _top_trigger(game)
+    assert trigger.source_permanent_id == raider.obj_id
+    assert trigger.controller_idx == 0
+    assert trigger.trigger_key == TriggerKey.ATTACKS.value
+
+
+def test_attack_trigger_does_not_fire_from_upkeep_event():
+    """Attack triggers ignore unrelated step events."""
+    game = fresh_game()
+    raider = place_on_battlefield(
+        make_creature("Raid Captain", 2, 2),
+        0,
+        game.zones,
+    )
+    game.trigger_registry.register(raider, TriggerKey.ATTACKS, is_attacks)
+
+    game.fire_step_triggers(Step.UPKEEP)
 
     assert game.stack.top is None
 

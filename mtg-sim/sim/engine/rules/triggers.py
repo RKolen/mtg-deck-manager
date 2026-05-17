@@ -20,6 +20,7 @@ class TriggerKey(StrEnum):
 
     ENTERS_BATTLEFIELD = "enters_battlefield"
     DIES = "dies"
+    ATTACKS = "attacks"
     BEGINNING_OF_UPKEEP = "beginning_of_upkeep"
 
 
@@ -31,7 +32,15 @@ class StepTriggerEvent:
     active_player_idx: int
 
 
-TriggerEvent = ZoneMoveEvent | StepTriggerEvent
+@dataclass(frozen=True)
+class AttackTriggerEvent:
+    """Synthetic event emitted when an attacker is declared."""
+
+    attacker_id: int
+    attacking_player_idx: int
+
+
+TriggerEvent = ZoneMoveEvent | StepTriggerEvent | AttackTriggerEvent
 TriggerCondition = Callable[[TriggerEvent, "GameState"], bool]
 
 
@@ -112,6 +121,11 @@ def is_dies(event: TriggerEvent, _game: GameState) -> bool:
         and event.to_zone == Zone.GRAVEYARD
         and "Creature" in event.obj.type_line
     )
+
+
+def is_attacks(event: TriggerEvent, _game: GameState) -> bool:
+    """Return True when an attacker is declared."""
+    return isinstance(event, AttackTriggerEvent)
 
 
 def is_beginning_of_upkeep(event: TriggerEvent, _game: GameState) -> bool:

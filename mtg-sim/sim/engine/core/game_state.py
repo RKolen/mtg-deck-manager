@@ -14,13 +14,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from engine.core.game_object import Permanent
 from engine.core.mana import ManaPool
 from engine.core.turn_structure import TurnRunner
 from engine.core.turn_structure import Step
 from engine.core.zones import ZoneManager, ZoneMoveEvent
 from engine.rules.state_based import check_sbas
 from engine.rules.stack import Stack
-from engine.rules.triggers import StepTriggerEvent, TriggerRegistry
+from engine.rules.triggers import AttackTriggerEvent, StepTriggerEvent, TriggerRegistry
 
 
 @dataclass
@@ -100,6 +101,14 @@ class GameState:
         event = StepTriggerEvent(
             step=step,
             active_player_idx=self.active_player_idx,
+        )
+        self.trigger_registry.put_triggers_on_stack(event, self)
+
+    def fire_attack_triggers(self, attacker: Permanent) -> None:
+        """Put triggered abilities for a declared attacker on the stack."""
+        event = AttackTriggerEvent(
+            attacker_id=attacker.obj_id,
+            attacking_player_idx=attacker.controller_idx,
         )
         self.trigger_registry.put_triggers_on_stack(event, self)
 
