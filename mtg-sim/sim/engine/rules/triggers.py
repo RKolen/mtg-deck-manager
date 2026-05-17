@@ -21,6 +21,7 @@ class TriggerKey(StrEnum):
     ENTERS_BATTLEFIELD = "enters_battlefield"
     DIES = "dies"
     ATTACKS = "attacks"
+    BLOCKS = "blocks"
     BEGINNING_OF_UPKEEP = "beginning_of_upkeep"
 
 
@@ -40,7 +41,16 @@ class AttackTriggerEvent:
     attacking_player_idx: int
 
 
-TriggerEvent = ZoneMoveEvent | StepTriggerEvent | AttackTriggerEvent
+@dataclass(frozen=True)
+class BlockTriggerEvent:
+    """Synthetic event emitted when a blocker is declared."""
+
+    blocker_id: int
+    attacker_id: int
+    defending_player_idx: int
+
+
+TriggerEvent = ZoneMoveEvent | StepTriggerEvent | AttackTriggerEvent | BlockTriggerEvent
 TriggerCondition = Callable[[TriggerEvent, "GameState"], bool]
 
 
@@ -126,6 +136,11 @@ def is_dies(event: TriggerEvent, _game: GameState) -> bool:
 def is_attacks(event: TriggerEvent, _game: GameState) -> bool:
     """Return True when an attacker is declared."""
     return isinstance(event, AttackTriggerEvent)
+
+
+def is_blocks(event: TriggerEvent, _game: GameState) -> bool:
+    """Return True when a blocker is declared."""
+    return isinstance(event, BlockTriggerEvent)
 
 
 def is_beginning_of_upkeep(event: TriggerEvent, _game: GameState) -> bool:

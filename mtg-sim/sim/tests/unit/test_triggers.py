@@ -5,7 +5,7 @@ from engine.core.game_state import GameState
 from engine.core.turn_structure import Step
 from engine.core.zones import Zone
 from engine.rules.triggers import TriggerKey, is_attacks, is_beginning_of_upkeep, is_dies
-from engine.rules.triggers import is_enters_battlefield
+from engine.rules.triggers import is_blocks, is_enters_battlefield
 from tests.conftest import fresh_game, make_creature, place_on_battlefield
 
 
@@ -185,6 +185,54 @@ def test_attack_trigger_does_not_fire_from_upkeep_event():
     game.trigger_registry.register(raider, TriggerKey.ATTACKS, is_attacks)
 
     game.fire_step_triggers(Step.UPKEEP)
+
+    assert game.stack.top is None
+
+
+def test_block_trigger_goes_on_stack_from_declared_blocker():
+    """Block triggers fire when a blocker is declared."""
+    game = fresh_game()
+    sentry = place_on_battlefield(
+        make_creature("Sentry", 1, 4),
+        0,
+        game.zones,
+    )
+    blocker = place_on_battlefield(
+        make_creature("Wall", 0, 4),
+        0,
+        game.zones,
+    )
+    attacker = place_on_battlefield(
+        make_creature("Goblin", 2, 2),
+        1,
+        game.zones,
+    )
+    game.trigger_registry.register(sentry, TriggerKey.BLOCKS, is_blocks)
+
+    game.fire_block_triggers(blocker, attacker)
+
+    trigger = _top_trigger(game)
+    assert trigger.source_permanent_id == sentry.obj_id
+    assert trigger.controller_idx == 0
+    assert trigger.trigger_key == TriggerKey.BLOCKS.value
+
+
+def test_block_trigger_does_not_fire_from_attack_event():
+    """Block triggers ignore attack declaration events."""
+    game = fresh_game()
+    sentry = place_on_battlefield(
+        make_creature("Sentry", 1, 4),
+        0,
+        game.zones,
+    )
+    attacker = place_on_battlefield(
+        make_creature("Goblin", 2, 2),
+        1,
+        game.zones,
+    )
+    game.trigger_registry.register(sentry, TriggerKey.BLOCKS, is_blocks)
+
+    game.fire_attack_triggers(attacker)
 
     assert game.stack.top is None
 

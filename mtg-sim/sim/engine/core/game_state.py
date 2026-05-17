@@ -21,7 +21,8 @@ from engine.core.turn_structure import Step
 from engine.core.zones import ZoneManager, ZoneMoveEvent
 from engine.rules.state_based import check_sbas
 from engine.rules.stack import Stack
-from engine.rules.triggers import AttackTriggerEvent, StepTriggerEvent, TriggerRegistry
+from engine.rules.triggers import AttackTriggerEvent, BlockTriggerEvent
+from engine.rules.triggers import StepTriggerEvent, TriggerRegistry
 
 
 @dataclass
@@ -109,6 +110,15 @@ class GameState:
         event = AttackTriggerEvent(
             attacker_id=attacker.obj_id,
             attacking_player_idx=attacker.controller_idx,
+        )
+        self.trigger_registry.put_triggers_on_stack(event, self)
+
+    def fire_block_triggers(self, blocker: Permanent, attacker: Permanent) -> None:
+        """Put triggered abilities for a declared blocker on the stack."""
+        event = BlockTriggerEvent(
+            blocker_id=blocker.obj_id,
+            attacker_id=attacker.obj_id,
+            defending_player_idx=blocker.controller_idx,
         )
         self.trigger_registry.put_triggers_on_stack(event, self)
 
