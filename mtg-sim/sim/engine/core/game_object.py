@@ -186,12 +186,14 @@ class Permanent(GameObject):
             "objId": self.obj_id,
             "uid": str(self.obj_id),
             "name": self.name,
+            "cmc": self.card_info.cmc if self.card_info is not None else 0,
             "type": self.type_line,
             "typeLine": self.type_line,
             "power": power,
             "toughness": toughness,
             "tapped": self.tapped,
             "sick": self.sick,
+            "canAttack": _can_attack(self),
             "oracle": self.oracle_text,
             "counters": dict(self.counters),
             "damageMarked": self.damage_marked,
@@ -248,3 +250,8 @@ def _parse_int(value: str) -> int:
         return int(value)
     except ValueError:
         return 0
+
+
+def _can_attack(perm: Permanent) -> bool:
+    """Return whether a permanent is eligible to attack in the simple Phase B loop."""
+    return "Creature" in perm.type_line and not perm.tapped and not perm.sick

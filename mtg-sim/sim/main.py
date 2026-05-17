@@ -48,7 +48,7 @@ from pydantic import BaseModel, Field
 
 from deck_registry import fetch_meta_deck, fetch_player_deck
 from forge_adapter import ForgeAdapter
-from game_engine import create_game, get_game, remove_game
+from engine.game import create_game, get_game, remove_game
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
