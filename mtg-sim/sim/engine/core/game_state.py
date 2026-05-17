@@ -16,9 +16,10 @@ from dataclasses import dataclass, field
 
 from engine.core.mana import ManaPool
 from engine.core.turn_structure import TurnRunner
-from engine.core.zones import ZoneManager
+from engine.core.zones import ZoneManager, ZoneMoveEvent
 from engine.rules.state_based import check_sbas
 from engine.rules.stack import Stack
+from engine.rules.triggers import TriggerRegistry
 
 
 @dataclass
@@ -58,8 +59,13 @@ class GameState:
     players: list[PlayerInfo]
     turn: TurnRunner
     stack: Stack
+    trigger_registry: TriggerRegistry = field(default_factory=TriggerRegistry)
     log: list[LogEntry] = field(default_factory=list)
     winner: int | None = None
+
+    def __post_init__(self) -> None:
+        """Subscribe the trigger registry to zone movement events."""
+        self.zones.register_listener(self._handle_zone_move)
 
     @property
     def active_player_idx(self) -> int:
@@ -83,6 +89,10 @@ class GameState:
     def check_sbas(self) -> list:
         """Apply state-based actions and return the emitted SBA events."""
         return check_sbas(self)
+
+    def _handle_zone_move(self, event: ZoneMoveEvent) -> None:
+        """Put matching triggered abilities on the stack."""
+        self.trigger_registry.put_triggers_on_stack(event, self)
 
     def to_client(self) -> dict:
         """Serialise public game state, hiding the opponent's hand contents."""

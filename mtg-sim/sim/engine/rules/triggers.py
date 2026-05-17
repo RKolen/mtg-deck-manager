@@ -5,10 +5,13 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from engine.core.game_object import Effect, Permanent, Target, TriggeredAbilityOnStack
-from engine.core.game_state import GameState
 from engine.core.zones import Zone, ZoneMoveEvent
+
+if TYPE_CHECKING:
+    from engine.core.game_state import GameState
 
 
 class TriggerKey(StrEnum):
@@ -17,7 +20,7 @@ class TriggerKey(StrEnum):
     ENTERS_BATTLEFIELD = "enters_battlefield"
 
 
-TriggerCondition = Callable[[ZoneMoveEvent, GameState], bool]
+TriggerCondition = Callable[[ZoneMoveEvent, "GameState"], bool]
 
 
 @dataclass(frozen=True)
