@@ -217,6 +217,7 @@ class InteractiveGame:
     def action_confirm_attack(self) -> dict:
         """Resolve the player's declared attackers as unblocked damage."""
         assert self.phase == "attack"
+        self._fire_attack_triggers(self.pending_attackers)
         result = resolve_combat_damage(
             self.state,
             attacking_player_idx=0,
@@ -273,6 +274,7 @@ class InteractiveGame:
     def action_confirm_blocks(self) -> dict:
         """Resolve opponent combat after blocker assignment."""
         assert self.phase == "declare_blockers"
+        self._fire_block_triggers()
         self._resolve_opponent_combat()
         self._finish_opponent_turn()
         return self.to_client()
@@ -557,6 +559,7 @@ class InteractiveGame:
         tap_attackers(attackers)
         self.pending_opp_attackers = [str(p.obj_id) for p in attackers]
         self._log("opponent", "attack_declared", f"Attacks with {_perm_names(attackers)}")
+        self._fire_attack_triggers(self.pending_opp_attackers)
         self.phase = "declare_blockers"
 
     def _resolve_opponent_combat(self) -> None:
@@ -579,6 +582,23 @@ class InteractiveGame:
             return
         self.state.turn.context.turn_number += 1
         self.phase = "draw"
+
+    def _fire_attack_triggers(self, attacker_ids: list[str]) -> None:
+        """Put declared-attacker triggers on the stack and resolve them."""
+        for attacker_id in attacker_ids:
+            attacker = self._find_permanent(attacker_id)
+            if attacker is not None:
+                self.state.fire_attack_triggers(attacker)
+        self._auto_pass_stack()
+
+    def _fire_block_triggers(self) -> None:
+        """Put declared-blocker triggers on the stack and resolve them."""
+        for blocker_uid, attacker_uid in self.pending_blockers.items():
+            blocker = self._find_permanent(blocker_uid)
+            attacker = self._find_permanent(attacker_uid)
+            if blocker is not None and attacker is not None:
+                self.state.fire_block_triggers(blocker, attacker)
+        self._auto_pass_stack()
 
     def _check_game_over(self) -> bool:
         """Apply SBAs and set game_over phase if a player lost."""
