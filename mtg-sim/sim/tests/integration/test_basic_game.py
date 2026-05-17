@@ -3,6 +3,7 @@
 from engine.game import create_game, get_game, remove_game
 from engine.core.game_object import CardObject
 from engine.core.zones import Zone
+from engine.rules.triggers import TriggerKey, is_spell_cast
 from tests.conftest import make_card, make_creature, make_deck, make_land
 from tests.conftest import place_on_battlefield
 
@@ -92,6 +93,34 @@ def test_cast_uses_stack_before_auto_resolution():
     resolved = game.action_pass_priority()
     assert not resolved["stack"]
     assert resolved["playerBattlefield"][0]["name"] == "Memnite"
+
+
+def test_cast_spell_trigger_goes_above_cast_spell_on_stack():
+    """Spell-cast triggers emitted by the game loop sit above the cast spell."""
+    memnite = make_card(
+        name="Memnite",
+        type_line="Artifact Creature — Construct",
+        cmc=0,
+        pt="1/1",
+        mana_cost="",
+    )
+    game = create_game([memnite for _ in range(20)], make_deck(lands=20))
+    game.action_keep()
+    observer = place_on_battlefield(
+        make_creature("Cast Observer", 1, 1),
+        0,
+        game.state.zones,
+    )
+    game.state.trigger_registry.register(
+        observer,
+        TriggerKey.SPELL_CAST,
+        is_spell_cast,
+    )
+
+    data = game.action_cast_to_stack(0)
+
+    assert data["stack"][0]["type"] == "TriggeredAbilityOnStack"
+    assert data["stack"][1]["name"] == "Memnite"
 
 
 def test_instant_can_be_cast_while_spell_is_on_stack():

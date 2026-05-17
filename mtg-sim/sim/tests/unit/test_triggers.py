@@ -1,13 +1,13 @@
 """Unit tests for engine/rules/triggers.py."""
 
-from engine.core.game_object import TriggeredAbilityOnStack
+from engine.core.game_object import Target, TriggeredAbilityOnStack
 from engine.core.game_state import GameState
 from engine.core.turn_structure import Step
 from engine.core.zones import Zone
 from engine.rules.triggers import TriggerKey, is_attacks, is_beginning_of_combat
 from engine.rules.triggers import is_beginning_of_upkeep, is_blocks, is_dies
 from engine.rules.triggers import is_draws_card, is_end_step, is_enters_battlefield
-from engine.rules.triggers import is_spell_cast
+from engine.rules.triggers import is_spell_cast, spell_cast_event
 from tests.conftest import add_to_hand, add_to_library, fresh_game, make_card
 from tests.conftest import make_creature, make_instant, place_on_battlefield
 
@@ -287,6 +287,16 @@ def test_spell_cast_trigger_goes_on_stack_from_cast_event():
     assert trigger.source_permanent_id == observer.obj_id
     assert trigger.controller_idx == 0
     assert trigger.trigger_key == TriggerKey.SPELL_CAST.value
+
+
+def test_spell_cast_event_carries_spell_targets():
+    """Spell-cast events keep target choices for heroic-style conditions."""
+    spell = add_to_hand(make_instant("Titan's Strength"), 0, fresh_game().zones)
+    target = Target(obj_id=123)
+
+    event = spell_cast_event(spell, (target,))
+
+    assert event.targets == (target,)
 
 
 def test_spell_cast_trigger_does_not_fire_from_draw_event():

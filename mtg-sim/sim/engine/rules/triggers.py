@@ -63,6 +63,7 @@ class SpellCastTriggerEvent:
     controller_idx: int
     spell_name: str
     type_line: str
+    targets: tuple[Target, ...] = ()
 
 
 TriggerEvent = (
@@ -194,7 +195,10 @@ def is_spell_cast(event: TriggerEvent, _game: GameState) -> bool:
     return isinstance(event, SpellCastTriggerEvent)
 
 
-def spell_cast_event(spell: CardObject) -> SpellCastTriggerEvent:
+def spell_cast_event(
+    spell: CardObject,
+    targets: tuple[Target, ...] = (),
+) -> SpellCastTriggerEvent:
     """Build a spell-cast event from a card object."""
     card_info = spell.card_info
     return SpellCastTriggerEvent(
@@ -202,6 +206,7 @@ def spell_cast_event(spell: CardObject) -> SpellCastTriggerEvent:
         controller_idx=spell.controller_idx,
         spell_name=card_info.name if card_info is not None else "",
         type_line=card_info.type_line if card_info is not None else "",
+        targets=targets,
     )
 
 

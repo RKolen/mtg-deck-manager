@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from engine.core.game_object import CardObject, Permanent
+from engine.core.game_object import CardObject, Permanent, Target
 from engine.core.mana import ManaPool
 from engine.core.turn_structure import TurnRunner
 from engine.core.turn_structure import Step
@@ -122,9 +122,16 @@ class GameState:
         )
         self.trigger_registry.put_triggers_on_stack(event, self)
 
-    def fire_spell_cast_triggers(self, spell: CardObject) -> None:
+    def fire_spell_cast_triggers(
+        self,
+        spell: CardObject,
+        targets: tuple[Target, ...] = (),
+    ) -> None:
         """Put triggered abilities for a cast spell on the stack."""
-        self.trigger_registry.put_triggers_on_stack(spell_cast_event(spell), self)
+        self.trigger_registry.put_triggers_on_stack(
+            spell_cast_event(spell, targets),
+            self,
+        )
 
     def to_client(self) -> dict:
         """Serialise public game state, hiding the opponent's hand contents."""

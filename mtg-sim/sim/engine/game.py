@@ -168,13 +168,14 @@ class InteractiveGame:
         if life_cost:
             self.state.players[0].life -= life_cost
             self._log("player", "phyrexian", f"Paid {life_cost} life for {card_info.name}")
-        self._put_spell_on_stack(
+        targets = self._put_spell_on_stack(
             player_idx=0,
             card=card,
             target_uid=target_uid,
             target_player=target_player,
         )
         self._log("player", "cast", f"{card_info.name} on stack")
+        self.state.fire_spell_cast_triggers(card, tuple(targets))
         self._resolve_heroic_triggers(card, target_uid)
         if auto_resolve:
             self._auto_pass_stack()
@@ -358,7 +359,7 @@ class InteractiveGame:
         card: CardObject,
         target_uid: str | None,
         target_player: int | None,
-    ) -> None:
+    ) -> list[Target]:
         """Move a cast spell from hand to the stack."""
         targets = _targets_from_request(target_uid, target_player)
         self.state.zones.play_from_hand(card, player_idx)
@@ -369,6 +370,7 @@ class InteractiveGame:
             targets=targets,
         ))
         self.state.turn.action_taken()
+        return targets
 
     def _resolve_top_of_stack(self) -> str:
         """Resolve the top stack object and apply its simple Phase B effect."""
@@ -535,13 +537,14 @@ class InteractiveGame:
         if not self._tap_lands_for_mana(1, mana_needed):
             return
         target_player = 0 if spell_category(card_info) == "burn" else None
-        self._put_spell_on_stack(
+        targets = self._put_spell_on_stack(
             player_idx=1,
             card=card,
             target_uid=None,
             target_player=target_player,
         )
         self._log("opponent", "cast", f"{card_info.name} on stack")
+        self.state.fire_spell_cast_triggers(card, tuple(targets))
         self._auto_pass_stack()
 
     def _start_opponent_attack(self) -> None:
