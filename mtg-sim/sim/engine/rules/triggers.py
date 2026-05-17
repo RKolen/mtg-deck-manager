@@ -8,6 +8,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from engine.core.game_object import Effect, Permanent, Target, TriggeredAbilityOnStack
+from engine.core.turn_structure import Step
 from engine.core.zones import Zone, ZoneMoveEvent
 
 if TYPE_CHECKING:
@@ -19,9 +20,19 @@ class TriggerKey(StrEnum):
 
     ENTERS_BATTLEFIELD = "enters_battlefield"
     DIES = "dies"
+    BEGINNING_OF_UPKEEP = "beginning_of_upkeep"
 
 
-TriggerCondition = Callable[[ZoneMoveEvent, "GameState"], bool]
+@dataclass(frozen=True)
+class StepTriggerEvent:
+    """Synthetic event for triggers that fire at the start of a turn step."""
+
+    step: Step
+    active_player_idx: int
+
+
+TriggerEvent = ZoneMoveEvent | StepTriggerEvent
+TriggerCondition = Callable[[TriggerEvent, "GameState"], bool]
 
 
 @dataclass(frozen=True)
@@ -64,7 +75,7 @@ class TriggerRegistry:
 
     def fire(
         self,
-        event: ZoneMoveEvent,
+        event: TriggerEvent,
         game: GameState,
     ) -> list[TriggeredAbilityOnStack]:
         """Return triggered abilities that fire from the event."""
@@ -77,7 +88,7 @@ class TriggerRegistry:
 
     def put_triggers_on_stack(
         self,
-        event: ZoneMoveEvent,
+        event: TriggerEvent,
         game: GameState,
     ) -> list[TriggeredAbilityOnStack]:
         """Create triggered abilities and put them on the game stack."""
@@ -87,19 +98,25 @@ class TriggerRegistry:
         return abilities
 
 
-def is_enters_battlefield(event: ZoneMoveEvent, _game: GameState) -> bool:
+def is_enters_battlefield(event: TriggerEvent, _game: GameState) -> bool:
     """Return True when an event moved an object onto the battlefield."""
-    return event.to_zone == Zone.BATTLEFIELD
+    return isinstance(event, ZoneMoveEvent) and event.to_zone == Zone.BATTLEFIELD
 
 
-def is_dies(event: ZoneMoveEvent, _game: GameState) -> bool:
+def is_dies(event: TriggerEvent, _game: GameState) -> bool:
     """Return True when a creature moved from battlefield to graveyard."""
     return (
-        isinstance(event.obj, Permanent)
+        isinstance(event, ZoneMoveEvent)
+        and isinstance(event.obj, Permanent)
         and event.from_zone == Zone.BATTLEFIELD
         and event.to_zone == Zone.GRAVEYARD
         and "Creature" in event.obj.type_line
     )
+
+
+def is_beginning_of_upkeep(event: TriggerEvent, _game: GameState) -> bool:
+    """Return True when upkeep begins."""
+    return isinstance(event, StepTriggerEvent) and event.step == Step.UPKEEP
 
 
 def _to_stack_object(definition: TriggerDefinition) -> TriggeredAbilityOnStack:
@@ -115,7 +132,7 @@ def _to_stack_object(definition: TriggerDefinition) -> TriggeredAbilityOnStack:
 
 def _source_can_trigger(
     definition: TriggerDefinition,
-    event: ZoneMoveEvent,
+    event: TriggerEvent,
     game: GameState,
 ) -> bool:
     if game.zones.find_permanent(definition.source_permanent_id) is not None:
@@ -125,10 +142,11 @@ def _source_can_trigger(
 
 def _is_self_leaves_battlefield_trigger(
     definition: TriggerDefinition,
-    event: ZoneMoveEvent,
+    event: TriggerEvent,
 ) -> bool:
     return (
-        isinstance(event.obj, Permanent)
+        isinstance(event, ZoneMoveEvent)
+        and isinstance(event.obj, Permanent)
         and definition.source_permanent_id == event.obj.obj_id
         and definition.trigger_key == TriggerKey.DIES
         and event.from_zone == Zone.BATTLEFIELD

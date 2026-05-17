@@ -1,7 +1,9 @@
 """Unit tests for engine/rules/triggers.py."""
 
+from engine.core.turn_structure import Step
 from engine.core.zones import Zone
-from engine.rules.triggers import TriggerKey, is_dies, is_enters_battlefield
+from engine.rules.triggers import TriggerKey, is_beginning_of_upkeep, is_dies
+from engine.rules.triggers import is_enters_battlefield
 from tests.conftest import fresh_game, make_creature, place_on_battlefield
 
 
@@ -107,3 +109,45 @@ def test_self_dies_trigger_fires_from_own_sba_death():
     assert trigger.source_permanent_id == doomed.obj_id
     assert trigger.controller_idx == 0
     assert trigger.trigger_key == TriggerKey.DIES.value
+
+
+def test_upkeep_trigger_goes_on_stack_from_step_event():
+    """Beginning-of-upkeep triggers fire from explicit step events."""
+    game = fresh_game()
+    shrine = place_on_battlefield(
+        make_creature("Shrine Keeper", 1, 1),
+        0,
+        game.zones,
+    )
+    game.trigger_registry.register(
+        shrine,
+        TriggerKey.BEGINNING_OF_UPKEEP,
+        is_beginning_of_upkeep,
+    )
+
+    game.fire_step_triggers(Step.UPKEEP)
+
+    trigger = game.stack.top
+    assert trigger is not None
+    assert trigger.source_permanent_id == shrine.obj_id
+    assert trigger.controller_idx == 0
+    assert trigger.trigger_key == TriggerKey.BEGINNING_OF_UPKEEP.value
+
+
+def test_upkeep_trigger_does_not_fire_during_draw_step():
+    """Beginning-of-upkeep triggers ignore other beginning-phase steps."""
+    game = fresh_game()
+    shrine = place_on_battlefield(
+        make_creature("Shrine Keeper", 1, 1),
+        0,
+        game.zones,
+    )
+    game.trigger_registry.register(
+        shrine,
+        TriggerKey.BEGINNING_OF_UPKEEP,
+        is_beginning_of_upkeep,
+    )
+
+    game.fire_step_triggers(Step.DRAW)
+
+    assert game.stack.top is None

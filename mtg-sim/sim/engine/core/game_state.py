@@ -16,10 +16,11 @@ from dataclasses import dataclass, field
 
 from engine.core.mana import ManaPool
 from engine.core.turn_structure import TurnRunner
+from engine.core.turn_structure import Step
 from engine.core.zones import ZoneManager, ZoneMoveEvent
 from engine.rules.state_based import check_sbas
 from engine.rules.stack import Stack
-from engine.rules.triggers import TriggerRegistry
+from engine.rules.triggers import StepTriggerEvent, TriggerRegistry
 
 
 @dataclass
@@ -92,6 +93,14 @@ class GameState:
 
     def _handle_zone_move(self, event: ZoneMoveEvent) -> None:
         """Put matching triggered abilities on the stack."""
+        self.trigger_registry.put_triggers_on_stack(event, self)
+
+    def fire_step_triggers(self, step: Step) -> None:
+        """Put triggered abilities for the beginning of a step on the stack."""
+        event = StepTriggerEvent(
+            step=step,
+            active_player_idx=self.active_player_idx,
+        )
         self.trigger_registry.put_triggers_on_stack(event, self)
 
     def to_client(self) -> dict:
