@@ -1,5 +1,6 @@
 """Integration tests for the Phase B interactive game loop."""
 
+from deck_registry import CardInfo
 from engine.game import create_game, get_game, remove_game
 from engine.core.game_object import CardObject, Effect, GameObject
 from engine.core.game_state import GameState
@@ -276,24 +277,7 @@ def test_phyrexian_life_payment_casts_with_no_mana():
 
 def test_heroic_token_created_when_targeted_by_spell():
     """The Phase B loop supports the heroic token path from the plan."""
-    crusader = make_card(
-        name="Akroan Crusader",
-        type_line="Creature — Human Soldier",
-        cmc=0,
-        pt="1/1",
-        oracle=(
-            "Heroic — Whenever you cast a spell that targets Akroan Crusader, "
-            "create a 1/1 red Soldier creature token."
-        ),
-        mana_cost="",
-    )
-    growth = make_card(
-        name="Titan's Strength",
-        type_line="Instant",
-        cmc=0,
-        oracle="Target creature gets +3/+1 until end of turn.",
-        mana_cost="",
-    )
+    crusader, growth = _heroic_cards()
     game = create_game(make_deck(lands=20), make_deck(lands=20))
     game.action_keep()
     game.state.zones.player_zones[0].hand = [
@@ -306,6 +290,29 @@ def test_heroic_token_created_when_targeted_by_spell():
     names = [perm["name"] for perm in data["playerBattlefield"]]
     assert "Akroan Crusader" in names
     assert "Soldier Token" in names
+
+
+def test_heroic_trigger_uses_stack_before_targeting_spell_resolves():
+    """Heroic token creation resolves from a trigger above the targeting spell."""
+    crusader, growth = _heroic_cards()
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=crusader),
+        CardObject(controller_idx=0, owner_idx=0, card_info=growth),
+    ]
+    game.action_cast(0)
+    target = game.state.zones.creatures_of(0)[0]
+
+    data = game.action_cast_to_stack(0, target_uid=str(target.obj_id))
+
+    assert data["stack"][0]["type"] == "TriggeredAbilityOnStack"
+    assert data["stack"][1]["name"] == "Titan's Strength"
+    game.action_pass_priority()
+    data = game.action_pass_priority()
+    names = [perm["name"] for perm in data["playerBattlefield"]]
+    assert "Soldier Token" in names
+    assert data["stack"][0]["name"] == "Titan's Strength"
 
 
 def test_player_attack_uses_combat_rules_for_unblocked_damage():
@@ -407,7 +414,7 @@ def test_game_session_store_round_trip_and_remove():
     assert get_game(game_id) is None
 
 
-class _GainLifeEffect(Effect):  # pylint: disable=too-few-public-methods
+class _GainLifeEffect(Effect):
     """Test effect that gains life when an ability resolves."""
 
     def __init__(self, player_idx: int, amount: int) -> None:
@@ -418,3 +425,30 @@ class _GainLifeEffect(Effect):  # pylint: disable=too-few-public-methods
         """Apply the test life gain effect."""
         game.players[self.player_idx].life += self.amount
         return f"Gained {self.amount} life"
+
+    def describe(self) -> str:
+        """Return a short description for test diagnostics."""
+        return f"Gain {self.amount} life"
+
+
+def _heroic_cards() -> tuple[CardInfo, CardInfo]:
+    """Return a simple heroic creature and a spell that can target it."""
+    crusader = make_card(
+        name="Akroan Crusader",
+        type_line="Creature — Human Soldier",
+        cmc=0,
+        pt="1/1",
+        oracle=(
+            "Heroic — Whenever you cast a spell that targets Akroan Crusader, "
+            "create a 1/1 red Soldier creature token."
+        ),
+        mana_cost="",
+    )
+    growth = make_card(
+        name="Titan's Strength",
+        type_line="Instant",
+        cmc=0,
+        oracle="Target creature gets +3/+1 until end of turn.",
+        mana_cost="",
+    )
+    return crusader, growth

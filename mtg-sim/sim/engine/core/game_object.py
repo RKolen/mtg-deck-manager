@@ -93,6 +93,10 @@ class Effect:
         """Apply this effect and return a short resolution log detail."""
         return ""
 
+    def describe(self) -> str:
+        """Return a short human-readable description of this effect."""
+        return type(self).__name__
+
 
 @dataclass
 class Target:

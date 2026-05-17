@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 
 from deck_registry import CardInfo
 from engine.cards.oracle_parse import (
+    TokenBlueprint,
     is_affordable,
     parse_damage,
     parse_draw,
@@ -22,7 +23,8 @@ from engine.cards.oracle_parse import (
     spell_category,
 )
 from engine.core.game_object import ActivatedAbilityOnStack, CardObject, Permanent
-from engine.core.game_object import TokenObject, TriggeredAbilityOnStack
+from engine.core.game_object import Effect, GameObject, TokenObject
+from engine.core.game_object import TriggeredAbilityOnStack
 from engine.core.game_object import SpellOnStack, Target
 from engine.core.game_state import GameState, LogEntry, PlayerInfo
 from engine.core.turn_structure import PriorityPassOutcome, TurnRunner
@@ -30,6 +32,7 @@ from engine.core.zones import Zone, ZoneManager
 from engine.rules.combat import can_attack, eligible_attackers, legal_blocker
 from engine.rules.combat import resolve_combat_damage, tap_attackers
 from engine.rules.stack import Stack
+from engine.rules.triggers import TriggerKey, is_spell_targeting_source
 
 
 @dataclass
@@ -177,7 +180,6 @@ class InteractiveGame:
         )
         self._log("player", "cast", f"{card_info.name} on stack")
         self.state.fire_spell_cast_triggers(card, tuple(targets))
-        self._resolve_heroic_triggers(card, target_uid)
         if auto_resolve:
             self._auto_pass_stack()
         return self.to_client()
@@ -397,7 +399,8 @@ class InteractiveGame:
         category = spell_category(card_info)
         controller_idx = spell.controller_idx
         if category == "creature":
-            self.state.zones.enter_battlefield(card, controller_idx, "resolve")
+            permanent = self.state.zones.enter_battlefield(card, controller_idx, "resolve")
+            self._register_permanent_triggers(permanent)
             return f"Cast creature {card_info.name}"
         if category == "burn":
             return self._resolve_burn(card, spell.targets, controller_idx)
@@ -472,30 +475,19 @@ class InteractiveGame:
         self._move_card_to_graveyard(card)
         return f"{card_info.name} drew {_card_names(drawn) or 'no cards'}"
 
-    def _resolve_heroic_triggers(self, spell_card: CardObject, target_uid: str | None) -> None:
-        """Resolve the Phase B subset of heroic token triggers."""
-        if target_uid is None:
+    def _register_permanent_triggers(self, permanent: Permanent) -> None:
+        """Register parsed triggered abilities from a newly resolved permanent."""
+        if "heroic" not in permanent.oracle_text.lower():
             return
-        target = self._find_permanent(target_uid)
-        if target is None or target.controller_idx != spell_card.controller_idx:
-            return
-        if "heroic" not in target.oracle_text.lower():
-            return
-        blueprint = parse_token_blueprint(target.oracle_text)
+        blueprint = parse_token_blueprint(permanent.oracle_text)
         if blueprint is None:
             return
-        token = TokenObject(
-            controller_idx=target.controller_idx,
-            owner_idx=target.controller_idx,
-            name=blueprint.name,
-            type_line=blueprint.type_line,
-            colors=blueprint.colors,
-            power=blueprint.power,
-            toughness=blueprint.toughness,
-            oracle_text=blueprint.oracle_text,
+        self.state.trigger_registry.register(
+            permanent,
+            TriggerKey.SPELL_CAST,
+            is_spell_targeting_source,
+            effect=_CreateTokenEffect(blueprint),
         )
-        self.state.zones.enter_battlefield(token, target.controller_idx, "heroic")
-        self._log("system", "heroic", f"{target.name} created {blueprint.name}")
 
     def _opponent_main_phase(self) -> None:
         """Run a simple opponent draw, land, and spell sequence."""
@@ -834,6 +826,37 @@ def _resolve_ability_effect(
         return "Resolved ability"
     detail = obj.effect.resolve(game, obj)
     return detail or "Resolved ability"
+
+
+class _CreateTokenEffect(Effect):
+    """Effect that creates a token from a parsed token blueprint."""
+
+    def __init__(self, blueprint: TokenBlueprint) -> None:
+        self.blueprint = blueprint
+
+    def resolve(self, game: GameState, source: GameObject) -> str:
+        """Create the token controlled by the source permanent's controller."""
+        if not isinstance(source, TriggeredAbilityOnStack):
+            return ""
+        source_permanent = game.zones.find_permanent(source.source_permanent_id)
+        if source_permanent is None:
+            return ""
+        token = TokenObject(
+            controller_idx=source_permanent.controller_idx,
+            owner_idx=source_permanent.controller_idx,
+            name=self.blueprint.name,
+            type_line=self.blueprint.type_line,
+            colors=self.blueprint.colors,
+            power=self.blueprint.power,
+            toughness=self.blueprint.toughness,
+            oracle_text=self.blueprint.oracle_text,
+        )
+        game.zones.enter_battlefield(token, source_permanent.controller_idx, "heroic")
+        return f"{source_permanent.name} created {self.blueprint.name}"
+
+    def describe(self) -> str:
+        """Return a short description for logs and debugging."""
+        return f"Create {self.blueprint.name}"
 
 
 def _last_creature(permanents: list[Permanent]) -> Permanent | None:
