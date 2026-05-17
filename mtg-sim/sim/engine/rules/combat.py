@@ -1,4 +1,4 @@
-"""Simplified combat helpers for the Phase B interactive game loop."""
+"""Combat helpers for the interactive game loop."""
 
 from __future__ import annotations
 
@@ -18,13 +18,28 @@ class CombatDamageResult:
 
 
 def can_attack(perm: Permanent) -> bool:
-    """Return whether a permanent can attack in the current Phase B rules."""
-    return _is_creature(perm) and not perm.tapped and not perm.sick
+    """Return whether a permanent can attack under current combat rules."""
+    return (
+        _is_creature(perm)
+        and not perm.tapped
+        and not perm.sick
+        and not _has_keyword(perm, "defender")
+    )
 
 
 def can_block(perm: Permanent) -> bool:
-    """Return whether a permanent can block in the current Phase B rules."""
+    """Return whether a permanent can be declared as a blocker."""
     return _is_creature(perm) and not perm.tapped
+
+
+def legal_blocker(blocker: Permanent, attacker: Permanent, game: GameState) -> bool:
+    """Return whether blocker can block attacker."""
+    del game
+    if not can_block(blocker):
+        return False
+    if _has_keyword(attacker, "flying"):
+        return _has_keyword(blocker, "flying") or _has_keyword(blocker, "reach")
+    return True
 
 
 def power(perm: Permanent) -> int:
@@ -96,7 +111,7 @@ def _first_blocker_for(
         if (
             blocker is not None
             and blocker.controller_idx == defending_player_idx
-            and can_block(blocker)
+            and legal_blocker(blocker, attacker, game)
         ):
             return blocker
     return None
@@ -111,3 +126,7 @@ def _find_permanent(game: GameState, uid: str) -> Permanent | None:
 
 def _is_creature(perm: Permanent) -> bool:
     return "Creature" in perm.type_line
+
+
+def _has_keyword(perm: Permanent, keyword: str) -> bool:
+    return keyword.lower() in perm.oracle_text.lower()

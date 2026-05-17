@@ -26,7 +26,7 @@ from engine.core.game_object import SpellOnStack, Target
 from engine.core.game_state import GameState, LogEntry, PlayerInfo
 from engine.core.turn_structure import PriorityPassOutcome, TurnRunner
 from engine.core.zones import Zone, ZoneManager
-from engine.rules.combat import can_attack, can_block, eligible_attackers
+from engine.rules.combat import can_attack, eligible_attackers, legal_blocker
 from engine.rules.combat import resolve_combat_damage, tap_attackers
 from engine.rules.stack import Stack
 
@@ -255,7 +255,7 @@ class InteractiveGame:
             and attacker is not None
             and blocker.controller_idx == 0
             and attacker.controller_idx == 1
-            and can_block(blocker)
+            and legal_blocker(blocker, attacker, self.state)
         ):
             self.pending_blockers[blocker_uid] = attacker_uid
         return self.to_client()
