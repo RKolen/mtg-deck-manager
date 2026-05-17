@@ -73,7 +73,7 @@ TriggerEvent = (
     | BlockTriggerEvent
     | SpellCastTriggerEvent
 )
-TriggerCondition = Callable[[TriggerEvent, "GameState"], bool]
+TriggerCondition = Callable[[TriggerEvent, "GameState", "TriggerDefinition"], bool]
 
 
 @dataclass(frozen=True)
@@ -124,7 +124,7 @@ class TriggerRegistry:
             _to_stack_object(definition)
             for definition in self._definitions
             if _source_can_trigger(definition, event, game)
-            and definition.condition(event, game)
+            and definition.condition(event, game, definition)
         ]
 
     def put_triggers_on_stack(
@@ -139,12 +139,20 @@ class TriggerRegistry:
         return abilities
 
 
-def is_enters_battlefield(event: TriggerEvent, _game: GameState) -> bool:
+def is_enters_battlefield(
+    event: TriggerEvent,
+    _game: GameState,
+    _definition: TriggerDefinition,
+) -> bool:
     """Return True when an event moved an object onto the battlefield."""
     return isinstance(event, ZoneMoveEvent) and event.to_zone == Zone.BATTLEFIELD
 
 
-def is_dies(event: TriggerEvent, _game: GameState) -> bool:
+def is_dies(
+    event: TriggerEvent,
+    _game: GameState,
+    _definition: TriggerDefinition,
+) -> bool:
     """Return True when a creature moved from battlefield to graveyard."""
     return (
         isinstance(event, ZoneMoveEvent)
@@ -155,32 +163,56 @@ def is_dies(event: TriggerEvent, _game: GameState) -> bool:
     )
 
 
-def is_attacks(event: TriggerEvent, _game: GameState) -> bool:
+def is_attacks(
+    event: TriggerEvent,
+    _game: GameState,
+    _definition: TriggerDefinition,
+) -> bool:
     """Return True when an attacker is declared."""
     return isinstance(event, AttackTriggerEvent)
 
 
-def is_blocks(event: TriggerEvent, _game: GameState) -> bool:
+def is_blocks(
+    event: TriggerEvent,
+    _game: GameState,
+    _definition: TriggerDefinition,
+) -> bool:
     """Return True when a blocker is declared."""
     return isinstance(event, BlockTriggerEvent)
 
 
-def is_beginning_of_upkeep(event: TriggerEvent, _game: GameState) -> bool:
+def is_beginning_of_upkeep(
+    event: TriggerEvent,
+    _game: GameState,
+    _definition: TriggerDefinition,
+) -> bool:
     """Return True when upkeep begins."""
     return isinstance(event, StepTriggerEvent) and event.step == Step.UPKEEP
 
 
-def is_beginning_of_combat(event: TriggerEvent, _game: GameState) -> bool:
+def is_beginning_of_combat(
+    event: TriggerEvent,
+    _game: GameState,
+    _definition: TriggerDefinition,
+) -> bool:
     """Return True when beginning of combat begins."""
     return isinstance(event, StepTriggerEvent) and event.step == Step.BEGIN_COMBAT
 
 
-def is_end_step(event: TriggerEvent, _game: GameState) -> bool:
+def is_end_step(
+    event: TriggerEvent,
+    _game: GameState,
+    _definition: TriggerDefinition,
+) -> bool:
     """Return True when the end step begins."""
     return isinstance(event, StepTriggerEvent) and event.step == Step.END_STEP
 
 
-def is_draws_card(event: TriggerEvent, _game: GameState) -> bool:
+def is_draws_card(
+    event: TriggerEvent,
+    _game: GameState,
+    _definition: TriggerDefinition,
+) -> bool:
     """Return True when a card is drawn from library into hand."""
     return (
         isinstance(event, ZoneMoveEvent)
@@ -190,9 +222,40 @@ def is_draws_card(event: TriggerEvent, _game: GameState) -> bool:
     )
 
 
-def is_spell_cast(event: TriggerEvent, _game: GameState) -> bool:
+def is_spell_cast(
+    event: TriggerEvent,
+    _game: GameState,
+    _definition: TriggerDefinition,
+) -> bool:
     """Return True when a spell is cast."""
     return isinstance(event, SpellCastTriggerEvent)
+
+
+def is_noncreature_nonland_spell_cast(
+    event: TriggerEvent,
+    _game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Return True when this trigger's controller casts a noncreature nonland spell."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and "Creature" not in event.type_line
+        and "Land" not in event.type_line
+    )
+
+
+def is_spell_targeting_source(
+    event: TriggerEvent,
+    _game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Return True when this trigger's controller casts a spell targeting its source."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and any(target.obj_id == definition.source_permanent_id for target in event.targets)
+    )
 
 
 def spell_cast_event(

@@ -7,7 +7,9 @@ from engine.core.zones import Zone
 from engine.rules.triggers import TriggerKey, is_attacks, is_beginning_of_combat
 from engine.rules.triggers import is_beginning_of_upkeep, is_blocks, is_dies
 from engine.rules.triggers import is_draws_card, is_end_step, is_enters_battlefield
-from engine.rules.triggers import is_spell_cast, spell_cast_event
+from engine.rules.triggers import is_noncreature_nonland_spell_cast
+from engine.rules.triggers import is_spell_cast, is_spell_targeting_source
+from engine.rules.triggers import spell_cast_event
 from tests.conftest import add_to_hand, add_to_library, fresh_game, make_card
 from tests.conftest import make_creature, make_instant, place_on_battlefield
 
@@ -342,6 +344,111 @@ def test_spell_cast_trigger_does_not_fire_from_draw_event():
     game.trigger_registry.register(observer, TriggerKey.SPELL_CAST, is_spell_cast)
 
     game.zones.draw(0)
+
+    assert game.stack.top is None
+
+
+def test_noncreature_nonland_spell_cast_trigger_fires_for_own_instant():
+    """Prowess-style conditions fire for your noncreature nonland spell."""
+    game = fresh_game()
+    prowess_creature = place_on_battlefield(
+        make_creature("Monastery Swiftspear", 1, 2),
+        0,
+        game.zones,
+    )
+    spell = add_to_hand(make_instant("Titan's Strength"), 0, game.zones)
+    game.trigger_registry.register(
+        prowess_creature,
+        TriggerKey.SPELL_CAST,
+        is_noncreature_nonland_spell_cast,
+    )
+
+    game.fire_spell_cast_triggers(spell)
+
+    trigger = _top_trigger(game)
+    assert trigger.source_permanent_id == prowess_creature.obj_id
+    assert trigger.trigger_key == TriggerKey.SPELL_CAST.value
+
+
+def test_noncreature_nonland_spell_cast_trigger_ignores_creatures():
+    """Prowess-style conditions ignore creature spells."""
+    game = fresh_game()
+    prowess_creature = place_on_battlefield(
+        make_creature("Monastery Swiftspear", 1, 2),
+        0,
+        game.zones,
+    )
+    spell = add_to_hand(make_creature("Bear", 2, 2), 0, game.zones)
+    game.trigger_registry.register(
+        prowess_creature,
+        TriggerKey.SPELL_CAST,
+        is_noncreature_nonland_spell_cast,
+    )
+
+    game.fire_spell_cast_triggers(spell)
+
+    assert game.stack.top is None
+
+
+def test_noncreature_nonland_spell_cast_trigger_ignores_opponents_spells():
+    """Prowess-style conditions only fire for the source controller's spells."""
+    game = fresh_game()
+    prowess_creature = place_on_battlefield(
+        make_creature("Monastery Swiftspear", 1, 2),
+        0,
+        game.zones,
+    )
+    spell = add_to_hand(make_instant("Lightning Bolt"), 1, game.zones)
+    game.trigger_registry.register(
+        prowess_creature,
+        TriggerKey.SPELL_CAST,
+        is_noncreature_nonland_spell_cast,
+    )
+
+    game.fire_spell_cast_triggers(spell)
+
+    assert game.stack.top is None
+
+
+def test_spell_targeting_source_trigger_fires_for_own_targeted_spell():
+    """Heroic-style conditions fire when your spell targets the source permanent."""
+    game = fresh_game()
+    heroic_creature = place_on_battlefield(
+        make_creature("Akroan Crusader", 1, 1),
+        0,
+        game.zones,
+    )
+    spell = add_to_hand(make_instant("Titan's Strength"), 0, game.zones)
+    game.trigger_registry.register(
+        heroic_creature,
+        TriggerKey.SPELL_CAST,
+        is_spell_targeting_source,
+    )
+
+    game.fire_spell_cast_triggers(spell, (Target(obj_id=heroic_creature.obj_id),))
+
+    trigger = _top_trigger(game)
+    assert trigger.source_permanent_id == heroic_creature.obj_id
+    assert trigger.trigger_key == TriggerKey.SPELL_CAST.value
+
+
+def test_spell_targeting_source_trigger_ignores_other_targets():
+    """Heroic-style conditions ignore spells that target a different permanent."""
+    game = fresh_game()
+    heroic_creature = place_on_battlefield(
+        make_creature("Akroan Crusader", 1, 1),
+        0,
+        game.zones,
+    )
+    other_creature = place_on_battlefield(make_creature("Bear", 2, 2), 0, game.zones)
+    spell = add_to_hand(make_instant("Titan's Strength"), 0, game.zones)
+    game.trigger_registry.register(
+        heroic_creature,
+        TriggerKey.SPELL_CAST,
+        is_spell_targeting_source,
+    )
+
+    game.fire_spell_cast_triggers(spell, (Target(obj_id=other_creature.obj_id),))
 
     assert game.stack.top is None
 
