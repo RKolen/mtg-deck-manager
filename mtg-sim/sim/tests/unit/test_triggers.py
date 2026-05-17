@@ -1,5 +1,7 @@
 """Unit tests for engine/rules/triggers.py."""
 
+from engine.core.game_object import TriggeredAbilityOnStack
+from engine.core.game_state import GameState
 from engine.core.turn_structure import Step
 from engine.core.zones import Zone
 from engine.rules.triggers import TriggerKey, is_beginning_of_upkeep, is_dies
@@ -23,8 +25,7 @@ def test_etb_trigger_goes_on_stack_from_game_state_listener():
 
     place_on_battlefield(make_creature("Bear", 2, 2), 1, game.zones)
 
-    trigger = game.stack.top
-    assert trigger is not None
+    trigger = _top_trigger(game)
     assert trigger.source_permanent_id == soul_warden.obj_id
     assert trigger.controller_idx == 0
     assert trigger.trigger_key == TriggerKey.ENTERS_BATTLEFIELD.value
@@ -84,8 +85,7 @@ def test_dies_trigger_goes_on_stack_from_sba_death():
     bear.damage_marked = 2
     game.check_sbas()
 
-    trigger = game.stack.top
-    assert trigger is not None
+    trigger = _top_trigger(game)
     assert trigger.source_permanent_id == blood_artist.obj_id
     assert trigger.controller_idx == 0
     assert trigger.trigger_key == TriggerKey.DIES.value
@@ -104,8 +104,7 @@ def test_self_dies_trigger_fires_from_own_sba_death():
     doomed.damage_marked = 1
     game.check_sbas()
 
-    trigger = game.stack.top
-    assert trigger is not None
+    trigger = _top_trigger(game)
     assert trigger.source_permanent_id == doomed.obj_id
     assert trigger.controller_idx == 0
     assert trigger.trigger_key == TriggerKey.DIES.value
@@ -127,8 +126,7 @@ def test_upkeep_trigger_goes_on_stack_from_step_event():
 
     game.fire_step_triggers(Step.UPKEEP)
 
-    trigger = game.stack.top
-    assert trigger is not None
+    trigger = _top_trigger(game)
     assert trigger.source_permanent_id == shrine.obj_id
     assert trigger.controller_idx == 0
     assert trigger.trigger_key == TriggerKey.BEGINNING_OF_UPKEEP.value
@@ -151,3 +149,10 @@ def test_upkeep_trigger_does_not_fire_during_draw_step():
     game.fire_step_triggers(Step.DRAW)
 
     assert game.stack.top is None
+
+
+def _top_trigger(game: GameState) -> TriggeredAbilityOnStack:
+    """Return the stack top narrowed for Pylance."""
+    trigger = game.stack.top
+    assert isinstance(trigger, TriggeredAbilityOnStack)
+    return trigger

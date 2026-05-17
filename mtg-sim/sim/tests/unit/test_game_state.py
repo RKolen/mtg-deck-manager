@@ -51,5 +51,9 @@ def test_fresh_zones_loads_libraries():
         player_cards=[make_card("Player Library Card")],
         opponent_cards=[make_card("Opponent Library Card")],
     )
-    assert zones.player_zones[0].library[0].card_info.name == "Player Library Card"
-    assert zones.player_zones[1].library[0].card_info.name == "Opponent Library Card"
+    player_card = zones.player_zones[0].library[0].card_info
+    opponent_card = zones.player_zones[1].library[0].card_info
+    assert player_card is not None
+    assert opponent_card is not None
+    assert player_card.name == "Player Library Card"
+    assert opponent_card.name == "Opponent Library Card"
