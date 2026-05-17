@@ -25,6 +25,8 @@ from engine.core.game_object import SpellOnStack, Target
 from engine.core.game_state import GameState, LogEntry, PlayerInfo
 from engine.core.turn_structure import PriorityPassOutcome, TurnRunner
 from engine.core.zones import Zone, ZoneManager
+from engine.rules.combat import can_attack, can_block, eligible_attackers
+from engine.rules.combat import resolve_combat_damage, tap_attackers
 from engine.rules.stack import Stack
 
 
@@ -202,21 +204,22 @@ class InteractiveGame:
             self.pending_attackers.remove(uid)
             return self.to_client()
         perm = self._find_permanent(uid)
-        if perm is not None and perm.controller_idx == 0 and _can_attack(perm):
+        if perm is not None and perm.controller_idx == 0 and can_attack(perm):
             self.pending_attackers.append(uid)
         return self.to_client()
 
     def action_confirm_attack(self) -> dict:
         """Resolve the player's declared attackers as unblocked damage."""
         assert self.phase == "attack"
-        attackers = [p for p in self._permanents(0) if str(p.obj_id) in self.pending_attackers]
-        damage = 0
-        for attacker in attackers:
-            attacker.tapped = True
-            damage += _power(attacker)
-        if damage:
-            self.state.players[1].life -= damage
-            self._log("player", "attack", f"Attacked for {damage} damage")
+        result = resolve_combat_damage(
+            self.state,
+            attacking_player_idx=0,
+            defending_player_idx=1,
+            attacker_ids=self.pending_attackers,
+            blocker_assignments={},
+        )
+        if result.damage_to_player:
+            self._log("player", "attack", f"Attacked for {result.damage_to_player} damage")
         self.pending_attackers = []
         self.phase = "main2"
         self._check_game_over()
@@ -245,7 +248,13 @@ class InteractiveGame:
         assert self.phase == "declare_blockers"
         blocker = self._find_permanent(blocker_uid)
         attacker = self._find_permanent(attacker_uid)
-        if blocker is not None and attacker is not None and not blocker.tapped:
+        if (
+            blocker is not None
+            and attacker is not None
+            and blocker.controller_idx == 0
+            and attacker.controller_idx == 1
+            and can_block(blocker)
+        ):
             self.pending_blockers[blocker_uid] = attacker_uid
         return self.to_client()
 
@@ -487,40 +496,25 @@ class InteractiveGame:
 
     def _start_opponent_attack(self) -> None:
         """Declare opponent attackers or finish the opponent turn."""
-        attackers = [p for p in self._permanents(1) if _can_attack(p)]
+        attackers = eligible_attackers(self._permanents(1))
         if not attackers:
             self._finish_opponent_turn()
             return
-        for perm in attackers:
-            perm.tapped = True
+        tap_attackers(attackers)
         self.pending_opp_attackers = [str(p.obj_id) for p in attackers]
         self._log("opponent", "attack_declared", f"Attacks with {_perm_names(attackers)}")
         self.phase = "declare_blockers"
 
     def _resolve_opponent_combat(self) -> None:
         """Resolve current opponent attackers against assigned blockers."""
-        damage_to_player = 0
-        attackers = [
-            p for p in self._permanents(1)
-            if str(p.obj_id) in self.pending_opp_attackers
-        ]
-        for attacker in attackers:
-            blockers = [
-                self._find_permanent(blocker_uid)
-                for blocker_uid, attacker_uid in self.pending_blockers.items()
-                if attacker_uid == str(attacker.obj_id)
-            ]
-            live_blockers = [b for b in blockers if b is not None]
-            if not live_blockers:
-                damage_to_player += _power(attacker)
-                continue
-            blocker = live_blockers[0]
-            attacker.damage_marked += _power(blocker)
-            blocker.damage_marked += _power(attacker)
-        if damage_to_player:
-            self.state.players[0].life -= damage_to_player
-        self.state.check_sbas()
-        self._log("opponent", "attack", f"Dealt {damage_to_player} damage")
+        result = resolve_combat_damage(
+            self.state,
+            attacking_player_idx=1,
+            defending_player_idx=0,
+            attacker_ids=self.pending_opp_attackers,
+            blocker_assignments=self.pending_blockers,
+        )
+        self._log("opponent", "attack", f"Dealt {result.damage_to_player} damage")
         self._check_game_over()
 
     def _finish_opponent_turn(self) -> None:
@@ -739,15 +733,6 @@ def _target_player(targets: list[Target]) -> int | None:
     """Return the first player target index."""
     target = next((t for t in targets if t.player_idx is not None), None)
     return target.player_idx if target is not None else None
-
-
-def _can_attack(perm: Permanent) -> bool:
-    return "Creature" in perm.type_line and not perm.tapped and not perm.sick
-
-
-def _power(perm: Permanent) -> int:
-    base = perm.card_info.numeric_power if perm.card_info is not None else 0
-    return base + perm.counters.get("+1/+1", 0) - perm.counters.get("-1/-1", 0)
 
 
 def _last_creature(permanents: list[Permanent]) -> Permanent | None:

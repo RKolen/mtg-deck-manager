@@ -3,7 +3,8 @@
 from engine.game import create_game, get_game, remove_game
 from engine.core.game_object import CardObject
 from engine.core.zones import Zone
-from tests.conftest import make_card, make_deck, make_land
+from tests.conftest import make_card, make_creature, make_deck, make_land
+from tests.conftest import place_on_battlefield
 
 
 def test_create_game_returns_legacy_client_shape():
@@ -108,6 +109,49 @@ def test_spell_with_illegal_target_fizzles_through_stack():
     assert not data["stack"]
     assert data["opponentLife"] == 20
     assert "Shock" in data["playerGraveyard"]
+
+
+def test_player_attack_uses_combat_rules_for_unblocked_damage():
+    """A confirmed player attack taps the attacker and damages the opponent."""
+    memnite = make_card(
+        name="Memnite",
+        type_line="Artifact Creature — Construct",
+        cmc=0,
+        pt="1/1",
+        mana_cost="",
+    )
+    game = create_game([memnite for _ in range(20)], make_deck(lands=20))
+    game.action_keep()
+    game.action_cast(0)
+    attacker = game.state.zones.creatures_of(0)[0]
+    attacker.sick = False
+    game.action_go_to_attack()
+    game.action_toggle_attacker(str(attacker.obj_id))
+    data = game.action_confirm_attack()
+    assert data["phase"] == "main2"
+    assert data["opponentLife"] == 19
+    assert data["playerBattlefield"][0]["tapped"]
+
+
+def test_player_blocker_prevents_opponent_combat_damage():
+    """Opponent combat delegates blocker damage and SBA cleanup to combat rules."""
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    blocker = place_on_battlefield(make_creature("Bear", 2, 2), 0, game.state.zones)
+    attacker = place_on_battlefield(make_creature("Goblin", 2, 2), 1, game.state.zones)
+    blocker.sick = False
+    attacker.sick = False
+
+    data = game.action_end_turn()
+    assert data["phase"] == "declare_blockers"
+    assert data["opponentAttackers"][0]["tapped"]
+
+    game.action_assign_blocker(str(blocker.obj_id), str(attacker.obj_id))
+    data = game.action_confirm_blocks()
+    assert data["phase"] == "draw"
+    assert data["playerLife"] == 20
+    assert blocker not in game.state.zones.battlefield
+    assert attacker not in game.state.zones.battlefield
 
 
 def test_end_turn_returns_to_player_draw_when_opponent_has_no_attackers():
