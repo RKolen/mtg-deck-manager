@@ -73,10 +73,11 @@ def resolve_combat_damage(
     tap_attackers(attackers)
 
     for attacker in attackers:
-        blocker = _first_blocker_for(game, defending_player_idx, attacker, blocker_assignments)
-        if blocker is None:
+        blockers = _blockers_for(game, defending_player_idx, attacker, blocker_assignments)
+        if not _has_enough_blockers(attacker, blockers):
             result.damage_to_player += power(attacker)
             continue
+        blocker = blockers[0]
         result.blocked_attackers += 1
         attacker.damage_marked += power(blocker)
         blocker.damage_marked += power(attacker)
@@ -99,12 +100,13 @@ def _selected_attackers(
     ]
 
 
-def _first_blocker_for(
+def _blockers_for(
     game: GameState,
     defending_player_idx: int,
     attacker: Permanent,
     blocker_assignments: dict[str, str],
-) -> Permanent | None:
+) -> list[Permanent]:
+    blockers = []
     for blocker_uid, attacker_uid in blocker_assignments.items():
         if attacker_uid != str(attacker.obj_id):
             continue
@@ -114,8 +116,14 @@ def _first_blocker_for(
             and blocker.controller_idx == defending_player_idx
             and legal_blocker(blocker, attacker, game)
         ):
-            return blocker
-    return None
+            blockers.append(blocker)
+    return blockers
+
+
+def _has_enough_blockers(attacker: Permanent, blockers: list[Permanent]) -> bool:
+    if _has_keyword(attacker, "menace"):
+        return len(blockers) >= 2
+    return bool(blockers)
 
 
 def _find_permanent(game: GameState, uid: str) -> Permanent | None:

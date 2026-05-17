@@ -162,6 +162,53 @@ def test_resolve_combat_damage_marks_blocker_and_attacker_damage():
     assert blocker.damage_marked == 3
 
 
+def test_menace_attacker_needs_two_blockers():
+    """A menace creature is not blocked by only one creature."""
+    game = fresh_game()
+    attacker = place_on_battlefield(
+        make_creature("Menacer", 2, 2, oracle="Menace"),
+        1,
+        game.zones,
+    )
+    blocker = place_on_battlefield(make_creature("Blocker", 2, 2), 0, game.zones)
+    result = resolve_combat_damage(
+        game,
+        attacking_player_idx=1,
+        defending_player_idx=0,
+        attacker_ids=[str(attacker.obj_id)],
+        blocker_assignments={str(blocker.obj_id): str(attacker.obj_id)},
+    )
+    assert result.damage_to_player == 2
+    assert result.blocked_attackers == 0
+    assert game.players[0].life == 18
+
+
+def test_menace_attacker_can_be_blocked_by_two_creatures():
+    """Two legal blockers satisfy menace."""
+    game = fresh_game()
+    attacker = place_on_battlefield(
+        make_creature("Menacer", 2, 2, oracle="Menace"),
+        1,
+        game.zones,
+    )
+    first = place_on_battlefield(make_creature("First", 2, 2), 0, game.zones)
+    second = place_on_battlefield(make_creature("Second", 2, 2), 0, game.zones)
+    result = resolve_combat_damage(
+        game,
+        attacking_player_idx=1,
+        defending_player_idx=0,
+        attacker_ids=[str(attacker.obj_id)],
+        blocker_assignments={
+            str(first.obj_id): str(attacker.obj_id),
+            str(second.obj_id): str(attacker.obj_id),
+        },
+    )
+    assert result.damage_to_player == 0
+    assert result.blocked_attackers == 1
+    assert game.players[0].life == 20
+    assert first.damage_marked == 2
+
+
 def test_resolve_combat_damage_ignores_invalid_blocker_assignments():
     """Missing or wrong-controller blockers do not stop combat damage."""
     game = fresh_game()
