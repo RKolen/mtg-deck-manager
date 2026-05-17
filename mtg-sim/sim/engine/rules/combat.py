@@ -85,8 +85,9 @@ def resolve_combat_damage(
 
     for attacker in attackers:
         blockers = _blockers_for(game, defending_player_idx, attacker, blocker_assignments)
-        _resolve_first_strike_damage(context, attacker, blockers)
-        _resolve_regular_combat_damage(context, attacker, blockers)
+        is_blocked = _has_enough_blockers(attacker, blockers)
+        _resolve_first_strike_damage(context, attacker, blockers, is_blocked)
+        _resolve_regular_combat_damage(context, attacker, blockers, is_blocked)
 
     if result.damage_to_player:
         game.players[defending_player_idx].life -= result.damage_to_player
@@ -98,12 +99,15 @@ def _resolve_first_strike_damage(
     context: _CombatContext,
     attacker: Permanent,
     blockers: list[Permanent],
+    is_blocked: bool,
 ) -> None:
     """Resolve first-strike damage, then SBAs before regular damage."""
-    first_strikers = [perm for perm in [attacker, *blockers] if _has_first_strike(perm)]
+    first_strikers = [
+        perm for perm in [attacker, *blockers] if _has_early_strike(perm)
+    ]
     if not first_strikers:
         return
-    _assign_combat_damage(context, attacker, blockers, first_strike_step=True)
+    _assign_combat_damage(context, attacker, blockers, is_blocked, first_strike_step=True)
     context.game.check_sbas()
 
 
@@ -111,6 +115,7 @@ def _resolve_regular_combat_damage(
     context: _CombatContext,
     attacker: Permanent,
     blockers: list[Permanent],
+    is_blocked: bool,
 ) -> None:
     """Resolve regular combat damage from surviving non-first-strikers."""
     if attacker not in context.game.zones.battlefield:
@@ -118,17 +123,24 @@ def _resolve_regular_combat_damage(
     live_blockers = [
         blocker for blocker in blockers if blocker in context.game.zones.battlefield
     ]
-    _assign_combat_damage(context, attacker, live_blockers, first_strike_step=False)
+    _assign_combat_damage(
+        context,
+        attacker,
+        live_blockers,
+        is_blocked,
+        first_strike_step=False,
+    )
 
 
 def _assign_combat_damage(
     context: _CombatContext,
     attacker: Permanent,
     blockers: list[Permanent],
+    is_blocked: bool,
     first_strike_step: bool,
 ) -> None:
     attacker_deals = _deals_in_step(attacker, first_strike_step)
-    if not _has_enough_blockers(attacker, blockers):
+    if not is_blocked:
         if attacker_deals:
             damage = power(attacker)
             context.result.damage_to_player += damage
@@ -193,12 +205,16 @@ def _has_enough_blockers(attacker: Permanent, blockers: list[Permanent]) -> bool
 
 def _deals_in_step(perm: Permanent, first_strike_step: bool) -> bool:
     if first_strike_step:
-        return _has_first_strike(perm)
-    return not _has_first_strike(perm)
+        return _has_early_strike(perm)
+    return _has_double_strike(perm) or not _has_early_strike(perm)
 
 
-def _has_first_strike(perm: Permanent) -> bool:
-    return _has_keyword(perm, "first strike")
+def _has_early_strike(perm: Permanent) -> bool:
+    return _has_keyword(perm, "first strike") or _has_double_strike(perm)
+
+
+def _has_double_strike(perm: Permanent) -> bool:
+    return _has_keyword(perm, "double strike")
 
 
 def _apply_lifelink(

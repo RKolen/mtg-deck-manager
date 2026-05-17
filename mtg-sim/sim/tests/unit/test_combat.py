@@ -314,6 +314,69 @@ def test_first_strike_deathtouch_kills_before_return_damage():
     assert attacker.damage_marked == 0
 
 
+def test_double_strike_unblocked_deals_damage_twice():
+    """Double strike deals combat damage in both damage steps."""
+    game = fresh_game()
+    attacker = place_on_battlefield(
+        make_creature("Berserker", 2, 2, oracle="Double strike"),
+        1,
+        game.zones,
+    )
+    result = resolve_combat_damage(
+        game,
+        attacking_player_idx=1,
+        defending_player_idx=0,
+        attacker_ids=[str(attacker.obj_id)],
+        blocker_assignments={},
+    )
+    assert result.damage_to_player == 4
+    assert game.players[0].life == 16
+
+
+def test_double_strike_attacker_stays_blocked_after_killing_blocker():
+    """A blocked double striker without trample does not hit the player later."""
+    game = fresh_game()
+    attacker = place_on_battlefield(
+        make_creature("Berserker", 2, 2, oracle="Double strike"),
+        1,
+        game.zones,
+    )
+    blocker = place_on_battlefield(make_creature("Bear", 2, 2), 0, game.zones)
+    result = resolve_combat_damage(
+        game,
+        attacking_player_idx=1,
+        defending_player_idx=0,
+        attacker_ids=[str(attacker.obj_id)],
+        blocker_assignments={str(blocker.obj_id): str(attacker.obj_id)},
+    )
+    assert result.damage_to_player == 0
+    assert blocker not in game.zones.battlefield
+    assert attacker in game.zones.battlefield
+    assert attacker.damage_marked == 0
+
+
+def test_double_strike_trample_hits_player_after_killing_blocker():
+    """A trample double striker can assign regular damage after blockers die."""
+    game = fresh_game()
+    attacker = place_on_battlefield(
+        make_creature("Berserker", 2, 2, oracle="Double strike, trample"),
+        1,
+        game.zones,
+    )
+    blocker = place_on_battlefield(make_creature("Bear", 2, 2), 0, game.zones)
+    result = resolve_combat_damage(
+        game,
+        attacking_player_idx=1,
+        defending_player_idx=0,
+        attacker_ids=[str(attacker.obj_id)],
+        blocker_assignments={str(blocker.obj_id): str(attacker.obj_id)},
+    )
+    assert result.damage_to_player == 2
+    assert game.players[0].life == 18
+    assert blocker not in game.zones.battlefield
+    assert attacker in game.zones.battlefield
+
+
 def test_indestructible_survives_deathtouch_damage():
     """Indestructible still ignores lethal deathtouch damage."""
     game = fresh_game()
