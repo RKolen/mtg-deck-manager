@@ -4,8 +4,9 @@ from engine.core.game_object import TriggeredAbilityOnStack
 from engine.core.game_state import GameState
 from engine.core.turn_structure import Step
 from engine.core.zones import Zone
-from engine.rules.triggers import TriggerKey, is_attacks, is_beginning_of_upkeep, is_dies
-from engine.rules.triggers import is_blocks, is_enters_battlefield
+from engine.rules.triggers import TriggerKey, is_attacks, is_beginning_of_combat
+from engine.rules.triggers import is_beginning_of_upkeep, is_blocks, is_dies
+from engine.rules.triggers import is_enters_battlefield
 from tests.conftest import fresh_game, make_creature, place_on_battlefield
 
 
@@ -147,6 +148,47 @@ def test_upkeep_trigger_does_not_fire_during_draw_step():
     )
 
     game.fire_step_triggers(Step.DRAW)
+
+    assert game.stack.top is None
+
+
+def test_beginning_of_combat_trigger_goes_on_stack_from_step_event():
+    """Beginning-of-combat triggers fire from explicit step events."""
+    game = fresh_game()
+    captain = place_on_battlefield(
+        make_creature("Battle Captain", 2, 2),
+        0,
+        game.zones,
+    )
+    game.trigger_registry.register(
+        captain,
+        TriggerKey.BEGINNING_OF_COMBAT,
+        is_beginning_of_combat,
+    )
+
+    game.fire_step_triggers(Step.BEGIN_COMBAT)
+
+    trigger = _top_trigger(game)
+    assert trigger.source_permanent_id == captain.obj_id
+    assert trigger.controller_idx == 0
+    assert trigger.trigger_key == TriggerKey.BEGINNING_OF_COMBAT.value
+
+
+def test_beginning_of_combat_trigger_does_not_fire_during_upkeep():
+    """Beginning-of-combat triggers ignore other beginning steps."""
+    game = fresh_game()
+    captain = place_on_battlefield(
+        make_creature("Battle Captain", 2, 2),
+        0,
+        game.zones,
+    )
+    game.trigger_registry.register(
+        captain,
+        TriggerKey.BEGINNING_OF_COMBAT,
+        is_beginning_of_combat,
+    )
+
+    game.fire_step_triggers(Step.UPKEEP)
 
     assert game.stack.top is None
 

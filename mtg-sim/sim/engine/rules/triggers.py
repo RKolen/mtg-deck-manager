@@ -23,6 +23,7 @@ class TriggerKey(StrEnum):
     ATTACKS = "attacks"
     BLOCKS = "blocks"
     BEGINNING_OF_UPKEEP = "beginning_of_upkeep"
+    BEGINNING_OF_COMBAT = "beginning_of_combat"
 
 
 @dataclass(frozen=True)
@@ -146,6 +147,11 @@ def is_blocks(event: TriggerEvent, _game: GameState) -> bool:
 def is_beginning_of_upkeep(event: TriggerEvent, _game: GameState) -> bool:
     """Return True when upkeep begins."""
     return isinstance(event, StepTriggerEvent) and event.step == Step.UPKEEP
+
+
+def is_beginning_of_combat(event: TriggerEvent, _game: GameState) -> bool:
+    """Return True when beginning of combat begins."""
+    return isinstance(event, StepTriggerEvent) and event.step == Step.BEGIN_COMBAT
 
 
 def _to_stack_object(definition: TriggerDefinition) -> TriggeredAbilityOnStack:
