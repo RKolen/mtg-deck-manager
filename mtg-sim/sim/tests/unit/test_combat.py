@@ -162,6 +162,53 @@ def test_resolve_combat_damage_marks_blocker_and_attacker_damage():
     assert blocker.damage_marked == 3
 
 
+def test_lifelink_attacker_gains_life_from_player_damage():
+    """Lifelink gains life when combat damage is dealt to a player."""
+    game = fresh_game()
+    attacker = place_on_battlefield(
+        make_creature("Vampire", 3, 3, oracle="Lifelink"),
+        0,
+        game.zones,
+    )
+    result = resolve_combat_damage(
+        game,
+        attacking_player_idx=0,
+        defending_player_idx=1,
+        attacker_ids=[str(attacker.obj_id)],
+        blocker_assignments={},
+    )
+    assert result.damage_to_player == 3
+    assert game.players[0].life == 23
+    assert game.players[1].life == 17
+
+
+def test_lifelink_attacker_and_blocker_gain_life_from_creature_damage():
+    """Lifelink works for combat damage dealt to creatures."""
+    game = fresh_game()
+    attacker = place_on_battlefield(
+        make_creature("Attacker", 3, 3, oracle="Lifelink"),
+        1,
+        game.zones,
+    )
+    blocker = place_on_battlefield(
+        make_creature("Blocker", 2, 4, oracle="Lifelink"),
+        0,
+        game.zones,
+    )
+    result = resolve_combat_damage(
+        game,
+        attacking_player_idx=1,
+        defending_player_idx=0,
+        attacker_ids=[str(attacker.obj_id)],
+        blocker_assignments={str(blocker.obj_id): str(attacker.obj_id)},
+    )
+    assert result.damage_to_player == 0
+    assert game.players[0].life == 22
+    assert game.players[1].life == 23
+    assert attacker.damage_marked == 2
+    assert blocker.damage_marked == 3
+
+
 def test_menace_attacker_needs_two_blockers():
     """A menace creature is not blocked by only one creature."""
     game = fresh_game()

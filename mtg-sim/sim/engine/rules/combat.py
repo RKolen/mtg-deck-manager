@@ -74,13 +74,18 @@ def resolve_combat_damage(
 
     for attacker in attackers:
         blockers = _blockers_for(game, defending_player_idx, attacker, blocker_assignments)
+        attacker_power = power(attacker)
         if not _has_enough_blockers(attacker, blockers):
-            result.damage_to_player += power(attacker)
+            result.damage_to_player += attacker_power
+            _apply_lifelink(game, attacking_player_idx, attacker, attacker_power)
             continue
         blocker = blockers[0]
+        blocker_power = power(blocker)
         result.blocked_attackers += 1
-        attacker.damage_marked += power(blocker)
-        blocker.damage_marked += power(attacker)
+        attacker.damage_marked += blocker_power
+        blocker.damage_marked += attacker_power
+        _apply_lifelink(game, attacking_player_idx, attacker, attacker_power)
+        _apply_lifelink(game, defending_player_idx, blocker, blocker_power)
 
     if result.damage_to_player:
         game.players[defending_player_idx].life -= result.damage_to_player
@@ -124,6 +129,16 @@ def _has_enough_blockers(attacker: Permanent, blockers: list[Permanent]) -> bool
     if _has_keyword(attacker, "menace"):
         return len(blockers) >= 2
     return bool(blockers)
+
+
+def _apply_lifelink(
+    game: GameState,
+    controller_idx: int,
+    source: Permanent,
+    damage_dealt: int,
+) -> None:
+    if damage_dealt > 0 and _has_keyword(source, "lifelink"):
+        game.players[controller_idx].life += damage_dealt
 
 
 def _find_permanent(game: GameState, uid: str) -> Permanent | None:
