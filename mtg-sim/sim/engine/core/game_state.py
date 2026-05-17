@@ -22,6 +22,7 @@ from engine.core.zones import ZoneManager, ZoneMoveEvent
 from engine.rules.state_based import check_sbas
 from engine.rules.stack import Stack
 from engine.rules.triggers import AttackTriggerEvent, BlockTriggerEvent
+from engine.rules.triggers import LifeGainedTriggerEvent
 from engine.rules.triggers import StepTriggerEvent, TriggerRegistry, spell_cast_event
 
 
@@ -130,6 +131,25 @@ class GameState:
         """Put triggered abilities for a cast spell on the stack."""
         self.trigger_registry.put_triggers_on_stack(
             spell_cast_event(spell, targets),
+            self,
+        )
+
+    def gain_life(
+        self,
+        player_idx: int,
+        amount: int,
+        source_permanent_id: int | None = None,
+    ) -> None:
+        """Gain life and put matching life-gain triggers on the stack."""
+        if amount <= 0:
+            return
+        self.players[player_idx].life += amount
+        self.trigger_registry.put_triggers_on_stack(
+            LifeGainedTriggerEvent(
+                player_idx=player_idx,
+                amount=amount,
+                source_permanent_id=source_permanent_id,
+            ),
             self,
         )
 

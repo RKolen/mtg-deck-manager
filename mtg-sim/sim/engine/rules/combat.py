@@ -224,7 +224,7 @@ def _apply_lifelink(
     damage_dealt: int,
 ) -> None:
     if damage_dealt > 0 and _has_keyword(source, "lifelink"):
-        game.players[controller_idx].life += damage_dealt
+        game.gain_life(controller_idx, damage_dealt, source.obj_id)
 
 
 def _assign_attacker_damage(

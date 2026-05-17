@@ -7,7 +7,8 @@ from engine.core.zones import Zone
 from engine.rules.triggers import TriggerKey, is_attacks, is_beginning_of_combat
 from engine.rules.triggers import is_beginning_of_upkeep, is_blocks, is_dies
 from engine.rules.triggers import is_draws_card, is_end_step, is_enters_battlefield
-from engine.rules.triggers import is_leaves_battlefield, is_noncreature_nonland_spell_cast
+from engine.rules.triggers import is_controller_gains_life, is_leaves_battlefield
+from engine.rules.triggers import is_life_gained, is_noncreature_nonland_spell_cast
 from engine.rules.triggers import is_spell_cast, is_spell_targeting_source
 from engine.rules.triggers import spell_cast_event
 from tests.conftest import add_to_hand, add_to_library, fresh_game, make_card
@@ -365,6 +366,59 @@ def test_draw_card_trigger_does_not_fire_from_draw_step_event():
 
     game.fire_step_triggers(Step.DRAW)
 
+    assert game.stack.top is None
+
+
+def test_life_gained_trigger_goes_on_stack_from_gain_life():
+    """Life-gain triggers fire from GameState.gain_life."""
+    game = fresh_game()
+    observer = place_on_battlefield(
+        make_creature("Life Observer", 1, 1),
+        0,
+        game.zones,
+    )
+    game.trigger_registry.register(observer, TriggerKey.LIFE_GAINED, is_life_gained)
+
+    game.gain_life(1, 3)
+
+    trigger = _top_trigger(game)
+    assert game.players[1].life == 23
+    assert trigger.source_permanent_id == observer.obj_id
+    assert trigger.trigger_key == TriggerKey.LIFE_GAINED.value
+
+
+def test_controller_gains_life_trigger_ignores_opponents_life_gain():
+    """Controller-specific life-gain triggers only fire for their controller."""
+    game = fresh_game()
+    observer = place_on_battlefield(
+        make_creature("Life Observer", 1, 1),
+        0,
+        game.zones,
+    )
+    game.trigger_registry.register(
+        observer,
+        TriggerKey.LIFE_GAINED,
+        is_controller_gains_life,
+    )
+
+    game.gain_life(1, 3)
+
+    assert game.stack.top is None
+
+
+def test_life_gained_trigger_ignores_zero_life_gain():
+    """Zero or negative life gain is not a life-gain event."""
+    game = fresh_game()
+    observer = place_on_battlefield(
+        make_creature("Life Observer", 1, 1),
+        0,
+        game.zones,
+    )
+    game.trigger_registry.register(observer, TriggerKey.LIFE_GAINED, is_life_gained)
+
+    game.gain_life(0, 0)
+
+    assert game.players[0].life == 20
     assert game.stack.top is None
 
 

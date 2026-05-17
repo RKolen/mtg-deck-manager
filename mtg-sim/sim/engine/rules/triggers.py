@@ -29,6 +29,7 @@ class TriggerKey(StrEnum):
     END_STEP = "end_step"
     DRAWS_CARD = "draws_card"
     SPELL_CAST = "spell_cast"
+    LIFE_GAINED = "life_gained"
 
 
 @dataclass(frozen=True)
@@ -67,12 +68,22 @@ class SpellCastTriggerEvent:
     targets: tuple[Target, ...] = ()
 
 
+@dataclass(frozen=True)
+class LifeGainedTriggerEvent:
+    """Synthetic event emitted when a player gains life."""
+
+    player_idx: int
+    amount: int
+    source_permanent_id: int | None = None
+
+
 TriggerEvent = (
     ZoneMoveEvent
     | StepTriggerEvent
     | AttackTriggerEvent
     | BlockTriggerEvent
     | SpellCastTriggerEvent
+    | LifeGainedTriggerEvent
 )
 TriggerCondition = Callable[[TriggerEvent, "GameState", "TriggerDefinition"], bool]
 
@@ -239,6 +250,28 @@ def is_spell_cast(
 ) -> bool:
     """Return True when a spell is cast."""
     return isinstance(event, SpellCastTriggerEvent)
+
+
+def is_life_gained(
+    event: TriggerEvent,
+    _game: GameState,
+    _definition: TriggerDefinition,
+) -> bool:
+    """Return True when a player gains life."""
+    return isinstance(event, LifeGainedTriggerEvent) and event.amount > 0
+
+
+def is_controller_gains_life(
+    event: TriggerEvent,
+    _game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Return True when this trigger's controller gains life."""
+    return (
+        isinstance(event, LifeGainedTriggerEvent)
+        and event.player_idx == definition.controller_idx
+        and event.amount > 0
+    )
 
 
 def is_noncreature_nonland_spell_cast(
