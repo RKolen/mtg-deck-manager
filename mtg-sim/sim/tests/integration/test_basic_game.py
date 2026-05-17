@@ -119,6 +119,44 @@ def test_end_turn_returns_to_player_draw_when_opponent_has_no_attackers():
     assert data["turn"] == 2
 
 
+def test_opponent_creature_cast_uses_stack_and_resolves():
+    """Opponent creature casting uses the same stack-backed pipeline."""
+    memnite = make_card(
+        name="Memnite",
+        type_line="Artifact Creature — Construct",
+        cmc=0,
+        pt="1/1",
+        mana_cost="",
+    )
+    game = create_game(make_deck(lands=20), [memnite for _ in range(20)])
+    game.action_keep()
+    data = game.action_end_turn()
+    assert not data["stack"]
+    assert len(data["opponentBattlefield"]) == 1
+    assert data["opponentBattlefield"][0]["name"] == "Memnite"
+    assert any(
+        entry["actor"] == "opponent" and entry["detail"] == "Memnite on stack"
+        for entry in data["log"]
+    )
+
+
+def test_opponent_burn_cast_uses_stack_and_damages_player():
+    """Opponent burn spell resolves through the stack and hits the player."""
+    shock = make_card(
+        name="Shock",
+        type_line="Instant",
+        cmc=0,
+        oracle="Shock deals 2 damage to any target.",
+        mana_cost="",
+    )
+    game = create_game(make_deck(lands=20), [shock for _ in range(20)])
+    game.action_keep()
+    data = game.action_end_turn()
+    assert not data["stack"]
+    assert data["playerLife"] == 18
+    assert "Shock" in data["opponentGraveyard"]
+
+
 def test_game_session_store_round_trip_and_remove():
     """create_game registers sessions retrievable by FastAPI routes."""
     game = create_game(make_deck(lands=20), make_deck(lands=20))

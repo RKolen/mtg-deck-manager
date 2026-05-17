@@ -167,7 +167,8 @@ class InteractiveGame:
             self.state.players[0].life -= life_cost
             self._log("player", "phyrexian", f"Paid {life_cost} life for {card_info.name}")
         self._put_spell_on_stack(
-            card,
+            player_idx=0,
+            card=card,
             target_uid=target_uid,
             target_player=target_player,
         )
@@ -319,15 +320,16 @@ class InteractiveGame:
 
     def _put_spell_on_stack(
         self,
+        player_idx: int,
         card: CardObject,
         target_uid: str | None,
         target_player: int | None,
     ) -> None:
         """Move a cast spell from hand to the stack."""
         targets = _targets_from_request(target_uid, target_player)
-        self.state.zones.play_from_hand(card, 0)
+        self.state.zones.play_from_hand(card, player_idx)
         self.state.stack.push(SpellOnStack(
-            controller_idx=0,
+            controller_idx=player_idx,
             owner_idx=card.owner_idx,
             source=card,
             targets=targets,
@@ -354,17 +356,18 @@ class InteractiveGame:
         assert card is not None
         card_info = _require_card_info(card)
         category = spell_category(card_info)
-        if category == "creature" and spell.controller_idx == 0:
-            self.state.zones.enter_battlefield(card, 0, "resolve")
+        controller_idx = spell.controller_idx
+        if category == "creature":
+            self.state.zones.enter_battlefield(card, controller_idx, "resolve")
             return f"Cast creature {card_info.name}"
-        if category == "burn" and spell.controller_idx == 0:
-            return self._resolve_burn(card, spell.targets)
-        if category == "pump" and spell.controller_idx == 0:
-            return self._resolve_pump(card, spell.targets)
-        if category == "removal" and spell.controller_idx == 0:
+        if category == "burn":
+            return self._resolve_burn(card, spell.targets, controller_idx)
+        if category == "pump":
+            return self._resolve_pump(card, spell.targets, controller_idx)
+        if category == "removal":
             return self._resolve_removal(card, spell.targets)
-        if category == "draw" and spell.controller_idx == 0:
-            return self._resolve_draw(card)
+        if category == "draw":
+            return self._resolve_draw(card, controller_idx)
         self._move_card_to_graveyard(card)
         return f"Cast {card_info.name}"
 
@@ -372,15 +375,19 @@ class InteractiveGame:
         self,
         card: CardObject,
         targets: list[Target],
+        controller_idx: int,
     ) -> str:
         card_info = _require_card_info(card)
         damage = parse_damage(card_info.oracle_text or "") or max(1, int(card_info.cmc))
         self._move_card_to_graveyard(card)
         target_player = _target_player(targets)
         target_uid = _target_uid(targets)
-        if target_player == 1 or target_uid is None:
-            self.state.players[1].life -= damage
-            return f"{card_info.name} dealt {damage} damage to opponent"
+        default_player = 1 - controller_idx
+        if target_uid is None:
+            victim_idx = target_player if target_player is not None else default_player
+            self.state.players[victim_idx].life -= damage
+            label = "opponent" if victim_idx == 1 else "you"
+            return f"{card_info.name} dealt {damage} damage to {label}"
         target = self._find_permanent(target_uid)
         if target is None:
             return f"Cast {card_info.name} (no valid target)"
@@ -388,13 +395,21 @@ class InteractiveGame:
         self.state.check_sbas()
         return f"{card_info.name} dealt {damage} damage to {target.name}"
 
-    def _resolve_pump(self, card: CardObject, targets: list[Target]) -> str:
+    def _resolve_pump(
+        self,
+        card: CardObject,
+        targets: list[Target],
+        controller_idx: int,
+    ) -> str:
         card_info = _require_card_info(card)
         power, toughness = parse_pump(card_info.oracle_text or "")
         if power == 0 and toughness == 0:
             power, toughness = 1, 1
         target_uid = _target_uid(targets)
-        target = self._find_permanent(target_uid) or _last_creature(self._permanents(0))
+        target = (
+            self._find_permanent(target_uid)
+            or _last_creature(self._permanents(controller_idx))
+        )
         self._move_card_to_graveyard(card)
         if target is None:
             return f"Cast {card_info.name} (no target)"
@@ -411,10 +426,10 @@ class InteractiveGame:
         self.state.zones.leave_battlefield(target, Zone.GRAVEYARD, "destroy")
         return f"{card_info.name} destroyed {target.name}"
 
-    def _resolve_draw(self, card: CardObject) -> str:
+    def _resolve_draw(self, card: CardObject, controller_idx: int) -> str:
         card_info = _require_card_info(card)
         count = parse_draw(card_info.oracle_text or "") or 1
-        drawn = self._draw_cards(0, count)
+        drawn = self._draw_cards(controller_idx, count)
         self._move_card_to_graveyard(card)
         return f"{card_info.name} drew {_card_names(drawn) or 'no cards'}"
 
@@ -460,24 +475,15 @@ class InteractiveGame:
         mana_needed, _ = _payment_requirements(card_info)
         if not self._tap_lands_for_mana(1, mana_needed):
             return
-        self._resolve_opponent_spell(card)
-
-    def _resolve_opponent_spell(self, card: CardObject) -> None:
-        """Resolve one simple AI spell."""
-        card_info = _require_card_info(card)
-        category = spell_category(card_info)
-        if category == "creature":
-            self.state.zones.enter_battlefield(card, 1, "cast", Zone.HAND)
-            self._log("opponent", "cast", card_info.name)
-            return
-        self.state.zones.play_from_hand(card, 1)
-        self._move_card_to_graveyard(card)
-        if category == "burn":
-            damage = parse_damage(card_info.oracle_text or "") or max(1, int(card_info.cmc))
-            self.state.players[0].life -= damage
-            self._log("opponent", "burn", f"{card_info.name} dealt {damage} damage to you")
-            return
-        self._log("opponent", "cast", card_info.name)
+        target_player = 0 if spell_category(card_info) == "burn" else None
+        self._put_spell_on_stack(
+            player_idx=1,
+            card=card,
+            target_uid=None,
+            target_player=target_player,
+        )
+        self._log("opponent", "cast", f"{card_info.name} on stack")
+        self._auto_pass_stack()
 
     def _start_opponent_attack(self) -> None:
         """Declare opponent attackers or finish the opponent turn."""
