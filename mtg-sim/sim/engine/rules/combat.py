@@ -54,9 +54,10 @@ def eligible_attackers(permanents: list[Permanent]) -> list[Permanent]:
 
 
 def tap_attackers(attackers: list[Permanent]) -> None:
-    """Tap attackers as part of declaring them."""
+    """Tap attackers as part of declaring them unless they have vigilance."""
     for attacker in attackers:
-        attacker.tapped = True
+        if not _has_keyword(attacker, "vigilance"):
+            attacker.tapped = True
 
 
 def resolve_combat_damage(

@@ -96,6 +96,39 @@ def test_tap_attackers_marks_each_attacker_tapped():
     assert attacker.tapped
 
 
+def test_tap_attackers_leaves_vigilance_attacker_untapped():
+    """Vigilance attackers do not tap when declared as attackers."""
+    game = fresh_game()
+    attacker = place_on_battlefield(
+        make_creature("Sentinel", 2, 2, oracle="Vigilance"),
+        0,
+        game.zones,
+        sick=False,
+    )
+    tap_attackers([attacker])
+    assert not attacker.tapped
+
+
+def test_vigilance_attacker_deals_damage_without_tapping():
+    """Vigilance does not prevent combat damage, only attacker tapping."""
+    game = fresh_game()
+    attacker = place_on_battlefield(
+        make_creature("Sentinel", 2, 2, oracle="Vigilance"),
+        0,
+        game.zones,
+    )
+    result = resolve_combat_damage(
+        game,
+        attacking_player_idx=0,
+        defending_player_idx=1,
+        attacker_ids=[str(attacker.obj_id)],
+        blocker_assignments={},
+    )
+    assert result.damage_to_player == 2
+    assert game.players[1].life == 18
+    assert not attacker.tapped
+
+
 def test_resolve_combat_damage_deals_unblocked_damage_to_defender():
     """Unblocked attackers damage the defending player."""
     game = fresh_game()
