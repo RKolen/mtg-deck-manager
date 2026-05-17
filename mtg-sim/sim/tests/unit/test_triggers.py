@@ -6,8 +6,9 @@ from engine.core.turn_structure import Step
 from engine.core.zones import Zone
 from engine.rules.triggers import TriggerKey, is_attacks, is_beginning_of_combat
 from engine.rules.triggers import is_beginning_of_upkeep, is_blocks, is_dies
-from engine.rules.triggers import is_enters_battlefield
-from tests.conftest import fresh_game, make_creature, place_on_battlefield
+from engine.rules.triggers import is_draws_card, is_end_step, is_enters_battlefield
+from tests.conftest import add_to_library, fresh_game, make_card, make_creature
+from tests.conftest import place_on_battlefield
 
 
 def test_etb_trigger_goes_on_stack_from_game_state_listener():
@@ -189,6 +190,81 @@ def test_beginning_of_combat_trigger_does_not_fire_during_upkeep():
     )
 
     game.fire_step_triggers(Step.UPKEEP)
+
+    assert game.stack.top is None
+
+
+def test_end_step_trigger_goes_on_stack_from_step_event():
+    """End-step triggers fire from explicit step events."""
+    game = fresh_game()
+    oracle = place_on_battlefield(
+        make_creature("End Step Oracle", 1, 1),
+        0,
+        game.zones,
+    )
+    game.trigger_registry.register(
+        oracle,
+        TriggerKey.END_STEP,
+        is_end_step,
+    )
+
+    game.fire_step_triggers(Step.END_STEP)
+
+    trigger = _top_trigger(game)
+    assert trigger.source_permanent_id == oracle.obj_id
+    assert trigger.controller_idx == 0
+    assert trigger.trigger_key == TriggerKey.END_STEP.value
+
+
+def test_end_step_trigger_does_not_fire_during_cleanup():
+    """End-step triggers ignore cleanup."""
+    game = fresh_game()
+    oracle = place_on_battlefield(
+        make_creature("End Step Oracle", 1, 1),
+        0,
+        game.zones,
+    )
+    game.trigger_registry.register(
+        oracle,
+        TriggerKey.END_STEP,
+        is_end_step,
+    )
+
+    game.fire_step_triggers(Step.CLEANUP)
+
+    assert game.stack.top is None
+
+
+def test_draw_card_trigger_goes_on_stack_from_draw_event():
+    """Draw-card triggers fire from library-to-hand draw events."""
+    game = fresh_game()
+    observer = place_on_battlefield(
+        make_creature("Draw Observer", 1, 1),
+        0,
+        game.zones,
+    )
+    add_to_library(make_card("Drawn Card"), 0, game.zones)
+    game.trigger_registry.register(observer, TriggerKey.DRAWS_CARD, is_draws_card)
+
+    game.zones.draw(0)
+
+    trigger = _top_trigger(game)
+    assert trigger.source_permanent_id == observer.obj_id
+    assert trigger.controller_idx == 0
+    assert trigger.trigger_key == TriggerKey.DRAWS_CARD.value
+
+
+def test_draw_card_trigger_does_not_fire_from_draw_step_event():
+    """Draw-card triggers require an actual card draw event."""
+    game = fresh_game()
+    observer = place_on_battlefield(
+        make_creature("Draw Observer", 1, 1),
+        0,
+        game.zones,
+    )
+    game.trigger_registry.register(observer, TriggerKey.DRAWS_CARD, is_draws_card)
+
+    game.fire_step_triggers(Step.DRAW)
 
     assert game.stack.top is None
 

@@ -24,6 +24,8 @@ class TriggerKey(StrEnum):
     BLOCKS = "blocks"
     BEGINNING_OF_UPKEEP = "beginning_of_upkeep"
     BEGINNING_OF_COMBAT = "beginning_of_combat"
+    END_STEP = "end_step"
+    DRAWS_CARD = "draws_card"
 
 
 @dataclass(frozen=True)
@@ -152,6 +154,21 @@ def is_beginning_of_upkeep(event: TriggerEvent, _game: GameState) -> bool:
 def is_beginning_of_combat(event: TriggerEvent, _game: GameState) -> bool:
     """Return True when beginning of combat begins."""
     return isinstance(event, StepTriggerEvent) and event.step == Step.BEGIN_COMBAT
+
+
+def is_end_step(event: TriggerEvent, _game: GameState) -> bool:
+    """Return True when the end step begins."""
+    return isinstance(event, StepTriggerEvent) and event.step == Step.END_STEP
+
+
+def is_draws_card(event: TriggerEvent, _game: GameState) -> bool:
+    """Return True when a card is drawn from library into hand."""
+    return (
+        isinstance(event, ZoneMoveEvent)
+        and event.from_zone == Zone.LIBRARY
+        and event.to_zone == Zone.HAND
+        and event.cause == "draw"
+    )
 
 
 def _to_stack_object(definition: TriggerDefinition) -> TriggeredAbilityOnStack:
