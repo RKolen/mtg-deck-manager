@@ -7,8 +7,9 @@ from engine.core.zones import Zone
 from engine.rules.triggers import TriggerKey, is_attacks, is_beginning_of_combat
 from engine.rules.triggers import is_beginning_of_upkeep, is_blocks, is_dies
 from engine.rules.triggers import is_draws_card, is_end_step, is_enters_battlefield
-from tests.conftest import add_to_library, fresh_game, make_card, make_creature
-from tests.conftest import place_on_battlefield
+from engine.rules.triggers import is_spell_cast
+from tests.conftest import add_to_hand, add_to_library, fresh_game, make_card
+from tests.conftest import make_creature, make_instant, place_on_battlefield
 
 
 def test_etb_trigger_goes_on_stack_from_game_state_listener():
@@ -265,6 +266,41 @@ def test_draw_card_trigger_does_not_fire_from_draw_step_event():
     game.trigger_registry.register(observer, TriggerKey.DRAWS_CARD, is_draws_card)
 
     game.fire_step_triggers(Step.DRAW)
+
+    assert game.stack.top is None
+
+
+def test_spell_cast_trigger_goes_on_stack_from_cast_event():
+    """Spell-cast triggers fire from explicit cast events."""
+    game = fresh_game()
+    observer = place_on_battlefield(
+        make_creature("Cast Observer", 1, 1),
+        0,
+        game.zones,
+    )
+    spell = add_to_hand(make_instant("Lightning Bolt"), 0, game.zones)
+    game.trigger_registry.register(observer, TriggerKey.SPELL_CAST, is_spell_cast)
+
+    game.fire_spell_cast_triggers(spell)
+
+    trigger = _top_trigger(game)
+    assert trigger.source_permanent_id == observer.obj_id
+    assert trigger.controller_idx == 0
+    assert trigger.trigger_key == TriggerKey.SPELL_CAST.value
+
+
+def test_spell_cast_trigger_does_not_fire_from_draw_event():
+    """Spell-cast triggers ignore unrelated zone movement events."""
+    game = fresh_game()
+    observer = place_on_battlefield(
+        make_creature("Cast Observer", 1, 1),
+        0,
+        game.zones,
+    )
+    add_to_library(make_card("Drawn Card"), 0, game.zones)
+    game.trigger_registry.register(observer, TriggerKey.SPELL_CAST, is_spell_cast)
+
+    game.zones.draw(0)
 
     assert game.stack.top is None
 

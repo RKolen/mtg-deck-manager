@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from engine.core.game_object import Permanent
+from engine.core.game_object import CardObject, Permanent
 from engine.core.mana import ManaPool
 from engine.core.turn_structure import TurnRunner
 from engine.core.turn_structure import Step
@@ -22,7 +22,7 @@ from engine.core.zones import ZoneManager, ZoneMoveEvent
 from engine.rules.state_based import check_sbas
 from engine.rules.stack import Stack
 from engine.rules.triggers import AttackTriggerEvent, BlockTriggerEvent
-from engine.rules.triggers import StepTriggerEvent, TriggerRegistry
+from engine.rules.triggers import StepTriggerEvent, TriggerRegistry, spell_cast_event
 
 
 @dataclass
@@ -121,6 +121,10 @@ class GameState:
             defending_player_idx=blocker.controller_idx,
         )
         self.trigger_registry.put_triggers_on_stack(event, self)
+
+    def fire_spell_cast_triggers(self, spell: CardObject) -> None:
+        """Put triggered abilities for a cast spell on the stack."""
+        self.trigger_registry.put_triggers_on_stack(spell_cast_event(spell), self)
 
     def to_client(self) -> dict:
         """Serialise public game state, hiding the opponent's hand contents."""

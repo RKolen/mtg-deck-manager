@@ -7,7 +7,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from engine.core.game_object import Effect, Permanent, Target, TriggeredAbilityOnStack
+from engine.core.game_object import CardObject, Effect, Permanent, Target
+from engine.core.game_object import TriggeredAbilityOnStack
 from engine.core.turn_structure import Step
 from engine.core.zones import Zone, ZoneMoveEvent
 
@@ -26,6 +27,7 @@ class TriggerKey(StrEnum):
     BEGINNING_OF_COMBAT = "beginning_of_combat"
     END_STEP = "end_step"
     DRAWS_CARD = "draws_card"
+    SPELL_CAST = "spell_cast"
 
 
 @dataclass(frozen=True)
@@ -53,7 +55,23 @@ class BlockTriggerEvent:
     defending_player_idx: int
 
 
-TriggerEvent = ZoneMoveEvent | StepTriggerEvent | AttackTriggerEvent | BlockTriggerEvent
+@dataclass(frozen=True)
+class SpellCastTriggerEvent:
+    """Synthetic event emitted when a spell is cast."""
+
+    spell_id: int
+    controller_idx: int
+    spell_name: str
+    type_line: str
+
+
+TriggerEvent = (
+    ZoneMoveEvent
+    | StepTriggerEvent
+    | AttackTriggerEvent
+    | BlockTriggerEvent
+    | SpellCastTriggerEvent
+)
 TriggerCondition = Callable[[TriggerEvent, "GameState"], bool]
 
 
@@ -168,6 +186,22 @@ def is_draws_card(event: TriggerEvent, _game: GameState) -> bool:
         and event.from_zone == Zone.LIBRARY
         and event.to_zone == Zone.HAND
         and event.cause == "draw"
+    )
+
+
+def is_spell_cast(event: TriggerEvent, _game: GameState) -> bool:
+    """Return True when a spell is cast."""
+    return isinstance(event, SpellCastTriggerEvent)
+
+
+def spell_cast_event(spell: CardObject) -> SpellCastTriggerEvent:
+    """Build a spell-cast event from a card object."""
+    card_info = spell.card_info
+    return SpellCastTriggerEvent(
+        spell_id=spell.obj_id,
+        controller_idx=spell.controller_idx,
+        spell_name=card_info.name if card_info is not None else "",
+        type_line=card_info.type_line if card_info is not None else "",
     )
 
 
