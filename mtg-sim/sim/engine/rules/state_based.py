@@ -14,10 +14,13 @@ counters, battle cards) are stubs that will be fleshed out in later phases.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from engine.core.game_object import Permanent, TokenObject
-from engine.core.game_state import GameState
 from engine.core.zones import Zone
+
+if TYPE_CHECKING:
+    from engine.core.game_state import GameState
 
 
 @dataclass

@@ -24,75 +24,16 @@ import re
 import uuid
 from dataclasses import dataclass, field
 from deck_registry import CardInfo
+from engine.cards.oracle_parse import (
+    is_affordable as _spell_is_affordable,
+    parse_damage as _parse_damage,
+    parse_draw as _parse_draw,
+    parse_pump as _parse_pump,
+    spell_category as _spell_category,
+)
+from engine.core.game_state import LogEntry
 
 logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Oracle text helpers
-# ---------------------------------------------------------------------------
-
-def _parse_damage(text: str) -> int:
-    """Return the first explicit damage number found in oracle text, or 0."""
-    m = re.search(r"deals? (\d+) damage", text, re.IGNORECASE)
-    return int(m.group(1)) if m else 0
-
-
-def _parse_pump(text: str) -> tuple[int, int]:
-    """Return the (power, toughness) bonus from a pump or base-P/T effect."""
-    m = re.search(r"gets? \+(\d+)/\+(\d+)", text, re.IGNORECASE)
-    if m:
-        return int(m.group(1)), int(m.group(2))
-    m = re.search(r"base power and toughness (\d+)/(\d+)", text, re.IGNORECASE)
-    if m:
-        return int(m.group(1)), int(m.group(2))
-    return 0, 0
-
-
-def _parse_draw(text: str) -> int:
-    """Return the number of cards drawn by a draw effect, or 0 if not found."""
-    m = re.search(r"draw (\w+) card", text, re.IGNORECASE)
-    if not m:
-        return 0
-    word = m.group(1).lower()
-    word_map = {"a": 1, "an": 1, "one": 1, "two": 2, "three": 3}
-    return word_map.get(word, int(word) if word.isdigit() else 1)
-
-
-def _spell_is_affordable(card: CardInfo, available_mana: int) -> bool:
-    """True when the player can currently cast this spell.
-
-    Phyrexian mana pips ({W/P}, {G/P}, …) can each be paid with 2 life
-    instead of mana, so the minimum mana required is CMC minus the number
-    of phyrexian pips.
-    """
-    if card.is_land:
-        return False
-    phyrexian_pips = (card.mana_cost or "").upper().count("/P")
-    mana_needed = max(0, int(card.cmc) - phyrexian_pips)
-    return available_mana >= mana_needed
-
-
-_CATEGORY_CHECKS: list[tuple[str, str]] = [
-    ("burn",    "deals.*damage"),
-    ("pump",    r"\+\d/\+\d|gets? \+"),
-    ("removal", "destroy|exile"),
-    ("draw",    "draw.*card"),
-    ("aura",    "enchant "),
-]
-
-
-def _spell_category(card: CardInfo) -> str:
-    """Classify a card into a broad effect category for simplified resolution."""
-    if card.is_land:
-        return "land"
-    if card.is_creature:
-        return "creature"
-    text = (card.oracle_text or "").lower()
-    for category, pattern in _CATEGORY_CHECKS:
-        if re.search(pattern, text):
-            return category
-    return "spell"
 
 
 # ---------------------------------------------------------------------------
@@ -239,20 +180,6 @@ class PlayerState:
             }
             for i, c in enumerate(self.hand)
         ]
-
-
-# ---------------------------------------------------------------------------
-# Game log entry
-# ---------------------------------------------------------------------------
-
-@dataclass
-class LogEntry:
-    """One line in the game log, attributed to a player or the system."""
-
-    turn: int
-    actor: str
-    action: str
-    detail: str = ""
 
 
 # ---------------------------------------------------------------------------

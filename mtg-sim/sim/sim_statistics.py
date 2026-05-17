@@ -172,7 +172,8 @@ def _build_prompt(stats: dict) -> str:
         f"Average mulligans per game: {mull:.1f}.\n"
         f"Top opponent threats in losing games: {killers or 'none recorded'}.\n\n"
         "Write 2-3 short key-moment observations about this matchup. "
-        "Focus on what decided games (e.g. 'Player wins X% of games where they curve out by turn 3'). "
+        "Focus on what decided games "
+        "(e.g. 'Player wins X% of games where they curve out by turn 3'). "
         "One sentence each. Return as a JSON array of strings only."
     )
 
@@ -190,8 +191,8 @@ def _generate_key_moments(stats: dict) -> list[str]:
         match = re.search(r"\[.*\]", text, re.DOTALL)
         if match:
             return json.loads(match.group(0))
-    except Exception:
-        pass
+    except (requests.RequestException, json.JSONDecodeError, ValueError) as exc:
+        logger.warning("Could not generate key moments: %s", exc)
     return []
 
 
@@ -238,7 +239,7 @@ def compute_statistics(
     opp_mulls = [r.opponent_mulligan for r in results]
     mull_dist = Counter(player_mulls)
 
-    mulliganStats = {
+    mulligan_stats = {
         "avgPlayerMulligan": round(sum(player_mulls) / total, 2),
         "avgOpponentMulligan": round(sum(opp_mulls) / total, 2),
         "distribution": {str(k): v for k, v in sorted(mull_dist.items())},
@@ -263,7 +264,7 @@ def compute_statistics(
         "avgTurnWin": round(sum(win_turns) / len(win_turns), 1) if win_turns else 0,
         "avgTurnLoss": round(sum(loss_turns) / len(loss_turns), 1) if loss_turns else 0,
         "topKillers": _top_killers(losing_games, losses),
-        "mulliganStats": mulliganStats,
+        "mulliganStats": mulligan_stats,
         "avgMulliganCount": round(sum(player_mulls) / total, 2),
         "manaEfficiency": _mana_efficiency(results),
         "lifeProgression": _life_progression(results),

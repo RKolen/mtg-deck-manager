@@ -179,6 +179,25 @@ class Permanent(GameObject):
         """Return True if the oracle text contains the given keyword (case-insensitive)."""
         return keyword.lower() in self.oracle_text.lower()
 
+    def to_dict(self) -> dict:
+        """Serialise this permanent for clients and integration tests."""
+        power, toughness = _power_toughness(self)
+        return {
+            "objId": self.obj_id,
+            "uid": str(self.obj_id),
+            "name": self.name,
+            "type": self.type_line,
+            "typeLine": self.type_line,
+            "power": power,
+            "toughness": toughness,
+            "tapped": self.tapped,
+            "sick": self.sick,
+            "oracle": self.oracle_text,
+            "counters": dict(self.counters),
+            "damageMarked": self.damage_marked,
+            "attachedTo": self.attached_to,
+        }
+
 
 @dataclass
 class SpellOnStack(GameObject):
@@ -212,3 +231,20 @@ class TriggeredAbilityOnStack(GameObject):
 
 
 StackObject: TypeAlias = SpellOnStack | ActivatedAbilityOnStack | TriggeredAbilityOnStack
+
+
+def _power_toughness(perm: Permanent) -> tuple[int, int]:
+    """Return printed/token power and toughness without continuous effects."""
+    if perm.card_info is not None:
+        return perm.card_info.numeric_power, perm.card_info.numeric_toughness
+    if isinstance(perm.source, TokenObject):
+        return _parse_int(perm.source.power), _parse_int(perm.source.toughness)
+    return 0, 0
+
+
+def _parse_int(value: str) -> int:
+    """Parse integer P/T text; variable values default to 0 in Phase A."""
+    try:
+        return int(value)
+    except ValueError:
+        return 0

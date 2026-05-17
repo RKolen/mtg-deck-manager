@@ -54,6 +54,11 @@ def make_land(name: str = "Plains", color: str = "W") -> CardInfo:
     )
 
 
+def make_deck(*cards: CardInfo, lands: int = 20) -> list[CardInfo]:
+    """Create a deterministic test deck from explicit cards plus basic lands."""
+    return list(cards) + [make_land() for _ in range(lands)]
+
+
 def make_creature(
     name: str = "Grizzly Bears",
     power: int = 2,
@@ -138,6 +143,19 @@ def add_to_library(
     )
     zones.player_zones[player_idx].library.insert(0, card_obj)
     return card_obj
+
+
+def fresh_zones(
+    player_cards: list[CardInfo] | None = None,
+    opponent_cards: list[CardInfo] | None = None,
+) -> ZoneManager:
+    """Return zones with the provided cards loaded into each player's library."""
+    zones = ZoneManager()
+    for card_info in player_cards or []:
+        add_to_library(card_info, 0, zones)
+    for card_info in opponent_cards or []:
+        add_to_library(card_info, 1, zones)
+    return zones
 
 
 # ---------------------------------------------------------------------------
