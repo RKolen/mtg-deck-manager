@@ -32,12 +32,18 @@ def test_keep_starts_first_main_phase_on_the_play():
     assert "play_land" in data["availableActions"]
 
 
-def test_mulligan_reduces_hand_size():
-    """Mulligan shuffles back and draws one fewer card."""
+def test_london_mulligan_draws_seven_then_bottoms_on_keep():
+    """Each mulligan redraws 7, then keep bottoms one card per mulligan."""
     game = create_game(make_deck(lands=20), make_deck(lands=20))
     data = game.action_mulligan()
     assert data["phase"] == "mulligan"
-    assert len(data["playerHand"]) == 6
+    assert len(data["playerHand"]) == 7
+    data = game.action_mulligan()
+    assert len(data["playerHand"]) == 7
+    data = game.action_keep()
+    assert data["phase"] == "main1"
+    assert len(data["playerHand"]) == 5
+    assert any(entry["action"] == "mulligan_bottom" for entry in data["log"])
 
 
 def test_play_land_moves_card_to_battlefield():
@@ -109,6 +115,69 @@ def test_spell_with_illegal_target_fizzles_through_stack():
     assert not data["stack"]
     assert data["opponentLife"] == 20
     assert "Shock" in data["playerGraveyard"]
+
+
+def test_phyrexian_life_payment_casts_with_no_mana():
+    """Phyrexian mana can be paid with life when no mana is available."""
+    growth = make_card(
+        name="Mutagenic Growth",
+        type_line="Instant",
+        cmc=1,
+        oracle="Target creature gets +2/+2 until end of turn.",
+        mana_cost="{G/P}",
+    )
+    creature = make_card(
+        name="Hero",
+        type_line="Creature — Human",
+        cmc=0,
+        pt="1/1",
+        mana_cost="",
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=creature),
+        CardObject(controller_idx=0, owner_idx=0, card_info=growth),
+    ]
+    game.action_cast(0)
+    target = game.state.zones.creatures_of(0)[0]
+    data = game.action_cast(0, target_uid=str(target.obj_id))
+    assert data["playerLife"] == 18
+    assert "Mutagenic Growth" in data["playerGraveyard"]
+
+
+def test_heroic_token_created_when_targeted_by_spell():
+    """The Phase B loop supports the heroic token path from the plan."""
+    crusader = make_card(
+        name="Akroan Crusader",
+        type_line="Creature — Human Soldier",
+        cmc=0,
+        pt="1/1",
+        oracle=(
+            "Heroic — Whenever you cast a spell that targets Akroan Crusader, "
+            "create a 1/1 red Soldier creature token."
+        ),
+        mana_cost="",
+    )
+    growth = make_card(
+        name="Titan's Strength",
+        type_line="Instant",
+        cmc=0,
+        oracle="Target creature gets +3/+1 until end of turn.",
+        mana_cost="",
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=crusader),
+        CardObject(controller_idx=0, owner_idx=0, card_info=growth),
+    ]
+    game.action_cast(0)
+    target = game.state.zones.creatures_of(0)[0]
+    data = game.action_cast(0, target_uid=str(target.obj_id))
+    names = [perm["name"] for perm in data["playerBattlefield"]]
+    assert "Akroan Crusader" in names
+    assert "Soldier Token" in names
 
 
 def test_player_attack_uses_combat_rules_for_unblocked_damage():

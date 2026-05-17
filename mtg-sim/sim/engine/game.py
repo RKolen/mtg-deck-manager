@@ -18,9 +18,10 @@ from engine.cards.oracle_parse import (
     parse_damage,
     parse_draw,
     parse_pump,
+    parse_token_blueprint,
     spell_category,
 )
-from engine.core.game_object import CardObject, Permanent
+from engine.core.game_object import CardObject, Permanent, TokenObject
 from engine.core.game_object import SpellOnStack, Target
 from engine.core.game_state import GameState, LogEntry, PlayerInfo
 from engine.core.turn_structure import PriorityPassOutcome, TurnRunner
@@ -37,6 +38,7 @@ class InteractiveGame:
     state: GameState
     phase: str = "mulligan"
     on_the_play: bool = True
+    mulligans_taken: int = 0
     pending_attackers: list[str] = field(default_factory=list)
     pending_opp_attackers: list[str] = field(default_factory=list)
     pending_blockers: dict[str, str] = field(default_factory=dict)
@@ -84,25 +86,24 @@ class InteractiveGame:
     def action_keep(self) -> dict:
         """Keep the current opening hand and start the first player turn."""
         assert self.phase == "mulligan"
+        bottomed = self._bottom_mulligan_cards(0)
         self._log("player", "keep", f"Kept {len(self._zones(0).hand)}-card hand")
+        if bottomed:
+            self._log("player", "mulligan_bottom", f"Bottomed {_card_names(bottomed)}")
         self._start_player_turn_one()
         return self.to_client()
 
     def action_mulligan(self) -> dict:
-        """Shuffle the current hand away and draw one fewer card."""
+        """Shuffle the current hand away and draw seven cards."""
         assert self.phase == "mulligan"
         hand = self._zones(0).hand
-        current_size = len(hand)
-        if current_size <= 4:
-            self._log("player", "keep", f"Forced keep at {current_size} cards")
-            self._start_player_turn_one()
-            return self.to_client()
         library = self._zones(0).library
         library.extend(hand)
         hand.clear()
         random.shuffle(library)
-        self._draw_cards(0, current_size - 1)
-        self._log("player", "mulligan", f"Mulligan to {len(hand)}")
+        self.mulligans_taken += 1
+        self._draw_cards(0, 7)
+        self._log("player", "mulligan", f"Mulligan {self.mulligans_taken}: drew {len(hand)}")
         return self.to_client()
 
     def action_draw(self) -> dict:
@@ -175,6 +176,7 @@ class InteractiveGame:
             target_player=target_player,
         )
         self._log("player", "cast", f"{card_info.name} on stack")
+        self._resolve_heroic_triggers(card, target_uid)
         if auto_resolve:
             self._auto_pass_stack()
         return self.to_client()
@@ -442,6 +444,31 @@ class InteractiveGame:
         self._move_card_to_graveyard(card)
         return f"{card_info.name} drew {_card_names(drawn) or 'no cards'}"
 
+    def _resolve_heroic_triggers(self, spell_card: CardObject, target_uid: str | None) -> None:
+        """Resolve the Phase B subset of heroic token triggers."""
+        if target_uid is None:
+            return
+        target = self._find_permanent(target_uid)
+        if target is None or target.controller_idx != spell_card.controller_idx:
+            return
+        if "heroic" not in target.oracle_text.lower():
+            return
+        blueprint = parse_token_blueprint(target.oracle_text)
+        if blueprint is None:
+            return
+        token = TokenObject(
+            controller_idx=target.controller_idx,
+            owner_idx=target.controller_idx,
+            name=blueprint.name,
+            type_line=blueprint.type_line,
+            colors=blueprint.colors,
+            power=blueprint.power,
+            toughness=blueprint.toughness,
+            oracle_text=blueprint.oracle_text,
+        )
+        self.state.zones.enter_battlefield(token, target.controller_idx, "heroic")
+        self._log("system", "heroic", f"{target.name} created {blueprint.name}")
+
     def _opponent_main_phase(self) -> None:
         """Run a simple opponent draw, land, and spell sequence."""
         self._begin_turn(1)
@@ -566,6 +593,17 @@ class InteractiveGame:
             if card is not None:
                 drawn.append(card)
         return drawn
+
+    def _bottom_mulligan_cards(self, player_idx: int) -> list[CardObject]:
+        """Put one card per mulligan taken on the bottom of that player's library."""
+        count = min(self.mulligans_taken, len(self._zones(player_idx).hand))
+        if count <= 0:
+            return []
+        hand = self._zones(player_idx).hand
+        bottomed = hand[-count:]
+        del hand[-count:]
+        self._zones(player_idx).library.extend(bottomed)
+        return bottomed
 
     def _tap_lands_for_mana(self, player_idx: int, amount: int) -> bool:
         """Tap untapped lands to pay generic mana."""
