@@ -144,6 +144,11 @@ def _assign_combat_damage(
         if attacker_deals:
             damage = power(attacker)
             context.result.damage_to_player += damage
+            context.game.fire_combat_damage_triggers(
+                attacker,
+                damage,
+                damaged_player_idx=context.defending_player_idx,
+            )
             _apply_lifelink(
                 context.game,
                 context.attacking_player_idx,
@@ -155,13 +160,23 @@ def _assign_combat_damage(
         context.result.blocked_attackers += 1
     if attacker_deals:
         damage = power(attacker)
-        player_damage = _assign_attacker_damage(attacker, blockers, damage)
+        player_damage = _assign_attacker_damage(context, attacker, blockers, damage)
         context.result.damage_to_player += player_damage
+        context.game.fire_combat_damage_triggers(
+            attacker,
+            player_damage,
+            damaged_player_idx=context.defending_player_idx,
+        )
         _apply_lifelink(context.game, context.attacking_player_idx, attacker, damage)
     for blocker in blockers:
         if _deals_in_step(blocker, first_strike_step):
             damage = power(blocker)
             _mark_combat_damage(attacker, blocker, damage)
+            context.game.fire_combat_damage_triggers(
+                blocker,
+                damage,
+                damaged_permanent=attacker,
+            )
             _apply_lifelink(context.game, context.defending_player_idx, blocker, damage)
 
 
@@ -228,6 +243,7 @@ def _apply_lifelink(
 
 
 def _assign_attacker_damage(
+    context: _CombatContext,
     attacker: Permanent,
     blockers: list[Permanent],
     attacker_power: int,
@@ -237,6 +253,11 @@ def _assign_attacker_damage(
     for blocker in blockers:
         assigned = min(remaining, _lethal_damage(attacker, blocker))
         _mark_combat_damage(blocker, attacker, assigned)
+        context.game.fire_combat_damage_triggers(
+            attacker,
+            assigned,
+            damaged_permanent=blocker,
+        )
         remaining -= assigned
         if remaining <= 0:
             return 0

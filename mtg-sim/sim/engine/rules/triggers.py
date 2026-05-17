@@ -30,6 +30,7 @@ class TriggerKey(StrEnum):
     DRAWS_CARD = "draws_card"
     SPELL_CAST = "spell_cast"
     LIFE_GAINED = "life_gained"
+    DEALS_COMBAT_DAMAGE = "deals_combat_damage"
 
 
 @dataclass(frozen=True)
@@ -77,6 +78,17 @@ class LifeGainedTriggerEvent:
     source_permanent_id: int | None = None
 
 
+@dataclass(frozen=True)
+class CombatDamageTriggerEvent:
+    """Synthetic event emitted when a permanent deals combat damage."""
+
+    source_permanent_id: int
+    controller_idx: int
+    amount: int
+    damaged_player_idx: int | None = None
+    damaged_permanent_id: int | None = None
+
+
 TriggerEvent = (
     ZoneMoveEvent
     | StepTriggerEvent
@@ -84,6 +96,7 @@ TriggerEvent = (
     | BlockTriggerEvent
     | SpellCastTriggerEvent
     | LifeGainedTriggerEvent
+    | CombatDamageTriggerEvent
 )
 TriggerCondition = Callable[[TriggerEvent, "GameState", "TriggerDefinition"], bool]
 
@@ -270,6 +283,28 @@ def is_controller_gains_life(
     return (
         isinstance(event, LifeGainedTriggerEvent)
         and event.player_idx == definition.controller_idx
+        and event.amount > 0
+    )
+
+
+def is_deals_combat_damage(
+    event: TriggerEvent,
+    _game: GameState,
+    _definition: TriggerDefinition,
+) -> bool:
+    """Return True when a permanent deals combat damage."""
+    return isinstance(event, CombatDamageTriggerEvent) and event.amount > 0
+
+
+def is_source_deals_combat_damage(
+    event: TriggerEvent,
+    _game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Return True when this trigger's source deals combat damage."""
+    return (
+        isinstance(event, CombatDamageTriggerEvent)
+        and event.source_permanent_id == definition.source_permanent_id
         and event.amount > 0
     )
 

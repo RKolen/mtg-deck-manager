@@ -8,8 +8,10 @@ from engine.rules.triggers import TriggerKey, is_attacks, is_beginning_of_combat
 from engine.rules.triggers import is_beginning_of_upkeep, is_blocks, is_dies
 from engine.rules.triggers import is_draws_card, is_end_step, is_enters_battlefield
 from engine.rules.triggers import is_controller_gains_life, is_leaves_battlefield
-from engine.rules.triggers import is_life_gained, is_noncreature_nonland_spell_cast
+from engine.rules.triggers import is_deals_combat_damage, is_life_gained
+from engine.rules.triggers import is_noncreature_nonland_spell_cast
 from engine.rules.triggers import is_spell_cast, is_spell_targeting_source
+from engine.rules.triggers import is_source_deals_combat_damage
 from engine.rules.triggers import spell_cast_event
 from tests.conftest import add_to_hand, add_to_library, fresh_game, make_card
 from tests.conftest import make_creature, make_instant, place_on_battlefield
@@ -419,6 +421,64 @@ def test_life_gained_trigger_ignores_zero_life_gain():
     game.gain_life(0, 0)
 
     assert game.players[0].life == 20
+    assert game.stack.top is None
+
+
+def test_combat_damage_trigger_goes_on_stack_from_damage_event():
+    """Combat-damage triggers fire from explicit combat damage events."""
+    game = fresh_game()
+    observer = place_on_battlefield(
+        make_creature("Damage Observer", 1, 1),
+        0,
+        game.zones,
+    )
+    attacker = place_on_battlefield(make_creature("Goblin", 2, 2), 0, game.zones)
+    game.trigger_registry.register(
+        observer,
+        TriggerKey.DEALS_COMBAT_DAMAGE,
+        is_deals_combat_damage,
+    )
+
+    game.fire_combat_damage_triggers(attacker, 2, damaged_player_idx=1)
+
+    trigger = _top_trigger(game)
+    assert trigger.source_permanent_id == observer.obj_id
+    assert trigger.trigger_key == TriggerKey.DEALS_COMBAT_DAMAGE.value
+
+
+def test_source_deals_combat_damage_trigger_ignores_other_sources():
+    """Source-specific combat-damage triggers only fire for their own source."""
+    game = fresh_game()
+    watched = place_on_battlefield(make_creature("Watched", 2, 2), 0, game.zones)
+    other = place_on_battlefield(make_creature("Other", 2, 2), 0, game.zones)
+    game.trigger_registry.register(
+        watched,
+        TriggerKey.DEALS_COMBAT_DAMAGE,
+        is_source_deals_combat_damage,
+    )
+
+    game.fire_combat_damage_triggers(other, 2, damaged_player_idx=1)
+
+    assert game.stack.top is None
+
+
+def test_combat_damage_trigger_ignores_zero_damage():
+    """Zero combat damage is not a damage event."""
+    game = fresh_game()
+    observer = place_on_battlefield(
+        make_creature("Damage Observer", 1, 1),
+        0,
+        game.zones,
+    )
+    attacker = place_on_battlefield(make_creature("Goblin", 2, 2), 0, game.zones)
+    game.trigger_registry.register(
+        observer,
+        TriggerKey.DEALS_COMBAT_DAMAGE,
+        is_deals_combat_damage,
+    )
+
+    game.fire_combat_damage_triggers(attacker, 0, damaged_player_idx=1)
+
     assert game.stack.top is None
 
 

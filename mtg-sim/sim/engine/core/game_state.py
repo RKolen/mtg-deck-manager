@@ -22,6 +22,7 @@ from engine.core.zones import ZoneManager, ZoneMoveEvent
 from engine.rules.state_based import check_sbas
 from engine.rules.stack import Stack
 from engine.rules.triggers import AttackTriggerEvent, BlockTriggerEvent
+from engine.rules.triggers import CombatDamageTriggerEvent
 from engine.rules.triggers import LifeGainedTriggerEvent
 from engine.rules.triggers import StepTriggerEvent, TriggerRegistry, spell_cast_event
 
@@ -149,6 +150,29 @@ class GameState:
                 player_idx=player_idx,
                 amount=amount,
                 source_permanent_id=source_permanent_id,
+            ),
+            self,
+        )
+
+    def fire_combat_damage_triggers(
+        self,
+        source: Permanent,
+        amount: int,
+        damaged_player_idx: int | None = None,
+        damaged_permanent: Permanent | None = None,
+    ) -> None:
+        """Put triggered abilities for combat damage dealt by a permanent on the stack."""
+        if amount <= 0:
+            return
+        self.trigger_registry.put_triggers_on_stack(
+            CombatDamageTriggerEvent(
+                source_permanent_id=source.obj_id,
+                controller_idx=source.controller_idx,
+                amount=amount,
+                damaged_player_idx=damaged_player_idx,
+                damaged_permanent_id=(
+                    damaged_permanent.obj_id if damaged_permanent is not None else None
+                ),
             ),
             self,
         )

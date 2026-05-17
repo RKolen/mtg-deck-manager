@@ -4,6 +4,7 @@ from engine.core.game_object import TriggeredAbilityOnStack
 from engine.rules.combat import can_attack, can_block, eligible_attackers, legal_blocker
 from engine.rules.combat import power, resolve_combat_damage, tap_attackers
 from engine.rules.triggers import TriggerKey, is_controller_gains_life
+from engine.rules.triggers import is_source_deals_combat_damage
 from tests.conftest import fresh_game, make_creature, place_on_battlefield
 
 
@@ -144,6 +145,30 @@ def test_resolve_combat_damage_deals_unblocked_damage_to_defender():
     )
     assert result.damage_to_player == 2
     assert game.players[1].life == 18
+
+
+def test_unblocked_combat_damage_puts_source_trigger_on_stack():
+    """Combat damage emitted by combat resolution can trigger from its source."""
+    game = fresh_game()
+    attacker = place_on_battlefield(make_creature("Goblin", 2, 2), 0, game.zones)
+    game.trigger_registry.register(
+        attacker,
+        TriggerKey.DEALS_COMBAT_DAMAGE,
+        is_source_deals_combat_damage,
+    )
+
+    resolve_combat_damage(
+        game,
+        attacking_player_idx=0,
+        defending_player_idx=1,
+        attacker_ids=[str(attacker.obj_id)],
+        blocker_assignments={},
+    )
+
+    trigger = game.stack.top
+    assert isinstance(trigger, TriggeredAbilityOnStack)
+    assert trigger.source_permanent_id == attacker.obj_id
+    assert trigger.trigger_key == TriggerKey.DEALS_COMBAT_DAMAGE.value
 
 
 def test_resolve_combat_damage_marks_blocker_and_attacker_damage():
