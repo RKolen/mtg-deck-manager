@@ -445,6 +445,29 @@ def test_deathtouch_trample_assigns_one_to_blocker_then_excess():
     assert attacker in game.zones.battlefield
 
 
+def test_first_strike_deathtouch_trample_excess_hits_before_return_damage():
+    """First strike deathtouch trample needs one blocker damage before excess."""
+    game = fresh_game()
+    attacker = place_on_battlefield(
+        make_creature("Venomous Duelist", 5, 5, oracle="First strike, deathtouch, trample"),
+        1,
+        game.zones,
+    )
+    blocker = place_on_battlefield(make_creature("Wall", 0, 5), 0, game.zones)
+    result = resolve_combat_damage(
+        game,
+        attacking_player_idx=1,
+        defending_player_idx=0,
+        attacker_ids=[str(attacker.obj_id)],
+        blocker_assignments={str(blocker.obj_id): str(attacker.obj_id)},
+    )
+    assert result.damage_to_player == 4
+    assert game.players[0].life == 16
+    assert blocker not in game.zones.battlefield
+    assert attacker in game.zones.battlefield
+    assert attacker.damage_marked == 0
+
+
 def test_multiple_blockers_all_deal_damage_to_attacker():
     """Every legal blocker assigned to an attacker deals combat damage."""
     game = fresh_game()
