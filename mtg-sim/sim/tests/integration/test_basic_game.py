@@ -1,7 +1,8 @@
 """Integration tests for the Phase B interactive game loop."""
 
 from engine.game import create_game, get_game, remove_game
-from engine.core.game_object import CardObject
+from engine.core.game_object import CardObject, Effect, GameObject
+from engine.core.game_state import GameState
 from engine.core.zones import Zone
 from engine.rules.triggers import TriggerKey, is_spell_cast
 from tests.conftest import make_card, make_creature, make_deck, make_land
@@ -121,6 +122,40 @@ def test_cast_spell_trigger_goes_above_cast_spell_on_stack():
 
     assert data["stack"][0]["type"] == "TriggeredAbilityOnStack"
     assert data["stack"][1]["name"] == "Memnite"
+
+
+def test_triggered_ability_effect_resolves_before_spell_below_it():
+    """Triggered ability effects resolve from the stack before the spell underneath."""
+    memnite = make_card(
+        name="Memnite",
+        type_line="Artifact Creature — Construct",
+        cmc=0,
+        pt="1/1",
+        mana_cost="",
+    )
+    game = create_game([memnite for _ in range(20)], make_deck(lands=20))
+    game.action_keep()
+    observer = place_on_battlefield(
+        make_creature("Cast Observer", 1, 1),
+        0,
+        game.state.zones,
+    )
+    game.state.trigger_registry.register(
+        observer,
+        TriggerKey.SPELL_CAST,
+        is_spell_cast,
+        effect=_GainLifeEffect(player_idx=0, amount=1),
+    )
+
+    data = game.action_cast_to_stack(0)
+    assert data["stack"][0]["type"] == "TriggeredAbilityOnStack"
+
+    game.action_pass_priority()
+    data = game.action_pass_priority()
+
+    assert data["playerLife"] == 21
+    assert data["stack"][0]["name"] == "Memnite"
+    assert len(data["playerBattlefield"]) == 1
 
 
 def test_instant_can_be_cast_while_spell_is_on_stack():
@@ -370,3 +405,16 @@ def test_game_session_store_round_trip_and_remove():
     assert get_game(game_id) is game
     remove_game(game_id)
     assert get_game(game_id) is None
+
+
+class _GainLifeEffect(Effect):  # pylint: disable=too-few-public-methods
+    """Test effect that gains life when an ability resolves."""
+
+    def __init__(self, player_idx: int, amount: int) -> None:
+        self.player_idx = player_idx
+        self.amount = amount
+
+    def resolve(self, game: GameState, _source: GameObject) -> str:
+        """Apply the test life gain effect."""
+        game.players[self.player_idx].life += self.amount
+        return f"Gained {self.amount} life"

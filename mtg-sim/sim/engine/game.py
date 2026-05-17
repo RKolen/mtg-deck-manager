@@ -21,7 +21,8 @@ from engine.cards.oracle_parse import (
     parse_token_blueprint,
     spell_category,
 )
-from engine.core.game_object import CardObject, Permanent, TokenObject
+from engine.core.game_object import ActivatedAbilityOnStack, CardObject, Permanent
+from engine.core.game_object import TokenObject, TriggeredAbilityOnStack
 from engine.core.game_object import SpellOnStack, Target
 from engine.core.game_state import GameState, LogEntry, PlayerInfo
 from engine.core.turn_structure import PriorityPassOutcome, TurnRunner
@@ -384,6 +385,8 @@ class InteractiveGame:
         obj = result.obj
         if isinstance(obj, SpellOnStack) and obj.source is not None:
             return self._apply_spell(obj)
+        if isinstance(obj, (TriggeredAbilityOnStack, ActivatedAbilityOnStack)):
+            return _resolve_ability_effect(obj, self.state)
         return "Resolved ability"
 
     def _apply_spell(self, spell: SpellOnStack) -> str:
@@ -820,6 +823,17 @@ def _target_player(targets: list[Target]) -> int | None:
     """Return the first player target index."""
     target = next((t for t in targets if t.player_idx is not None), None)
     return target.player_idx if target is not None else None
+
+
+def _resolve_ability_effect(
+    obj: TriggeredAbilityOnStack | ActivatedAbilityOnStack,
+    game: GameState,
+) -> str:
+    """Apply an ability effect if one is attached to the stack object."""
+    if obj.effect is None:
+        return "Resolved ability"
+    detail = obj.effect.resolve(game, obj)
+    return detail or "Resolved ability"
 
 
 def _last_creature(permanents: list[Permanent]) -> Permanent | None:

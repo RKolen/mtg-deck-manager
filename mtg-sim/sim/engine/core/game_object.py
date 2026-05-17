@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, TypeAlias
 
 if TYPE_CHECKING:
     from deck_registry import CardInfo
+    from engine.core.game_state import GameState
 
 _obj_counter: itertools.count[int] = itertools.count(1)
 _ts_counter: itertools.count[int] = itertools.count(1)
@@ -87,6 +88,10 @@ class Effect:
     defined in engine/cards/effects.py (Phase E13). This base exists so
     StackObject can hold a typed reference from Phase E1 onward.
     """
+
+    def resolve(self, _game: GameState, _source: GameObject) -> str:
+        """Apply this effect and return a short resolution log detail."""
+        return ""
 
 
 @dataclass
