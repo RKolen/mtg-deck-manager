@@ -54,6 +54,37 @@ def test_etb_condition_ignores_non_battlefield_moves():
     assert game.stack.top is None
 
 
+def test_simultaneous_triggers_are_stacked_in_apnap_order():
+    """Non-active player's trigger is on top after APNAP stack ordering."""
+    game = fresh_game()
+    opponent_observer = place_on_battlefield(
+        make_creature("Opponent Observer", 1, 1),
+        1,
+        game.zones,
+    )
+    player_observer = place_on_battlefield(
+        make_creature("Player Observer", 1, 1),
+        0,
+        game.zones,
+    )
+    game.trigger_registry.register(
+        opponent_observer,
+        TriggerKey.ENTERS_BATTLEFIELD,
+        is_enters_battlefield,
+    )
+    game.trigger_registry.register(
+        player_observer,
+        TriggerKey.ENTERS_BATTLEFIELD,
+        is_enters_battlefield,
+    )
+
+    place_on_battlefield(make_creature("Bear", 2, 2), 0, game.zones)
+
+    trigger = _top_trigger(game)
+    assert trigger.source_permanent_id == opponent_observer.obj_id
+    assert trigger.controller_idx == 1
+
+
 def test_trigger_does_not_fire_after_source_left_battlefield():
     """Registered triggers stop firing when their source permanent is gone."""
     game = fresh_game()

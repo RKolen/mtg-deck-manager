@@ -133,7 +133,7 @@ class TriggerRegistry:
         game: GameState,
     ) -> list[TriggeredAbilityOnStack]:
         """Create triggered abilities and put them on the game stack."""
-        abilities = self.fire(event, game)
+        abilities = _order_apnap(self.fire(event, game), game.active_player_idx)
         for ability in abilities:
             game.stack.push(ability)
         return abilities
@@ -218,6 +218,17 @@ def _to_stack_object(definition: TriggerDefinition) -> TriggeredAbilityOnStack:
         trigger_key=definition.trigger_key.value,
         effect=definition.effect,
         targets=list(definition.targets),
+    )
+
+
+def _order_apnap(
+    abilities: list[TriggeredAbilityOnStack],
+    active_player_idx: int,
+) -> list[TriggeredAbilityOnStack]:
+    """Return abilities in APNAP order for placement on the stack."""
+    return sorted(
+        abilities,
+        key=lambda ability: ability.controller_idx != active_player_idx,
     )
 
 
