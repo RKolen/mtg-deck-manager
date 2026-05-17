@@ -27,7 +27,7 @@ from engine.core.game_object import Effect, GameObject, TokenObject
 from engine.core.game_object import TriggeredAbilityOnStack
 from engine.core.game_object import SpellOnStack, Target
 from engine.core.game_state import GameState, LogEntry, PlayerInfo
-from engine.core.turn_structure import PriorityPassOutcome, TurnRunner
+from engine.core.turn_structure import PriorityPassOutcome, Step, TurnRunner
 from engine.core.zones import Zone, ZoneManager
 from engine.rules.combat import can_attack, eligible_attackers, legal_blocker
 from engine.rules.combat import resolve_combat_damage, tap_attackers
@@ -199,6 +199,7 @@ class InteractiveGame:
     def action_go_to_attack(self) -> dict:
         """Move from first main phase to declare attackers."""
         assert self.phase == "main1"
+        self._fire_step_triggers(Step.BEGIN_COMBAT)
         self.phase = "attack"
         self.pending_attackers = []
         return self.to_client()
@@ -243,6 +244,7 @@ class InteractiveGame:
     def action_end_turn(self) -> dict:
         """End the player's turn, run a simple opponent turn, then pass back."""
         assert self.phase in ("main1", "main2", "attack")
+        self._fire_step_triggers(Step.END_STEP)
         self._log("player", "end_turn", f"End of turn {self.turn}")
         self.phase = "opp_turn"
         self._opponent_main_phase()
@@ -358,6 +360,7 @@ class InteractiveGame:
         player.mana_pool.empty()
         player.land_played = False
         player.spells_cast_this_turn = 0
+        self._fire_step_triggers(Step.UPKEEP)
 
     def _put_spell_on_stack(
         self,
@@ -582,6 +585,11 @@ class InteractiveGame:
             return
         self.state.turn.context.turn_number += 1
         self.phase = "draw"
+
+    def _fire_step_triggers(self, step: Step) -> None:
+        """Put step-based triggers on the stack and resolve them."""
+        self.state.fire_step_triggers(step)
+        self._auto_pass_stack()
 
     def _fire_attack_triggers(self, attacker_ids: list[str]) -> None:
         """Put declared-attacker triggers on the stack and resolve them."""

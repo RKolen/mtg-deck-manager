@@ -5,7 +5,9 @@ from engine.game import create_game, get_game, remove_game
 from engine.core.game_object import CardObject, Effect, GameObject
 from engine.core.game_state import GameState
 from engine.core.zones import Zone
-from engine.rules.triggers import TriggerKey, is_attacks, is_blocks, is_spell_cast
+from engine.rules.triggers import TriggerKey, is_attacks, is_beginning_of_combat
+from engine.rules.triggers import is_beginning_of_upkeep, is_blocks, is_end_step
+from engine.rules.triggers import is_spell_cast
 from tests.conftest import make_card, make_creature, make_deck, make_land
 from tests.conftest import place_on_battlefield
 
@@ -425,6 +427,61 @@ def test_block_trigger_resolves_before_combat_damage():
 
     assert data["playerLife"] == 21
     assert data["phase"] == "draw"
+
+
+def test_beginning_of_combat_trigger_resolves_on_attack_step_entry():
+    """Beginning-of-combat triggers resolve when the player moves to combat."""
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    observer = place_on_battlefield(make_creature("Combat Observer", 1, 1), 0, game.state.zones)
+    game.state.trigger_registry.register(
+        observer,
+        TriggerKey.BEGINNING_OF_COMBAT,
+        is_beginning_of_combat,
+        effect=_GainLifeEffect(player_idx=0, amount=1),
+    )
+
+    data = game.action_go_to_attack()
+
+    assert data["playerLife"] == 21
+    assert data["phase"] == "attack"
+
+
+def test_end_step_trigger_resolves_when_player_ends_turn():
+    """End-step triggers resolve before the opponent turn completes."""
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    observer = place_on_battlefield(make_creature("End Observer", 1, 1), 0, game.state.zones)
+    game.state.trigger_registry.register(
+        observer,
+        TriggerKey.END_STEP,
+        is_end_step,
+        effect=_GainLifeEffect(player_idx=0, amount=1),
+    )
+
+    data = game.action_end_turn()
+
+    assert data["playerLife"] == 21
+    assert data["phase"] == "draw"
+
+
+def test_upkeep_trigger_resolves_before_player_draw():
+    """Upkeep triggers resolve at the start of the player's next turn."""
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    observer = place_on_battlefield(make_creature("Upkeep Observer", 1, 1), 0, game.state.zones)
+    game.action_end_turn()
+    game.state.trigger_registry.register(
+        observer,
+        TriggerKey.BEGINNING_OF_UPKEEP,
+        is_beginning_of_upkeep,
+        effect=_GainLifeEffect(player_idx=0, amount=1),
+    )
+
+    data = game.action_draw()
+
+    assert data["playerLife"] == 21
+    assert data["phase"] == "main1"
 
 
 def test_end_turn_returns_to_player_draw_when_opponent_has_no_attackers():
