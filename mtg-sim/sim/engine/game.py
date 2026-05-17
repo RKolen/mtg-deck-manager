@@ -152,10 +152,9 @@ class InteractiveGame:
         auto_resolve: bool,
     ) -> dict:
         """Pay costs and place a spell on the stack."""
-        assert self.phase in ("main1", "main2")
         card = self._zones(0).hand[hand_idx]
         card_info = _require_card_info(card)
-        assert not card_info.is_land
+        assert _can_cast_now(card_info, self.phase, self.state.stack.is_empty)
         mana_needed, life_cost = _payment_requirements(card_info)
         if not self._tap_lands_for_mana(0, mana_needed):
             return {
@@ -280,31 +279,55 @@ class InteractiveGame:
     def _available_actions(self) -> list[str]:
         """Return action names legal in the current phase."""
         if not self.state.stack.is_empty:
-            return ["pass_priority"]
-        if self.phase == "mulligan":
-            return ["keep", "mulligan"]
-        if self.phase in ("game_over", "opp_turn"):
-            return []
-        if self.phase == "draw":
-            return ["auto_draw"]
-        if self.phase == "declare_blockers":
-            return ["assign_blocker", "unassign_blocker", "confirm_blocks"]
-        actions: list[str] = []
-        if self.phase in ("main1", "main2"):
-            player_can_play_land = (
-                not self.state.players[0].land_played
-                and any(_is_land(c) for c in self._zones(0).hand)
-            )
-            if player_can_play_land:
-                actions.append("play_land")
-            if any(is_affordable(_require_card_info(c), self._available_mana(0))
-                   for c in self._zones(0).hand if not _is_land(c)):
-                actions.append("cast_spell")
-            if self.phase == "main1":
-                actions.append("go_to_attack")
-            actions.append("end_turn")
-        if self.phase == "attack":
+            actions = self._stack_actions()
+        elif self.phase == "mulligan":
+            actions = ["keep", "mulligan"]
+        elif self.phase in ("game_over", "opp_turn"):
+            actions = []
+        elif self.phase == "draw":
+            actions = ["auto_draw"]
+        elif self.phase == "declare_blockers":
+            actions = self._declare_blockers_actions()
+        elif self.phase in ("main1", "main2"):
+            actions = self._main_phase_actions()
+        elif self.phase == "attack":
+            actions = []
             actions.extend(["toggle_attacker", "confirm_attack", "skip_attack"])
+            if self._has_castable_instant():
+                actions.append("cast_spell")
+        else:
+            actions = []
+        return actions
+
+    def _stack_actions(self) -> list[str]:
+        """Return legal actions while the stack is non-empty."""
+        actions = ["pass_priority"]
+        if self._has_castable_instant():
+            actions.append("cast_spell")
+        return actions
+
+    def _declare_blockers_actions(self) -> list[str]:
+        """Return legal actions in the declare-blockers phase."""
+        actions = ["assign_blocker", "unassign_blocker", "confirm_blocks"]
+        if self._has_castable_instant():
+            actions.append("cast_spell")
+        return actions
+
+    def _main_phase_actions(self) -> list[str]:
+        """Return legal actions in a main phase with an empty stack."""
+        actions: list[str] = []
+        player_can_play_land = (
+            not self.state.players[0].land_played
+            and any(_is_land(c) for c in self._zones(0).hand)
+        )
+        if player_can_play_land:
+            actions.append("play_land")
+        if any(is_affordable(_require_card_info(c), self._available_mana(0))
+               for c in self._zones(0).hand if not _is_land(c)):
+            actions.append("cast_spell")
+        if self.phase == "main1":
+            actions.append("go_to_attack")
+        actions.append("end_turn")
         return actions
 
     def _start_player_turn_one(self) -> None:
@@ -577,6 +600,15 @@ class InteractiveGame:
         """Return the last few graveyard card names."""
         return [_require_card_info(c).name for c in self._zones(player_idx).graveyard[-5:]]
 
+    def _has_castable_instant(self) -> bool:
+        """Return whether the player can cast an instant in the current window."""
+        return any(
+            _has_instant_timing(_require_card_info(card))
+            and is_affordable(_require_card_info(card), self._available_mana(0))
+            for card in self._zones(0).hand
+            if not _is_land(card)
+        )
+
     def _log_to_client(self, limit: int | None = None) -> list[dict]:
         """Serialise game log entries."""
         entries = self.state.log[-limit:] if limit is not None else self.state.log
@@ -746,6 +778,20 @@ def _require_card_info(card: CardObject) -> CardInfo:
 
 def _is_land(card: CardObject) -> bool:
     return _require_card_info(card).is_land
+
+
+def _can_cast_now(card: CardInfo, phase: str, stack_is_empty: bool) -> bool:
+    """Return whether the player can cast a card in the current Phase B window."""
+    if card.is_land:
+        return False
+    if _has_instant_timing(card):
+        return phase in ("main1", "main2", "attack", "declare_blockers")
+    return phase in ("main1", "main2") and stack_is_empty
+
+
+def _has_instant_timing(card: CardInfo) -> bool:
+    """Return whether a spell can be cast at instant speed."""
+    return "Instant" in card.type_line or "Flash" in (card.oracle_text or "")
 
 
 def _targets_from_request(target_uid: str | None, target_player: int | None) -> list[Target]:

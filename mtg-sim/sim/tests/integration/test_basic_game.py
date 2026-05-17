@@ -94,6 +94,70 @@ def test_cast_uses_stack_before_auto_resolution():
     assert resolved["playerBattlefield"][0]["name"] == "Memnite"
 
 
+def test_instant_can_be_cast_while_spell_is_on_stack():
+    """Instants can be cast at priority while another spell is pending."""
+    memnite = make_card(
+        name="Memnite",
+        type_line="Artifact Creature — Construct",
+        cmc=0,
+        pt="1/1",
+        mana_cost="",
+    )
+    shock = make_card(
+        name="Shock",
+        type_line="Instant",
+        cmc=0,
+        oracle="Shock deals 2 damage to any target.",
+        mana_cost="",
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=memnite),
+    ]
+    data = game.action_cast_to_stack(0)
+    assert data["availableActions"] == ["pass_priority"]
+
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=shock),
+    ]
+    data = game.to_client()
+    assert "cast_spell" in data["availableActions"]
+    data = game.action_cast(0, target_player=1)
+    assert not data["stack"]
+    assert data["opponentLife"] == 18
+    assert data["playerBattlefield"][0]["name"] == "Memnite"
+    assert "Shock" in data["playerGraveyard"]
+
+
+def test_sorcery_speed_spell_unavailable_while_stack_is_not_empty():
+    """Non-instant spells cannot be cast in response windows."""
+    memnite = make_card(
+        name="Memnite",
+        type_line="Artifact Creature — Construct",
+        cmc=0,
+        pt="1/1",
+        mana_cost="",
+    )
+    divination = make_card(
+        name="Divination",
+        type_line="Sorcery",
+        cmc=0,
+        oracle="Draw two cards.",
+        mana_cost="",
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=memnite),
+    ]
+    game.action_cast_to_stack(0)
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=divination),
+    ]
+    assert game.to_client()["availableActions"] == ["pass_priority"]
+
+
 def test_spell_with_illegal_target_fizzles_through_stack():
     """Target legality is checked when the stack object resolves."""
     shock = make_card(
