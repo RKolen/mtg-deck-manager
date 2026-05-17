@@ -79,13 +79,13 @@ def resolve_combat_damage(
             result.damage_to_player += attacker_power
             _apply_lifelink(game, attacking_player_idx, attacker, attacker_power)
             continue
-        blocker = blockers[0]
-        blocker_power = power(blocker)
         result.blocked_attackers += 1
-        _mark_combat_damage(attacker, blocker, blocker_power)
-        _mark_combat_damage(blocker, attacker, attacker_power)
+        player_damage = _assign_attacker_damage(attacker, blockers, attacker_power)
+        result.damage_to_player += player_damage
+        for blocker in blockers:
+            _mark_combat_damage(attacker, blocker, power(blocker))
+            _apply_lifelink(game, defending_player_idx, blocker, power(blocker))
         _apply_lifelink(game, attacking_player_idx, attacker, attacker_power)
-        _apply_lifelink(game, defending_player_idx, blocker, blocker_power)
 
     if result.damage_to_player:
         game.players[defending_player_idx].life -= result.damage_to_player
@@ -139,6 +139,30 @@ def _apply_lifelink(
 ) -> None:
     if damage_dealt > 0 and _has_keyword(source, "lifelink"):
         game.players[controller_idx].life += damage_dealt
+
+
+def _assign_attacker_damage(
+    attacker: Permanent,
+    blockers: list[Permanent],
+    attacker_power: int,
+) -> int:
+    """Assign attacker damage to blockers, returning trample damage to player."""
+    remaining = attacker_power
+    for blocker in blockers:
+        assigned = min(remaining, _lethal_damage(attacker, blocker))
+        _mark_combat_damage(blocker, attacker, assigned)
+        remaining -= assigned
+        if remaining <= 0:
+            return 0
+    if _has_keyword(attacker, "trample"):
+        return remaining
+    return 0
+
+
+def _lethal_damage(source: Permanent, receiver: Permanent) -> int:
+    if _has_keyword(source, "deathtouch"):
+        return 1
+    return max(0, _toughness(receiver) - receiver.damage_marked)
 
 
 def _mark_combat_damage(receiver: Permanent, source: Permanent, damage: int) -> None:

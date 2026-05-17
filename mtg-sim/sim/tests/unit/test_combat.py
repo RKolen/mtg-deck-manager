@@ -273,6 +273,100 @@ def test_indestructible_survives_deathtouch_damage():
     assert attacker not in game.zones.battlefield
 
 
+def test_trample_assigns_excess_damage_to_defending_player():
+    """Trample damage beyond lethal damage hits the defending player."""
+    game = fresh_game()
+    attacker = place_on_battlefield(
+        make_creature("Rhino", 5, 5, oracle="Trample"),
+        1,
+        game.zones,
+    )
+    blocker = place_on_battlefield(make_creature("Bear", 2, 2), 0, game.zones)
+    result = resolve_combat_damage(
+        game,
+        attacking_player_idx=1,
+        defending_player_idx=0,
+        attacker_ids=[str(attacker.obj_id)],
+        blocker_assignments={str(blocker.obj_id): str(attacker.obj_id)},
+    )
+    assert result.damage_to_player == 3
+    assert game.players[0].life == 17
+    assert blocker not in game.zones.battlefield
+    assert attacker in game.zones.battlefield
+
+
+def test_deathtouch_trample_assigns_one_to_blocker_then_excess():
+    """Deathtouch reduces lethal trample assignment to one damage."""
+    game = fresh_game()
+    attacker = place_on_battlefield(
+        make_creature("Venomous Beast", 5, 5, oracle="Deathtouch, trample"),
+        1,
+        game.zones,
+    )
+    blocker = place_on_battlefield(make_creature("Wall", 0, 5), 0, game.zones)
+    result = resolve_combat_damage(
+        game,
+        attacking_player_idx=1,
+        defending_player_idx=0,
+        attacker_ids=[str(attacker.obj_id)],
+        blocker_assignments={str(blocker.obj_id): str(attacker.obj_id)},
+    )
+    assert result.damage_to_player == 4
+    assert game.players[0].life == 16
+    assert blocker not in game.zones.battlefield
+    assert attacker in game.zones.battlefield
+
+
+def test_multiple_blockers_all_deal_damage_to_attacker():
+    """Every legal blocker assigned to an attacker deals combat damage."""
+    game = fresh_game()
+    attacker = place_on_battlefield(make_creature("Attacker", 5, 5), 1, game.zones)
+    first = place_on_battlefield(make_creature("First", 2, 3), 0, game.zones)
+    second = place_on_battlefield(make_creature("Second", 2, 3), 0, game.zones)
+    result = resolve_combat_damage(
+        game,
+        attacking_player_idx=1,
+        defending_player_idx=0,
+        attacker_ids=[str(attacker.obj_id)],
+        blocker_assignments={
+            str(first.obj_id): str(attacker.obj_id),
+            str(second.obj_id): str(attacker.obj_id),
+        },
+    )
+    assert result.damage_to_player == 0
+    assert result.blocked_attackers == 1
+    assert attacker.damage_marked == 4
+    assert first not in game.zones.battlefield
+    assert second in game.zones.battlefield
+
+
+def test_trample_excess_counts_all_multiple_blockers():
+    """Trample excess is assigned only after all blockers have lethal damage."""
+    game = fresh_game()
+    attacker = place_on_battlefield(
+        make_creature("Rhino", 7, 7, oracle="Trample"),
+        1,
+        game.zones,
+    )
+    first = place_on_battlefield(make_creature("First", 1, 2), 0, game.zones)
+    second = place_on_battlefield(make_creature("Second", 1, 3), 0, game.zones)
+    result = resolve_combat_damage(
+        game,
+        attacking_player_idx=1,
+        defending_player_idx=0,
+        attacker_ids=[str(attacker.obj_id)],
+        blocker_assignments={
+            str(first.obj_id): str(attacker.obj_id),
+            str(second.obj_id): str(attacker.obj_id),
+        },
+    )
+    assert result.damage_to_player == 2
+    assert game.players[0].life == 18
+    assert first not in game.zones.battlefield
+    assert second not in game.zones.battlefield
+    assert attacker in game.zones.battlefield
+
+
 def test_menace_attacker_needs_two_blockers():
     """A menace creature is not blocked by only one creature."""
     game = fresh_game()
