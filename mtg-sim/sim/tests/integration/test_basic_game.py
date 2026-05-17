@@ -315,6 +315,23 @@ def test_heroic_trigger_uses_stack_before_targeting_spell_resolves():
     assert data["stack"][0]["name"] == "Titan's Strength"
 
 
+def test_prowess_trigger_uses_stack_above_noncreature_spell():
+    """Prowess-style spell triggers are registered from resolved permanents."""
+    swiftspear, growth = _prowess_cards()
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=swiftspear),
+        CardObject(controller_idx=0, owner_idx=0, card_info=growth),
+    ]
+    game.action_cast(0)
+
+    data = game.action_cast_to_stack(0)
+
+    assert data["stack"][0]["type"] == "TriggeredAbilityOnStack"
+    assert data["stack"][1]["name"] == "Titan's Strength"
+
+
 def test_player_attack_uses_combat_rules_for_unblocked_damage():
     """A confirmed player attack taps the attacker and damages the opponent."""
     memnite = make_card(
@@ -452,3 +469,23 @@ def _heroic_cards() -> tuple[CardInfo, CardInfo]:
         mana_cost="",
     )
     return crusader, growth
+
+
+def _prowess_cards() -> tuple[CardInfo, CardInfo]:
+    """Return a simple prowess creature and a noncreature spell."""
+    swiftspear = make_card(
+        name="Monastery Swiftspear",
+        type_line="Creature — Human Monk",
+        cmc=0,
+        pt="1/2",
+        oracle="Prowess",
+        mana_cost="",
+    )
+    growth = make_card(
+        name="Titan's Strength",
+        type_line="Instant",
+        cmc=0,
+        oracle="Target creature gets +3/+1 until end of turn.",
+        mana_cost="",
+    )
+    return swiftspear, growth

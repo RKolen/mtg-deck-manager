@@ -32,7 +32,8 @@ from engine.core.zones import Zone, ZoneManager
 from engine.rules.combat import can_attack, eligible_attackers, legal_blocker
 from engine.rules.combat import resolve_combat_damage, tap_attackers
 from engine.rules.stack import Stack
-from engine.rules.triggers import TriggerKey, is_spell_targeting_source
+from engine.rules.triggers import TriggerKey, is_noncreature_nonland_spell_cast
+from engine.rules.triggers import is_spell_targeting_source
 
 
 @dataclass
@@ -477,17 +478,22 @@ class InteractiveGame:
 
     def _register_permanent_triggers(self, permanent: Permanent) -> None:
         """Register parsed triggered abilities from a newly resolved permanent."""
-        if "heroic" not in permanent.oracle_text.lower():
-            return
-        blueprint = parse_token_blueprint(permanent.oracle_text)
-        if blueprint is None:
-            return
-        self.state.trigger_registry.register(
-            permanent,
-            TriggerKey.SPELL_CAST,
-            is_spell_targeting_source,
-            effect=_CreateTokenEffect(blueprint),
-        )
+        oracle = permanent.oracle_text.lower()
+        if "heroic" in oracle:
+            blueprint = parse_token_blueprint(permanent.oracle_text)
+            if blueprint is not None:
+                self.state.trigger_registry.register(
+                    permanent,
+                    TriggerKey.SPELL_CAST,
+                    is_spell_targeting_source,
+                    effect=_CreateTokenEffect(blueprint),
+                )
+        if "prowess" in oracle:
+            self.state.trigger_registry.register(
+                permanent,
+                TriggerKey.SPELL_CAST,
+                is_noncreature_nonland_spell_cast,
+            )
 
     def _opponent_main_phase(self) -> None:
         """Run a simple opponent draw, land, and spell sequence."""
