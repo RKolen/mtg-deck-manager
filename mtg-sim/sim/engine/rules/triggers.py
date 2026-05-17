@@ -18,6 +18,7 @@ class TriggerKey(StrEnum):
     """Known trigger timing/event keys."""
 
     ENTERS_BATTLEFIELD = "enters_battlefield"
+    DIES = "dies"
 
 
 TriggerCondition = Callable[[ZoneMoveEvent, "GameState"], bool]
@@ -70,7 +71,7 @@ class TriggerRegistry:
         return [
             _to_stack_object(definition)
             for definition in self._definitions
-            if _source_still_exists(definition, game)
+            if _source_can_trigger(definition, event, game)
             and definition.condition(event, game)
         ]
 
@@ -91,6 +92,16 @@ def is_enters_battlefield(event: ZoneMoveEvent, _game: GameState) -> bool:
     return event.to_zone == Zone.BATTLEFIELD
 
 
+def is_dies(event: ZoneMoveEvent, _game: GameState) -> bool:
+    """Return True when a creature moved from battlefield to graveyard."""
+    return (
+        isinstance(event.obj, Permanent)
+        and event.from_zone == Zone.BATTLEFIELD
+        and event.to_zone == Zone.GRAVEYARD
+        and "Creature" in event.obj.type_line
+    )
+
+
 def _to_stack_object(definition: TriggerDefinition) -> TriggeredAbilityOnStack:
     return TriggeredAbilityOnStack(
         controller_idx=definition.controller_idx,
@@ -102,5 +113,23 @@ def _to_stack_object(definition: TriggerDefinition) -> TriggeredAbilityOnStack:
     )
 
 
-def _source_still_exists(definition: TriggerDefinition, game: GameState) -> bool:
-    return game.zones.find_permanent(definition.source_permanent_id) is not None
+def _source_can_trigger(
+    definition: TriggerDefinition,
+    event: ZoneMoveEvent,
+    game: GameState,
+) -> bool:
+    if game.zones.find_permanent(definition.source_permanent_id) is not None:
+        return True
+    return _is_self_leaves_battlefield_trigger(definition, event)
+
+
+def _is_self_leaves_battlefield_trigger(
+    definition: TriggerDefinition,
+    event: ZoneMoveEvent,
+) -> bool:
+    return (
+        isinstance(event.obj, Permanent)
+        and definition.source_permanent_id == event.obj.obj_id
+        and definition.trigger_key == TriggerKey.DIES
+        and event.from_zone == Zone.BATTLEFIELD
+    )
