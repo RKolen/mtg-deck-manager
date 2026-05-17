@@ -20,6 +20,7 @@ class TriggerKey(StrEnum):
     """Known trigger timing/event keys."""
 
     ENTERS_BATTLEFIELD = "enters_battlefield"
+    LEAVES_BATTLEFIELD = "leaves_battlefield"
     DIES = "dies"
     ATTACKS = "attacks"
     BLOCKS = "blocks"
@@ -146,6 +147,15 @@ def is_enters_battlefield(
 ) -> bool:
     """Return True when an event moved an object onto the battlefield."""
     return isinstance(event, ZoneMoveEvent) and event.to_zone == Zone.BATTLEFIELD
+
+
+def is_leaves_battlefield(
+    event: TriggerEvent,
+    _game: GameState,
+    _definition: TriggerDefinition,
+) -> bool:
+    """Return True when an event moved an object away from the battlefield."""
+    return isinstance(event, ZoneMoveEvent) and event.from_zone == Zone.BATTLEFIELD
 
 
 def is_dies(
@@ -313,6 +323,9 @@ def _is_self_leaves_battlefield_trigger(
         isinstance(event, ZoneMoveEvent)
         and isinstance(event.obj, Permanent)
         and definition.source_permanent_id == event.obj.obj_id
-        and definition.trigger_key == TriggerKey.DIES
+        and definition.trigger_key in (
+            TriggerKey.DIES,
+            TriggerKey.LEAVES_BATTLEFIELD,
+        )
         and event.from_zone == Zone.BATTLEFIELD
     )

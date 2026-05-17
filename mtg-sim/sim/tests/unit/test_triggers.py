@@ -7,7 +7,7 @@ from engine.core.zones import Zone
 from engine.rules.triggers import TriggerKey, is_attacks, is_beginning_of_combat
 from engine.rules.triggers import is_beginning_of_upkeep, is_blocks, is_dies
 from engine.rules.triggers import is_draws_card, is_end_step, is_enters_battlefield
-from engine.rules.triggers import is_noncreature_nonland_spell_cast
+from engine.rules.triggers import is_leaves_battlefield, is_noncreature_nonland_spell_cast
 from engine.rules.triggers import is_spell_cast, is_spell_targeting_source
 from engine.rules.triggers import spell_cast_event
 from tests.conftest import add_to_hand, add_to_library, fresh_game, make_card
@@ -144,6 +144,71 @@ def test_self_dies_trigger_fires_from_own_sba_death():
     assert trigger.source_permanent_id == doomed.obj_id
     assert trigger.controller_idx == 0
     assert trigger.trigger_key == TriggerKey.DIES.value
+
+
+def test_leaves_battlefield_trigger_goes_on_stack_from_destroy():
+    """A registered leaves-battlefield trigger fires when a permanent leaves."""
+    game = fresh_game()
+    watcher = place_on_battlefield(
+        make_creature("Departures Watcher", 1, 1),
+        0,
+        game.zones,
+    )
+    bear = place_on_battlefield(make_creature("Bear", 2, 2), 1, game.zones)
+    game.trigger_registry.register(
+        watcher,
+        TriggerKey.LEAVES_BATTLEFIELD,
+        is_leaves_battlefield,
+    )
+
+    game.zones.leave_battlefield(bear, Zone.GRAVEYARD, "destroy")
+
+    trigger = _top_trigger(game)
+    assert trigger.source_permanent_id == watcher.obj_id
+    assert trigger.controller_idx == 0
+    assert trigger.trigger_key == TriggerKey.LEAVES_BATTLEFIELD.value
+
+
+def test_self_leaves_battlefield_trigger_fires_from_own_departure():
+    """Leaves-battlefield triggers can fire from the source permanent leaving."""
+    game = fresh_game()
+    traveler = place_on_battlefield(
+        make_creature("Selfless Spirit", 2, 1),
+        0,
+        game.zones,
+    )
+    game.trigger_registry.register(
+        traveler,
+        TriggerKey.LEAVES_BATTLEFIELD,
+        is_leaves_battlefield,
+    )
+
+    game.zones.leave_battlefield(traveler, Zone.GRAVEYARD, "destroy")
+
+    trigger = _top_trigger(game)
+    assert trigger.source_permanent_id == traveler.obj_id
+    assert trigger.controller_idx == 0
+    assert trigger.trigger_key == TriggerKey.LEAVES_BATTLEFIELD.value
+
+
+def test_leaves_battlefield_trigger_ignores_non_battlefield_moves():
+    """Leaves-battlefield triggers require an object to leave the battlefield."""
+    game = fresh_game()
+    watcher = place_on_battlefield(
+        make_creature("Departures Watcher", 1, 1),
+        0,
+        game.zones,
+    )
+    card = add_to_library(make_card("Drawn Card"), 0, game.zones)
+    game.trigger_registry.register(
+        watcher,
+        TriggerKey.LEAVES_BATTLEFIELD,
+        is_leaves_battlefield,
+    )
+
+    game.zones.draw(card.controller_idx)
+
+    assert game.stack.top is None
 
 
 def test_upkeep_trigger_goes_on_stack_from_step_event():
