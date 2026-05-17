@@ -117,6 +117,7 @@ class InteractiveGame:
         self._begin_turn(0)
         drawn = self._draw_cards(0, 1)
         self._log("player", "draw", f"Drew: {_card_names(drawn) or '-'}")
+        self._auto_pass_stack()
         self.phase = "main1"
         return self.to_client()
 

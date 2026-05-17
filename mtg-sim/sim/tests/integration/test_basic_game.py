@@ -7,7 +7,8 @@ from engine.core.game_state import GameState
 from engine.core.zones import Zone
 from engine.rules.triggers import TriggerKey, is_attacks, is_beginning_of_combat
 from engine.rules.triggers import is_beginning_of_upkeep, is_blocks, is_dies
-from engine.rules.triggers import is_end_step, is_enters_battlefield, is_spell_cast
+from engine.rules.triggers import is_draws_card, is_end_step, is_enters_battlefield
+from engine.rules.triggers import is_spell_cast
 from tests.conftest import make_card, make_creature, make_deck, make_land
 from tests.conftest import place_on_battlefield
 
@@ -35,6 +36,26 @@ def test_keep_starts_first_main_phase_on_the_play():
     assert data["phase"] == "main1"
     assert len(data["playerHand"]) == 7
     assert "play_land" in data["availableActions"]
+
+
+def test_draw_card_trigger_resolves_from_turn_draw():
+    """Draw-card triggers emitted by the turn draw resolve before main phase."""
+    game = create_game(make_deck(lands=20), make_deck(lands=20), on_the_play=True)
+    game.action_keep()
+    observer = place_on_battlefield(make_creature("Draw Observer", 1, 1), 0, game.state.zones)
+    game.action_end_turn()
+    game.state.trigger_registry.register(
+        observer,
+        TriggerKey.DRAWS_CARD,
+        is_draws_card,
+        effect=_GainLifeEffect(player_idx=0, amount=1),
+    )
+
+    data = game.action_draw()
+
+    assert data["playerLife"] == 21
+    assert data["phase"] == "main1"
+    assert not data["stack"]
 
 
 def test_london_mulligan_draws_seven_then_bottoms_on_keep():
