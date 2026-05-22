@@ -80,6 +80,12 @@ from engine.abilities.keywords.casting import (
     resolve_cast_adjustments,
 )
 from engine.abilities.keywords.casting.cast_adjustments import CastAdjustmentInput
+from engine.abilities.keywords.actions import (
+    has_connive,
+    keyword_actions_in_oracle,
+    resolve_spell_keyword_actions,
+)
+from engine.abilities.keywords.actions.tokens import connive
 from engine.game.cast_modifiers import apply_post_cast_modifiers
 from engine.cards.oracle_parse import parse_draw, parse_token_blueprint, spell_category
 from engine.core.game_object import (
@@ -840,6 +846,33 @@ class SpellStackMixin(GameRuntimeMixin):
         self.state.turn.action_taken()
         return targets
 
+    def _spell_keyword_action_detail(
+        self,
+        spell: SpellOnStack,
+        *,
+        skip_actions: frozenset[str] = frozenset(),
+    ) -> str:
+        """Apply keyword actions from oracle text after the primary spell effect."""
+        card = spell.source
+        if card is None or card.card_info is None:
+            return ""
+        second_uid = None
+        if len(spell.targets) >= 2:
+            second_uid = target_uid([spell.targets[1]])
+        detail = resolve_spell_keyword_actions(
+            self.state.zones,
+            self.state,
+            spell.controller_idx,
+            card.card_info.oracle_text or '',
+            target_uid(spell.targets),
+            self._draw_cards,
+            skip_actions=skip_actions,
+            second_creature_uid=second_uid,
+        )
+        if detail:
+            self.state.check_sbas()
+        return detail
+
     def _resolve_top_of_stack(self) -> str:
         """Resolve the top stack object and apply its simple Phase B effect."""
         result = self.state.stack.resolve_top(self.state.zones, self.state)
@@ -872,8 +905,20 @@ class SpellStackMixin(GameRuntimeMixin):
             "draw": self._resolve_draw,
         }
         handler = dispatch.get(category)
+        skip_actions: frozenset[str] = frozenset()
+        if category == 'draw' and has_connive(card_info.oracle_text or ''):
+            skip_actions = frozenset({'Connive'})
         if handler is not None:
-            return handler(spell)
+            primary = handler(spell)
+            extras = self._spell_keyword_action_detail(spell, skip_actions=skip_actions)
+            if extras:
+                return f"{primary}; {extras}"
+            return primary
+        if keyword_actions_in_oracle(card_info.oracle_text):
+            extras = self._spell_keyword_action_detail(spell)
+            if extras:
+                self._relocate_resolved_spell(spell, card)
+                return f"{card_info.name}: {extras}"
         self._relocate_resolved_spell(spell, card)
         return f"Cast {card_info.name}"
 
@@ -1057,7 +1102,12 @@ class SpellStackMixin(GameRuntimeMixin):
         assert card is not None
         controller_idx = spell.controller_idx
         card_info = require_card_info(card)
-        count = (parse_draw(card_info.oracle_text or "") or 1) + extra_draw_from_kicker(
+        oracle = card_info.oracle_text or ''
+        if has_connive(oracle):
+            detail = connive(self.state.zones, controller_idx, oracle, self._draw_cards)
+            self._relocate_resolved_spell(spell, card)
+            return f"{card_info.name} {detail}"
+        count = (parse_draw(oracle) or 1) + extra_draw_from_kicker(
             card_info,
             spell.kicker_times,
         )
