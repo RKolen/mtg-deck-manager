@@ -36,6 +36,7 @@ class SpellCastContext:
 
     cast_via_flashback: bool = False
     cast_via_escape: bool = False
+    cast_via_jump_start: bool = False
     from_graveyard: bool = False
     kicker_times: int = 0
 

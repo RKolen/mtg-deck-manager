@@ -224,9 +224,19 @@ class SpellOnStack(GameObject):
     chosen_x: int = 0
     cast_via_flashback: bool = False
     cast_via_escape: bool = False
+    cast_via_jump_start: bool = False
     kicker_times: int = 0
     is_storm_copy: bool = False
     cast_via_cascade: bool = False
+
+
+def spell_exiles_from_graveyard_cast(spell: SpellOnStack) -> bool:
+    """Return True when a graveyard alt-cast spell exiles on leaving the stack."""
+    return (
+        spell.cast_via_flashback
+        or spell.cast_via_escape
+        or spell.cast_via_jump_start
+    )
 
 
 @dataclass

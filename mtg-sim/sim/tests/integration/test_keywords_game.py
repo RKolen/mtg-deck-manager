@@ -78,6 +78,39 @@ def test_escape_cast_from_graveyard_exiles_on_resolve():
     assert exiled_names == {"Scream", "A", "B"}
 
 
+def test_jump_start_cast_from_graveyard_exiles_on_resolve():
+    """Jump-start discards, casts from the graveyard, and exiles the spell on resolve."""
+    bolt = make_instant(
+        name="Bolt",
+        oracle="Bolt deals 2 damage to any target.\nJump-start {0}",
+        mana_cost="{R}",
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    fodder = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant("Fodder"))
+    card = CardObject(controller_idx=0, owner_idx=0, card_info=bolt)
+    game.state.zones.player_zones[0].hand = [fodder]
+    game.state.zones.player_zones[0].graveyard = [card]
+    data = game.action_cast_jump_start(
+        0,
+        target_player=1,
+        discard_hand_idx=0,
+    )
+    assert data["opponentLife"] == 18
+    assert not data["stack"]
+    assert len(game.state.zones.player_zones[0].graveyard) == 1
+    discarded = game.state.zones.player_zones[0].graveyard[0]
+    assert isinstance(discarded, CardObject)
+    assert discarded.card_info is not None
+    assert discarded.card_info.name == "Fodder"
+    exiled = game.state.zones.player_zones[0].exile
+    assert len(exiled) == 1
+    exiled_spell = exiled[0]
+    assert isinstance(exiled_spell, CardObject)
+    assert exiled_spell.card_info is not None
+    assert exiled_spell.card_info.name == "Bolt"
+
+
 def test_kicked_burn_spell_deals_extra_damage():
     """A kicked burn spell pays the kicker cost and uses kicked damage."""
     burst = make_instant(

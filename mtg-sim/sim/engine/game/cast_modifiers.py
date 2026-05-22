@@ -63,6 +63,7 @@ def _push_storm_copies(
             targets=list(targets),
             cast_via_flashback=context.cast_via_flashback,
             cast_via_escape=context.cast_via_escape,
+            cast_via_jump_start=context.cast_via_jump_start,
             kicker_times=context.kicker_times,
             is_storm_copy=True,
         ))

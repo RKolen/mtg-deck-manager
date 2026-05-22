@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 
 from engine.abilities.keywords import can_target_permanent, pay_ward_for_target
 from engine.core.game_object import (
+    spell_exiles_from_graveyard_cast,
     CardObject,
     Permanent,
     SpellOnStack,
@@ -196,7 +197,7 @@ def _move_spell_card_to_graveyard(obj: StackObject, zones: ZoneManager) -> None:
         return
     destination = (
         zones.player_zones[obj.owner_idx].exile
-        if obj.cast_via_flashback or obj.cast_via_escape
+        if spell_exiles_from_graveyard_cast(obj)
         else zones.player_zones[obj.owner_idx].graveyard
     )
     destination.append(source)

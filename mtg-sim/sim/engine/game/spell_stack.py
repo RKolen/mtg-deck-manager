@@ -5,6 +5,11 @@ from __future__ import annotations
 from engine.abilities.keywords.casting import (
     can_cast_via_escape,
     can_cast_via_flashback,
+    can_cast_via_jump_start,
+    discard_for_jump_start,
+    has_jump_start,
+    jump_start_discard_error,
+    jump_start_mana_needed,
     cast_mana_needed,
     escape_mana_needed,
     extra_draw_from_kicker,
@@ -225,6 +230,56 @@ class SpellStackMixin(GameRuntimeMixin):
             self._auto_pass_stack()
         return self.to_client()
 
+    def _announce_jump_start_cast(
+        self,
+        graveyard_idx: int,
+        target_uid_str: str | None,
+        target_player_idx: int | None,
+        auto_resolve: bool,
+        discard_hand_idx: int | None = None,
+    ) -> dict:
+        """Discard a card, pay jump-start cost, and cast from the graveyard."""
+        card = self._zones(0).graveyard[graveyard_idx]
+        if not isinstance(card, CardObject):
+            return {**self.to_client(), "error": "Invalid card"}
+        card_info = require_card_info(card)
+        if not has_jump_start(card_info):
+            return {**self.to_client(), "error": f"{card_info.name} does not have jump-start"}
+        if not can_cast_via_jump_start(card_info, self.phase, self.state.stack.is_empty):
+            return {**self.to_client(), "error": "Cannot cast jump-start now"}
+        discard_err = jump_start_discard_error(self.state.zones, 0, discard_hand_idx)
+        if discard_err:
+            return {**self.to_client(), "error": discard_err}
+        mana_needed = jump_start_mana_needed(card_info)
+        if not self._tap_lands_for_mana(0, mana_needed):
+            return {
+                **self.to_client(),
+                "error": (
+                    f"Not enough mana ({self._available_mana(0)} available, "
+                    f"need {mana_needed})"
+                ),
+            }
+        assert discard_hand_idx is not None
+        discarded = discard_for_jump_start(self.state.zones, 0, discard_hand_idx)
+        self.state.players[0].spells_cast_this_turn += 1
+        targets = self._put_spell_on_stack(
+            player_idx=0,
+            card=card,
+            target_uid_str=target_uid_str,
+            target_player_idx=target_player_idx,
+            context=SpellCastContext(cast_via_jump_start=True, from_graveyard=True),
+        )
+        discard_info = require_card_info(discarded)
+        self._log(
+            "player",
+            "jump-start",
+            f"{card_info.name} on stack (discarded {discard_info.name})",
+        )
+        self.state.fire_spell_cast_triggers(card, tuple(targets))
+        if auto_resolve:
+            self._auto_pass_stack()
+        return self.to_client()
+
     def _put_spell_on_stack(
         self,
         player_idx: int,
@@ -247,6 +302,7 @@ class SpellStackMixin(GameRuntimeMixin):
             targets=targets,
             cast_via_flashback=opts.cast_via_flashback,
             cast_via_escape=opts.cast_via_escape,
+            cast_via_jump_start=opts.cast_via_jump_start,
             kicker_times=opts.kicker_times,
         ))
         actor = "player" if player_idx == 0 else "opponent"

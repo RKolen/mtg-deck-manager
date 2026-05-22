@@ -40,6 +40,14 @@ from engine.abilities.keywords.casting.delve import (
     normalize_delve_graveyard_indices,
     resolve_delve_for_cast,
 )
+from engine.abilities.keywords.casting.jump_start import (
+    can_cast_via_jump_start,
+    discard_for_jump_start,
+    has_jump_start,
+    jump_start_cost,
+    jump_start_discard_error,
+    jump_start_mana_needed,
+)
 from engine.abilities.keywords.casting.improvise import (
     has_improvise,
     normalize_improvise_artifact_ids,
@@ -61,6 +69,12 @@ from engine.abilities.keywords.casting.kicker import (
 __all__ = [
     'can_cast_via_escape',
     'can_cast_via_flashback',
+    'can_cast_via_jump_start',
+    'discard_for_jump_start',
+    'has_jump_start',
+    'jump_start_cost',
+    'jump_start_discard_error',
+    'jump_start_mana_needed',
     'escape_cost',
     'escape_exiles_required',
     'escape_mana_needed',

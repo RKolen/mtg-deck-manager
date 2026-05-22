@@ -8,6 +8,12 @@ from engine.abilities import activated, keywords
 from engine.abilities.keywords.casting import (
     can_cast_via_escape,
     can_cast_via_flashback,
+    can_cast_via_jump_start,
+    discard_for_jump_start,
+    has_jump_start,
+    jump_start_cost,
+    jump_start_discard_error,
+    jump_start_mana_needed,
     cast_mana_needed,
     escape_cost,
     escape_exiles_required,
@@ -391,6 +397,40 @@ def test_can_cast_via_flashback_allows_instant_timing():
     assert not can_cast_via_flashback(card, 'upkeep', stack_is_empty=True)
 
 
+def test_has_jump_start_parses_alternate_cost():
+    """Jump-start cost is parsed from oracle text."""
+    card = make_instant(
+        'Bolt',
+        oracle='Jump-start {1}{R}\nBolt deals 2 damage to any target.',
+    )
+    assert has_jump_start(card)
+    cost = jump_start_cost(card)
+    assert cost is not None
+    assert cost.mana_value == 2
+    assert jump_start_mana_needed(card) == 2
+
+
+def test_discard_for_jump_start_moves_card_to_graveyard():
+    """Jump-start discard removes a card from hand and puts it in the graveyard."""
+    game = fresh_game()
+    spell_info = make_instant('Bolt', oracle='Jump-start {0}\nDeal 2 damage.')
+    to_discard = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant('Fodder'))
+    game.zones.player_zones[0].hand.append(to_discard)
+    assert jump_start_discard_error(game.zones, 0, 0) is None
+    discarded = discard_for_jump_start(game.zones, 0, 0)
+    assert discarded.card_info is not None
+    assert discarded.card_info.name == 'Fodder'
+    assert len(game.zones.player_zones[0].hand) == 0
+    assert to_discard in game.zones.player_zones[0].graveyard
+
+
+def test_can_cast_via_jump_start_allows_instant_timing():
+    """Jump-start may be cast during combat steps like an instant."""
+    card = make_instant('Bolt', oracle='Jump-start {0}\nDeal 2 damage.')
+    assert can_cast_via_jump_start(card, 'attack', stack_is_empty=False)
+    assert not can_cast_via_jump_start(card, 'upkeep', stack_is_empty=True)
+
+
 def test_can_cast_via_escape_allows_instant_timing():
     """Escape may be cast during combat steps like an instant."""
     card = make_instant('Scream', oracle='Escape—{0}\nExile two other cards.')
@@ -536,6 +576,25 @@ def test_flashback_fizzle_exiles_source_card():
         owner_idx=0,
         source=card,
         cast_via_flashback=True,
+        targets=[Target(obj_id=99999)],
+    )
+    game.stack.push(spell)
+    result = game.stack.resolve_top(game.zones)
+    assert result.fizzled
+    assert card in game.zones.player_zones[0].exile
+    assert card not in game.zones.player_zones[0].graveyard
+
+
+def test_jump_start_fizzle_exiles_source_card():
+    """Fizzled jump-start spells exile instead of returning to the graveyard."""
+    game = fresh_game()
+    card_info = make_instant('Bolt', oracle='Jump-start {0}\nDeal 2 damage.')
+    card = CardObject(controller_idx=0, owner_idx=0, card_info=card_info)
+    spell = SpellOnStack(
+        controller_idx=1,
+        owner_idx=0,
+        source=card,
+        cast_via_jump_start=True,
         targets=[Target(obj_id=99999)],
     )
     game.stack.push(spell)

@@ -165,6 +165,22 @@ class InteractiveGame(SpellStackMixin):  # pylint: disable=too-many-public-metho
             escape_exile_indices=escape_exile_indices,
         )
 
+    def action_cast_jump_start(
+        self,
+        graveyard_idx: int,
+        target_uid: str | None = None,
+        target_player: int | None = None,
+        discard_hand_idx: int | None = None,
+    ) -> dict:
+        """Cast a card from the graveyard for its jump-start cost."""
+        return self._announce_jump_start_cast(
+            graveyard_idx,
+            target_uid,
+            target_player,
+            auto_resolve=True,
+            discard_hand_idx=discard_hand_idx,
+        )
+
     def action_pass_priority(self) -> dict:
         """Pass priority once; resolve or advance when both players pass."""
         outcome = self.state.turn.pass_priority(self.state.stack.is_empty)

@@ -187,6 +187,7 @@ class GameActionRequest(BaseModel):
     delveGraveyardIndices: list[int] = []
     improviseArtifactIds: list[str] = []
     escapeExileIndices: list[int] = []
+    discardHandIdx: int | None = None
     targetUid: str | None = None
     targetPlayer: int | None = None
     permanentUid: str | None = None
@@ -277,6 +278,14 @@ async def _dispatch_action(game: InteractiveGame, req: GameActionRequest) -> dic
             req.targetUid,
             req.targetPlayer,
             escape_exile_indices=req.escapeExileIndices,
+        )
+    if req.action == "cast_jump_start":
+        assert req.handIdx is not None
+        return game.action_cast_jump_start(
+            req.handIdx,
+            req.targetUid,
+            req.targetPlayer,
+            discard_hand_idx=req.discardHandIdx,
         )
     if req.action == "toggle_attacker":
         assert req.permanentUid is not None
