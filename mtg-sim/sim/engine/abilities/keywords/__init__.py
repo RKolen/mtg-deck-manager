@@ -65,6 +65,7 @@ from engine.abilities.keywords.registry import (
 )
 from engine.abilities.keywords.registry_data import KEYWORD_ENTRIES, SCRYFALL_KEYWORD_COUNT
 from engine.abilities.keywords.targeting import (
+    ProtectionSource,
     can_target_permanent,
     has_hexproof,
     has_protection_from,
@@ -73,6 +74,8 @@ from engine.abilities.keywords.targeting import (
     must_pay_ward,
     pay_ward_for_target,
     protection_qualities,
+    protection_source_from_card,
+    protection_source_from_flags,
     ward_cost,
 )
 from engine.abilities.keywords.timing import enters_ready, has_flash
@@ -122,6 +125,9 @@ __all__ = [
     'must_pay_ward',
     'pay_ward_for_target',
     'protection_qualities',
+    'protection_source_from_card',
+    'protection_source_from_flags',
+    'ProtectionSource',
     'registry_summary',
     'should_tap_attacker',
     'storm_copy_count',

@@ -13,11 +13,18 @@ from engine.abilities.keywords import (
     has_registered_keyword,
     registry_summary,
 )
-from engine.core.game_object import SpellOnStack, Target
+from engine.core.game_object import CardObject, SpellOnStack, Target
 from engine.core.mana import ManaCost
 from engine.core.zones import Zone
 from engine.rules.combat import legal_blocker, resolve_combat_damage
-from tests.conftest import fresh_game, make_card, make_creature, make_land, place_on_battlefield
+from tests.conftest import (
+    fresh_game,
+    make_card,
+    make_creature,
+    make_instant,
+    make_land,
+    place_on_battlefield,
+)
 
 
 def test_registry_matches_scryfall_catalog_size():
@@ -183,8 +190,10 @@ def test_protection_from_creatures_blocks_creature_sources():
         0,
         game.zones,
     )
-    assert not keywords.can_target_permanent(protected, 1, source_is_creature=True)
-    assert keywords.can_target_permanent(protected, 1, source_is_creature=False)
+    creature_source = keywords.protection_source_from_flags(source_is_creature=True)
+    non_creature = keywords.protection_source_from_flags()
+    assert not keywords.can_target_permanent(protected, 1, source=creature_source)
+    assert keywords.can_target_permanent(protected, 1, source=non_creature)
 
 
 def test_protection_from_red_blocks_red_sources():
@@ -195,7 +204,104 @@ def test_protection_from_red_blocks_red_sources():
         0,
         game.zones,
     )
-    assert not keywords.can_target_permanent(protected, 1, source_colors=frozenset({'R'}))
+    red_bolt = make_instant('Bolt', mana_cost='{R}')
+    assert not keywords.can_target_permanent(protected, 1, source_card=red_bolt)
+    white_spell = make_instant('Heal', mana_cost='{W}')
+    assert keywords.can_target_permanent(protected, 1, source_card=white_spell)
+
+
+def test_protection_from_red_and_green_blocks_both():
+    """Multi-clause protection parses 'and from' follow-ups."""
+    game = fresh_game()
+    protected = place_on_battlefield(
+        make_creature(
+            'Warder',
+            oracle='Protection from red and from green',
+        ),
+        0,
+        game.zones,
+    )
+    assert keywords.protection_qualities(protected) == frozenset({'red', 'green'})
+    assert not keywords.can_target_permanent(
+        protected, 1, source_card=make_instant('Bolt', mana_cost='{R}'),
+    )
+    assert not keywords.can_target_permanent(
+        protected, 1, source_card=make_instant('Growth', mana_cost='{G}'),
+    )
+    assert keywords.can_target_permanent(
+        protected, 1, source_card=make_instant('Counter', mana_cost='{U}'),
+    )
+
+
+def test_protection_from_instants_blocks_instant_spells():
+    """Protection from instants blocks instant spell sources."""
+    game = fresh_game()
+    protected = place_on_battlefield(
+        make_creature('Shell', oracle='Protection from instants'),
+        0,
+        game.zones,
+    )
+    assert not keywords.can_target_permanent(
+        protected, 1, source_card=make_instant('Shock'),
+    )
+    assert keywords.can_target_permanent(
+        protected, 1, source_card=make_creature('Bear'),
+    )
+
+
+def test_protection_from_colored_blocks_colored_spells():
+    """Protection from colored blocks any spell with colored mana in its cost."""
+    game = fresh_game()
+    protected = place_on_battlefield(
+        make_creature('Pale', oracle='Protection from colored'),
+        0,
+        game.zones,
+    )
+    assert not keywords.can_target_permanent(
+        protected, 1, source_card=make_instant('Bolt', mana_cost='{R}'),
+    )
+    assert keywords.can_target_permanent(
+        protected, 1,
+        source_card=make_card('Rock', type_line='Artifact', mana_cost='{2}'),
+    )
+
+
+def test_protection_from_everything_blocks_all_sources():
+    """Protection from everything blocks any spell source."""
+    game = fresh_game()
+    protected = place_on_battlefield(
+        make_creature('True Believer', oracle='Protection from everything'),
+        0,
+        game.zones,
+    )
+    assert not keywords.can_target_permanent(
+        protected, 1, source_card=make_instant('Shock', mana_cost='{R}'),
+    )
+    assert not keywords.can_target_permanent(
+        protected, 1, source_card=make_creature('Bear'),
+    )
+
+
+def test_protection_spell_fizzles_on_stack():
+    """A red instant targeting protection-from-red fizzles at resolution."""
+    game = fresh_game()
+    protected = place_on_battlefield(
+        make_creature('Knight', oracle='Protection from red'),
+        0,
+        game.zones,
+    )
+    bolt = make_instant('Bolt', mana_cost='{R}')
+    source = CardObject(controller_idx=1, owner_idx=1, card_info=bolt)
+    spell = SpellOnStack(
+        controller_idx=1,
+        owner_idx=1,
+        source=source,
+        targets=[Target(obj_id=protected.obj_id)],
+    )
+    game.stack.push(spell)
+    result = game.stack.resolve_top(game.zones)
+    assert result.fizzled
+    assert result.reason == 'all_targets_illegal'
 
 
 def test_hexproof_spell_fizzles_on_stack():
