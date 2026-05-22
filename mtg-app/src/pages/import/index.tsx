@@ -3,7 +3,7 @@
  *
  * Parses a Magic Deck Spreadsheet v2 Excel file client-side using xlsx.js,
  * matches card names against the Drupal card library, presents unmatched
- * cards for manual resolution, then POSTs deck + deck_card nodes via JSON:API.
+ * cards for manual resolution, then creates the deck and slots via GraphQL.
  */
 
 import React, { useState, useCallback, useRef } from 'react';

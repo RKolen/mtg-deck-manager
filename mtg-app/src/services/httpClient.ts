@@ -12,7 +12,7 @@ import axios, { type AxiosInstance } from 'axios';
  * Creates an Axios instance pre-configured with the Drupal base URL and
  * Basic Auth credentials sourced from environment variables.
  *
- * @param basePath     - Path appended to GATSBY_DRUPAL_URL (e.g. '/jsonapi').
+ * @param basePath     - Path appended to GATSBY_DRUPAL_URL (e.g. '/api').
  * @param extraHeaders - Additional headers merged into every request.
  */
 export function createDrupalClient(

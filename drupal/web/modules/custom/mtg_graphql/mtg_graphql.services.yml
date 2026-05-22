@@ -1,0 +1,6 @@
+services:
+  mtg_graphql.deck_card_mutator:
+    class: Drupal\mtg_graphql\Service\DeckCardMutator
+    arguments:
+      - '@entity.repository'
+      - '@entity_type.manager'

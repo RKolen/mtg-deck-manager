@@ -1,5 +1,5 @@
 """
-Fetches deck lists from Drupal JSON:API for use in game simulations.
+Fetches deck lists from Drupal GraphQL for use in game simulations.
 
 Returns CardInfo objects with CMC, type, power and toughness so the mock
 engine can make realistic gameplay decisions based on the actual cards.
@@ -21,12 +21,6 @@ logger = logging.getLogger(__name__)
 DRUPAL_URL: str = os.environ.get("DRUPAL_URL", "")
 DRUPAL_USER: str = os.environ.get("DRUPAL_USER", "")
 DRUPAL_PASS: str = os.environ.get("DRUPAL_PASS", "")
-
-_CARD_FIELDS = (
-    "title,field_cmc,field_type_line,field_power,field_toughness,"
-    "field_oracle_text,field_mana_cost,field_produced_mana"
-)
-
 
 def _parse_list_field(value: object) -> list[str]:
     """Parse a JSON:API multi-value field into a list of strings."""
@@ -100,22 +94,40 @@ class CardInfo:
         return "Spell"
 
 
-def _parse_card_attrs(attrs: dict) -> dict:
-    """Extract card fields from a JSON:API attributes dict.
+def _graphql(query: str, variables: dict | None = None) -> dict:
+    """POST a GraphQL query to Drupal and return the data payload."""
+    if not DRUPAL_URL:
+        return {}
+    url = f"{DRUPAL_URL.rstrip('/')}/graphql"
+    payload: dict = {"query": query}
+    if variables:
+        payload["variables"] = variables
+    resp = requests.post(
+        url,
+        json=payload,
+        auth=_get_auth(),
+        timeout=30,
+        verify=False,
+    )
+    resp.raise_for_status()
+    body = resp.json()
+    if body.get("errors"):
+        raise requests.RequestException(str(body["errors"]))
+    return body.get("data") or {}
 
-    Power and toughness are combined into a 'pt' string (e.g. '2/2')
-    matching CardInfo's field layout.
-    """
-    power = str(attrs.get("field_power") or "0")
-    toughness = str(attrs.get("field_toughness") or "0")
+
+def _parse_gql_card(card: dict) -> dict:
+    """Extract card fields from a GraphQL MtgCard object."""
+    power = str(card.get("power") or "0")
+    toughness = str(card.get("toughness") or "0")
     return {
-        "name": str(attrs.get("title") or ""),
-        "cmc": float(attrs.get("field_cmc") or 0),
-        "type_line": str(attrs.get("field_type_line") or ""),
+        "name": str(card.get("title") or ""),
+        "cmc": float(card.get("cmc") or 0),
+        "type_line": str(card.get("typeLine") or ""),
         "pt": f"{power}/{toughness}",
-        "oracle_text": str(attrs.get("field_oracle_text") or ""),
-        "mana_cost": str(attrs.get("field_mana_cost") or ""),
-        "produced_mana": _parse_list_field(attrs.get("field_produced_mana")),
+        "oracle_text": str(card.get("oracleText") or ""),
+        "mana_cost": str(card.get("manaCost") or ""),
+        "produced_mana": card.get("producedMana") or [],
     }
 
 
@@ -134,44 +146,34 @@ def _card_info_from(info: dict, quantity: int, sideboard: bool) -> CardInfo:
     )
 
 
-def _chunk_url(chunk: list[str]) -> str:
-    """Build a JSON:API OR-filter URL for a batch of card names."""
-    params: list[str] = []
-    for j, name in enumerate(chunk):
-        params.append(f"filter[n{j}][condition][path]=title")
-        params.append(f"filter[n{j}][condition][value]={urllib.parse.quote(name)}")
-        params.append(f"filter[n{j}][condition][memberOf]=or-group")
-    params.append("filter[or-group][group][conjunction]=OR")
-    params.append(f"fields[node--mtg_card]={_CARD_FIELDS}")
-    params.append("page[limit]=500")
-    return f"{DRUPAL_URL}/jsonapi/node/mtg_card?" + "&".join(params)
+_CARD_GQL = """
+  title cmc typeLine power toughness oracleText manaCost producedMana
+"""
 
-
-def _fetch_chunk(chunk: list[str], result: dict[str, dict]) -> None:
-    """Paginate through one name-chunk and merge results into `result`."""
-    url: str | None = _chunk_url(chunk)
-    needed = set(chunk)
-    while url and needed:
-        resp = requests.get(url, auth=_get_auth(), timeout=20, verify=False)
-        resp.raise_for_status()
-        body = resp.json()
-        for node in body.get("data", []):
-            parsed = _parse_card_attrs(node["attributes"])
-            title = parsed["name"]
-            if title and title not in result:
-                result[title] = parsed
-            needed.discard(title)
-        next_link = body.get("links", {}).get("next", {})
-        url = next_link.get("href") if next_link and needed else None
+def _fetch_name_chunk(chunk: list[str], result: dict[str, dict]) -> None:
+    """Fetch exact card names via GraphQL cardsByName."""
+    query = (
+        "query CardsByName($name: String!) { cardsByName(name: $name) {"
+        + _CARD_GQL
+        + "} }"
+    )
+    for name in chunk:
+        try:
+            data = _graphql(query, {"name": name})
+            for card in data.get("cardsByName") or []:
+                parsed = _parse_gql_card(card)
+                if parsed["name"] and parsed["name"] not in result:
+                    result[parsed["name"]] = parsed
+        except requests.RequestException as exc:
+            logger.warning("Card lookup failed for %s: %s", name, exc)
 
 
 def _enrich_by_name(names: list[str]) -> dict[str, dict]:
     """
     Batch-fetch CMC, type_line, power, toughness from Drupal for card names.
 
-    Uses an OR filter against the mtg_card JSON:API endpoint, batched in
-    chunks of 30 to stay within URL length limits. Cards not found fall back
-    to safe defaults (caller handles missing keys).
+    Uses GraphQL cardsByName per name, batched in chunks of 30.
+    Cards not found fall back to safe defaults (caller handles missing keys).
     """
     if not names or not DRUPAL_URL:
         return {}
@@ -181,7 +183,7 @@ def _enrich_by_name(names: list[str]) -> dict[str, dict]:
 
     for i in range(0, len(unique), 30):
         try:
-            _fetch_chunk(unique[i: i + 30], result)
+            _fetch_name_chunk(unique[i: i + 30], result)
         except requests.RequestException as exc:
             logger.warning("Card enrichment failed for chunk %d: %s", i, exc)
 
@@ -190,61 +192,37 @@ def _enrich_by_name(names: list[str]) -> dict[str, dict]:
 
 def fetch_player_deck(deck_nid: int) -> list[CardInfo]:
     """
-    Fetch card slots from a deck's field_deck_cards paragraphs.
-
-    The deck owns its cards (deck → paragraph.deck_card → mtg_card).
-    A single request includes both paragraphs and card data.
+    Fetch card slots from a deck's field_deck_cards paragraphs via GraphQL.
     """
-    url = (
-        f"{DRUPAL_URL}/jsonapi/node/deck"
-        f"?filter[drupal_internal__nid]={deck_nid}"
-        "&include=field_deck_cards,field_deck_cards.field_card"
-        "&fields[node--deck]=field_deck_cards"
-        "&fields[paragraph--deck_card]=field_card,field_quantity,field_is_sideboard"
-        f"&fields[node--mtg_card]={_CARD_FIELDS}"
-        "&page[limit]=1"
+    query = (
+        "query DeckCards($nid: Int!) { deckCardsByNid(nid: $nid) {"
+        " quantity isSideboard card {"
+        + _CARD_GQL
+        + "} } }"
     )
-    resp = requests.get(url, auth=_get_auth(), timeout=30, verify=False)
-    resp.raise_for_status()
-    body = resp.json()
+    try:
+        data = _graphql(query, {"nid": deck_nid})
+    except requests.RequestException as exc:
+        logger.warning("Deck fetch failed for nid %s: %s", deck_nid, exc)
+        return []
 
-    data = body.get("data", [])
-    if not data:
+    slots = data.get("deckCardsByNid") or []
+    if not slots:
         logger.warning("No deck found for nid %s", deck_nid)
         return []
 
-    para_refs = (
-        data[0].get("relationships", {})
-        .get("field_deck_cards", {})
-        .get("data", [])
-    )
-
-    included = body.get("included") or []
-    card_map = {
-        i["id"]: _parse_card_attrs(i["attributes"])
-        for i in included if i.get("type") == "node--mtg_card"
-    }
-    para_map = {
-        i["id"]: i
-        for i in included if i.get("type") == "paragraph--deck_card"
-    }
-
     cards: list[CardInfo] = []
-    for ref in para_refs:
-        para = para_map.get(ref.get("id", ""))
-        if not para:
+    for slot in slots:
+        card = slot.get("card")
+        if not card:
             continue
-        card_id = (
-            para.get("relationships", {}).get("field_card", {})
-            .get("data", {}).get("id", "")
-        )
-        info = card_map.get(card_id, {})
+        info = _parse_gql_card(card)
         if not info.get("name"):
             continue
         cards.append(_card_info_from(
             info,
-            quantity=int(para["attributes"].get("field_quantity") or 1),
-            sideboard=bool(para["attributes"].get("field_is_sideboard", False)),
+            quantity=int(slot.get("quantity") or 1),
+            sideboard=bool(slot.get("isSideboard", False)),
         ))
     return cards
 
@@ -254,23 +232,23 @@ def fetch_meta_deck(archetype: str, fmt: str) -> list[CardInfo]:
     """
     Fetch the canonical card list for a meta archetype, enriched with card data.
     """
-    url = (
-        f"{DRUPAL_URL}/jsonapi/node/meta_deck"
-        f"?filter[title]={urllib.parse.quote(archetype)}"
-        f"&filter[field_format]={urllib.parse.quote(fmt)}"
-        "&fields[node--meta_deck]=title,field_cards_json"
-        "&page[limit]=1"
+    query = (
+        "query MetaDeck($format: String!) { metaDecks(format: $format) {"
+        " title cardsJson } }"
     )
-    resp = requests.get(url, auth=_get_auth(), timeout=30, verify=False)
-    resp.raise_for_status()
-    body = resp.json()
-    data = body.get("data", [])
-    if not data:
+    try:
+        data = _graphql(query, {"format": fmt})
+    except requests.RequestException as exc:
+        logger.warning("Meta deck fetch failed for %s / %s: %s", archetype, fmt, exc)
+        return []
+
+    meta_list = data.get("metaDecks") or []
+    match = next((m for m in meta_list if m.get("title") == archetype), None)
+    if match is None:
         logger.warning("No meta_deck found for %s / %s", archetype, fmt)
         return []
 
-    raw = data[0]["attributes"].get("field_cards_json") or ""
-    cards_json = raw.get("value", "") if isinstance(raw, dict) else str(raw)
+    cards_json = str(match.get("cardsJson") or "")
     try:
         raw_cards: list[dict] = json.loads(cards_json) if cards_json else []
     except json.JSONDecodeError:

@@ -8,8 +8,7 @@ import type {
   JsonApiSingleResponse,
   MtgCardAttributes,
 } from '../types/drupal';
-import { createDrupalClient } from './httpClient';
-import { getGraphQLClient, getMtgGraphQLClient } from './graphqlClient';
+import { getGraphQLClient } from './graphqlClient';
 import { slugify } from '../utils/slugify';
 
 // ---------------------------------------------------------------------------
@@ -89,6 +88,11 @@ interface GqlCollectionCard {
 // Adapters — map clean GraphQL shapes back to the JSON:API-shaped types that
 // the page components depend on. Keeps all pages unchanged.
 // ---------------------------------------------------------------------------
+
+/** Maps a GraphQL MtgCard node to the resource shape used by pages. */
+export function gqlCardToResource(c: GqlMtgCard): JsonApiResource<MtgCardAttributes> {
+  return toCardResource(c);
+}
 
 function toCardResource(c: GqlMtgCard): JsonApiResource<MtgCardAttributes> {
   return {
@@ -301,7 +305,7 @@ export async function fetchCardsPage(
     }
   `;
 
-  const data = await getMtgGraphQLClient().request<{
+  const data = await getGraphQLClient().request<{
     cards: { cards: GqlMtgCard[]; nextCursor: string | null };
   }>(query, {
     page,
@@ -327,7 +331,7 @@ export async function fetchCardBySlug(
     }
   `;
 
-  const data = await getMtgGraphQLClient().request<{ card: GqlMtgCard | null }>(query, { slug });
+  const data = await getGraphQLClient().request<{ card: GqlMtgCard | null }>(query, { slug });
   return data.card != null ? toCardResource(data.card) : null;
 }
 
@@ -341,7 +345,7 @@ export async function findCardsByName(
     }
   `;
 
-  const data = await getMtgGraphQLClient().request<{ cardsByName: GqlMtgCard[] }>(query, { name });
+  const data = await getGraphQLClient().request<{ cardsByName: GqlMtgCard[] }>(query, { name });
   return data.cardsByName.map(toCardResource);
 }
 
@@ -391,7 +395,7 @@ export async function createDeck(
       createDeck(title: $title, format: $format, notes: $notes) { ...DeckFields }
     }
   `;
-  const data = await getMtgGraphQLClient().request<{ createDeck: GqlDeck }>(mutation, {
+  const data = await getGraphQLClient().request<{ createDeck: GqlDeck }>(mutation, {
     title: attributes.title,
     format: attributes.field_format,
     notes: attributes.field_notes ?? null,
@@ -409,7 +413,7 @@ export async function updateDeck(
       updateDeck(id: $id, title: $title, format: $format, notes: $notes) { ...DeckFields }
     }
   `;
-  const data = await getMtgGraphQLClient().request<{ updateDeck: GqlDeck }>(mutation, {
+  const data = await getGraphQLClient().request<{ updateDeck: GqlDeck }>(mutation, {
     id,
     title: attributes.title ?? null,
     format: attributes.field_format ?? null,
@@ -422,43 +426,119 @@ export async function deleteDeck(id: string): Promise<void> {
   const mutation = gql`
     mutation DeleteDeck($id: ID!) { deleteDeck(id: $id) }
   `;
-  await getMtgGraphQLClient().request(mutation, { id });
+  await getGraphQLClient().request(mutation, { id });
 }
 
 // ---------------------------------------------------------------------------
-// Deck cards — reads via GraphQL, mutations via the existing REST endpoint
-//
-// Paragraph creation/deletion is complex enough that we keep the dedicated
-// /api/deck-cards REST resource. GraphQL handles reads only.
+// Deck cards (GraphQL Compose paragraphs + MTG extension mutations)
 // ---------------------------------------------------------------------------
 
-const deckCardsClient = createDrupalClient('/api');
+interface GqlComposeDeckCard {
+  uuid: string;
+  quantity: number;
+  isSideboard: boolean;
+  card: GqlMtgCard | null;
+}
 
-async function deckCardAction(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
-  const res = await deckCardsClient.post<Record<string, unknown>>(
-    '/deck-cards?_format=json',
-    payload,
-    { headers: { 'Content-Type': 'application/json', Accept: 'application/json' } },
-  );
-  return res.data;
+const COMPOSE_DECK_CARD_FIELDS = gql`
+  fragment ComposeDeckCardFields on ParagraphDeckCard {
+    uuid
+    quantity
+    isSideboard
+    card {
+      ... on NodeMtgCard {
+        uuid
+        title
+        manaCost
+        cmc
+        typeLine
+        colors
+        colorIdentity
+        oracleText
+        imageUri
+        isManaProducer
+        producedMana
+        legalFormats
+      }
+    }
+  }
+`;
+
+function composeCardToGql(card: GqlMtgCard & { uuid?: string }): GqlMtgCard {
+  return { ...card, id: card.uuid ?? card.id };
+}
+
+function toDeckCardFromCompose(slot: GqlComposeDeckCard): DeckCardWithCard {
+  if (slot.card == null) {
+    throw new Error('Deck card paragraph is missing its card reference');
+  }
+  const mapped = toDeckCardWithCard({
+    id: slot.uuid,
+    quantity: slot.quantity,
+    isSideboard: slot.isSideboard,
+    card: composeCardToGql(slot.card),
+  });
+  return mapped;
 }
 
 export async function fetchDeckCardsWithCards(
   deckId: string,
 ): Promise<DeckCardWithCard[]> {
   const query = gql`
-    query GetDeckCards($deckId: ID!) {
-      deckCards(deckId: $deckId) {
-        id quantity isSideboard
-        card {
-          id title manaCost cmc typeLine colors colorIdentity
-          oracleText imageUri isManaProducer producedMana legalFormats
+    ${COMPOSE_DECK_CARD_FIELDS}
+    query GetDeckWithCards($id: ID!) {
+      nodeDeck(id: $id) {
+        deckCards {
+          ...ComposeDeckCardFields
         }
       }
     }
   `;
-  const data = await getMtgGraphQLClient().request<{ deckCards: GqlDeckCard[] }>(query, { deckId });
-  return data.deckCards.map(toDeckCardWithCard);
+  const data = await getGraphQLClient().request<{
+    nodeDeck: { deckCards: GqlComposeDeckCard[] } | null;
+  }>(query, { id: deckId });
+  const slots = data.nodeDeck?.deckCards ?? [];
+  return slots.filter(s => s.card != null).map(toDeckCardFromCompose);
+}
+
+async function deckCardAdd(
+  deckId: string,
+  cardId: string,
+  quantity: number,
+  isSideboard: boolean,
+): Promise<void> {
+  const mutation = gql`
+    mutation DeckCardAdd(
+      $deckId: ID!, $cardId: ID!, $quantity: Int!, $isSideboard: Boolean!
+    ) {
+      deckCardAdd(
+        deckId: $deckId, cardId: $cardId, quantity: $quantity, isSideboard: $isSideboard
+      ) { id }
+    }
+  `;
+  await getGraphQLClient().request(mutation, { deckId, cardId, quantity, isSideboard });
+}
+
+async function deckCardUpdate(
+  deckId: string,
+  slotId: string,
+  quantity: number,
+): Promise<void> {
+  const mutation = gql`
+    mutation DeckCardUpdate($deckId: ID!, $slotId: ID!, $quantity: Int!) {
+      deckCardUpdate(deckId: $deckId, slotId: $slotId, quantity: $quantity) { id }
+    }
+  `;
+  await getGraphQLClient().request(mutation, { deckId, slotId, quantity });
+}
+
+async function deckCardRemove(deckId: string, slotId: string): Promise<void> {
+  const mutation = gql`
+    mutation DeckCardRemove($deckId: ID!, $slotId: ID!) {
+      deckCardRemove(deckId: $deckId, slotId: $slotId)
+    }
+  `;
+  await getGraphQLClient().request(mutation, { deckId, slotId });
 }
 
 export async function importCardToDeck(
@@ -466,13 +546,7 @@ export async function importCardToDeck(
   cards: { cardId: string; quantity: number; isSideboard: boolean; cardName: string }[],
 ): Promise<void> {
   for (const c of cards) {
-    await deckCardAction({
-      action: 'add',
-      deckUuid: deckId,
-      cardUuid: c.cardId,
-      quantity: c.quantity,
-      isSideboard: c.isSideboard,
-    });
+    await deckCardAdd(deckId, c.cardId, c.quantity, c.isSideboard);
   }
 }
 
@@ -492,7 +566,7 @@ export async function addCardToDeck(
     return;
   }
 
-  await deckCardAction({ action: 'add', deckUuid: deckId, cardUuid: cardId, quantity: 1, isSideboard });
+  await deckCardAdd(deckId, cardId, 1, isSideboard);
 }
 
 export async function setCardQuantityInDeck(
@@ -505,7 +579,7 @@ export async function setCardQuantityInDeck(
     await removeCardFromDeck(slotId, deckId, allSlots);
     return;
   }
-  await deckCardAction({ action: 'update', deckUuid: deckId, paraUuid: slotId, quantity });
+  await deckCardUpdate(deckId, slotId, quantity);
 }
 
 export async function removeCardFromDeck(
@@ -513,7 +587,7 @@ export async function removeCardFromDeck(
   deckId: string,
   _allSlots: DeckCardWithCard[],
 ): Promise<void> {
-  await deckCardAction({ action: 'remove', deckUuid: deckId, paraUuid: slotId });
+  await deckCardRemove(deckId, slotId);
 }
 
 // ---------------------------------------------------------------------------
@@ -543,7 +617,7 @@ export async function fetchCollectionValue(): Promise<number> {
   const query = gql`
     query GetCollectionValue { collectionValue }
   `;
-  const data = await getMtgGraphQLClient().request<{ collectionValue: number }>(query);
+  const data = await getGraphQLClient().request<{ collectionValue: number }>(query);
   return data.collectionValue;
 }
 
@@ -569,7 +643,7 @@ export async function upsertCollectionCard(
       }
     }
   `;
-  const data = await getMtgGraphQLClient().request<{ upsertCollectionCard: GqlCollectionCard }>(
+  const data = await getGraphQLClient().request<{ upsertCollectionCard: GqlCollectionCard }>(
     mutation,
     { cardId, cardName, quantityOwned, quantityFoil, existingId: existingId ?? null },
   );
@@ -587,7 +661,7 @@ export async function fetchCollectionCardByCardId(
       }
     }
   `;
-  const data = await getMtgGraphQLClient().request<{
+  const data = await getGraphQLClient().request<{
     collectionCardByCardId: GqlCollectionCard | null;
   }>(query, { cardId });
   return data.collectionCardByCardId != null

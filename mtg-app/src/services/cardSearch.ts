@@ -1,44 +1,24 @@
 /**
- * Client for the MTG Card Search REST endpoint (/api/card-search).
- *
- * Backed by Search API + Solr on the Drupal side. The response shape mirrors
- * the JSON:API structure so existing JsonApiResource types can be reused.
+ * Solr-backed card search via GraphQL Compose extension (cardSearch query).
  */
 
-import type { AxiosInstance } from 'axios';
+import { gql } from 'graphql-request';
 import type { JsonApiResource, MtgCardAttributes } from '../types/drupal';
-import { createDrupalClient } from './httpClient';
-
-const client: AxiosInstance = createDrupalClient('/api');
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+import { gqlCardToResource } from './drupalApi';
+import { getGraphQLClient } from './graphqlClient';
 
 export interface CardSearchParams {
-  /** Full-text search against card name and oracle text. */
   q?: string;
-  /** Filter by type line (partial match). */
   type?: string;
-  /** Filter by oracle text (partial match). */
   oracleText?: string;
-  /** Filter to cards legal in this format (e.g. 'modern', 'standard'). */
   legalIn?: string;
-  /** Minimum converted mana cost (inclusive). */
   cmcMin?: number;
-  /** Maximum converted mana cost (inclusive). */
   cmcMax?: number;
-  /** Cards must contain all of these colors (W/U/B/R/G). */
   colors?: string[];
-  /** Cards must have color identity matching all of these colors. */
   colorIdentity?: string[];
-  /** Filter to mana-producing cards only. */
   manaProducer?: boolean;
-  /** Filter by rarity: common | uncommon | rare | mythic. */
   rarity?: string;
-  /** Zero-based page number. */
   page?: number;
-  /** Number of results per page (max 100). */
   limit?: number;
 }
 
@@ -50,39 +30,81 @@ export interface CardSearchResult {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Request builder
-// ---------------------------------------------------------------------------
-
-function buildParams(params: CardSearchParams): Record<string, string | string[]> {
-  const out: Record<string, string | string[]> = {};
-
-  if (params.q) out['q'] = params.q;
-  if (params.type) out['type'] = params.type;
-  if (params.oracleText) out['oracle_text'] = params.oracleText;
-  if (params.legalIn) out['legal_in'] = params.legalIn;
-  if (params.cmcMin != null) out['cmc_min'] = String(params.cmcMin);
-  if (params.cmcMax != null) out['cmc_max'] = String(params.cmcMax);
-  if (params.colors && params.colors.length > 0) out['colors[]'] = params.colors;
-  if (params.colorIdentity && params.colorIdentity.length > 0) out['color_identity[]'] = params.colorIdentity;
-  if (params.manaProducer != null) out['mana_producer'] = params.manaProducer ? '1' : '0';
-  if (params.rarity) out['rarity'] = params.rarity;
-  if (params.page != null) out['page'] = String(params.page);
-  if (params.limit != null) out['limit'] = String(params.limit);
-
-  return out;
+interface GqlSearchCard {
+  id: string;
+  title: string;
+  manaCost: string | null;
+  cmc: number | null;
+  typeLine: string | null;
+  colors: string[];
+  colorIdentity: string[];
+  oracleText: string | null;
+  imageUri: string | null;
+  isManaProducer: boolean;
+  producedMana: string[];
+  legalFormats: string[];
+  priceUsd: string | null;
+  priceUsdFoil: string | null;
+  setCode: string | null;
+  setName: string | null;
+  rarity: string | null;
+  collectorNumber: string | null;
+  power: string | null;
+  toughness: string | null;
+  loyalty: string | null;
 }
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
+const SEARCH_CARD_FIELDS = gql`
+  fragment SearchCardFields on MtgCard {
+    id title manaCost cmc typeLine colors colorIdentity
+    oracleText imageUri isManaProducer producedMana legalFormats
+    priceUsd priceUsdFoil setCode setName rarity collectorNumber
+    power toughness loyalty
+  }
+`;
 
-/**
- * Searches MTG cards using the Solr-backed REST endpoint.
- */
 export async function searchCards(params: CardSearchParams): Promise<CardSearchResult> {
-  const response = await client.get<CardSearchResult>('/card-search', {
-    params: buildParams(params),
+  const query = gql`
+    ${SEARCH_CARD_FIELDS}
+    query CardSearch(
+      $q: String, $type: String, $oracleText: String, $legalIn: String,
+      $cmcMin: Float, $cmcMax: Float, $colors: [String!], $colorIdentity: [String!],
+      $manaProducer: Boolean, $rarity: String, $page: Int, $limit: Int
+    ) {
+      cardSearch(
+        q: $q, type: $type, oracleText: $oracleText, legalIn: $legalIn,
+        cmcMin: $cmcMin, cmcMax: $cmcMax, colors: $colors, colorIdentity: $colorIdentity,
+        manaProducer: $manaProducer, rarity: $rarity, page: $page, limit: $limit
+      ) {
+        count
+        pages
+        cards { ...SearchCardFields }
+      }
+    }
+  `;
+
+  const data = await getGraphQLClient().request<{
+    cardSearch: { cards: GqlSearchCard[]; count: number; pages: number };
+  }>(query, {
+    q: params.q || null,
+    type: params.type || null,
+    oracleText: params.oracleText || null,
+    legalIn: params.legalIn || null,
+    cmcMin: params.cmcMin ?? null,
+    cmcMax: params.cmcMax ?? null,
+    colors: params.colors?.length ? params.colors : null,
+    colorIdentity: params.colorIdentity?.length ? params.colorIdentity : null,
+    manaProducer: params.manaProducer ?? null,
+    rarity: params.rarity || null,
+    page: params.page ?? 0,
+    limit: params.limit ?? 20,
   });
-  return response.data;
+
+  return {
+    data: data.cardSearch.cards.map(gqlCardToResource),
+    meta: {
+      count: data.cardSearch.count,
+      pages: data.cardSearch.pages,
+    },
+  };
 }

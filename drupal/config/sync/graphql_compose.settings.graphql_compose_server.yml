@@ -14,6 +14,10 @@ entity_config:
       enabled: true
       query_load_enabled: true
       edges_enabled: true
+  paragraph:
+    deck_card:
+      enabled: true
+      query_load_enabled: true
 field_config:
   node:
     deck:
@@ -68,6 +72,14 @@ field_config:
       field_quantity_owned:
         enabled: true
       field_quantity_foil:
+        enabled: true
+  paragraph:
+    deck_card:
+      field_card:
+        enabled: true
+      field_quantity:
+        enabled: true
+      field_is_sideboard:
         enabled: true
 settings:
   exclude_unpublished: true

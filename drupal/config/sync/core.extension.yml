@@ -29,6 +29,7 @@ module:
   media_library: 0
   migrate: 0
   migrate_plus: 0
+  mtg_card_search: 0
   mtg_card_suggestions: 0
   mtg_graphql: 0
   mtg_scryfall_sync: 0

@@ -1,62 +1,13 @@
-schema {
-  query: Query
-  mutation: Mutation
-}
-
-type Query {
-  cards(
-    page: Int
-    limit: Int
-    name: String
-    colors: [String!]
-    type: String
-    maxCmc: Float
-    titlePrefix: String
-  ): CardPage!
-
-  card(slug: String!): MtgCard
-
-  cardsByName(name: String!): [MtgCard!]!
-
-  decks: [Deck!]!
-
-  deck(id: ID!): Deck
-
-  deckCards(deckId: ID!): [DeckCard!]!
-
-  collectionCards: [CollectionCard!]!
-
-  collectionCardByCardId(cardId: ID!): CollectionCard
-
-  collectionValue: Float!
-
-  pages: [Page!]!
-
-  metaDecks(format: String!): [MetaDeck!]!
-
-  simulationHistory(deckNid: Int!, limit: Int): [SimulationResult!]!
-}
-
-type Mutation {
-  createDeck(title: String!, format: String!, notes: String): Deck!
-
-  updateDeck(id: ID!, title: String, format: String, notes: String): Deck!
-
-  deleteDeck(id: ID!): Boolean!
-
-  upsertCollectionCard(
-    cardId: ID!
-    cardName: String!
-    quantityOwned: Int!
-    quantityFoil: Int
-    existingId: ID
-  ): CollectionCard!
-}
-
 type CardPage {
   cards: [MtgCard!]!
   nextCursor: String
   total: Int!
+}
+
+type CardSearchResult {
+  cards: [MtgCard!]!
+  count: Int!
+  pages: Int!
 }
 
 type MtgCard {
@@ -98,6 +49,12 @@ type DeckCard {
   card: MtgCard!
 }
 
+type DeckCardSlot {
+  id: ID!
+  quantity: Int!
+  isSideboard: Boolean!
+}
+
 type Page {
   id: ID!
   title: String!
@@ -119,6 +76,7 @@ type MetaDeck {
   metaShare: Float
   archetypeTags: [String!]!
   fetchedAt: String
+  cardsJson: String
 }
 
 type SimulationResult {

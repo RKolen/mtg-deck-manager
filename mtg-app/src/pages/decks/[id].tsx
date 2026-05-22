@@ -1,7 +1,7 @@
 /**
  * Deck editor + analysis page — Phases 4 and 5.
  *
- * All card/deck data is fetched at runtime via JSON:API.
+ * All card/deck data is fetched at runtime via GraphQL.
  * The page has two tabs: Editor and Analysis.
  *
  * Route: /decks/:id  (Gatsby client-only route via [id].tsx)

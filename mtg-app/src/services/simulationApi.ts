@@ -3,7 +3,7 @@
  */
 
 import { gql } from 'graphql-request';
-import { getMtgGraphQLClient } from './graphqlClient';
+import { getGraphQLClient } from './graphqlClient';
 import { createDrupalClient } from './httpClient';
 
 const client = createDrupalClient('/api');
@@ -137,7 +137,7 @@ export async function fetchSimulationHistory(
       }
     }
   `;
-  const data = await getMtgGraphQLClient().request<{
+  const data = await getGraphQLClient().request<{
     simulationHistory: SimulationHistoryEntry[];
   }>(query, { deckNid, limit });
   return data.simulationHistory;

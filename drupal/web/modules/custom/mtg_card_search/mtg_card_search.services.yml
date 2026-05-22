@@ -1,1 +1,10 @@
-services: {}
+services:
+  logger.channel.mtg_card_search:
+    parent: logger.channel_base
+    arguments: ['mtg_card_search']
+
+  mtg_card_search.search:
+    class: Drupal\mtg_card_search\CardSearchService
+    arguments:
+      - '@entity_type.manager'
+      - '@logger.channel.mtg_card_search'

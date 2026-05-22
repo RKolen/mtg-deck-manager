@@ -1,7 +1,7 @@
 /**
  * Deck list page — Phase 4.
  *
- * All data is fetched and mutated at runtime via JSON:API.
+ * All data is fetched and mutated at runtime via GraphQL.
  */
 
 import React, { useState } from 'react';

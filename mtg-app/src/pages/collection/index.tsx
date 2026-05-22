@@ -3,7 +3,7 @@
  *
  * Card catalogue is fetched at runtime via Solr-backed search endpoint with
  * debounced filters. Collection quantities (owned/foil) are fetched at
- * runtime via JSON:API and managed through @tanstack/react-query.
+ * runtime via GraphQL and managed through @tanstack/react-query.
  */
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';

@@ -9,7 +9,9 @@ label: 'GraphQL Compose - Server'
 schema: graphql_compose
 schema_configuration:
   graphql_compose:
-    providers: {  }
+    providers:
+      mtg_graphql: mtg_graphql
+      graphql_compose_edges: graphql_compose_edges
 persisted_queries_settings: {  }
 endpoint: /graphql
 debug_flag: 0

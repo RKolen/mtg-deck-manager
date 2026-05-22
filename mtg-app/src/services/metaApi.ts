@@ -2,7 +2,7 @@
  * Clients for Phase 10A — Pro Meta Analyst.
  *
  * Three backends:
- *   Drupal GraphQL   — meta_deck node catalogue  (/graphql/mtg)
+ *   Drupal GraphQL   — meta_deck node catalogue  (/graphql)
  *   Drupal REST      — POST /api/matchup-advice  (LLM matchup advisor)
  *   Python service   — POST /classify            (deck deduction classifier)
  */
@@ -10,7 +10,7 @@
 import axios from 'axios';
 import { gql } from 'graphql-request';
 import { createDrupalClient } from './httpClient';
-import { getMtgGraphQLClient } from './graphqlClient';
+import { getGraphQLClient } from './graphqlClient';
 import type { JsonApiResource } from '../types/drupal';
 
 const drupalApi = createDrupalClient('/api');
@@ -92,7 +92,7 @@ export async function fetchMetaDecks(format: string): Promise<MetaDeck[]> {
       }
     }
   `;
-  const data = await getMtgGraphQLClient().request<{ metaDecks: GqlMetaDeck[] }>(query, { format });
+  const data = await getGraphQLClient().request<{ metaDecks: GqlMetaDeck[] }>(query, { format });
   return data.metaDecks.map(toMetaDeck);
 }
 
