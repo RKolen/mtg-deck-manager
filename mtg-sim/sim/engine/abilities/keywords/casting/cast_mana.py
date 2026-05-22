@@ -29,6 +29,7 @@ from engine.abilities.keywords.casting.overload import (
 )
 from engine.abilities.keywords.casting.buyback import buyback_extra_mana
 from engine.abilities.keywords.casting.replicate import replicate_extra_mana
+from engine.abilities.keywords.casting.spree import spree_extra_mana
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,7 @@ class AnnounceCastManaOptions:
     cast_for_emerge: bool = False
     cast_for_mutate: bool = False
     mutate_target_uid: str | None = None
+    spree_mode_indices: tuple[int, ...] = ()
 
 
 def _payment_requirements(card: CardInfo) -> tuple[int, int]:
@@ -82,4 +84,5 @@ def resolve_announce_cast_mana(
     )
     mana_needed += replicate_extra_mana(card, opts.replicate_times)
     mana_needed += buyback_extra_mana(card, opts.paid_buyback)
+    mana_needed += spree_extra_mana(card, opts.spree_mode_indices)
     return mana_needed, life_cost

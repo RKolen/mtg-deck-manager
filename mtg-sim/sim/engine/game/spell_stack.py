@@ -23,6 +23,13 @@ from engine.abilities.keywords.casting import (
     mutate_bonus_counters,
     mutate_host_error,
     normalize_mutate_cast,
+    has_spree,
+    normalize_spree_modes,
+    spree_mode_damage,
+    spree_mode_draw,
+    spree_mode_is_destroy,
+    spree_modes,
+    spree_selection_error,
     can_cast_aftermath,
     can_cast_via_escape,
     can_cast_via_flashback,
@@ -163,6 +170,10 @@ class SpellStackMixin(GameRuntimeMixin):
         mutate_err = mutate_host_error(self.state.zones, 0, card_info, opts.mutate_target_uid)
         if mutate_err:
             return {**self.to_client(), "error": mutate_err}
+        paid_spree = normalize_spree_modes(card_info, list(opts.spree_mode_indices))
+        spree_err = spree_selection_error(card_info, list(opts.spree_mode_indices))
+        if spree_err:
+            return {**self.to_client(), "error": spree_err}
         cast_target_uid = (
             opts.mutate_target_uid or opts.bestow_target_uid or target_uid_str
         )
@@ -179,6 +190,7 @@ class SpellStackMixin(GameRuntimeMixin):
                 cast_for_emerge=paid_emerge,
                 cast_for_mutate=paid_mutate,
                 mutate_target_uid=opts.mutate_target_uid,
+                spree_mode_indices=paid_spree,
             ),
         )
         adjustments = resolve_cast_adjustments(
@@ -230,6 +242,7 @@ class SpellStackMixin(GameRuntimeMixin):
                 paid_buyback=paid_buyback,
                 cast_for_emerge=paid_emerge,
                 cast_via_mutate=paid_mutate,
+                spree_mode_indices=paid_spree,
             ),
         )
         cast_detail = f"{card_info.name} on stack"
@@ -251,6 +264,8 @@ class SpellStackMixin(GameRuntimeMixin):
             cast_detail = f"{cast_detail} (emerge, sacrificed {sacrificed_name})"
         if paid_mutate:
             cast_detail = f"{cast_detail} (mutate)"
+        if paid_spree:
+            cast_detail = f"{cast_detail} (spree modes {list(paid_spree)})"
         if adjustments.delve_cards_exiled:
             cast_detail = (
                 f"{cast_detail} (delve x{adjustments.delve_cards_exiled})"
@@ -690,6 +705,7 @@ class SpellStackMixin(GameRuntimeMixin):
             cast_via_mutate=opts.cast_via_mutate,
             cast_via_foretell=opts.cast_via_foretell,
             cast_via_plot=opts.cast_via_plot,
+            modes=list(opts.spree_mode_indices),
         ))
         actor = "player" if player_idx == 0 else "opponent"
         for detail in apply_post_cast_modifiers(self, player_idx, card, targets, opts):
@@ -718,6 +734,8 @@ class SpellStackMixin(GameRuntimeMixin):
         card = spell.source
         assert card is not None
         card_info = require_card_info(card)
+        if spell.modes and has_spree(card_info):
+            return self._resolve_spree_spell(spell)
         category = spell_category(card_info)
         dispatch = {
             "creature": self._resolve_creature_spell,
@@ -731,6 +749,55 @@ class SpellStackMixin(GameRuntimeMixin):
             return handler(spell)
         self._relocate_resolved_spell(spell, card)
         return f"Cast {card_info.name}"
+
+    def _resolve_spree_spell(self, spell: SpellOnStack) -> str:
+        """Resolve a spree spell by applying each chosen mode."""
+        card = spell.source
+        assert card is not None
+        card_info = require_card_info(card)
+        options = spree_modes(card_info)
+        controller_idx = spell.controller_idx
+        parts: list[str] = []
+        for idx in spell.modes:
+            if idx >= len(options):
+                continue
+            effect = options[idx].effect
+            draw_count = spree_mode_draw(effect)
+            if draw_count:
+                drawn = self._draw_cards(controller_idx, draw_count)
+                parts.append(f"drew {card_names(drawn) or 'no cards'}")
+            damage = spree_mode_damage(effect)
+            if damage:
+                target_uid_val = target_uid(spell.targets)
+                victim_idx = (
+                    first_target_player(spell.targets)
+                    if first_target_player(spell.targets) is not None
+                    else 1 - controller_idx
+                )
+                if target_uid_val is None:
+                    self.state.players[victim_idx].life -= damage
+                    parts.append(f"dealt {damage} damage")
+                else:
+                    target = self._find_permanent(target_uid_val)
+                    if target is not None:
+                        target.damage_marked += damage
+                        parts.append(f"dealt {damage} to {target.name}")
+            if spree_mode_is_destroy(effect):
+                target_uid_val = target_uid(spell.targets)
+                target = self._find_permanent(target_uid_val)
+                if target is not None:
+                    self.state.zones.leave_battlefield(
+                        target,
+                        Zone.GRAVEYARD,
+                        'destroy',
+                        self.state,
+                    )
+                    parts.append(f"destroyed {target.name}")
+        if spell.modes:
+            self.state.check_sbas()
+        self._relocate_resolved_spell(spell, card)
+        detail = ", ".join(parts) if parts else "no effect"
+        return f"{card_info.name} spree ({detail})"
 
     def _resolve_creature_spell(self, spell: SpellOnStack) -> str:
         """Resolve a creature spell onto the battlefield."""

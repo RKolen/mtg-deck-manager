@@ -50,6 +50,11 @@ from engine.abilities.keywords.casting import (
     has_mutate,
     mutate_host_error,
     mutate_mana_needed,
+    has_spree,
+    normalize_spree_modes,
+    spree_extra_mana,
+    spree_modes,
+    spree_selection_error,
     has_emerge,
     resolve_burn_damage,
     has_bestow,
@@ -576,6 +581,27 @@ def test_has_jump_start_parses_alternate_cost():
     assert cost is not None
     assert cost.mana_value == 2
     assert jump_start_mana_needed(card) == 2
+
+
+def test_spree_modes_parse_and_extra_mana():
+    """Spree bullets parse costs and add mana for each chosen mode."""
+    card = make_instant(
+        'Score',
+        oracle=(
+            'Spree\n'
+            '• {2} — Draw a card.\n'
+            '• {3} — Score deals 2 damage to any target.'
+        ),
+    )
+    assert has_spree(card)
+    modes = spree_modes(card)
+    assert len(modes) == 2
+    assert modes[0].mana_value == 2
+    assert modes[1].mana_value == 3
+    chosen = normalize_spree_modes(card, [1, 0, 99])
+    assert chosen == (0, 1)
+    assert spree_extra_mana(card, chosen) == 5
+    assert spree_selection_error(card, []) == "Spree requires choosing at least one mode"
 
 
 def test_has_mutate_and_host_validation():

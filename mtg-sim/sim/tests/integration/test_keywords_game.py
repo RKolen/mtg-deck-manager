@@ -224,6 +224,29 @@ def test_overloaded_spell_damages_each_creature():
     assert bear.damage_marked == 4
 
 
+def test_spree_cast_applies_chosen_modes():
+    """Spree pays for selected bullets and resolves draw plus burn."""
+    score = make_instant(
+        name="Big Score",
+        cmc=0,
+        mana_cost="",
+        oracle=(
+            "Spree\n"
+            "• {0} — Draw a card.\n"
+            "• {0} — Big Score deals 2 damage to any target."
+        ),
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=score),
+    ]
+    data = game.action_cast(0, target_player=1, spree_mode_indices=[0, 1])
+    assert "error" not in data
+    assert data["opponentLife"] == 18
+    assert len(game.state.zones.player_zones[0].hand) == 1
+
+
 def test_mutate_adds_counters_to_host():
     """Casting for mutate buffs the host instead of entering as a separate creature."""
     snapdax = make_creature(

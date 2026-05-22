@@ -193,6 +193,7 @@ class GameActionRequest(BaseModel):
     emergeSacrificeIds: list[str] = []
     castForMutate: bool = False
     mutateTargetUid: str | None = None
+    spreeModeIndices: list[int] = []
     convokeCreatureIds: list[str] = []
     delveGraveyardIndices: list[int] = []
     improviseArtifactIds: list[str] = []
@@ -285,6 +286,7 @@ async def _dispatch_action(game: InteractiveGame, req: GameActionRequest) -> dic
             emerge_sacrifice_ids=emerge_ids,
             cast_for_mutate=req.castForMutate,
             mutate_target_uid=req.mutateTargetUid,
+            spree_mode_indices=req.spreeModeIndices,
             convoke_creature_ids=convoke_ids,
             delve_graveyard_indices=req.delveGraveyardIndices,
             improvise_artifact_ids=improvise_ids,

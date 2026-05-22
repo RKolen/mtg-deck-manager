@@ -38,6 +38,7 @@ class CastAnnounceOptions:
     emerge_sacrifice_ids: tuple[int, ...] = ()
     cast_for_mutate: bool = False
     mutate_target_uid: str | None = None
+    spree_mode_indices: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -62,6 +63,7 @@ class SpellCastContext:
     cast_via_mutate: bool = False
     cast_via_foretell: bool = False
     cast_via_plot: bool = False
+    spree_mode_indices: tuple[int, ...] = ()
 
 
 def expand_deck(cards: list[CardInfo], player_idx: int) -> list[CardObject]:

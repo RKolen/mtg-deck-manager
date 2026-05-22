@@ -77,6 +77,7 @@ def _push_storm_copies(
             entwined=context.entwined,
             overloaded=context.overloaded,
             cast_via_bestow=context.cast_via_bestow,
+            modes=list(context.spree_mode_indices),
             is_storm_copy=True,
         ))
     return copies
@@ -112,6 +113,7 @@ def _push_replicate_copies(
             entwined=context.entwined,
             overloaded=context.overloaded,
             cast_via_bestow=context.cast_via_bestow,
+            modes=list(context.spree_mode_indices),
             is_replicate_copy=True,
         ))
     return times

@@ -106,6 +106,17 @@ from engine.abilities.keywords.casting.miracle import (
     miracle_mana_needed,
     normalize_miracle_cast,
 )
+from engine.abilities.keywords.casting.spree import (
+    SpreeMode,
+    has_spree,
+    normalize_spree_modes,
+    spree_extra_mana,
+    spree_mode_damage,
+    spree_mode_draw,
+    spree_mode_is_destroy,
+    spree_modes,
+    spree_selection_error,
+)
 from engine.abilities.keywords.casting.replicate import (
     has_replicate,
     normalize_replicate_times,
@@ -248,6 +259,15 @@ __all__ = [
     'overload_mana_needed',
     'overload_opponent_indices',
     'has_miracle',
+    'SpreeMode',
+    'has_spree',
+    'normalize_spree_modes',
+    'spree_extra_mana',
+    'spree_mode_damage',
+    'spree_mode_draw',
+    'spree_mode_is_destroy',
+    'spree_modes',
+    'spree_selection_error',
     'has_replicate',
     'miracle_cost',
     'miracle_mana_needed',
