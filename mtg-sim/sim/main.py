@@ -191,6 +191,8 @@ class GameActionRequest(BaseModel):
     paidBuyback: bool = False
     castForEmerge: bool = False
     emergeSacrificeIds: list[str] = []
+    castForMutate: bool = False
+    mutateTargetUid: str | None = None
     convokeCreatureIds: list[str] = []
     delveGraveyardIndices: list[int] = []
     improviseArtifactIds: list[str] = []
@@ -281,6 +283,8 @@ async def _dispatch_action(game: InteractiveGame, req: GameActionRequest) -> dic
             paid_buyback=req.paidBuyback,
             cast_for_emerge=req.castForEmerge,
             emerge_sacrifice_ids=emerge_ids,
+            cast_for_mutate=req.castForMutate,
+            mutate_target_uid=req.mutateTargetUid,
             convoke_creature_ids=convoke_ids,
             delve_graveyard_indices=req.delveGraveyardIndices,
             improvise_artifact_ids=improvise_ids,
@@ -312,6 +316,18 @@ async def _dispatch_action(game: InteractiveGame, req: GameActionRequest) -> dic
             req.targetPlayer,
             discard_hand_idx=req.discardHandIdx,
         )
+    if req.action == "foretell":
+        assert req.handIdx is not None
+        return game.action_foretell(req.handIdx)
+    if req.action == "cast_foretell":
+        assert req.handIdx is not None
+        return game.action_cast_foretell(req.handIdx, req.targetUid, req.targetPlayer)
+    if req.action == "plot":
+        assert req.handIdx is not None
+        return game.action_plot(req.handIdx)
+    if req.action == "cast_plot":
+        assert req.handIdx is not None
+        return game.action_cast_plot(req.handIdx, req.targetUid, req.targetPlayer)
     if req.action == "cast_aftermath":
         assert req.handIdx is not None
         return game.action_cast_aftermath(req.handIdx, req.targetUid, req.targetPlayer)

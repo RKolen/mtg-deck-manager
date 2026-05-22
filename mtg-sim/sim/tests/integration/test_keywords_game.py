@@ -6,6 +6,7 @@ from engine.game import create_game
 from engine.rules.combat import can_attack
 from tests.conftest import (
     make_artifact,
+    make_card,
     make_creature,
     make_deck,
     make_instant,
@@ -221,6 +222,73 @@ def test_overloaded_spell_damages_each_creature():
     assert "error" not in data
     assert soldier.damage_marked == 4
     assert bear.damage_marked == 4
+
+
+def test_mutate_adds_counters_to_host():
+    """Casting for mutate buffs the host instead of entering as a separate creature."""
+    snapdax = make_creature(
+        name="Snapdax",
+        oracle="Mutate {0}\nWhen this creature mutates, it deals 2 damage.",
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    host = place_on_battlefield(make_creature("Beast", 2, 2), 0, game.state.zones)
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=snapdax),
+    ]
+    data = game.action_cast(
+        0,
+        cast_for_mutate=True,
+        mutate_target_uid=str(host.obj_id),
+    )
+    assert "error" not in data
+    assert host.counters.get("+1/+1", 0) > 0
+    assert not any(
+        p.card_info is not None and p.card_info.name == "Snapdax"
+        for p in game.state.zones.battlefield
+    )
+
+
+def test_foretell_exile_then_cast():
+    """Foretell exiles from hand and the foretold card can be cast from exile."""
+    glimpse = make_instant(
+        name="Glimpse",
+        cmc=0,
+        mana_cost="",
+        oracle="Draw a card.\nForetell {0}",
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=glimpse),
+    ]
+    setup = game.action_foretell(0)
+    assert "error" not in setup
+    assert len(game.state.zones.player_zones[0].exile) == 1
+    cast = game.action_cast_foretell(0)
+    assert "error" not in cast
+    assert len(game.state.zones.player_zones[0].hand) >= 1
+
+
+def test_plot_sorcery_casts_from_exile_for_free():
+    """Plot exiles a sorcery and later casts it without paying mana."""
+    heist = make_card(
+        name="Heist",
+        type_line="Sorcery",
+        cmc=0,
+        oracle="Draw two cards.\nPlot",
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=heist),
+    ]
+    setup = game.action_plot(0)
+    assert "error" not in setup
+    assert len(game.state.zones.player_zones[0].exile) == 1
+    cast = game.action_cast_plot(0)
+    assert "error" not in cast
+    assert len(game.state.zones.player_zones[0].hand) >= 2
 
 
 def test_emerge_cast_sacrifices_creature_and_enters_battlefield():

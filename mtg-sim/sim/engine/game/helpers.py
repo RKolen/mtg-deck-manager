@@ -36,6 +36,8 @@ class CastAnnounceOptions:
     paid_buyback: bool = False
     cast_for_emerge: bool = False
     emerge_sacrifice_ids: tuple[int, ...] = ()
+    cast_for_mutate: bool = False
+    mutate_target_uid: str | None = None
 
 
 @dataclass(frozen=True)
@@ -48,6 +50,7 @@ class SpellCastContext:
     cast_via_retrace: bool = False
     cast_via_aftermath: bool = False
     from_graveyard: bool = False
+    from_exile: bool = False
     kicker_times: int = 0
     entwined: bool = False
     overloaded: bool = False
@@ -56,6 +59,9 @@ class SpellCastContext:
     replicate_times: int = 0
     paid_buyback: bool = False
     cast_for_emerge: bool = False
+    cast_via_mutate: bool = False
+    cast_via_foretell: bool = False
+    cast_via_plot: bool = False
 
 
 def expand_deck(cards: list[CardInfo], player_idx: int) -> list[CardObject]:

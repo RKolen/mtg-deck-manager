@@ -37,6 +37,19 @@ from engine.abilities.keywords.casting import (
     emerge_cost,
     emerge_mana_needed,
     emerge_sacrifice_error,
+    FORETELL_EXILE_MODE,
+    FORETELL_SETUP_MANA,
+    can_cast_foretold,
+    exile_for_foretell,
+    foretell_setup_error,
+    has_foretell,
+    PLOT_EXILE_MODE,
+    exile_for_plot,
+    has_plot,
+    is_plottable_sorcery,
+    has_mutate,
+    mutate_host_error,
+    mutate_mana_needed,
     has_emerge,
     resolve_burn_damage,
     has_bestow,
@@ -563,6 +576,52 @@ def test_has_jump_start_parses_alternate_cost():
     assert cost is not None
     assert cost.mana_value == 2
     assert jump_start_mana_needed(card) == 2
+
+
+def test_has_mutate_and_host_validation():
+    """Mutate parses cost and rejects Human hosts when required."""
+    card = make_creature(
+        'Snapdax',
+        oracle='Mutate {2}{U}{B}{R}\nMutate onto a non-Human creature.',
+    )
+    assert has_mutate(card)
+    assert mutate_mana_needed(card)[0] == 5
+    game = fresh_game()
+    human = place_on_battlefield(
+        make_card(name='Soldier', type_line='Creature — Human Soldier'),
+        0,
+        game.zones,
+    )
+    beast = place_on_battlefield(make_creature('Beast'), 0, game.zones)
+    assert mutate_host_error(game.zones, 0, card, str(human.obj_id)) is not None
+    assert mutate_host_error(game.zones, 0, card, str(beast.obj_id)) is None
+
+
+def test_foretell_exile_and_cast_timing():
+    """Foretell setup exiles a card; foretold instants cast at instant speed."""
+    card = make_instant('Glimpse', oracle='Draw a card.\nForetell {1}{U}')
+    game = fresh_game()
+    game.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=card),
+    ]
+    assert foretell_setup_error(game.zones, 0, 0, card, 'main1', True) is None
+    exiled = exile_for_foretell(game.zones, 0, 0)
+    assert exiled.exiled_cast_mode == FORETELL_EXILE_MODE
+    assert can_cast_foretold(card, 'attack', False)
+
+
+def test_plot_only_sorceries():
+    """Plot applies to sorceries and exiles them for a free later cast."""
+    sorcery = make_card(name='Heist', type_line='Sorcery', oracle='Draw two cards.\nPlot')
+    instant = make_instant('Bolt', oracle='Plot')
+    assert is_plottable_sorcery(sorcery)
+    assert not is_plottable_sorcery(instant)
+    game = fresh_game()
+    game.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=sorcery),
+    ]
+    plotted = exile_for_plot(game.zones, 0, 0)
+    assert plotted.exiled_cast_mode == PLOT_EXILE_MODE
 
 
 def test_has_emerge_parses_cost_and_mana():

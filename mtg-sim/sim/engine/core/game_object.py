@@ -50,6 +50,7 @@ class CardObject(GameObject):
     """
 
     card_info: CardInfo | None = None
+    exiled_cast_mode: str | None = None
 
 
 @dataclass
@@ -236,6 +237,9 @@ class SpellOnStack(GameObject):
     cast_via_cascade: bool = False
     paid_buyback: bool = False
     cast_for_emerge: bool = False
+    cast_via_mutate: bool = False
+    cast_via_foretell: bool = False
+    cast_via_plot: bool = False
 
 
 def spell_is_ephemeral_copy(spell: SpellOnStack) -> bool:

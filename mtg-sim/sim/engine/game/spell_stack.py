@@ -10,6 +10,19 @@ from engine.abilities.keywords.casting import (
     normalize_emerge_cast,
     normalize_emerge_sacrifice_id,
     sacrifice_for_emerge,
+    FORETELL_SETUP_MANA,
+    cast_from_foretell_exile,
+    exile_for_foretell,
+    foretell_cast_mana_needed,
+    foretell_setup_error,
+    foretold_cast_error,
+    cast_from_plot_exile,
+    exile_for_plot,
+    plot_setup_error,
+    plotted_cast_error,
+    mutate_bonus_counters,
+    mutate_host_error,
+    normalize_mutate_cast,
     can_cast_aftermath,
     can_cast_via_escape,
     can_cast_via_flashback,
@@ -140,7 +153,19 @@ class SpellStackMixin(GameRuntimeMixin):
             opts.cast_for_emerge,
             list(opts.emerge_sacrifice_ids),
         )
-        cast_target_uid = opts.bestow_target_uid or target_uid_str
+        paid_mutate = normalize_mutate_cast(
+            card_info,
+            opts.cast_for_mutate,
+            opts.mutate_target_uid,
+        )
+        if opts.cast_for_mutate and not paid_mutate:
+            return {**self.to_client(), "error": f"{card_info.name} does not have mutate"}
+        mutate_err = mutate_host_error(self.state.zones, 0, card_info, opts.mutate_target_uid)
+        if mutate_err:
+            return {**self.to_client(), "error": mutate_err}
+        cast_target_uid = (
+            opts.mutate_target_uid or opts.bestow_target_uid or target_uid_str
+        )
         mana_needed, life_cost = resolve_announce_cast_mana(
             card_info,
             AnnounceCastManaOptions(
@@ -152,6 +177,8 @@ class SpellStackMixin(GameRuntimeMixin):
                 replicate_times=paid_replicate,
                 paid_buyback=paid_buyback,
                 cast_for_emerge=paid_emerge,
+                cast_for_mutate=paid_mutate,
+                mutate_target_uid=opts.mutate_target_uid,
             ),
         )
         adjustments = resolve_cast_adjustments(
@@ -202,6 +229,7 @@ class SpellStackMixin(GameRuntimeMixin):
                 replicate_times=paid_replicate,
                 paid_buyback=paid_buyback,
                 cast_for_emerge=paid_emerge,
+                cast_via_mutate=paid_mutate,
             ),
         )
         cast_detail = f"{card_info.name} on stack"
@@ -221,6 +249,8 @@ class SpellStackMixin(GameRuntimeMixin):
             cast_detail = f"{cast_detail} (buyback)"
         if paid_emerge:
             cast_detail = f"{cast_detail} (emerge, sacrificed {sacrificed_name})"
+        if paid_mutate:
+            cast_detail = f"{cast_detail} (mutate)"
         if adjustments.delve_cards_exiled:
             cast_detail = (
                 f"{cast_detail} (delve x{adjustments.delve_cards_exiled})"
@@ -486,6 +516,146 @@ class SpellStackMixin(GameRuntimeMixin):
             self._auto_pass_stack()
         return self.to_client()
 
+    def action_foretell(self, hand_idx: int) -> dict:
+        """Exile a card from hand for its foretell cost during a main phase."""
+        card = self._zones(0).hand[hand_idx]
+        if not isinstance(card, CardObject):
+            return {**self.to_client(), "error": "Invalid card"}
+        card_info = require_card_info(card)
+        setup_err = foretell_setup_error(
+            self.state.zones,
+            0,
+            hand_idx,
+            card_info,
+            self.phase,
+            self.state.stack.is_empty,
+        )
+        if setup_err:
+            return {**self.to_client(), "error": setup_err}
+        if not self._tap_lands_for_mana(0, FORETELL_SETUP_MANA):
+            return {
+                **self.to_client(),
+                "error": (
+                    f"Not enough mana ({self._available_mana(0)} available, "
+                    f"need {FORETELL_SETUP_MANA})"
+                ),
+            }
+        exile_for_foretell(self.state.zones, 0, hand_idx)
+        self._log("player", "foretell", f"Foretold {card_info.name}")
+        return self.to_client()
+
+    def _announce_cast_foretell(
+        self,
+        exile_idx: int,
+        target_uid_str: str | None,
+        target_player_idx: int | None,
+        auto_resolve: bool,
+    ) -> dict:
+        """Cast a foretold card from exile for its foretell cost."""
+        exile = self._zones(0).exile
+        if exile_idx < 0 or exile_idx >= len(exile):
+            return {**self.to_client(), "error": f"Exile index {exile_idx} out of range"}
+        preview = exile[exile_idx]
+        if not isinstance(preview, CardObject):
+            return {**self.to_client(), "error": "Invalid card"}
+        card_info = require_card_info(preview)
+        cast_err = foretold_cast_error(
+            self.state.zones,
+            0,
+            exile_idx,
+            card_info,
+            self.phase,
+            self.state.stack.is_empty,
+        )
+        if cast_err:
+            return {**self.to_client(), "error": cast_err}
+        mana_needed, life_cost = foretell_cast_mana_needed(card_info)
+        if not self._tap_lands_for_mana(0, mana_needed):
+            return {
+                **self.to_client(),
+                "error": (
+                    f"Not enough mana ({self._available_mana(0)} available, "
+                    f"need {mana_needed})"
+                ),
+            }
+        card = cast_from_foretell_exile(self.state.zones, 0, exile_idx)
+        if life_cost:
+            self.state.players[0].life -= life_cost
+            self._log("player", "phyrexian", f"Paid {life_cost} life for {card_info.name}")
+        self.state.players[0].spells_cast_this_turn += 1
+        targets = self._put_spell_on_stack(
+            player_idx=0,
+            card=card,
+            target_uid_str=target_uid_str,
+            target_player_idx=target_player_idx,
+            context=SpellCastContext(cast_via_foretell=True, from_exile=True),
+        )
+        self._log("player", "cast", f"{card_info.name} on stack (foretell)")
+        self.state.fire_spell_cast_triggers(card, tuple(targets))
+        if auto_resolve:
+            self._auto_pass_stack()
+        return self.to_client()
+
+    def action_plot(self, hand_idx: int) -> dict:
+        """Exile a sorcery from hand to plot it during a main phase."""
+        card = self._zones(0).hand[hand_idx]
+        if not isinstance(card, CardObject):
+            return {**self.to_client(), "error": "Invalid card"}
+        card_info = require_card_info(card)
+        setup_err = plot_setup_error(
+            self.state.zones,
+            0,
+            hand_idx,
+            card_info,
+            self.phase,
+            self.state.stack.is_empty,
+        )
+        if setup_err:
+            return {**self.to_client(), "error": setup_err}
+        exile_for_plot(self.state.zones, 0, hand_idx)
+        self._log("player", "plot", f"Plotted {card_info.name}")
+        return self.to_client()
+
+    def _announce_cast_plot(
+        self,
+        exile_idx: int,
+        target_uid_str: str | None,
+        target_player_idx: int | None,
+        auto_resolve: bool,
+    ) -> dict:
+        """Cast a plotted sorcery from exile without paying mana."""
+        exile = self._zones(0).exile
+        if exile_idx < 0 or exile_idx >= len(exile):
+            return {**self.to_client(), "error": f"Exile index {exile_idx} out of range"}
+        preview = exile[exile_idx]
+        if not isinstance(preview, CardObject):
+            return {**self.to_client(), "error": "Invalid card"}
+        card_info = require_card_info(preview)
+        cast_err = plotted_cast_error(
+            self.state.zones,
+            0,
+            exile_idx,
+            card_info,
+            self.phase,
+            self.state.stack.is_empty,
+        )
+        if cast_err:
+            return {**self.to_client(), "error": cast_err}
+        card = cast_from_plot_exile(self.state.zones, 0, exile_idx)
+        self.state.players[0].spells_cast_this_turn += 1
+        targets = self._put_spell_on_stack(
+            player_idx=0,
+            card=card,
+            target_uid_str=target_uid_str,
+            target_player_idx=target_player_idx,
+            context=SpellCastContext(cast_via_plot=True, from_exile=True),
+        )
+        self._log("player", "cast", f"{card_info.name} on stack (plot)")
+        self.state.fire_spell_cast_triggers(card, tuple(targets))
+        if auto_resolve:
+            self._auto_pass_stack()
+        return self.to_client()
+
     def _put_spell_on_stack(
         self,
         player_idx: int,
@@ -499,7 +669,7 @@ class SpellStackMixin(GameRuntimeMixin):
         targets = targets_from_request(target_uid_str, target_player_idx)
         if opts.from_graveyard:
             self.state.zones.cast_from_graveyard(card, player_idx)
-        else:
+        elif not opts.from_exile:
             self.state.zones.play_from_hand(card, player_idx)
         self.state.stack.push(SpellOnStack(
             controller_idx=player_idx,
@@ -517,6 +687,9 @@ class SpellStackMixin(GameRuntimeMixin):
             cast_via_bestow=opts.cast_via_bestow,
             paid_buyback=opts.paid_buyback,
             cast_for_emerge=opts.cast_for_emerge,
+            cast_via_mutate=opts.cast_via_mutate,
+            cast_via_foretell=opts.cast_via_foretell,
+            cast_via_plot=opts.cast_via_plot,
         ))
         actor = "player" if player_idx == 0 else "opponent"
         for detail in apply_post_cast_modifiers(self, player_idx, card, targets, opts):
@@ -569,6 +742,17 @@ class SpellStackMixin(GameRuntimeMixin):
         if spell_returns_to_hand_on_resolve(spell):
             self._zones(card.owner_idx).hand.append(card)
             return f"{card_info.name} returned to hand (buyback)"
+        if spell.cast_via_mutate:
+            host_id = target_uid(spell.targets)
+            if host_id is not None:
+                host = self._find_permanent(host_id)
+                if host is not None:
+                    bonus = mutate_bonus_counters(card_info)
+                    host.counters['+1/+1'] = host.counters.get('+1/+1', 0) + bonus
+                    self._move_card_to_graveyard(card)
+                    return f"Mutated {card_info.name} onto {host.name} (+{bonus}/+{bonus})"
+            self._move_card_to_graveyard(card)
+            return f"Cast {card_info.name} (mutate target not found)"
         permanent = self.state.zones.enter_battlefield(
             card,
             spell.controller_idx,

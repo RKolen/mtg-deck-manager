@@ -101,6 +101,8 @@ class InteractiveGame(SpellStackMixin):  # pylint: disable=too-many-public-metho
         paid_buyback: bool = False,
         cast_for_emerge: bool = False,
         emerge_sacrifice_ids: list[int] | None = None,
+        cast_for_mutate: bool = False,
+        mutate_target_uid: str | None = None,
         convoke_creature_ids: list[int] | None = None,
         delve_graveyard_indices: list[int] | None = None,
         improvise_artifact_ids: list[int] | None = None,
@@ -121,6 +123,8 @@ class InteractiveGame(SpellStackMixin):  # pylint: disable=too-many-public-metho
                 paid_buyback=paid_buyback,
                 cast_for_emerge=cast_for_emerge,
                 emerge_sacrifice_ids=tuple(emerge_sacrifice_ids or ()),
+                cast_for_mutate=cast_for_mutate,
+                mutate_target_uid=mutate_target_uid,
                 convoke_creature_ids=tuple(convoke_creature_ids or ()),
                 delve_graveyard_indices=tuple(delve_graveyard_indices or ()),
                 improvise_artifact_ids=tuple(improvise_artifact_ids or ()),
@@ -141,6 +145,8 @@ class InteractiveGame(SpellStackMixin):  # pylint: disable=too-many-public-metho
         paid_buyback: bool = False,
         cast_for_emerge: bool = False,
         emerge_sacrifice_ids: list[int] | None = None,
+        cast_for_mutate: bool = False,
+        mutate_target_uid: str | None = None,
         convoke_creature_ids: list[int] | None = None,
         delve_graveyard_indices: list[int] | None = None,
         improvise_artifact_ids: list[int] | None = None,
@@ -161,6 +167,8 @@ class InteractiveGame(SpellStackMixin):  # pylint: disable=too-many-public-metho
                 paid_buyback=paid_buyback,
                 cast_for_emerge=cast_for_emerge,
                 emerge_sacrifice_ids=tuple(emerge_sacrifice_ids or ()),
+                cast_for_mutate=cast_for_mutate,
+                mutate_target_uid=mutate_target_uid,
                 convoke_creature_ids=tuple(convoke_creature_ids or ()),
                 delve_graveyard_indices=tuple(delve_graveyard_indices or ()),
                 improvise_artifact_ids=tuple(improvise_artifact_ids or ()),
@@ -227,6 +235,34 @@ class InteractiveGame(SpellStackMixin):  # pylint: disable=too-many-public-metho
             target_player,
             auto_resolve=True,
             discard_hand_idx=discard_hand_idx,
+        )
+
+    def action_cast_foretell(
+        self,
+        exile_idx: int,
+        target_uid: str | None = None,
+        target_player: int | None = None,
+    ) -> dict:
+        """Cast a foretold card from exile for its foretell cost."""
+        return self._announce_cast_foretell(
+            exile_idx,
+            target_uid,
+            target_player,
+            auto_resolve=True,
+        )
+
+    def action_cast_plot(
+        self,
+        exile_idx: int,
+        target_uid: str | None = None,
+        target_player: int | None = None,
+    ) -> dict:
+        """Cast a plotted sorcery from exile without paying mana."""
+        return self._announce_cast_plot(
+            exile_idx,
+            target_uid,
+            target_player,
+            auto_resolve=True,
         )
 
     def action_cast_aftermath(
