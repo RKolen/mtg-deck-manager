@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from engine.abilities import keywords
-from engine.abilities.keyword_handlers import apply_combat_damage_to_creature
+from engine.abilities.keywords.handlers import apply_combat_damage_to_creature
 from engine.core.game_object import Permanent
 from engine.core.game_state import GameState
 

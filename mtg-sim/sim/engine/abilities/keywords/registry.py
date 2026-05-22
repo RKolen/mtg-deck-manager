@@ -1,8 +1,7 @@
 """
 Scryfall-backed keyword registry for all MTG keywords (2026).
 
-Detection scans oracle text against every name in KEYWORD_ENTRIES (359 entries
-from Scryfall catalogs: keyword-abilities, keyword-actions, ability-words).
+Detection scans oracle text against every name in registry_data.KEYWORD_ENTRIES.
 """
 
 from __future__ import annotations
@@ -12,7 +11,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import TypedDict
 
-from engine.abilities.keyword_registry_data import KEYWORD_ENTRIES, SCRYFALL_KEYWORD_COUNT
+from engine.abilities.keywords.registry_data import KEYWORD_ENTRIES, SCRYFALL_KEYWORD_COUNT
 from engine.core.game_object import oracle_has_keyword
 
 KeywordKind = str  # ability | action | word
@@ -115,20 +114,3 @@ def registry_summary() -> RegistrySummary:
         by_kind=by_kind,
         by_category=by_category,
     )
-
-
-# Re-export catalog symbols for callers that import from this module.
-__all__ = [
-    'KEYWORD_ENTRIES',
-    'SCRYFALL_KEYWORD_COUNT',
-    'KeywordEntry',
-    'RegistrySummary',
-    'all_entries',
-    'canonical_name',
-    'detect_keywords',
-    'entries_by_length',
-    'entry_by_key',
-    'has_registered_keyword',
-    'keywords_by_category',
-    'registry_summary',
-]

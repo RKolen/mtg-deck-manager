@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate keyword_registry_data.py from Scryfall catalog APIs (2026)."""
+"""Regenerate keywords/registry_data.py from Scryfall catalog APIs (2026)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from pathlib import Path
 
 USER_AGENT = 'MTG-Deck-Manager/1.0'
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / 'sim' / 'engine' / 'abilities' / 'keyword_registry_data.py'
+OUT = ROOT / 'sim' / 'engine' / 'abilities' / 'keywords' / 'registry_data.py'
 
 COMBAT_EVASION = {
     'flying', 'reach', 'menace', 'intimidate', 'fear', 'shadow',
@@ -73,7 +73,7 @@ def categorize(name: str, kind: str) -> str:
 
 
 def main() -> None:
-    """Write keyword_registry_data.py."""
+    """Write engine/abilities/keywords/registry_data.py."""
     try:
         abilities = fetch_catalog('keyword-abilities')
         actions = fetch_catalog('keyword-actions')
@@ -95,6 +95,7 @@ def main() -> None:
         '',
         'Generated from api.scryfall.com/catalog/* (Scryfall database as of generator run).',
         'Regenerate: python scripts/generate_keyword_registry.py',
+        'Target: engine/abilities/keywords/registry_data.py',
         '"""',
         '',
         'from __future__ import annotations',

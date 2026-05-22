@@ -16,8 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from engine.abilities.keyword_handlers import consume_regeneration_shield
-from engine.abilities.keywords import is_indestructible
+from engine.abilities.keywords import consume_regeneration_shield, is_indestructible
 from engine.core.game_object import Permanent, TokenObject
 from engine.core.zones import Zone
 

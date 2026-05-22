@@ -2,6 +2,7 @@
 
 Generated from api.scryfall.com/catalog/* on 2026-05-22.
 Regenerate: python scripts/generate_keyword_registry.py
+Target path: engine/abilities/keywords/registry_data.py
 """
 
 from __future__ import annotations

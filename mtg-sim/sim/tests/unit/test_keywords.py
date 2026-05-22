@@ -6,13 +6,13 @@ import pytest
 
 from engine.abilities import activated, keywords
 from engine.abilities.activated import ActivationSpeed
-from engine.abilities.keyword_registry import (
+from engine.abilities.keywords import (
+    KEYWORD_ENTRIES,
     SCRYFALL_KEYWORD_COUNT,
     detect_keywords,
     has_registered_keyword,
     registry_summary,
 )
-from engine.abilities.keyword_registry_data import KEYWORD_ENTRIES
 from engine.core.game_object import SpellOnStack, Target
 from engine.core.mana import ManaCost
 from engine.core.zones import Zone

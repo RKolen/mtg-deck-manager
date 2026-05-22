@@ -1,15 +1,11 @@
-"""
-Rules hooks for keyword abilities integrated into the engine (Phase E).
-
-Handlers are invoked from combat, zone changes, and casting where the simplified
-engine supports them. Keywords only detected in the registry still parse correctly.
-"""
+"""Runtime handlers invoked from combat, SBAs, and casting."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from engine.abilities.keywords import has_deathtouch, has_infect, has_wither
+from engine.abilities.keywords.combat import has_deathtouch
+from engine.abilities.keywords.counters import has_infect, has_wither
 from engine.core.game_object import Permanent, TokenObject
 
 if TYPE_CHECKING:
