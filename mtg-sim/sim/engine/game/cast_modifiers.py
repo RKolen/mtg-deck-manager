@@ -67,6 +67,8 @@ def _push_storm_copies(
             cast_via_aftermath=context.cast_via_aftermath,
             kicker_times=context.kicker_times,
             entwined=context.entwined,
+            overloaded=context.overloaded,
+            cast_via_bestow=context.cast_via_bestow,
             is_storm_copy=True,
         ))
     return copies

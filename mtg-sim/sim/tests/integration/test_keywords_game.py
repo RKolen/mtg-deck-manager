@@ -135,6 +135,51 @@ def test_jump_start_cast_from_graveyard_exiles_on_resolve():
     assert exiled_spell.card_info.name == "Bolt"
 
 
+def test_overloaded_spell_damages_each_creature():
+    """Overload deals damage to every creature on the battlefield."""
+    mortars = make_instant(
+        name="Mortars",
+        cmc=0,
+        mana_cost="",
+        oracle=(
+            "Mortars deals 4 damage to target creature. "
+            "Overload {0} (Damage each creature.)"
+        ),
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    soldier = place_on_battlefield(make_creature("Soldier", 4, 4), 0, game.state.zones)
+    bear = place_on_battlefield(make_creature("Bear", 4, 4), 1, game.state.zones)
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=mortars),
+    ]
+    data = game.action_cast(0, overloaded=True)
+    assert "error" not in data
+    assert soldier.damage_marked == 4
+    assert bear.damage_marked == 4
+
+
+def test_bestow_attaches_creature_to_host():
+    """Bestow enters the battlefield attached to the chosen creature."""
+    spirit_info = make_creature(
+        name="Spirit",
+        oracle="Flying\nBestow {0}",
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    host = place_on_battlefield(make_creature("Soldier", 2, 2), 0, game.state.zones)
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=spirit_info),
+    ]
+    data = game.action_cast(0, bestow_target_uid=str(host.obj_id))
+    assert "error" not in data
+    bestowed = next(
+        p for p in game.state.zones.battlefield
+        if p.name == "Spirit"
+    )
+    assert bestowed.attached_to == host.obj_id
+
+
 def test_entwined_charm_deals_damage_and_draws():
     """Entwined cast applies both modes: damage to opponent and a card drawn."""
     charm = make_instant(

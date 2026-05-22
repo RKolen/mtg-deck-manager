@@ -25,6 +25,14 @@ from engine.abilities.keywords.casting import (
     normalize_entwined,
     entwine_mana_needed,
     resolve_burn_damage,
+    has_bestow,
+    has_overload,
+    normalize_overloaded,
+    overload_hits_each_creature,
+    overload_mana_needed,
+    bestow_host_error,
+    bestow_mana_needed,
+    normalize_bestow,
     escape_cost,
     escape_exiles_required,
     escape_mana_needed,
@@ -405,6 +413,33 @@ def test_can_cast_via_flashback_allows_instant_timing():
     card = make_instant('Ray', oracle='Flashback {0}')
     assert can_cast_via_flashback(card, 'attack', stack_is_empty=False)
     assert not can_cast_via_flashback(card, 'upkeep', stack_is_empty=True)
+
+
+def test_has_overload_parses_alternate_cost():
+    """Overload cost replaces the mana cost when paid."""
+    card = make_instant(
+        'Mortars',
+        cmc=2,
+        oracle='Mortars deals 4 damage to target creature. Overload {4}',
+    )
+    assert has_overload(card)
+    assert overload_mana_needed(card) == (4, 0)
+    assert normalize_overloaded(card, True)
+    assert not overload_hits_each_creature(card)
+    assert overload_hits_each_creature(
+        make_instant('Sweep', oracle='Overload {2}\nDamage each creature.'),
+    )
+
+
+def test_has_bestow_parses_cost_and_validates_host():
+    """Bestow cost parses and requires a creature host you control."""
+    game = fresh_game()
+    spirit = make_creature('Spirit', oracle='Flying\nBestow {2}')
+    host = place_on_battlefield(make_creature('Soldier'), 0, game.zones)
+    assert has_bestow(spirit)
+    assert bestow_mana_needed(spirit) == (2, 0)
+    assert normalize_bestow(spirit, str(host.obj_id))
+    assert bestow_host_error(game.zones, 0, str(host.obj_id)) is None
 
 
 def test_has_entwine_parses_cost_and_cast_mana():

@@ -26,6 +26,8 @@ class CastAnnounceOptions:
 
     kicker_times: int = 0
     entwined: bool = False
+    overloaded: bool = False
+    bestow_target_uid: str | None = None
     convoke_creature_ids: tuple[int, ...] = ()
     delve_graveyard_indices: tuple[int, ...] = ()
     improvise_artifact_ids: tuple[int, ...] = ()
@@ -42,6 +44,8 @@ class SpellCastContext:
     from_graveyard: bool = False
     kicker_times: int = 0
     entwined: bool = False
+    overloaded: bool = False
+    cast_via_bestow: bool = False
 
 
 def expand_deck(cards: list[CardInfo], player_idx: int) -> list[CardObject]:

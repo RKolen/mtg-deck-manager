@@ -13,12 +13,17 @@ from engine.abilities.keywords.casting import (
     has_jump_start,
     jump_start_discard_error,
     jump_start_mana_needed,
-    cast_mana_needed,
-    cast_mana_with_entwine,
+    bestow_host_error,
     entwined_extra_draw,
+    normalize_bestow,
+    normalize_overloaded,
+    overload_creature_targets,
+    overload_hits_each_creature,
+    overload_opponent_indices,
+    resolve_announce_cast_mana,
+    resolve_overload_burn_damage,
     escape_mana_needed,
     extra_draw_from_kicker,
-    has_entwine,
     normalize_entwined,
     resolve_burn_damage,
     flashback_mana_needed,
@@ -26,7 +31,6 @@ from engine.abilities.keywords.casting import (
     has_flashback,
     escape_payment_error,
     exile_for_escape_cost,
-    has_kicker,
     kicked_counter_count,
     normalize_kicker_times,
     pump_with_kicker,
@@ -43,7 +47,6 @@ from engine.game.helpers import (
     CreateTokenEffect,
     SpellCastContext,
     can_cast_now,
-    payment_requirements,
     require_card_info,
     resolve_ability_effect,
     target_player as first_target_player,
@@ -80,16 +83,22 @@ class SpellStackMixin(GameRuntimeMixin):
         paid_entwined = normalize_entwined(card_info, opts.entwined)
         if opts.entwined and not paid_entwined:
             return {**self.to_client(), "error": f"{card_info.name} does not have entwine"}
-        mana_needed, life_cost = (
-            cast_mana_needed(card_info, paid_kicker)
-            if has_kicker(card_info)
-            else payment_requirements(card_info)
-        )
-        mana_needed, life_cost = cast_mana_with_entwine(
+        paid_overloaded = normalize_overloaded(card_info, opts.overloaded)
+        if opts.overloaded and not paid_overloaded:
+            return {**self.to_client(), "error": f"{card_info.name} does not have overload"}
+        paid_bestow = normalize_bestow(card_info, opts.bestow_target_uid)
+        if opts.bestow_target_uid and not paid_bestow:
+            return {**self.to_client(), "error": f"{card_info.name} does not have bestow"}
+        host_err = bestow_host_error(self.state.zones, 0, opts.bestow_target_uid)
+        if host_err:
+            return {**self.to_client(), "error": host_err}
+        cast_target_uid = opts.bestow_target_uid or target_uid_str
+        mana_needed, life_cost = resolve_announce_cast_mana(
             card_info,
-            mana_needed,
-            life_cost,
-            paid_entwined,
+            kicker_times=paid_kicker,
+            entwined=paid_entwined,
+            overloaded=paid_overloaded,
+            bestow_target_uid=opts.bestow_target_uid,
         )
         adjustments = resolve_cast_adjustments(
             card_info,
@@ -120,15 +129,24 @@ class SpellStackMixin(GameRuntimeMixin):
         targets = self._put_spell_on_stack(
             player_idx=0,
             card=card,
-            target_uid_str=target_uid_str,
+            target_uid_str=cast_target_uid,
             target_player_idx=target_player_idx,
-            context=SpellCastContext(kicker_times=paid_kicker, entwined=paid_entwined),
+            context=SpellCastContext(
+                kicker_times=paid_kicker,
+                entwined=paid_entwined,
+                overloaded=paid_overloaded,
+                cast_via_bestow=paid_bestow,
+            ),
         )
         cast_detail = f"{card_info.name} on stack"
+        if paid_overloaded:
+            cast_detail = f"{cast_detail} (overloaded)"
+        if paid_bestow:
+            cast_detail = f"{cast_detail} (bestow)"
         if paid_entwined:
-            cast_detail = f"{card_info.name} on stack (entwined)"
+            cast_detail = f"{cast_detail} (entwined)"
         if paid_kicker:
-            cast_detail = f"{card_info.name} on stack (kicked x{paid_kicker})"
+            cast_detail = f"{cast_detail} (kicked x{paid_kicker})"
         if adjustments.delve_cards_exiled:
             cast_detail = (
                 f"{cast_detail} (delve x{adjustments.delve_cards_exiled})"
@@ -366,6 +384,8 @@ class SpellStackMixin(GameRuntimeMixin):
             cast_via_aftermath=opts.cast_via_aftermath,
             kicker_times=opts.kicker_times,
             entwined=opts.entwined,
+            overloaded=opts.overloaded,
+            cast_via_bestow=opts.cast_via_bestow,
         ))
         actor = "player" if player_idx == 0 else "opponent"
         for detail in apply_post_cast_modifiers(self, player_idx, card, targets, opts):
@@ -420,6 +440,20 @@ class SpellStackMixin(GameRuntimeMixin):
             spell.controller_idx,
             "resolve",
         )
+        if spell.cast_via_bestow:
+            host_id = target_uid(spell.targets)
+            if host_id is not None:
+                permanent.attached_to = int(host_id)
+                host = self._find_permanent(host_id)
+                host_name = host.name if host is not None else "creature"
+                detail = f"Bestowed {card_info.name} on {host_name}"
+                counters = kicked_counter_count(card_info, spell.kicker_times)
+                if counters:
+                    permanent.counters["+1/+1"] = (
+                        permanent.counters.get("+1/+1", 0) + counters
+                    )
+                self._register_permanent_triggers(permanent)
+                return detail
         counters = kicked_counter_count(card_info, spell.kicker_times)
         if counters:
             permanent.counters["+1/+1"] = permanent.counters.get("+1/+1", 0) + counters
@@ -436,6 +470,17 @@ class SpellStackMixin(GameRuntimeMixin):
         targets = spell.targets
         card_info = require_card_info(card)
         controller_idx = spell.controller_idx
+        if spell.overloaded:
+            damage = resolve_overload_burn_damage(card_info, spell.kicker_times)
+            self._relocate_resolved_spell(spell, card)
+            if overload_hits_each_creature(card_info):
+                for perm in overload_creature_targets(self.state.zones.battlefield):
+                    perm.damage_marked += damage
+                self.state.check_sbas()
+                return f"{card_info.name} dealt {damage} damage to each creature"
+            for idx in overload_opponent_indices(controller_idx):
+                self.state.players[idx].life -= damage
+            return f"{card_info.name} dealt {damage} damage to each opponent"
         damage = resolve_burn_damage(card_info, spell.entwined, spell.kicker_times)
         extra_draw = entwined_extra_draw(card_info, spell.entwined)
         self._relocate_resolved_spell(spell, card)
