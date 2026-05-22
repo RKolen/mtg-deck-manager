@@ -183,6 +183,7 @@ class GameActionRequest(BaseModel):
     action: str
     handIdx: int | None = None
     kickerTimes: int = 0
+    convokeCreatureIds: list[str] = []
     targetUid: str | None = None
     targetPlayer: int | None = None
     permanentUid: str | None = None
@@ -252,11 +253,13 @@ async def _dispatch_action(game: InteractiveGame, req: GameActionRequest) -> dic
         return game.action_play_land(req.handIdx)
     if req.action == "cast":
         assert req.handIdx is not None
+        convoke_ids = [int(uid) for uid in req.convokeCreatureIds]
         return game.action_cast(
             req.handIdx,
             req.targetUid,
             req.targetPlayer,
             kicker_times=req.kickerTimes,
+            convoke_creature_ids=convoke_ids,
         )
     if req.action == "cast_flashback":
         assert req.handIdx is not None

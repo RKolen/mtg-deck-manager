@@ -21,6 +21,14 @@ from engine.core.game_state import GameState
 
 
 @dataclass(frozen=True)
+class CastAnnounceOptions:
+    """Optional costs when announcing a cast from hand."""
+
+    kicker_times: int = 0
+    convoke_creature_ids: tuple[int, ...] = ()
+
+
+@dataclass(frozen=True)
 class SpellCastContext:
     """Options when placing a spell on the stack."""
 

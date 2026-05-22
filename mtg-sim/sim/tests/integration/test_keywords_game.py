@@ -1,9 +1,17 @@
 """Integration tests for Phase E keyword behaviour in the game loop."""
 
 from engine.core.game_object import CardObject
+from engine.core.zones import Zone
 from engine.game import create_game
 from engine.rules.combat import can_attack
-from tests.conftest import make_card, make_creature, make_deck, make_instant, place_on_battlefield
+from tests.conftest import (
+    make_card,
+    make_creature,
+    make_deck,
+    make_instant,
+    make_land,
+    place_on_battlefield,
+)
 
 
 def test_haste_creature_can_attack_same_turn_it_entered():
@@ -82,3 +90,62 @@ def test_storm_spell_creates_and_resolves_copies():
     data = game.action_cast(0, target_player=1)
     assert data["opponentLife"] == 17
     assert len(game.state.zones.player_zones[0].graveyard) == 1
+
+
+def test_cascade_casts_free_spell_from_library():
+    """Casting a cascade spell puts a lower-mana hit on the stack and resolves it."""
+    hit = make_instant(
+        name="Hit",
+        cmc=1,
+        mana_cost="",
+        oracle="Hit deals 1 damage to any target.",
+    )
+    boarder = make_instant(
+        name="Boarder",
+        cmc=4,
+        mana_cost="",
+        oracle="Boarder has no effect. Cascade",
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    for _ in range(4):
+        land = CardObject(controller_idx=0, owner_idx=0, card_info=make_land())
+        game.state.zones.enter_battlefield(land, 0, "test_setup", Zone.HAND)
+    game.state.zones.player_zones[0].library = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=make_land()),
+        CardObject(controller_idx=0, owner_idx=0, card_info=hit),
+    ]
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=boarder),
+    ]
+    data = game.action_cast(0, target_player=1)
+    assert data["opponentLife"] == 19
+    assert len(game.state.zones.player_zones[0].library) == 1
+
+
+def test_convoke_cast_taps_creatures_to_pay_mana():
+    """Convoke lets a 4-mana burn spell be paid with two tapped creatures and two lands."""
+    burn = make_instant(
+        name="Mob Justice",
+        cmc=4,
+        mana_cost="",
+        oracle="Mob Justice deals 4 damage to any target. Convoke",
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    for _ in range(2):
+        land = CardObject(controller_idx=0, owner_idx=0, card_info=make_land())
+        game.state.zones.enter_battlefield(land, 0, "test_setup", Zone.HAND)
+    soldier = place_on_battlefield(make_creature("Soldier", 1, 1), 0, game.state.zones)
+    knight = place_on_battlefield(make_creature("Knight", 1, 1), 0, game.state.zones)
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=burn),
+    ]
+    data = game.action_cast(
+        0,
+        target_player=1,
+        convoke_creature_ids=[soldier.obj_id, knight.obj_id],
+    )
+    assert data["opponentLife"] == 16
+    assert soldier.tapped
+    assert knight.tapped

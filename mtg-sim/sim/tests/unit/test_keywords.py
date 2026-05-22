@@ -10,14 +10,22 @@ from engine.abilities.keywords.casting import (
     cast_mana_needed,
     flashback_cost,
     flashback_mana_needed,
+    has_convoke,
     has_flashback,
     has_kicker,
     is_multikicker,
     kicker_mana_per_time,
+    normalize_convoke_creature_ids,
     normalize_kicker_times,
+    resolve_convoke_for_cast,
     spell_damage,
     storm_copy_count,
     supports_storm_copies,
+)
+from engine.abilities.keywords.casting.cascade import (
+    has_cascade,
+    reveal_cascade_hit,
+    return_cascade_bottom,
 )
 from engine.abilities.activated import ActivationSpeed
 from engine.abilities.keywords import (
@@ -322,7 +330,9 @@ def test_has_flashback_parses_alternate_cost():
     """Flashback cost is parsed from oracle text."""
     card = make_instant('Ray', oracle='Flashback {2}{R}\nDeal 3 damage.')
     assert has_flashback(card)
-    assert flashback_cost(card).mana_value == 3
+    cost = flashback_cost(card)
+    assert cost is not None
+    assert cost.mana_value == 3
     assert flashback_mana_needed(card) == 3
 
 
@@ -348,6 +358,53 @@ def test_kicker_cost_and_kicked_damage():
     assert spell_damage(card, 0) == 2
     assert spell_damage(card, 1) == 4
     assert cast_mana_needed(card, 1)[0] == int(card.cmc) + 4
+
+
+def test_reveal_cascade_hit_finds_lower_mana_nonland():
+    """Cascade exiles from the top until a nonland with lower mana value."""
+    land = make_land()
+    hit_info = make_instant('Hit', cmc=2, oracle='Deal 1 damage.')
+    miss_info = make_instant('Big', cmc=4, oracle='Deal 4 damage.')
+    library = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=land),
+        CardObject(controller_idx=0, owner_idx=0, card_info=hit_info),
+        CardObject(controller_idx=0, owner_idx=0, card_info=miss_info),
+    ]
+    reveal = reveal_cascade_hit(library, max_mana_value=4)
+    return_cascade_bottom(library, reveal.bottom_cards)
+    assert reveal.hit is not None
+    assert reveal.hit.card_info is not None
+    assert reveal.hit.card_info.name == 'Hit'
+    assert len(library) == 2
+    names = {c.card_info.name for c in library if c.card_info}
+    assert names == {'Plains', 'Big'}
+
+
+def test_has_cascade_detects_keyword():
+    """Cascade is detected on oracle text."""
+    card = make_instant('Boarder', oracle='Cascade')
+    assert has_cascade(card)
+
+
+def test_has_convoke_detects_keyword():
+    """Convoke is detected on oracle text."""
+    card = make_instant('Mob', oracle='Convoke\nDeal 4 damage.')
+    assert has_convoke(card)
+
+
+def test_resolve_convoke_taps_creatures_and_reduces_mana():
+    """Each convoked creature taps and reduces generic mana by one."""
+    game = fresh_game()
+    spell = make_instant('Mob', cmc=4, oracle='Convoke\nDeal 4 damage.')
+    creature_a = place_on_battlefield(make_creature('Soldier'), 0, game.zones)
+    creature_b = place_on_battlefield(make_creature('Knight'), 0, game.zones)
+    ids = [creature_a.obj_id, creature_b.obj_id]
+    assert normalize_convoke_creature_ids(spell, ids) == ids
+    mana_left, tapped, err = resolve_convoke_for_cast(spell, 4, ids, game.zones, 0)
+    assert err is None
+    assert mana_left == 2
+    assert tapped == ids
+    assert creature_a.tapped and creature_b.tapped
 
 
 def test_storm_copy_count_is_other_spells_this_turn():

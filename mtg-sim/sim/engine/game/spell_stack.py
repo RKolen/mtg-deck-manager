@@ -12,15 +12,16 @@ from engine.abilities.keywords.casting import (
     kicked_counter_count,
     normalize_kicker_times,
     pump_with_kicker,
+    resolve_convoke_for_cast,
     spell_damage,
-    storm_copy_count,
-    supports_storm_copies,
 )
+from engine.game.cast_modifiers import apply_post_cast_modifiers
 from engine.cards.oracle_parse import parse_draw, parse_token_blueprint, spell_category
 from engine.core.game_object import ActivatedAbilityOnStack, CardObject, SpellOnStack, Target
 from engine.core.game_object import TriggeredAbilityOnStack
 from engine.core.zones import Zone
 from engine.game.helpers import (
+    CastAnnounceOptions,
     CreateTokenEffect,
     SpellCastContext,
     can_cast_now,
@@ -46,22 +47,32 @@ class SpellStackMixin(GameRuntimeMixin):
         target_uid_str: str | None,
         target_player_idx: int | None,
         auto_resolve: bool,
-        kicker_times: int = 0,
+        cast_options: CastAnnounceOptions | None = None,
     ) -> dict:
         """Pay costs and place a spell on the stack."""
+        opts = cast_options or CastAnnounceOptions()
         card = self._zones(0).hand[hand_idx]
         if not isinstance(card, CardObject):
             return {**self.to_client(), "error": "Invalid card"}
         card_info = require_card_info(card)
         assert can_cast_now(card_info, self.phase, self.state.stack.is_empty)
-        paid_kicker = normalize_kicker_times(card_info, kicker_times)
-        if kicker_times > 0 and paid_kicker == 0:
+        paid_kicker = normalize_kicker_times(card_info, opts.kicker_times)
+        if opts.kicker_times > 0 and paid_kicker == 0:
             return {**self.to_client(), "error": f"{card_info.name} does not have kicker"}
         mana_needed, life_cost = (
             cast_mana_needed(card_info, paid_kicker)
             if has_kicker(card_info)
             else payment_requirements(card_info)
         )
+        mana_needed, tapped_convoke, convoke_err = resolve_convoke_for_cast(
+            card_info,
+            mana_needed,
+            list(opts.convoke_creature_ids),
+            self.state.zones,
+            0,
+        )
+        if convoke_err:
+            return {**self.to_client(), "error": convoke_err}
         if not self._tap_lands_for_mana(0, mana_needed):
             return {
                 **self.to_client(),
@@ -84,6 +95,8 @@ class SpellStackMixin(GameRuntimeMixin):
         cast_detail = f"{card_info.name} on stack"
         if paid_kicker:
             cast_detail = f"{card_info.name} on stack (kicked x{paid_kicker})"
+        if tapped_convoke:
+            cast_detail = f"{cast_detail} (convoke x{len(tapped_convoke)})"
         self._log("player", "cast", cast_detail)
         self.state.fire_spell_cast_triggers(card, tuple(targets))
         if auto_resolve:
@@ -156,40 +169,11 @@ class SpellStackMixin(GameRuntimeMixin):
             cast_via_flashback=opts.cast_via_flashback,
             kicker_times=opts.kicker_times,
         ))
-        copies = self._push_storm_copies(player_idx, card, targets, opts)
+        actor = "player" if player_idx == 0 else "opponent"
+        for detail in apply_post_cast_modifiers(self, player_idx, card, targets, opts):
+            self._log(actor, "storm" if "storm" in detail else "cascade", detail)
         self.state.turn.action_taken()
-        if copies:
-            card_info = require_card_info(card)
-            self._log(
-                "player" if player_idx == 0 else "opponent",
-                "storm",
-                f"{card_info.name} + {copies} storm copy/copies",
-            )
         return targets
-
-    def _push_storm_copies(
-        self,
-        player_idx: int,
-        card: CardObject,
-        targets: list[Target],
-        context: SpellCastContext,
-    ) -> int:
-        """Put storm copies on the stack above the spell that created them."""
-        card_info = require_card_info(card)
-        if not supports_storm_copies(card_info):
-            return 0
-        copies = storm_copy_count(self.state.players[player_idx].spells_cast_this_turn)
-        for _ in range(copies):
-            self.state.stack.push(SpellOnStack(
-                controller_idx=player_idx,
-                owner_idx=card.owner_idx,
-                source=card,
-                targets=list(targets),
-                cast_via_flashback=context.cast_via_flashback,
-                kicker_times=context.kicker_times,
-                is_storm_copy=True,
-            ))
-        return copies
 
     def _resolve_top_of_stack(self) -> str:
         """Resolve the top stack object and apply its simple Phase B effect."""

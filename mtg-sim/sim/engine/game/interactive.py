@@ -17,6 +17,7 @@ from engine.core.game_state import GameState
 from engine.core.turn_structure import PriorityPassOutcome, Step
 from engine.core.zones import Zone
 from engine.game.helpers import (
+    CastAnnounceOptions,
     card_names,
     is_land,
     payment_requirements,
@@ -90,6 +91,7 @@ class InteractiveGame(SpellStackMixin):  # pylint: disable=too-many-public-metho
         target_uid: str | None = None,
         target_player: int | None = None,
         kicker_times: int = 0,
+        convoke_creature_ids: list[int] | None = None,
     ) -> dict:
         """Cast a spell through the stack, auto-passing while no responses exist."""
         return self._announce_cast(
@@ -97,7 +99,10 @@ class InteractiveGame(SpellStackMixin):  # pylint: disable=too-many-public-metho
             target_uid,
             target_player,
             auto_resolve=True,
-            kicker_times=kicker_times,
+            cast_options=CastAnnounceOptions(
+                kicker_times=kicker_times,
+                convoke_creature_ids=tuple(convoke_creature_ids or ()),
+            ),
         )
 
     def action_cast_to_stack(
@@ -106,6 +111,7 @@ class InteractiveGame(SpellStackMixin):  # pylint: disable=too-many-public-metho
         target_uid: str | None = None,
         target_player: int | None = None,
         kicker_times: int = 0,
+        convoke_creature_ids: list[int] | None = None,
     ) -> dict:
         """Cast a spell and leave it on the stack for explicit priority passes."""
         return self._announce_cast(
@@ -113,7 +119,10 @@ class InteractiveGame(SpellStackMixin):  # pylint: disable=too-many-public-metho
             target_uid,
             target_player,
             auto_resolve=False,
-            kicker_times=kicker_times,
+            cast_options=CastAnnounceOptions(
+                kicker_times=kicker_times,
+                convoke_creature_ids=tuple(convoke_creature_ids or ()),
+            ),
         )
 
     def action_cast_flashback(
