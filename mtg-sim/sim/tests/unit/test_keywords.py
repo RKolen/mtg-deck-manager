@@ -7,9 +7,15 @@ import pytest
 from engine.abilities import activated, keywords
 from engine.abilities.keywords.casting import (
     can_cast_via_flashback,
+    cast_mana_needed,
     flashback_cost,
     flashback_mana_needed,
     has_flashback,
+    has_kicker,
+    is_multikicker,
+    kicker_mana_per_time,
+    normalize_kicker_times,
+    spell_damage,
 )
 from engine.abilities.activated import ActivationSpeed
 from engine.abilities.keywords import (
@@ -323,6 +329,33 @@ def test_can_cast_via_flashback_allows_instant_timing():
     card = make_instant('Ray', oracle='Flashback {0}')
     assert can_cast_via_flashback(card, 'attack', stack_is_empty=False)
     assert not can_cast_via_flashback(card, 'upkeep', stack_is_empty=True)
+
+
+def test_kicker_cost_and_kicked_damage():
+    """Kicker cost parses and kicked burn uses the replacement damage."""
+    card = make_instant(
+        'Burst',
+        oracle=(
+            'Deals 2 damage to any target. Kicker {4}. '
+            'If this spell was kicked, it deals 4 damage instead.'
+        ),
+    )
+    assert has_kicker(card)
+    assert not is_multikicker(card)
+    assert kicker_mana_per_time(card) == 4
+    assert spell_damage(card, 0) == 2
+    assert spell_damage(card, 1) == 4
+    assert cast_mana_needed(card, 1)[0] == int(card.cmc) + 4
+
+
+def test_multikicker_normalizes_times():
+    """Multikicker allows paying more than once; regular kicker does not."""
+    multi = make_instant('Strength', oracle='Multikicker {1}\nDraw a card.')
+    single = make_instant('Bolt', oracle='Kicker {2}\nDeals 3 damage.')
+    assert is_multikicker(multi)
+    assert normalize_kicker_times(multi, 3) == 3
+    assert normalize_kicker_times(single, 3) == 1
+    assert normalize_kicker_times(single, 0) == 0
 
 
 def test_flashback_fizzle_exiles_source_card():

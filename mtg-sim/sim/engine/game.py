@@ -32,8 +32,15 @@ from engine.core.zones import Zone, ZoneManager
 from engine.abilities.keywords import has_flash
 from engine.abilities.keywords.casting import (
     can_cast_via_flashback,
+    cast_mana_needed,
+    extra_draw_from_kicker,
     flashback_mana_needed,
     has_flashback,
+    has_kicker,
+    kicked_counter_count,
+    normalize_kicker_times,
+    pump_with_kicker,
+    spell_damage,
 )
 from engine.rules.combat import can_attack, eligible_attackers, legal_blocker
 from engine.rules.combat import resolve_combat_damage, tap_attackers
@@ -48,6 +55,7 @@ class _SpellCastContext:
 
     cast_via_flashback: bool = False
     from_graveyard: bool = False
+    kicker_times: int = 0
 
 
 @dataclass
@@ -151,18 +159,32 @@ class InteractiveGame:  # pylint: disable=too-many-public-methods
         hand_idx: int,
         target_uid: str | None = None,
         target_player: int | None = None,
+        kicker_times: int = 0,
     ) -> dict:
         """Cast a spell through the stack, auto-passing while no responses exist."""
-        return self._announce_cast(hand_idx, target_uid, target_player, auto_resolve=True)
+        return self._announce_cast(
+            hand_idx,
+            target_uid,
+            target_player,
+            auto_resolve=True,
+            kicker_times=kicker_times,
+        )
 
     def action_cast_to_stack(
         self,
         hand_idx: int,
         target_uid: str | None = None,
         target_player: int | None = None,
+        kicker_times: int = 0,
     ) -> dict:
         """Cast a spell and leave it on the stack for explicit priority passes."""
-        return self._announce_cast(hand_idx, target_uid, target_player, auto_resolve=False)
+        return self._announce_cast(
+            hand_idx,
+            target_uid,
+            target_player,
+            auto_resolve=False,
+            kicker_times=kicker_times,
+        )
 
     def action_cast_flashback(
         self,
@@ -184,12 +206,20 @@ class InteractiveGame:  # pylint: disable=too-many-public-methods
         target_uid: str | None,
         target_player: int | None,
         auto_resolve: bool,
+        kicker_times: int = 0,
     ) -> dict:
         """Pay costs and place a spell on the stack."""
         card = self._zones(0).hand[hand_idx]
         card_info = _require_card_info(card)
         assert _can_cast_now(card_info, self.phase, self.state.stack.is_empty)
-        mana_needed, life_cost = _payment_requirements(card_info)
+        paid_kicker = normalize_kicker_times(card_info, kicker_times)
+        if kicker_times > 0 and paid_kicker == 0:
+            return {**self.to_client(), "error": f"{card_info.name} does not have kicker"}
+        mana_needed, life_cost = (
+            cast_mana_needed(card_info, paid_kicker)
+            if has_kicker(card_info)
+            else _payment_requirements(card_info)
+        )
         if not self._tap_lands_for_mana(0, mana_needed):
             return {
                 **self.to_client(),
@@ -207,8 +237,12 @@ class InteractiveGame:  # pylint: disable=too-many-public-methods
             card=card,
             target_uid=target_uid,
             target_player=target_player,
+            context=_SpellCastContext(kicker_times=paid_kicker),
         )
-        self._log("player", "cast", f"{card_info.name} on stack")
+        cast_detail = f"{card_info.name} on stack"
+        if paid_kicker:
+            cast_detail = f"{card_info.name} on stack (kicked x{paid_kicker})"
+        self._log("player", "cast", cast_detail)
         self.state.fire_spell_cast_triggers(card, tuple(targets))
         if auto_resolve:
             self._auto_pass_stack()
@@ -453,6 +487,7 @@ class InteractiveGame:  # pylint: disable=too-many-public-methods
             source=card,
             targets=targets,
             cast_via_flashback=opts.cast_via_flashback,
+            kicker_times=opts.kicker_times,
         ))
         self.state.turn.action_taken()
         return targets
@@ -482,8 +517,14 @@ class InteractiveGame:  # pylint: disable=too-many-public-methods
         controller_idx = spell.controller_idx
         if category == "creature":
             permanent = self.state.zones.enter_battlefield(card, controller_idx, "resolve")
+            counters = kicked_counter_count(card_info, spell.kicker_times)
+            if counters:
+                permanent.counters["+1/+1"] = permanent.counters.get("+1/+1", 0) + counters
             self._register_permanent_triggers(permanent)
-            return f"Cast creature {card_info.name}"
+            detail = f"Cast creature {card_info.name}"
+            if counters:
+                detail = f"{detail} with {counters} +1/+1 counter(s)"
+            return detail
         if category == "burn":
             return self._resolve_burn(spell, controller_idx)
         if category == "pump":
@@ -500,7 +541,7 @@ class InteractiveGame:  # pylint: disable=too-many-public-methods
         assert card is not None
         targets = spell.targets
         card_info = _require_card_info(card)
-        damage = parse_damage(card_info.oracle_text or "") or max(1, int(card_info.cmc))
+        damage = spell_damage(card_info, spell.kicker_times)
         self._relocate_resolved_spell(spell, card)
         target_player = _target_player(targets)
         target_uid = _target_uid(targets)
@@ -522,9 +563,7 @@ class InteractiveGame:  # pylint: disable=too-many-public-methods
         assert card is not None
         targets = spell.targets
         card_info = _require_card_info(card)
-        power, toughness = parse_pump(card_info.oracle_text or "")
-        if power == 0 and toughness == 0:
-            power, toughness = 1, 1
+        power, toughness = pump_with_kicker(card_info, spell.kicker_times)
         target_uid = _target_uid(targets)
         target = (
             self._find_permanent(target_uid)
@@ -554,7 +593,10 @@ class InteractiveGame:  # pylint: disable=too-many-public-methods
         assert card is not None
         controller_idx = spell.controller_idx
         card_info = _require_card_info(card)
-        count = parse_draw(card_info.oracle_text or "") or 1
+        count = (parse_draw(card_info.oracle_text or "") or 1) + extra_draw_from_kicker(
+            card_info,
+            spell.kicker_times,
+        )
         drawn = self._draw_cards(controller_idx, count)
         self._relocate_resolved_spell(spell, card)
         return f"{card_info.name} drew {_card_names(drawn) or 'no cards'}"

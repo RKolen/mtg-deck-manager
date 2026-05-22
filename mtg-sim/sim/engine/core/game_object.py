@@ -223,6 +223,7 @@ class SpellOnStack(GameObject):
     modes: list[int] = field(default_factory=list)
     chosen_x: int = 0
     cast_via_flashback: bool = False
+    kicker_times: int = 0
 
 
 @dataclass
