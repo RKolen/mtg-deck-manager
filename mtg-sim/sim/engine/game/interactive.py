@@ -79,10 +79,12 @@ class InteractiveGame(SpellStackMixin):  # pylint: disable=too-many-public-metho
         assert self.phase in ("main1", "main2")
         assert not self.state.players[0].land_played
         card = self._zones(0).hand[hand_idx]
-        assert card.card_info is not None and card.card_info.is_land
+        assert isinstance(card, CardObject)
+        card_info = require_card_info(card)
+        assert card_info.is_land
         self.state.zones.enter_battlefield(card, 0, "play_land", Zone.HAND)
         self.state.players[0].land_played = True
-        self._log("player", "land", card.card_info.name)
+        self._log("player", "land", card_info.name)
         return self.to_client()
 
     def action_cast(
@@ -145,6 +147,22 @@ class InteractiveGame(SpellStackMixin):  # pylint: disable=too-many-public-metho
             target_uid,
             target_player,
             auto_resolve=True,
+        )
+
+    def action_cast_escape(
+        self,
+        graveyard_idx: int,
+        target_uid: str | None = None,
+        target_player: int | None = None,
+        escape_exile_indices: list[int] | None = None,
+    ) -> dict:
+        """Cast a card from the graveyard for its escape cost."""
+        return self._announce_escape_cast(
+            graveyard_idx,
+            target_uid,
+            target_player,
+            auto_resolve=True,
+            escape_exile_indices=escape_exile_indices,
         )
 
     def action_pass_priority(self) -> dict:

@@ -48,6 +48,36 @@ def test_flashback_cast_from_graveyard_exiles_on_resolve():
     assert exiled.card_info.name == "Shock"
 
 
+def test_escape_cast_from_graveyard_exiles_on_resolve():
+    """Escape removes the spell from the graveyard and exiles it after resolving."""
+    scream = make_instant(
+        name="Scream",
+        oracle=(
+            "Scream deals 2 damage to any target.\n"
+            "Escape—{0}, Exile two other cards from your graveyard."
+        ),
+        mana_cost="{R}",
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    filler_a = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant("A"))
+    filler_b = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant("B"))
+    card = CardObject(controller_idx=0, owner_idx=0, card_info=scream)
+    game.state.zones.player_zones[0].graveyard.extend([card, filler_a, filler_b])
+    data = game.action_cast_escape(0, target_player=1, escape_exile_indices=[1, 2])
+    assert data["opponentLife"] == 18
+    assert not data["stack"]
+    assert len(game.state.zones.player_zones[0].graveyard) == 0
+    exiled = game.state.zones.player_zones[0].exile
+    assert len(exiled) == 3
+    exiled_names = {
+        c.card_info.name
+        for c in exiled
+        if isinstance(c, CardObject) and c.card_info is not None
+    }
+    assert exiled_names == {"Scream", "A", "B"}
+
+
 def test_kicked_burn_spell_deals_extra_damage():
     """A kicked burn spell pays the kicker cost and uses kicked damage."""
     burst = make_instant(

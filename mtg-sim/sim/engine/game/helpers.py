@@ -35,6 +35,7 @@ class SpellCastContext:
     """Options when placing a spell on the stack."""
 
     cast_via_flashback: bool = False
+    cast_via_escape: bool = False
     from_graveyard: bool = False
     kicker_times: int = 0
 

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from deck_registry import CardInfo
 from engine.abilities.keywords.registry import has_registered_keyword
 from engine.cards.oracle_parse import spell_category
-from engine.core.game_object import CardObject, SpellOnStack, Target
+from engine.core.game_object import CardObject, SpellOnStack, Target, ZoneCard
 
 
 @dataclass(frozen=True)
@@ -29,14 +29,17 @@ def spell_mana_value(card: CardInfo) -> int:
 
 
 def reveal_cascade_hit(
-    library: list[CardObject],
+    library: list[ZoneCard],
     max_mana_value: int,
 ) -> CascadeReveal:
     """Exile from the top of the library until a qualifying card is found."""
     exiled: list[CardObject] = []
     hit: CardObject | None = None
     while library:
-        card = library.pop(0)
+        top = library.pop(0)
+        if not isinstance(top, CardObject):
+            continue
+        card = top
         exiled.append(card)
         info = card.card_info
         if (
@@ -51,7 +54,7 @@ def reveal_cascade_hit(
     return CascadeReveal(hit=hit, bottom_cards=bottom)
 
 
-def return_cascade_bottom(library: list[CardObject], bottom: list[CardObject]) -> None:
+def return_cascade_bottom(library: list[ZoneCard], bottom: list[CardObject]) -> None:
     """Put exiled non-hit cards on the bottom of the library in order."""
     library.extend(bottom)
 

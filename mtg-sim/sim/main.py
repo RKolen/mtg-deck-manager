@@ -186,6 +186,7 @@ class GameActionRequest(BaseModel):
     convokeCreatureIds: list[str] = []
     delveGraveyardIndices: list[int] = []
     improviseArtifactIds: list[str] = []
+    escapeExileIndices: list[int] = []
     targetUid: str | None = None
     targetPlayer: int | None = None
     permanentUid: str | None = None
@@ -269,6 +270,14 @@ async def _dispatch_action(game: InteractiveGame, req: GameActionRequest) -> dic
     if req.action == "cast_flashback":
         assert req.handIdx is not None
         return game.action_cast_flashback(req.handIdx, req.targetUid, req.targetPlayer)
+    if req.action == "cast_escape":
+        assert req.handIdx is not None
+        return game.action_cast_escape(
+            req.handIdx,
+            req.targetUid,
+            req.targetPlayer,
+            escape_exile_indices=req.escapeExileIndices,
+        )
     if req.action == "toggle_attacker":
         assert req.permanentUid is not None
         return game.action_toggle_attacker(req.permanentUid)

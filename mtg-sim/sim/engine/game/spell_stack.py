@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 from engine.abilities.keywords.casting import (
+    can_cast_via_escape,
     can_cast_via_flashback,
     cast_mana_needed,
+    escape_mana_needed,
     extra_draw_from_kicker,
     flashback_mana_needed,
+    has_escape,
     has_flashback,
+    escape_payment_error,
+    exile_for_escape_cost,
     has_kicker,
     kicked_counter_count,
     normalize_kicker_times,
@@ -162,6 +167,64 @@ class SpellStackMixin(GameRuntimeMixin):
             self._auto_pass_stack()
         return self.to_client()
 
+    def _announce_escape_cast(
+        self,
+        graveyard_idx: int,
+        target_uid_str: str | None,
+        target_player_idx: int | None,
+        auto_resolve: bool,
+        escape_exile_indices: list[int] | None = None,
+    ) -> dict:
+        """Pay escape costs and cast a card from the graveyard."""
+        card = self._zones(0).graveyard[graveyard_idx]
+        if not isinstance(card, CardObject):
+            return {**self.to_client(), "error": "Invalid card"}
+        card_info = require_card_info(card)
+        if not has_escape(card_info):
+            return {**self.to_client(), "error": f"{card_info.name} does not have escape"}
+        if not can_cast_via_escape(card_info, self.phase, self.state.stack.is_empty):
+            return {**self.to_client(), "error": "Cannot cast escape now"}
+        exile_err = escape_payment_error(
+            self.state.zones,
+            0,
+            graveyard_idx,
+            escape_exile_indices or [],
+            card_info,
+        )
+        if exile_err:
+            return {**self.to_client(), "error": exile_err}
+        mana_needed = escape_mana_needed(card_info)
+        if not self._tap_lands_for_mana(0, mana_needed):
+            return {
+                **self.to_client(),
+                "error": (
+                    f"Not enough mana ({self._available_mana(0)} available, "
+                    f"need {mana_needed})"
+                ),
+            }
+        exiled = exile_for_escape_cost(
+            self.state.zones,
+            0,
+            escape_exile_indices or [],
+            card_info,
+        )
+        self.state.players[0].spells_cast_this_turn += 1
+        targets = self._put_spell_on_stack(
+            player_idx=0,
+            card=card,
+            target_uid_str=target_uid_str,
+            target_player_idx=target_player_idx,
+            context=SpellCastContext(cast_via_escape=True, from_graveyard=True),
+        )
+        detail = f"{card_info.name} on stack"
+        if exiled:
+            detail = f"{detail} (escape, exiled {len(exiled)} for cost)"
+        self._log("player", "escape", detail)
+        self.state.fire_spell_cast_triggers(card, tuple(targets))
+        if auto_resolve:
+            self._auto_pass_stack()
+        return self.to_client()
+
     def _put_spell_on_stack(
         self,
         player_idx: int,
@@ -183,6 +246,7 @@ class SpellStackMixin(GameRuntimeMixin):
             source=card,
             targets=targets,
             cast_via_flashback=opts.cast_via_flashback,
+            cast_via_escape=opts.cast_via_escape,
             kicker_times=opts.kicker_times,
         ))
         actor = "player" if player_idx == 0 else "opponent"

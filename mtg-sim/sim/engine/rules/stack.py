@@ -196,7 +196,7 @@ def _move_spell_card_to_graveyard(obj: StackObject, zones: ZoneManager) -> None:
         return
     destination = (
         zones.player_zones[obj.owner_idx].exile
-        if obj.cast_via_flashback
+        if obj.cast_via_flashback or obj.cast_via_escape
         else zones.player_zones[obj.owner_idx].graveyard
     )
     destination.append(source)

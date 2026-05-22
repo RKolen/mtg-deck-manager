@@ -17,6 +17,13 @@ if TYPE_CHECKING:
 class GameRuntimeMixin:
     """Shared runtime utilities for interactive play."""
 
+    if TYPE_CHECKING:
+        mulligans_taken: int
+
+        def _available_actions(self) -> list[str]: ...
+
+        def action_pass_priority(self) -> dict: ...
+
     state: GameState
     phase: str
     pending_attackers: list[str]
@@ -158,7 +165,7 @@ class GameRuntimeMixin:
         """Exile flashback spells; other noncreature spells go to the graveyard."""
         if spell.is_storm_copy:
             return
-        if spell.cast_via_flashback:
+        if spell.cast_via_flashback or spell.cast_via_escape:
             self.state.zones.player_zones[card.owner_idx].exile.append(card)
         else:
             self._move_card_to_graveyard(card)

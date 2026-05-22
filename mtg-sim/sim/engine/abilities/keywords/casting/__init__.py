@@ -1,5 +1,14 @@
 """Cast-modifier keywords (one module per keyword as integration proceeds)."""
 
+from engine.abilities.keywords.casting.escape import (
+    can_cast_via_escape,
+    escape_cost,
+    escape_exiles_required,
+    escape_mana_needed,
+    escape_payment_error,
+    exile_for_escape_cost,
+    has_escape,
+)
 from engine.abilities.keywords.casting.flashback import (
     can_cast_via_flashback,
     flashback_cost,
@@ -50,7 +59,14 @@ from engine.abilities.keywords.casting.kicker import (
 )
 
 __all__ = [
+    'can_cast_via_escape',
     'can_cast_via_flashback',
+    'escape_cost',
+    'escape_exiles_required',
+    'escape_mana_needed',
+    'escape_payment_error',
+    'exile_for_escape_cost',
+    'has_escape',
     'cast_mana_needed',
     'CastAdjustmentInput',
     'CastAdjustmentResult',

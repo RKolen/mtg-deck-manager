@@ -6,11 +6,18 @@ import pytest
 
 from engine.abilities import activated, keywords
 from engine.abilities.keywords.casting import (
+    can_cast_via_escape,
     can_cast_via_flashback,
     cast_mana_needed,
+    escape_cost,
+    escape_exiles_required,
+    escape_mana_needed,
+    escape_payment_error,
+    exile_for_escape_cost,
     flashback_cost,
     flashback_mana_needed,
     has_convoke,
+    has_escape,
     has_delve,
     has_flashback,
     has_improvise,
@@ -41,7 +48,7 @@ from engine.abilities.keywords import (
     has_registered_keyword,
     registry_summary,
 )
-from engine.core.game_object import CardObject, SpellOnStack, Target
+from engine.core.game_object import CardObject, SpellOnStack, Target, ZoneCard
 from engine.core.mana import ManaCost
 from engine.core.zones import Zone
 from engine.rules.combat import legal_blocker, resolve_combat_damage
@@ -342,11 +349,53 @@ def test_has_flashback_parses_alternate_cost():
     assert flashback_mana_needed(card) == 3
 
 
+def test_has_escape_parses_cost_and_exile_count():
+    """Escape mana cost and graveyard exile count parse from oracle text."""
+    card = make_instant(
+        'Scream',
+        oracle=(
+            'Scream deals 2 damage to any target.\n'
+            'Escape—{R}{R}, Exile two other cards from your graveyard.'
+        ),
+    )
+    assert has_escape(card)
+    cost = escape_cost(card)
+    assert cost is not None
+    assert cost.mana_value == 2
+    assert escape_exiles_required(card) == 2
+    assert escape_mana_needed(card) == 2
+
+
+def test_exile_for_escape_cost_removes_other_graveyard_cards():
+    """Escape exiles the chosen other cards before the spell leaves the graveyard."""
+    game = fresh_game()
+    spell_info = make_instant(
+        'Scream',
+        oracle='Escape—{0}\nExile two other cards from your graveyard.',
+    )
+    spell = CardObject(controller_idx=0, owner_idx=0, card_info=spell_info)
+    filler_a = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant('A'))
+    filler_b = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant('B'))
+    game.zones.player_zones[0].graveyard.extend([spell, filler_a, filler_b])
+    assert escape_payment_error(game.zones, 0, 0, [1, 2], spell_info) is None
+    exiled = exile_for_escape_cost(game.zones, 0, [1, 2], spell_info)
+    assert exiled == [1, 2]
+    assert len(game.zones.player_zones[0].exile) == 2
+    assert spell in game.zones.player_zones[0].graveyard
+
+
 def test_can_cast_via_flashback_allows_instant_timing():
     """Flashback may be cast during combat steps like an instant."""
     card = make_instant('Ray', oracle='Flashback {0}')
     assert can_cast_via_flashback(card, 'attack', stack_is_empty=False)
     assert not can_cast_via_flashback(card, 'upkeep', stack_is_empty=True)
+
+
+def test_can_cast_via_escape_allows_instant_timing():
+    """Escape may be cast during combat steps like an instant."""
+    card = make_instant('Scream', oracle='Escape—{0}\nExile two other cards.')
+    assert can_cast_via_escape(card, 'attack', stack_is_empty=False)
+    assert not can_cast_via_escape(card, 'upkeep', stack_is_empty=True)
 
 
 def test_kicker_cost_and_kicked_damage():
@@ -371,7 +420,7 @@ def test_reveal_cascade_hit_finds_lower_mana_nonland():
     land = make_land()
     hit_info = make_instant('Hit', cmc=2, oracle='Deal 1 damage.')
     miss_info = make_instant('Big', cmc=4, oracle='Deal 4 damage.')
-    library = [
+    library: list[ZoneCard] = [
         CardObject(controller_idx=0, owner_idx=0, card_info=land),
         CardObject(controller_idx=0, owner_idx=0, card_info=hit_info),
         CardObject(controller_idx=0, owner_idx=0, card_info=miss_info),
@@ -382,7 +431,11 @@ def test_reveal_cascade_hit_finds_lower_mana_nonland():
     assert reveal.hit.card_info is not None
     assert reveal.hit.card_info.name == 'Hit'
     assert len(library) == 2
-    names = {c.card_info.name for c in library if c.card_info}
+    names = {
+        c.card_info.name
+        for c in library
+        if isinstance(c, CardObject) and c.card_info is not None
+    }
     assert names == {'Plains', 'Big'}
 
 
@@ -483,6 +536,25 @@ def test_flashback_fizzle_exiles_source_card():
         owner_idx=0,
         source=card,
         cast_via_flashback=True,
+        targets=[Target(obj_id=99999)],
+    )
+    game.stack.push(spell)
+    result = game.stack.resolve_top(game.zones)
+    assert result.fizzled
+    assert card in game.zones.player_zones[0].exile
+    assert card not in game.zones.player_zones[0].graveyard
+
+
+def test_escape_fizzle_exiles_source_card():
+    """Fizzled escape spells exile instead of returning to the graveyard."""
+    game = fresh_game()
+    card_info = make_instant('Scream', oracle='Escape—{0}\nExile two other cards.')
+    card = CardObject(controller_idx=0, owner_idx=0, card_info=card_info)
+    spell = SpellOnStack(
+        controller_idx=1,
+        owner_idx=0,
+        source=card,
+        cast_via_escape=True,
         targets=[Target(obj_id=99999)],
     )
     game.stack.push(spell)

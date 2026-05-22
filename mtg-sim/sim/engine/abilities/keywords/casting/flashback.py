@@ -12,7 +12,7 @@ _FLASHBACK_COST_RE = re.compile(
     r'flashback\s*((?:\{[^}]+\})+)',
     re.IGNORECASE,
 )
-_INSTANT_SPEED_PHASES = frozenset({
+INSTANT_SPEED_PHASES = frozenset({
     'main1',
     'main2',
     'attack',
@@ -50,6 +50,6 @@ def can_cast_via_flashback(card: CardInfo, phase: str, stack_is_empty: bool) -> 
     """
     if card.is_land or not has_flashback(card):
         return False
-    if phase in _INSTANT_SPEED_PHASES:
+    if phase in INSTANT_SPEED_PHASES:
         return True
     return phase in ('main1', 'main2') and stack_is_empty
