@@ -17,7 +17,12 @@ from engine.abilities.keywords.casting import (
     jump_start_cost,
     jump_start_discard_error,
     jump_start_mana_needed,
+    buyback_cost,
+    buyback_extra_mana,
+    buyback_mana_needed,
     cast_mana_needed,
+    has_buyback,
+    normalize_buyback,
     cast_mana_with_entwine,
     entwine_cost,
     entwined_extra_draw,
@@ -81,7 +86,13 @@ from engine.abilities.keywords import (
     has_registered_keyword,
     registry_summary,
 )
-from engine.core.game_object import CardObject, SpellOnStack, Target, ZoneCard
+from engine.core.game_object import (
+    CardObject,
+    SpellOnStack,
+    Target,
+    ZoneCard,
+    spell_returns_to_hand_on_resolve,
+)
 from engine.core.mana import ManaCost
 from engine.core.zones import Zone
 from engine.rules.combat import legal_blocker, resolve_combat_damage
@@ -569,6 +580,42 @@ def test_can_cast_via_escape_allows_instant_timing():
     card = make_instant('Scream', oracle='Escape—{0}\nExile two other cards.')
     assert can_cast_via_escape(card, 'attack', stack_is_empty=False)
     assert not can_cast_via_escape(card, 'upkeep', stack_is_empty=True)
+
+
+def test_buyback_cost_and_extra_mana():
+    """Buyback cost parses and adds to announce mana when paid."""
+    card = make_instant(
+        'Echo',
+        oracle='Deal 2 damage to any target. Buyback {3}',
+    )
+    assert has_buyback(card)
+    assert buyback_mana_needed(card) == 3
+    assert buyback_cost(card) is not None
+    assert normalize_buyback(card, True)
+    assert not normalize_buyback(card, False)
+    assert buyback_extra_mana(card, True) == 3
+    assert buyback_extra_mana(card, False) == 0
+
+
+def test_spell_returns_to_hand_on_resolve_only_with_buyback():
+    """Buyback flag routes resolved spells to hand; copies and unpaid casts do not."""
+    card = CardObject(
+        controller_idx=0,
+        owner_idx=0,
+        card_info=make_instant('Echo', oracle='Buyback {1}\nDeal 1 damage.'),
+    )
+    buyback_spell = SpellOnStack(controller_idx=0, owner_idx=0, source=card, paid_buyback=True)
+    assert spell_returns_to_hand_on_resolve(buyback_spell)
+    unpaid = SpellOnStack(controller_idx=0, owner_idx=0, source=card, paid_buyback=False)
+    assert not spell_returns_to_hand_on_resolve(unpaid)
+    copy = SpellOnStack(
+        controller_idx=0,
+        owner_idx=0,
+        source=card,
+        paid_buyback=True,
+        is_storm_copy=True,
+    )
+    assert not spell_returns_to_hand_on_resolve(copy)
 
 
 def test_kicker_cost_and_kicked_damage():

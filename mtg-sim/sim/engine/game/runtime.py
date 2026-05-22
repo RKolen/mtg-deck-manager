@@ -8,7 +8,11 @@ from engine.cards.oracle_parse import is_affordable
 from engine.core.game_object import CardObject, Permanent
 from engine.core.game_object import SpellOnStack
 from engine.core.game_state import LogEntry
-from engine.core.game_object import spell_exiles_from_graveyard_cast, spell_is_ephemeral_copy
+from engine.core.game_object import (
+    spell_exiles_from_graveyard_cast,
+    spell_is_ephemeral_copy,
+    spell_returns_to_hand_on_resolve,
+)
 from engine.game.helpers import card_to_client, has_instant_timing, is_land, require_card_info
 
 if TYPE_CHECKING:
@@ -23,11 +27,11 @@ class GameRuntimeMixin:
 
         def _available_actions(self) -> list[str]:
             """Return action names available to the player in the current phase."""
-            raise NotImplementedError
+            return []
 
         def action_pass_priority(self) -> dict:
             """Pass priority once and return the updated client state."""
-            raise NotImplementedError
+            return {}
 
     state: GameState
     phase: str
@@ -167,11 +171,13 @@ class GameRuntimeMixin:
         self.state.zones.player_zones[card.owner_idx].graveyard.append(card)
 
     def _relocate_resolved_spell(self, spell: SpellOnStack, card: CardObject) -> None:
-        """Exile flashback spells; other noncreature spells go to the graveyard."""
+        """Exile alt-cast spells, return buyback spells to hand, else graveyard."""
         if spell_is_ephemeral_copy(spell):
             return
         if spell_exiles_from_graveyard_cast(spell):
             self.state.zones.player_zones[card.owner_idx].exile.append(card)
+        elif spell_returns_to_hand_on_resolve(spell):
+            self._zones(card.owner_idx).hand.append(card)
         else:
             self._move_card_to_graveyard(card)
 

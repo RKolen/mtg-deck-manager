@@ -247,6 +247,40 @@ def test_entwined_charm_deals_damage_and_draws():
     assert len(game.state.zones.player_zones[0].hand) == 1
 
 
+def test_buyback_spell_returns_to_hand_after_resolve():
+    """Paying buyback puts the spell back in hand instead of the graveyard."""
+    echo = make_instant(
+        name="Echoing Truth",
+        cmc=0,
+        mana_cost="",
+        oracle="Echoing Truth deals 2 damage to any target. Buyback {0}",
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=echo),
+    ]
+    without = game.action_cast(0, target_player=1, paid_buyback=False)
+    assert without["opponentLife"] == 18
+    assert len(game.state.zones.player_zones[0].graveyard) == 1
+    assert len(game.state.zones.player_zones[0].hand) == 0
+
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=echo),
+    ]
+    with_buyback = game.action_cast(0, target_player=1, paid_buyback=True)
+    assert with_buyback["opponentLife"] == 18
+    assert len(game.state.zones.player_zones[0].graveyard) == 0
+    hand = game.state.zones.player_zones[0].hand
+    assert len(hand) == 1
+    returned = hand[0]
+    assert isinstance(returned, CardObject)
+    assert returned.card_info is not None
+    assert returned.card_info.name == "Echoing Truth"
+
+
 def test_kicked_burn_spell_deals_extra_damage():
     """A kicked burn spell pays the kicker cost and uses kicked damage."""
     burst = make_instant(

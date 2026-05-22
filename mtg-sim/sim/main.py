@@ -188,6 +188,7 @@ class GameActionRequest(BaseModel):
     bestowTargetUid: str | None = None
     castForMiracle: bool = False
     replicateTimes: int = 0
+    paidBuyback: bool = False
     convokeCreatureIds: list[str] = []
     delveGraveyardIndices: list[int] = []
     improviseArtifactIds: list[str] = []
@@ -274,6 +275,7 @@ async def _dispatch_action(game: InteractiveGame, req: GameActionRequest) -> dic
             bestow_target_uid=req.bestowTargetUid,
             cast_for_miracle=req.castForMiracle,
             replicate_times=req.replicateTimes,
+            paid_buyback=req.paidBuyback,
             convoke_creature_ids=convoke_ids,
             delve_graveyard_indices=req.delveGraveyardIndices,
             improvise_artifact_ids=improvise_ids,

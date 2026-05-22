@@ -33,6 +33,7 @@ class CastAnnounceOptions:
     improvise_artifact_ids: tuple[int, ...] = ()
     cast_for_miracle: bool = False
     replicate_times: int = 0
+    paid_buyback: bool = False
 
 
 @dataclass(frozen=True)
@@ -50,6 +51,7 @@ class SpellCastContext:
     cast_via_bestow: bool = False
     cast_for_miracle: bool = False
     replicate_times: int = 0
+    paid_buyback: bool = False
 
 
 def expand_deck(cards: list[CardInfo], player_idx: int) -> list[CardObject]:

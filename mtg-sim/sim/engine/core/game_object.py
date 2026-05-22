@@ -233,6 +233,7 @@ class SpellOnStack(GameObject):
     is_storm_copy: bool = False
     is_replicate_copy: bool = False
     cast_via_cascade: bool = False
+    paid_buyback: bool = False
 
 
 def spell_is_ephemeral_copy(spell: SpellOnStack) -> bool:
@@ -248,6 +249,11 @@ def spell_exiles_from_graveyard_cast(spell: SpellOnStack) -> bool:
         or spell.cast_via_jump_start
         or spell.cast_via_aftermath
     )
+
+
+def spell_returns_to_hand_on_resolve(spell: SpellOnStack) -> bool:
+    """Return True when a resolved spell returns to its owner's hand (buyback)."""
+    return spell.paid_buyback and not spell_is_ephemeral_copy(spell)
 
 
 @dataclass

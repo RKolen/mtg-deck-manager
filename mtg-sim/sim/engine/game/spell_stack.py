@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from engine.abilities.keywords.casting import (
     aftermath_mana_needed,
+    normalize_buyback,
     can_cast_aftermath,
     can_cast_via_escape,
     can_cast_via_flashback,
@@ -22,6 +23,7 @@ from engine.abilities.keywords.casting import (
     overload_creature_targets,
     overload_hits_each_creature,
     overload_opponent_indices,
+    AnnounceCastManaOptions,
     resolve_announce_cast_mana,
     resolve_overload_burn_damage,
     escape_mana_needed,
@@ -47,6 +49,7 @@ from engine.core.game_object import (
     SpellOnStack,
     Target,
     spell_is_ephemeral_copy,
+    spell_returns_to_hand_on_resolve,
 )
 from engine.core.game_object import TriggeredAbilityOnStack
 from engine.core.zones import Zone
@@ -106,15 +109,21 @@ class SpellStackMixin(GameRuntimeMixin):
         paid_replicate = normalize_replicate_times(card_info, opts.replicate_times)
         if opts.replicate_times > 0 and paid_replicate == 0:
             return {**self.to_client(), "error": f"{card_info.name} does not have replicate"}
+        paid_buyback = normalize_buyback(card_info, opts.paid_buyback)
+        if opts.paid_buyback and not paid_buyback:
+            return {**self.to_client(), "error": f"{card_info.name} does not have buyback"}
         cast_target_uid = opts.bestow_target_uid or target_uid_str
         mana_needed, life_cost = resolve_announce_cast_mana(
             card_info,
-            kicker_times=paid_kicker,
-            entwined=paid_entwined,
-            overloaded=paid_overloaded,
-            bestow_target_uid=opts.bestow_target_uid,
-            cast_for_miracle=paid_miracle,
-            replicate_times=paid_replicate,
+            AnnounceCastManaOptions(
+                kicker_times=paid_kicker,
+                entwined=paid_entwined,
+                overloaded=paid_overloaded,
+                bestow_target_uid=opts.bestow_target_uid,
+                cast_for_miracle=paid_miracle,
+                replicate_times=paid_replicate,
+                paid_buyback=paid_buyback,
+            ),
         )
         adjustments = resolve_cast_adjustments(
             card_info,
@@ -154,6 +163,7 @@ class SpellStackMixin(GameRuntimeMixin):
                 cast_via_bestow=paid_bestow,
                 cast_for_miracle=paid_miracle,
                 replicate_times=paid_replicate,
+                paid_buyback=paid_buyback,
             ),
         )
         cast_detail = f"{card_info.name} on stack"
@@ -169,6 +179,8 @@ class SpellStackMixin(GameRuntimeMixin):
             cast_detail = f"{cast_detail} (entwined)"
         if paid_kicker:
             cast_detail = f"{cast_detail} (kicked x{paid_kicker})"
+        if paid_buyback:
+            cast_detail = f"{cast_detail} (buyback)"
         if adjustments.delve_cards_exiled:
             cast_detail = (
                 f"{cast_detail} (delve x{adjustments.delve_cards_exiled})"
@@ -408,6 +420,7 @@ class SpellStackMixin(GameRuntimeMixin):
             entwined=opts.entwined,
             overloaded=opts.overloaded,
             cast_via_bestow=opts.cast_via_bestow,
+            paid_buyback=opts.paid_buyback,
         ))
         actor = "player" if player_idx == 0 else "opponent"
         for detail in apply_post_cast_modifiers(self, player_idx, card, targets, opts):
@@ -457,6 +470,9 @@ class SpellStackMixin(GameRuntimeMixin):
         card_info = require_card_info(card)
         if spell_is_ephemeral_copy(spell):
             return f"Storm copy of {card_info.name} (creature copies not modeled)"
+        if spell_returns_to_hand_on_resolve(spell):
+            self._zones(card.owner_idx).hand.append(card)
+            return f"{card_info.name} returned to hand (buyback)"
         permanent = self.state.zones.enter_battlefield(
             card,
             spell.controller_idx,
