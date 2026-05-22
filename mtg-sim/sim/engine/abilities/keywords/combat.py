@@ -23,10 +23,15 @@ _LANDWALK_SUFFIXES = (
 )
 
 
+def _is_crewed_vehicle(perm: Permanent) -> bool:
+    """Return True when a vehicle has been crewed (can attack as a creature)."""
+    return "Vehicle" in perm.type_line and perm.counters.get("crewed", 0) > 0
+
+
 def can_attack(perm: Permanent) -> bool:
     """Return whether a permanent can be declared as an attacker."""
     return (
-        is_creature(perm)
+        (is_creature(perm) or _is_crewed_vehicle(perm))
         and not perm.tapped
         and not perm.sick
         and not has_keyword(perm, 'Defender')

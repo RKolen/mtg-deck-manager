@@ -301,6 +301,33 @@ async def _dispatch_action(game: InteractiveGame, req: GameActionRequest) -> dic
     if req.action == "suspend":
         assert req.handIdx is not None
         return game.action_suspend(req.handIdx)
+    if req.action == "cycle":
+        assert req.handIdx is not None
+        return game.action_cycle(req.handIdx)
+    if req.action == "channel":
+        assert req.handIdx is not None
+        return game.action_channel(req.handIdx, req.targetPlayer)
+    if req.action == "unearth":
+        assert req.handIdx is not None
+        return game.action_unearth(req.handIdx)
+    if req.action == "crew":
+        assert req.permanentUid is not None
+        crew_ids = [str(uid) for uid in (req.convokeCreatureIds or [])]
+        return game.action_crew(req.permanentUid, crew_ids)
+    if req.action == "mount":
+        assert req.permanentUid is not None
+        mount_ids = [str(uid) for uid in (req.convokeCreatureIds or [])]
+        return game.action_mount(req.permanentUid, mount_ids)
+    if req.action == "level_up":
+        assert req.permanentUid is not None
+        return game.action_level_up(req.permanentUid)
+    if req.action == "activate":
+        assert req.permanentUid is not None
+        return game.action_activate(
+            req.permanentUid,
+            req.handIdx or 0,
+            host_uid=req.targetUid,
+        )
     if req.action == "cast_flashback":
         assert req.handIdx is not None
         return game.action_cast_flashback(req.handIdx, req.targetUid, req.targetPlayer)

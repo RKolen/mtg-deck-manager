@@ -24,13 +24,14 @@ from engine.game.helpers import (
     perm_names,
     require_card_info,
 )
+from engine.game.activated_actions import ActivatedActionsMixin
 from engine.game.spell_stack import SpellStackMixin
 from engine.rules.combat import can_attack, eligible_attackers, legal_blocker
 from engine.rules.combat import resolve_combat_damage, tap_attackers
 
 
 @dataclass
-class InteractiveGame(SpellStackMixin):  # pylint: disable=too-many-public-methods
+class InteractiveGame(ActivatedActionsMixin, SpellStackMixin):  # pylint: disable=too-many-public-methods
     """Playable two-player game session backed by GameState."""
 
     state: GameState
@@ -361,6 +362,7 @@ class InteractiveGame(SpellStackMixin):  # pylint: disable=too-many-public-metho
         """End the player's turn, run a simple opponent turn, then pass back."""
         assert self.phase in ("main1", "main2", "attack")
         self._fire_step_triggers(Step.END_STEP)
+        self._exile_unearth_at_turn_end(0)
         self._log("player", "end_turn", f"End of turn {self.turn}")
         self.phase = "opp_turn"
         self._opponent_main_phase()

@@ -1,10 +1,4 @@
-"""
-Activated and mana abilities (Phase E8).
-
-Mana abilities resolve immediately without using the stack (CR 605). Other
-activated abilities are put on the stack when the full priority system is
-available; this module provides cost payment and legality helpers.
-"""
+"""Core activated-ability parsing, mana abilities, and equip (CR 605, CR 301)."""
 
 from __future__ import annotations
 
