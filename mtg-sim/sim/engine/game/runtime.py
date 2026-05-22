@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING
 
 from engine.cards.oracle_parse import is_affordable
 from engine.core.game_object import CardObject, Permanent
@@ -15,18 +15,19 @@ if TYPE_CHECKING:
     from engine.core.game_state import GameState
 
 
-class GameRuntimeHost(Protocol):  # pylint: disable=too-few-public-methods
-    """Methods on InteractiveGame used by GameRuntimeMixin."""
-
-    mulligans_taken: int
-
-    def _available_actions(self) -> list[str]: ...
-
-    def action_pass_priority(self) -> dict: ...
-
-
-class GameRuntimeMixin(GameRuntimeHost):
+class GameRuntimeMixin:
     """Shared runtime utilities for interactive play."""
+
+    if TYPE_CHECKING:
+        mulligans_taken: int
+
+        def _available_actions(self) -> list[str]:
+            """Return action names available to the player in the current phase."""
+            raise NotImplementedError
+
+        def action_pass_priority(self) -> dict:
+            """Pass priority once and return the updated client state."""
+            raise NotImplementedError
 
     state: GameState
     phase: str
