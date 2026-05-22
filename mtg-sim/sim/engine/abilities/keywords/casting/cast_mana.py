@@ -9,6 +9,10 @@ from engine.abilities.keywords.casting.bestow import (
     bestow_mana_needed,
     normalize_bestow,
 )
+from engine.abilities.keywords.casting.emerge import (
+    emerge_mana_needed,
+    normalize_emerge_cast,
+)
 from engine.abilities.keywords.casting.entwine import cast_mana_with_entwine
 from engine.abilities.keywords.casting.kicker import cast_mana_needed, has_kicker
 from engine.abilities.keywords.casting.miracle import (
@@ -34,6 +38,7 @@ class AnnounceCastManaOptions:
     cast_for_miracle: bool = False
     replicate_times: int = 0
     paid_buyback: bool = False
+    cast_for_emerge: bool = False
 
 
 def _payment_requirements(card: CardInfo) -> tuple[int, int]:
@@ -53,6 +58,8 @@ def resolve_announce_cast_mana(
         mana_needed, life_cost = miracle_mana_needed(card)
     elif normalize_overloaded(card, opts.overloaded):
         mana_needed, life_cost = overload_mana_needed(card)
+    elif normalize_emerge_cast(card, opts.cast_for_emerge):
+        mana_needed, life_cost = emerge_mana_needed(card)
     elif normalize_bestow(card, opts.bestow_target_uid):
         mana_needed, life_cost = bestow_mana_needed(card)
     elif has_kicker(card):

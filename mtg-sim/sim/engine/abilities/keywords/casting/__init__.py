@@ -47,6 +47,16 @@ from engine.abilities.keywords.casting.buyback import (
     has_buyback,
     normalize_buyback,
 )
+from engine.abilities.keywords.casting.emerge import (
+    emerge_allows_artifact_sacrifice,
+    emerge_cost,
+    emerge_mana_needed,
+    emerge_sacrifice_error,
+    has_emerge,
+    normalize_emerge_cast,
+    normalize_emerge_sacrifice_id,
+    sacrifice_for_emerge,
+)
 from engine.abilities.keywords.casting.bestow import (
     bestow_host_error,
     bestow_mana_needed,
@@ -157,6 +167,14 @@ __all__ = [
     'buyback_mana_needed',
     'has_buyback',
     'normalize_buyback',
+    'emerge_allows_artifact_sacrifice',
+    'emerge_cost',
+    'emerge_mana_needed',
+    'emerge_sacrifice_error',
+    'has_emerge',
+    'normalize_emerge_cast',
+    'normalize_emerge_sacrifice_id',
+    'sacrifice_for_emerge',
     'bestow_host_error',
     'bestow_mana_needed',
     'cast_mana_needed',

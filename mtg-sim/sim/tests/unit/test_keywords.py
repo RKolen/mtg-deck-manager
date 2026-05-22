@@ -34,6 +34,10 @@ from engine.abilities.keywords.casting import (
     has_entwine,
     normalize_entwined,
     entwine_mana_needed,
+    emerge_cost,
+    emerge_mana_needed,
+    emerge_sacrifice_error,
+    has_emerge,
     resolve_burn_damage,
     has_bestow,
     has_overload,
@@ -104,6 +108,7 @@ from engine.rules.combat import legal_blocker, resolve_combat_damage
 from tests.conftest import (
     fresh_game,
     make_card,
+    make_artifact,
     make_creature,
     make_instant,
     make_land,
@@ -558,6 +563,33 @@ def test_has_jump_start_parses_alternate_cost():
     assert cost is not None
     assert cost.mana_value == 2
     assert jump_start_mana_needed(card) == 2
+
+
+def test_has_emerge_parses_cost_and_mana():
+    """Emerge cost parses and replaces the creature's mana cost."""
+    card = make_creature(
+        'Wurm',
+        cmc=7,
+        oracle='Trample\nEmerge {2}{G}',
+        mana_cost='{5}{G}{G}',
+    )
+    assert has_emerge(card)
+    assert emerge_cost(card) is not None
+    assert emerge_mana_needed(card)[0] == 3
+    assert not has_emerge(make_instant('Bolt', oracle='Emerge {0}'))
+
+
+def test_emerge_sacrifice_requires_creature():
+    """Emerge rejects non-creature sacrifices unless artifact is allowed."""
+    game = fresh_game()
+    creature_card = make_creature('Wurm', oracle='Emerge {0}')
+    artifact_card = make_creature('Wurm', oracle='Emerge {0}\n(Sacrifice an artifact or creature.)')
+    host = place_on_battlefield(make_creature('Bear', 2, 2), 0, game.zones)
+    relic = place_on_battlefield(make_artifact('Relic'), 0, game.zones)
+    assert emerge_sacrifice_error(game.zones, 0, creature_card, True, []) is not None
+    assert emerge_sacrifice_error(game.zones, 0, creature_card, True, [host.obj_id]) is None
+    assert emerge_sacrifice_error(game.zones, 0, creature_card, True, [relic.obj_id]) is not None
+    assert emerge_sacrifice_error(game.zones, 0, artifact_card, True, [relic.obj_id]) is None
 
 
 def test_has_retrace_and_normal_mana_cost():

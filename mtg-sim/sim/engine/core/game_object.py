@@ -235,6 +235,7 @@ class SpellOnStack(GameObject):
     is_replicate_copy: bool = False
     cast_via_cascade: bool = False
     paid_buyback: bool = False
+    cast_for_emerge: bool = False
 
 
 def spell_is_ephemeral_copy(spell: SpellOnStack) -> bool:

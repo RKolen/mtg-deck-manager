@@ -5,6 +5,11 @@ from __future__ import annotations
 from engine.abilities.keywords.casting import (
     aftermath_mana_needed,
     normalize_buyback,
+    emerge_sacrifice_error,
+    has_emerge,
+    normalize_emerge_cast,
+    normalize_emerge_sacrifice_id,
+    sacrifice_for_emerge,
     can_cast_aftermath,
     can_cast_via_escape,
     can_cast_via_flashback,
@@ -118,6 +123,23 @@ class SpellStackMixin(GameRuntimeMixin):
         paid_buyback = normalize_buyback(card_info, opts.paid_buyback)
         if opts.paid_buyback and not paid_buyback:
             return {**self.to_client(), "error": f"{card_info.name} does not have buyback"}
+        paid_emerge = normalize_emerge_cast(card_info, opts.cast_for_emerge)
+        if opts.cast_for_emerge and not paid_emerge:
+            return {**self.to_client(), "error": f"{card_info.name} does not have emerge"}
+        emerge_err = emerge_sacrifice_error(
+            self.state.zones,
+            0,
+            card_info,
+            opts.cast_for_emerge,
+            list(opts.emerge_sacrifice_ids),
+        )
+        if emerge_err:
+            return {**self.to_client(), "error": emerge_err}
+        emerge_sacrifice_id = normalize_emerge_sacrifice_id(
+            card_info,
+            opts.cast_for_emerge,
+            list(opts.emerge_sacrifice_ids),
+        )
         cast_target_uid = opts.bestow_target_uid or target_uid_str
         mana_needed, life_cost = resolve_announce_cast_mana(
             card_info,
@@ -129,6 +151,7 @@ class SpellStackMixin(GameRuntimeMixin):
                 cast_for_miracle=paid_miracle,
                 replicate_times=paid_replicate,
                 paid_buyback=paid_buyback,
+                cast_for_emerge=paid_emerge,
             ),
         )
         adjustments = resolve_cast_adjustments(
@@ -157,6 +180,14 @@ class SpellStackMixin(GameRuntimeMixin):
         if life_cost:
             self.state.players[0].life -= life_cost
             self._log("player", "phyrexian", f"Paid {life_cost} life for {card_info.name}")
+        sacrificed_name = ""
+        if emerge_sacrifice_id is not None:
+            sacrificed = sacrifice_for_emerge(
+                self.state.zones,
+                self.state,
+                emerge_sacrifice_id,
+            )
+            sacrificed_name = sacrificed.name
         targets = self._put_spell_on_stack(
             player_idx=0,
             card=card,
@@ -170,6 +201,7 @@ class SpellStackMixin(GameRuntimeMixin):
                 cast_for_miracle=paid_miracle,
                 replicate_times=paid_replicate,
                 paid_buyback=paid_buyback,
+                cast_for_emerge=paid_emerge,
             ),
         )
         cast_detail = f"{card_info.name} on stack"
@@ -187,6 +219,8 @@ class SpellStackMixin(GameRuntimeMixin):
             cast_detail = f"{cast_detail} (kicked x{paid_kicker})"
         if paid_buyback:
             cast_detail = f"{cast_detail} (buyback)"
+        if paid_emerge:
+            cast_detail = f"{cast_detail} (emerge, sacrificed {sacrificed_name})"
         if adjustments.delve_cards_exiled:
             cast_detail = (
                 f"{cast_detail} (delve x{adjustments.delve_cards_exiled})"
@@ -482,6 +516,7 @@ class SpellStackMixin(GameRuntimeMixin):
             overloaded=opts.overloaded,
             cast_via_bestow=opts.cast_via_bestow,
             paid_buyback=opts.paid_buyback,
+            cast_for_emerge=opts.cast_for_emerge,
         ))
         actor = "player" if player_idx == 0 else "opponent"
         for detail in apply_post_cast_modifiers(self, player_idx, card, targets, opts):

@@ -34,6 +34,8 @@ class CastAnnounceOptions:
     cast_for_miracle: bool = False
     replicate_times: int = 0
     paid_buyback: bool = False
+    cast_for_emerge: bool = False
+    emerge_sacrifice_ids: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -53,6 +55,7 @@ class SpellCastContext:
     cast_for_miracle: bool = False
     replicate_times: int = 0
     paid_buyback: bool = False
+    cast_for_emerge: bool = False
 
 
 def expand_deck(cards: list[CardInfo], player_idx: int) -> list[CardObject]:

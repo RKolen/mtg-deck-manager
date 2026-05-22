@@ -189,6 +189,8 @@ class GameActionRequest(BaseModel):
     castForMiracle: bool = False
     replicateTimes: int = 0
     paidBuyback: bool = False
+    castForEmerge: bool = False
+    emergeSacrificeIds: list[str] = []
     convokeCreatureIds: list[str] = []
     delveGraveyardIndices: list[int] = []
     improviseArtifactIds: list[str] = []
@@ -265,6 +267,7 @@ async def _dispatch_action(game: InteractiveGame, req: GameActionRequest) -> dic
         assert req.handIdx is not None
         convoke_ids = [int(uid) for uid in req.convokeCreatureIds]
         improvise_ids = [int(uid) for uid in req.improviseArtifactIds]
+        emerge_ids = [int(uid) for uid in req.emergeSacrificeIds]
         return game.action_cast(
             req.handIdx,
             req.targetUid,
@@ -276,6 +279,8 @@ async def _dispatch_action(game: InteractiveGame, req: GameActionRequest) -> dic
             cast_for_miracle=req.castForMiracle,
             replicate_times=req.replicateTimes,
             paid_buyback=req.paidBuyback,
+            cast_for_emerge=req.castForEmerge,
+            emerge_sacrifice_ids=emerge_ids,
             convoke_creature_ids=convoke_ids,
             delve_graveyard_indices=req.delveGraveyardIndices,
             improvise_artifact_ids=improvise_ids,

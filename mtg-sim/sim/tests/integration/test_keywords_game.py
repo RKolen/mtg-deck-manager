@@ -223,6 +223,40 @@ def test_overloaded_spell_damages_each_creature():
     assert bear.damage_marked == 4
 
 
+def test_emerge_cast_sacrifices_creature_and_enters_battlefield():
+    """Casting for emerge sacrifices one creature and resolves the emerge spell."""
+    wurm = make_creature(
+        name="Elder Deep-Fiend",
+        cmc=8,
+        mana_cost="{8}",
+        oracle="Flash\nEmerge {0} (Sacrifice a creature.)",
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    fodder = place_on_battlefield(make_creature("Fodder", 1, 1), 0, game.state.zones)
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=wurm),
+    ]
+    data = game.action_cast(
+        0,
+        cast_for_emerge=True,
+        emerge_sacrifice_ids=[fodder.obj_id],
+    )
+    assert "error" not in data
+    assert not data["stack"]
+    battlefield = game.state.zones.battlefield
+    assert any(
+        p.card_info is not None and p.card_info.name == "Elder Deep-Fiend"
+        for p in battlefield
+        if p.controller_idx == 0
+    )
+    graveyard = game.state.zones.player_zones[0].graveyard
+    assert any(
+        isinstance(c, CardObject) and c.card_info is not None and c.card_info.name == "Fodder"
+        for c in graveyard
+    )
+
+
 def test_bestow_attaches_creature_to_host():
     """Bestow enters the battlefield attached to the chosen creature."""
     spirit_info = make_creature(
