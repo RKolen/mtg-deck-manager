@@ -58,6 +58,15 @@ from engine.abilities.keywords.casting import (
     spell_damage,
     storm_copy_count,
     supports_storm_copies,
+    has_miracle,
+    has_replicate,
+    miracle_cost,
+    miracle_mana_needed,
+    normalize_miracle_cast,
+    normalize_replicate_times,
+    replicate_extra_mana,
+    replicate_mana_per_time,
+    supports_replicate_copies,
 )
 from engine.abilities.keywords.casting.cascade import (
     has_cascade,
@@ -413,6 +422,32 @@ def test_can_cast_via_flashback_allows_instant_timing():
     card = make_instant('Ray', oracle='Flashback {0}')
     assert can_cast_via_flashback(card, 'attack', stack_is_empty=False)
     assert not can_cast_via_flashback(card, 'upkeep', stack_is_empty=True)
+
+
+def test_has_miracle_parses_alternate_cost():
+    """Miracle cost replaces the mana cost when cast for miracle."""
+    card = make_instant(
+        'Temporal Mastery',
+        cmc=5,
+        oracle='Take an extra turn. Miracle {1}{U}',
+    )
+    assert has_miracle(card)
+    cost = miracle_cost(card)
+    assert cost is not None
+    assert cost.mana_value == 2
+    assert miracle_mana_needed(card) == (2, 0)
+    assert normalize_miracle_cast(card, True)
+
+
+def test_replicate_cost_and_copy_support():
+    """Replicate adds mana per payment and supports noncreature copies."""
+    card = make_instant('Shock', oracle='Shock deals 2 damage. Replicate {0}')
+    assert has_replicate(card)
+    assert replicate_mana_per_time(card) == 0
+    assert normalize_replicate_times(card, 2) == 2
+    assert replicate_extra_mana(card, 2) == 0
+    assert supports_replicate_copies(card)
+    assert not supports_replicate_copies(make_creature('Bear', oracle='Replicate {1}'))
 
 
 def test_has_overload_parses_alternate_cost():

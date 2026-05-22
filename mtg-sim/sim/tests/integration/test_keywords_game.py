@@ -135,6 +135,41 @@ def test_jump_start_cast_from_graveyard_exiles_on_resolve():
     assert exiled_spell.card_info.name == "Bolt"
 
 
+def test_miracle_cast_pays_reduced_mana_and_deals_damage():
+    """Casting for miracle uses the miracle cost instead of the printed cost."""
+    mastery = make_instant(
+        name="Shock",
+        cmc=3,
+        mana_cost="",
+        oracle="Shock deals 2 damage to any target.\nMiracle {0}",
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=mastery),
+    ]
+    data = game.action_cast(0, target_player=1, cast_for_miracle=True)
+    assert data["opponentLife"] == 18
+
+
+def test_replicate_spell_creates_and_resolves_copies():
+    """Replicate puts paid copies on the stack that resolve with the original."""
+    bolt = make_instant(
+        name="Bolt",
+        cmc=0,
+        mana_cost="",
+        oracle="Bolt deals 1 damage to any target. Replicate {0}",
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=bolt),
+    ]
+    data = game.action_cast(0, target_player=1, replicate_times=2)
+    assert data["opponentLife"] == 17
+    assert len(game.state.zones.player_zones[0].graveyard) == 1
+
+
 def test_overloaded_spell_damages_each_creature():
     """Overload deals damage to every creature on the battlefield."""
     mortars = make_instant(

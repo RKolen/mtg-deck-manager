@@ -2,32 +2,31 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 from engine.cards.oracle_parse import is_affordable
 from engine.core.game_object import CardObject, Permanent
 from engine.core.game_object import SpellOnStack
 from engine.core.game_state import LogEntry
-from engine.core.game_object import spell_exiles_from_graveyard_cast
+from engine.core.game_object import spell_exiles_from_graveyard_cast, spell_is_ephemeral_copy
 from engine.game.helpers import card_to_client, has_instant_timing, is_land, require_card_info
 
 if TYPE_CHECKING:
     from engine.core.game_state import GameState
 
 
-class GameRuntimeMixin:
+class GameRuntimeHost(Protocol):  # pylint: disable=too-few-public-methods
+    """Methods on InteractiveGame used by GameRuntimeMixin."""
+
+    mulligans_taken: int
+
+    def _available_actions(self) -> list[str]: ...
+
+    def action_pass_priority(self) -> dict: ...
+
+
+class GameRuntimeMixin(GameRuntimeHost):
     """Shared runtime utilities for interactive play."""
-
-    if TYPE_CHECKING:
-        mulligans_taken: int
-
-        def _available_actions(self) -> list[str]:
-            """Declared on InteractiveGame; used when serialising client actions."""
-            ...
-
-        def action_pass_priority(self) -> dict:
-            """Declared on InteractiveGame; used when auto-passing the stack."""
-            ...
 
     state: GameState
     phase: str
@@ -168,7 +167,7 @@ class GameRuntimeMixin:
 
     def _relocate_resolved_spell(self, spell: SpellOnStack, card: CardObject) -> None:
         """Exile flashback spells; other noncreature spells go to the graveyard."""
-        if spell.is_storm_copy:
+        if spell_is_ephemeral_copy(spell):
             return
         if spell_exiles_from_graveyard_cast(spell):
             self.state.zones.player_zones[card.owner_idx].exile.append(card)

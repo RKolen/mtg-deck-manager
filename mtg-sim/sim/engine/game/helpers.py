@@ -31,6 +31,8 @@ class CastAnnounceOptions:
     convoke_creature_ids: tuple[int, ...] = ()
     delve_graveyard_indices: tuple[int, ...] = ()
     improvise_artifact_ids: tuple[int, ...] = ()
+    cast_for_miracle: bool = False
+    replicate_times: int = 0
 
 
 @dataclass(frozen=True)
@@ -46,6 +48,8 @@ class SpellCastContext:
     entwined: bool = False
     overloaded: bool = False
     cast_via_bestow: bool = False
+    cast_for_miracle: bool = False
+    replicate_times: int = 0
 
 
 def expand_deck(cards: list[CardInfo], player_idx: int) -> list[CardObject]:

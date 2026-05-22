@@ -12,6 +12,7 @@ from engine.abilities.keywords.casting.cascade import (
     return_cascade_bottom,
     spell_mana_value,
 )
+from engine.abilities.keywords.casting.replicate import supports_replicate_copies
 from engine.abilities.keywords.casting.storm import storm_copy_count, supports_storm_copies
 from engine.core.game_object import CardObject, SpellOnStack, Target
 from engine.core.game_state import GameState
@@ -31,12 +32,15 @@ def apply_post_cast_modifiers(
     targets: list[Target],
     context: SpellCastContext,
 ) -> list[str]:
-    """Apply storm, cascade, and return log detail lines."""
+    """Apply storm, replicate, cascade, and return log detail lines."""
     logs: list[str] = []
     card_info = require_card_info(card)
     copies = _push_storm_copies(game, player_idx, card, targets, context)
     if copies:
         logs.append(f"{card_info.name} + {copies} storm copy/copies")
+    replicates = _push_replicate_copies(game, player_idx, card, targets, context)
+    if replicates:
+        logs.append(f"{card_info.name} + {replicates} replicate copy/copies")
     cascade_name = _push_cascade_cast(game, player_idx, card, targets)
     if cascade_name:
         logs.append(f"cascade cast {cascade_name}")
@@ -72,6 +76,37 @@ def _push_storm_copies(
             is_storm_copy=True,
         ))
     return copies
+
+
+def _push_replicate_copies(
+    game: PostCastHost,
+    player_idx: int,
+    card: CardObject,
+    targets: list[Target],
+    context: SpellCastContext,
+) -> int:
+    """Put replicate copies on the stack above the spell that created them."""
+    card_info = require_card_info(card)
+    times = context.replicate_times
+    if not supports_replicate_copies(card_info) or times <= 0:
+        return 0
+    for _ in range(times):
+        game.state.stack.push(SpellOnStack(
+            controller_idx=player_idx,
+            owner_idx=card.owner_idx,
+            source=card,
+            targets=list(targets),
+            cast_via_flashback=context.cast_via_flashback,
+            cast_via_escape=context.cast_via_escape,
+            cast_via_jump_start=context.cast_via_jump_start,
+            cast_via_aftermath=context.cast_via_aftermath,
+            kicker_times=context.kicker_times,
+            entwined=context.entwined,
+            overloaded=context.overloaded,
+            cast_via_bestow=context.cast_via_bestow,
+            is_replicate_copy=True,
+        ))
+    return times
 
 
 def _push_cascade_cast(

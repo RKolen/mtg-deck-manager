@@ -186,6 +186,8 @@ class GameActionRequest(BaseModel):
     entwined: bool = False
     overloaded: bool = False
     bestowTargetUid: str | None = None
+    castForMiracle: bool = False
+    replicateTimes: int = 0
     convokeCreatureIds: list[str] = []
     delveGraveyardIndices: list[int] = []
     improviseArtifactIds: list[str] = []
@@ -270,6 +272,8 @@ async def _dispatch_action(game: InteractiveGame, req: GameActionRequest) -> dic
             entwined=req.entwined,
             overloaded=req.overloaded,
             bestow_target_uid=req.bestowTargetUid,
+            cast_for_miracle=req.castForMiracle,
+            replicate_times=req.replicateTimes,
             convoke_creature_ids=convoke_ids,
             delve_graveyard_indices=req.delveGraveyardIndices,
             improvise_artifact_ids=improvise_ids,

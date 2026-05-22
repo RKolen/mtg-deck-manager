@@ -47,6 +47,20 @@ from engine.abilities.keywords.casting.bestow import (
     normalize_bestow,
 )
 from engine.abilities.keywords.casting.cast_mana import resolve_announce_cast_mana
+from engine.abilities.keywords.casting.miracle import (
+    has_miracle,
+    miracle_cost,
+    miracle_mana_needed,
+    normalize_miracle_cast,
+)
+from engine.abilities.keywords.casting.replicate import (
+    has_replicate,
+    normalize_replicate_times,
+    replicate_cost,
+    replicate_extra_mana,
+    replicate_mana_per_time,
+    supports_replicate_copies,
+)
 from engine.abilities.keywords.casting.overload import (
     has_overload,
     normalize_overloaded,
@@ -126,8 +140,18 @@ __all__ = [
     'overload_hits_each_creature',
     'overload_mana_needed',
     'overload_opponent_indices',
+    'has_miracle',
+    'has_replicate',
+    'miracle_cost',
+    'miracle_mana_needed',
+    'normalize_miracle_cast',
+    'normalize_replicate_times',
+    'replicate_cost',
+    'replicate_extra_mana',
+    'replicate_mana_per_time',
     'resolve_announce_cast_mana',
     'resolve_overload_burn_damage',
+    'supports_replicate_copies',
     'entwine_cost',
     'entwined_extra_draw',
     'entwine_mana_needed',

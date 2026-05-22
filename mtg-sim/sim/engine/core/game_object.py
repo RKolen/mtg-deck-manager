@@ -231,7 +231,13 @@ class SpellOnStack(GameObject):
     overloaded: bool = False
     cast_via_bestow: bool = False
     is_storm_copy: bool = False
+    is_replicate_copy: bool = False
     cast_via_cascade: bool = False
+
+
+def spell_is_ephemeral_copy(spell: SpellOnStack) -> bool:
+    """Return True when a stack copy should not move its source card to a zone."""
+    return spell.is_storm_copy or spell.is_replicate_copy
 
 
 def spell_exiles_from_graveyard_cast(spell: SpellOnStack) -> bool:
