@@ -385,7 +385,7 @@ class InteractiveGame:
 
     def _resolve_top_of_stack(self) -> str:
         """Resolve the top stack object and apply its simple Phase B effect."""
-        result = self.state.stack.resolve_top(self.state.zones)
+        result = self.state.stack.resolve_top(self.state.zones, self.state)
         if result.obj is None:
             return ""
         if result.fizzled:

@@ -125,15 +125,54 @@ def test_shroud_blocks_all_targeting():
     assert not keywords.can_target_permanent(hidden, 1)
 
 
-def test_ward_blocks_opponent_targeting():
-    """Ward prevents opponent targeting in the simplified engine."""
+def test_ward_allows_opponent_to_target():
+    """Ward does not use hexproof-style targeting restriction."""
     game = fresh_game()
     warded = place_on_battlefield(
         make_creature('Guardian', oracle='Ward {2}'),
         0,
         game.zones,
     )
-    assert not keywords.can_target_permanent(warded, 1)
+    assert keywords.can_target_permanent(warded, 1)
+
+
+def test_ward_counters_spell_when_cost_not_paid():
+    """Ward counters an opponent's spell if they cannot pay {2}."""
+    game = fresh_game()
+    warded = place_on_battlefield(
+        make_creature('Guardian', oracle='Ward {2}'),
+        0,
+        game.zones,
+    )
+    spell = SpellOnStack(
+        controller_idx=1,
+        owner_idx=1,
+        targets=[Target(obj_id=warded.obj_id)],
+    )
+    game.stack.push(spell)
+    result = game.stack.resolve_top(game.zones, game)
+    assert result.fizzled
+    assert result.reason == 'ward_not_paid'
+
+
+def test_ward_spell_resolves_when_cost_paid():
+    """Ward allows resolution when the opponent pays {2} from their mana pool."""
+    game = fresh_game()
+    warded = place_on_battlefield(
+        make_creature('Guardian', oracle='Ward {2}'),
+        0,
+        game.zones,
+    )
+    game.players[1].mana_pool.add_color('C', 2)
+    spell = SpellOnStack(
+        controller_idx=1,
+        owner_idx=1,
+        targets=[Target(obj_id=warded.obj_id)],
+    )
+    game.stack.push(spell)
+    result = game.stack.resolve_top(game.zones, game)
+    assert not result.fizzled
+    assert game.players[1].mana_pool.total() == 0
 
 
 def test_protection_from_creatures_blocks_creature_sources():

@@ -13,8 +13,9 @@ cards go to their owner's graveyard; ability objects simply cease to exist.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
-from engine.abilities.keywords import can_target_permanent
+from engine.abilities.keywords import can_target_permanent, pay_ward_for_target
 from engine.core.game_object import (
     CardObject,
     Permanent,
@@ -23,6 +24,9 @@ from engine.core.game_object import (
     Target,
 )
 from engine.core.zones import ZoneManager
+
+if TYPE_CHECKING:
+    from engine.core.game_state import GameState
 
 
 @dataclass
@@ -63,13 +67,11 @@ class Stack:
         """True when no spells or abilities are waiting to resolve."""
         return not self.objects
 
-    def resolve_top(self, zones: ZoneManager) -> StackResolution:
+    def resolve_top(self, zones: ZoneManager, game: GameState | None = None) -> StackResolution:
         """Pop the top object; check targets; return a StackResolution.
 
         The caller is responsible for applying obj.effect when fizzled is False.
-        Target legality in Phase A: a permanent target is legal if its obj_id
-        still appears on the battlefield; a player target is always legal.
-        Full legality (hexproof, shroud, protection) is added in Phase E.
+        When game is provided, ward costs are paid or the spell is countered.
         """
         if not self.objects:
             return StackResolution(obj=None, fizzled=True, reason="stack_empty")
@@ -79,6 +81,10 @@ class Stack:
         if _has_targets(obj) and _all_targets_illegal(obj, zones, obj.controller_idx):
             _move_spell_card_to_graveyard(obj, zones)
             return StackResolution(obj=obj, fizzled=True, reason="all_targets_illegal")
+
+        if game is not None and _ward_counters_resolution(obj, zones, game):
+            _move_spell_card_to_graveyard(obj, zones)
+            return StackResolution(obj=obj, fizzled=True, reason="ward_not_paid")
 
         return StackResolution(obj=obj, fizzled=False, reason="resolved")
 
@@ -137,8 +143,21 @@ def _target_is_legal(target: Target, zones: ZoneManager, controller_idx: int) ->
 
 
 def _permanent_target_legal(target: Permanent, controller_idx: int) -> bool:
-    """Apply hexproof, shroud, ward, and protection to a permanent target."""
+    """Apply hexproof, shroud, and protection to a permanent target."""
     return can_target_permanent(target, controller_idx)
+
+
+def _ward_counters_resolution(obj: StackObject, zones: ZoneManager, game: GameState) -> bool:
+    """Return True when ward cost was not paid and the spell should be countered."""
+    for target in _get_targets(obj):
+        if target.obj_id is None:
+            continue
+        perm = zones.find_permanent(target.obj_id)
+        if perm is None:
+            continue
+        if not pay_ward_for_target(game, obj.controller_idx, perm):
+            return True
+    return False
 
 
 def _all_targets_illegal(
