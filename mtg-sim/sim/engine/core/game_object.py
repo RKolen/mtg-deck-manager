@@ -69,6 +69,9 @@ class TokenObject(GameObject):
     created_by_obj_id: int = 0
 
 
+ZoneCard: TypeAlias = CardObject | TokenObject
+
+
 @dataclass
 class EmblemObject(GameObject):
     """An emblem created by a planeswalker ability (CR 114).
@@ -219,6 +222,7 @@ class SpellOnStack(GameObject):
     targets: list[Target] = field(default_factory=list)
     modes: list[int] = field(default_factory=list)
     chosen_x: int = 0
+    cast_via_flashback: bool = False
 
 
 @dataclass

@@ -281,7 +281,7 @@ def test_token_in_hand_ceases_to_exist():
         power="1",
         toughness="1",
     )
-    game.zones.player_zones[0].hand.append(token)  # type: ignore[arg-type]
+    game.zones.player_zones[0].hand.append(token)
     events = check_sbas(game)
     assert any(e.rule == "704.5d" for e in events)
     assert token not in game.zones.player_zones[0].hand

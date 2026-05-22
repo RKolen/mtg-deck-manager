@@ -24,6 +24,7 @@ from engine.core.game_object import (
     SpellOnStack,
     StackObject,
     TokenObject,
+    ZoneCard,
 )
 
 if TYPE_CHECKING:
@@ -64,10 +65,10 @@ ZoneMoveListener = Callable[[ZoneMoveEvent], None]
 class PlayerZones:
     """The four private zones belonging to one player."""
 
-    library: list[CardObject] = field(default_factory=list)
-    hand: list[CardObject] = field(default_factory=list)
-    graveyard: list[CardObject] = field(default_factory=list)
-    exile: list[CardObject] = field(default_factory=list)
+    library: list[ZoneCard] = field(default_factory=list)
+    hand: list[ZoneCard] = field(default_factory=list)
+    graveyard: list[ZoneCard] = field(default_factory=list)
+    exile: list[ZoneCard] = field(default_factory=list)
 
 
 @dataclass
@@ -201,6 +202,19 @@ class ZoneManager:
         if card in hand:
             hand.remove(card)
 
+    def cast_from_graveyard(self, card: CardObject, player_idx: int) -> None:
+        """Remove a card from graveyard when it is cast via flashback."""
+        graveyard = self.player_zones[player_idx].graveyard
+        if card in graveyard:
+            graveyard.remove(card)
+            self._emit(ZoneMoveEvent(
+                obj=card,
+                from_zone=Zone.GRAVEYARD,
+                to_zone=Zone.STACK,
+                cause="flashback",
+                player_idx=player_idx,
+            ))
+
     def move_graveyard_to_hand(self, card: CardObject, owner_idx: int) -> None:
         """Return a card from graveyard to its owner's hand."""
         gy = self.player_zones[owner_idx].graveyard
@@ -296,7 +310,7 @@ class ZoneManager:
         self, card: CardObject, zone: Zone, player_idx: int
     ) -> None:
         pz = self.player_zones[player_idx]
-        destination: dict[Zone, list[CardObject]] = {
+        destination: dict[Zone, list[ZoneCard]] = {
             Zone.GRAVEYARD: pz.graveyard,
             Zone.HAND: pz.hand,
             Zone.EXILE: pz.exile,
@@ -310,7 +324,7 @@ class ZoneManager:
         self, card: CardObject, zone: Zone, player_idx: int
     ) -> None:
         pz = self.player_zones[player_idx]
-        source: dict[Zone, list[CardObject]] = {
+        source: dict[Zone, list[ZoneCard]] = {
             Zone.HAND: pz.hand,
             Zone.LIBRARY: pz.library,
             Zone.GRAVEYARD: pz.graveyard,

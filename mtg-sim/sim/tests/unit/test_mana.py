@@ -1,5 +1,7 @@
 """Unit tests for engine/core/mana.py and engine/cards/oracle_parse.is_affordable."""
 
+from dataclasses import FrozenInstanceError
+
 import pytest
 
 from engine.cards.oracle_parse import is_affordable as spell_is_affordable
@@ -37,8 +39,8 @@ def cost(s: str) -> ManaCost:
 
 def test_mana_singletons_are_frozen():
     """Frozen dataclass prevents attribute assignment."""
-    with pytest.raises(Exception):
-        W.color = "B"  # type: ignore[misc]
+    with pytest.raises(FrozenInstanceError):
+        setattr(W, "color", "B")
 
 
 def test_mana_invalid_color_raises():

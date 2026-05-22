@@ -5,6 +5,12 @@ from __future__ import annotations
 import pytest
 
 from engine.abilities import activated, keywords
+from engine.abilities.keywords.casting import (
+    can_cast_via_flashback,
+    flashback_cost,
+    flashback_mana_needed,
+    has_flashback,
+)
 from engine.abilities.activated import ActivationSpeed
 from engine.abilities.keywords import (
     KEYWORD_ENTRIES,
@@ -302,6 +308,40 @@ def test_protection_spell_fizzles_on_stack():
     result = game.stack.resolve_top(game.zones)
     assert result.fizzled
     assert result.reason == 'all_targets_illegal'
+
+
+def test_has_flashback_parses_alternate_cost():
+    """Flashback cost is parsed from oracle text."""
+    card = make_instant('Ray', oracle='Flashback {2}{R}\nDeal 3 damage.')
+    assert has_flashback(card)
+    assert flashback_cost(card).mana_value == 3
+    assert flashback_mana_needed(card) == 3
+
+
+def test_can_cast_via_flashback_allows_instant_timing():
+    """Flashback may be cast during combat steps like an instant."""
+    card = make_instant('Ray', oracle='Flashback {0}')
+    assert can_cast_via_flashback(card, 'attack', stack_is_empty=False)
+    assert not can_cast_via_flashback(card, 'upkeep', stack_is_empty=True)
+
+
+def test_flashback_fizzle_exiles_source_card():
+    """Fizzled flashback spells exile instead of going to the graveyard."""
+    game = fresh_game()
+    card_info = make_instant('Charm', oracle='Flashback {0}\nDeal 1 damage.')
+    card = CardObject(controller_idx=0, owner_idx=0, card_info=card_info)
+    spell = SpellOnStack(
+        controller_idx=1,
+        owner_idx=0,
+        source=card,
+        cast_via_flashback=True,
+        targets=[Target(obj_id=99999)],
+    )
+    game.stack.push(spell)
+    result = game.stack.resolve_top(game.zones)
+    assert result.fizzled
+    assert card in game.zones.player_zones[0].exile
+    assert card not in game.zones.player_zones[0].graveyard
 
 
 def test_hexproof_spell_fizzles_on_stack():

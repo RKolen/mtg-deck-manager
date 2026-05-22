@@ -185,7 +185,7 @@ def _all_targets_illegal(obj: StackObject, zones: ZoneManager) -> bool:
 
 
 def _move_spell_card_to_graveyard(obj: StackObject, zones: ZoneManager) -> None:
-    """Place the source card of a spell in its owner's graveyard after fizzle/counter.
+    """Place the source card after fizzle/counter; flashback spells exile instead.
 
     Ability objects have no card to move; they simply cease to exist.
     """
@@ -194,4 +194,9 @@ def _move_spell_card_to_graveyard(obj: StackObject, zones: ZoneManager) -> None:
     source: CardObject | None = obj.source
     if source is None:
         return
-    zones.player_zones[obj.owner_idx].graveyard.append(source)
+    destination = (
+        zones.player_zones[obj.owner_idx].exile
+        if obj.cast_via_flashback
+        else zones.player_zones[obj.owner_idx].graveyard
+    )
+    destination.append(source)

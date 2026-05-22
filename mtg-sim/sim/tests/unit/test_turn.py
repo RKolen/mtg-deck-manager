@@ -109,13 +109,14 @@ def test_full_turn_step_sequence():
         Step.REGULAR_DAMAGE, Step.END_COMBAT, Step.POSTCOMBAT_MAIN,
         Step.END_STEP, Step.CLEANUP,
     ]
-    step: Step | None = Step.UNTAP
-    actual = [step]
+    current = Step.UNTAP
+    actual = [current]
     while True:
-        step = next_step(step)  # type: ignore[arg-type]
-        if step is None:
+        nxt = next_step(current)
+        if nxt is None:
             break
-        actual.append(step)
+        actual.append(nxt)
+        current = nxt
     assert actual == expected
 
 

@@ -29,6 +29,7 @@ Python engine (faster, less accurate). Set FORGE_JAR to enable real simulation.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 import logging
 import os
 import pathlib
@@ -48,7 +49,7 @@ from pydantic import BaseModel, Field
 
 from deck_registry import fetch_meta_deck, fetch_player_deck
 from forge_adapter import ForgeAdapter
-from engine.game import create_game, get_game, remove_game
+from engine.game import InteractiveGame, create_game, get_game, remove_game
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -214,7 +215,7 @@ async def game_start(req: StartGameRequest) -> dict:
     return game.to_client()
 
 
-def _dispatch_blocker_action(game, req: GameActionRequest) -> dict | None:
+def _dispatch_blocker_action(game: InteractiveGame, req: GameActionRequest) -> dict | None:
     """Dispatch declare-blockers phase actions; return None if action not recognised."""
     if req.action == "assign_blocker":
         assert req.blockerUid is not None and req.attackerUid is not None
@@ -227,13 +228,13 @@ def _dispatch_blocker_action(game, req: GameActionRequest) -> dict | None:
     return None
 
 
-async def _dispatch_action(game, req: GameActionRequest) -> dict:
+async def _dispatch_action(game: InteractiveGame, req: GameActionRequest) -> dict:
     """Dispatch a single game action and return the updated state dict.
 
     Simple actions (no arguments) are resolved via a lookup table.
     Actions that require request parameters are handled explicitly.
     """
-    simple: dict[str, object] = {
+    simple: dict[str, Callable[[], dict]] = {
         "keep": game.action_keep,
         "mulligan": game.action_mulligan,
         "draw": game.action_draw,
@@ -242,14 +243,18 @@ async def _dispatch_action(game, req: GameActionRequest) -> dict:
         "confirm_attack": game.action_confirm_attack,
         "skip_attack": game.action_skip_attack,
     }
-    if req.action in simple:
-        return simple[req.action]()  # type: ignore[operator]
+    handler = simple.get(req.action)
+    if handler is not None:
+        return handler()
     if req.action == "play_land":
         assert req.handIdx is not None
         return game.action_play_land(req.handIdx)
     if req.action == "cast":
         assert req.handIdx is not None
         return game.action_cast(req.handIdx, req.targetUid, req.targetPlayer)
+    if req.action == "cast_flashback":
+        assert req.handIdx is not None
+        return game.action_cast_flashback(req.handIdx, req.targetUid, req.targetPlayer)
     if req.action == "toggle_attacker":
         assert req.permanentUid is not None
         return game.action_toggle_attacker(req.permanentUid)

@@ -11,7 +11,7 @@ Package layout (keep each file under ~1000 lines):
   timing.py          haste, flash
   counters.py        infect, persist, undying, indestructible, ...
   handlers.py        combat damage application, regeneration, storm
-  casting.py         cast modifiers (grow into casting/ subpackage)
+  casting/           cast modifiers (flashback, kicker, …)
   actions.py         keyword actions (mostly Phase G effects)
   ability_words.py   trigger registration helpers
   other.py           ability_other bucket (split per keyword over time)

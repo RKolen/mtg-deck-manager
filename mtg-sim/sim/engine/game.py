@@ -30,6 +30,11 @@ from engine.core.game_state import GameState, LogEntry, PlayerInfo
 from engine.core.turn_structure import PriorityPassOutcome, Step, TurnRunner
 from engine.core.zones import Zone, ZoneManager
 from engine.abilities.keywords import has_flash
+from engine.abilities.keywords.casting import (
+    can_cast_via_flashback,
+    flashback_mana_needed,
+    has_flashback,
+)
 from engine.rules.combat import can_attack, eligible_attackers, legal_blocker
 from engine.rules.combat import resolve_combat_damage, tap_attackers
 from engine.rules.stack import Stack
@@ -37,8 +42,16 @@ from engine.rules.triggers import TriggerKey, is_noncreature_nonland_spell_cast
 from engine.rules.triggers import is_spell_targeting_source
 
 
+@dataclass(frozen=True)
+class _SpellCastContext:
+    """Options when placing a spell on the stack."""
+
+    cast_via_flashback: bool = False
+    from_graveyard: bool = False
+
+
 @dataclass
-class InteractiveGame:
+class InteractiveGame:  # pylint: disable=too-many-public-methods
     """Playable two-player game session backed by GameState."""
 
     state: GameState
@@ -151,6 +164,20 @@ class InteractiveGame:
         """Cast a spell and leave it on the stack for explicit priority passes."""
         return self._announce_cast(hand_idx, target_uid, target_player, auto_resolve=False)
 
+    def action_cast_flashback(
+        self,
+        graveyard_idx: int,
+        target_uid: str | None = None,
+        target_player: int | None = None,
+    ) -> dict:
+        """Cast a card from the graveyard for its flashback cost."""
+        return self._announce_flashback_cast(
+            graveyard_idx,
+            target_uid,
+            target_player,
+            auto_resolve=True,
+        )
+
     def _announce_cast(
         self,
         hand_idx: int,
@@ -182,6 +209,47 @@ class InteractiveGame:
             target_player=target_player,
         )
         self._log("player", "cast", f"{card_info.name} on stack")
+        self.state.fire_spell_cast_triggers(card, tuple(targets))
+        if auto_resolve:
+            self._auto_pass_stack()
+        return self.to_client()
+
+    def _announce_flashback_cast(
+        self,
+        graveyard_idx: int,
+        target_uid: str | None,
+        target_player: int | None,
+        auto_resolve: bool,
+    ) -> dict:
+        """Pay flashback cost and cast a card from the graveyard."""
+        card = self._zones(0).graveyard[graveyard_idx]
+        card_info = _require_card_info(card)
+        if not has_flashback(card_info):
+            return {**self.to_client(), "error": f"{card_info.name} does not have flashback"}
+        if not can_cast_via_flashback(
+            card_info,
+            self.phase,
+            self.state.stack.is_empty,
+        ):
+            return {**self.to_client(), "error": "Cannot cast flashback now"}
+        mana_needed = flashback_mana_needed(card_info)
+        if not self._tap_lands_for_mana(0, mana_needed):
+            return {
+                **self.to_client(),
+                "error": (
+                    f"Not enough mana ({self._available_mana(0)} available, "
+                    f"need {mana_needed})"
+                ),
+            }
+        self.state.players[0].spells_cast_this_turn += 1
+        targets = self._put_spell_on_stack(
+            player_idx=0,
+            card=card,
+            target_uid=target_uid,
+            target_player=target_player,
+            context=_SpellCastContext(cast_via_flashback=True, from_graveyard=True),
+        )
+        self._log("player", "flashback", f"{card_info.name} on stack")
         self.state.fire_spell_cast_triggers(card, tuple(targets))
         if auto_resolve:
             self._auto_pass_stack()
@@ -370,15 +438,21 @@ class InteractiveGame:
         card: CardObject,
         target_uid: str | None,
         target_player: int | None,
+        context: _SpellCastContext | None = None,
     ) -> list[Target]:
-        """Move a cast spell from hand to the stack."""
+        """Move a cast spell onto the stack."""
+        opts = context or _SpellCastContext()
         targets = _targets_from_request(target_uid, target_player)
-        self.state.zones.play_from_hand(card, player_idx)
+        if opts.from_graveyard:
+            self.state.zones.cast_from_graveyard(card, player_idx)
+        else:
+            self.state.zones.play_from_hand(card, player_idx)
         self.state.stack.push(SpellOnStack(
             controller_idx=player_idx,
             owner_idx=card.owner_idx,
             source=card,
             targets=targets,
+            cast_via_flashback=opts.cast_via_flashback,
         ))
         self.state.turn.action_taken()
         return targets
@@ -411,25 +485,23 @@ class InteractiveGame:
             self._register_permanent_triggers(permanent)
             return f"Cast creature {card_info.name}"
         if category == "burn":
-            return self._resolve_burn(card, spell.targets, controller_idx)
+            return self._resolve_burn(spell, controller_idx)
         if category == "pump":
-            return self._resolve_pump(card, spell.targets, controller_idx)
+            return self._resolve_pump(spell, controller_idx)
         if category == "removal":
-            return self._resolve_removal(card, spell.targets)
+            return self._resolve_removal(spell)
         if category == "draw":
-            return self._resolve_draw(card, controller_idx)
-        self._move_card_to_graveyard(card)
+            return self._resolve_draw(spell)
+        self._relocate_resolved_spell(spell, card)
         return f"Cast {card_info.name}"
 
-    def _resolve_burn(
-        self,
-        card: CardObject,
-        targets: list[Target],
-        controller_idx: int,
-    ) -> str:
+    def _resolve_burn(self, spell: SpellOnStack, controller_idx: int) -> str:
+        card = spell.source
+        assert card is not None
+        targets = spell.targets
         card_info = _require_card_info(card)
         damage = parse_damage(card_info.oracle_text or "") or max(1, int(card_info.cmc))
-        self._move_card_to_graveyard(card)
+        self._relocate_resolved_spell(spell, card)
         target_player = _target_player(targets)
         target_uid = _target_uid(targets)
         default_player = 1 - controller_idx
@@ -445,12 +517,10 @@ class InteractiveGame:
         self.state.check_sbas()
         return f"{card_info.name} dealt {damage} damage to {target.name}"
 
-    def _resolve_pump(
-        self,
-        card: CardObject,
-        targets: list[Target],
-        controller_idx: int,
-    ) -> str:
+    def _resolve_pump(self, spell: SpellOnStack, controller_idx: int) -> str:
+        card = spell.source
+        assert card is not None
+        targets = spell.targets
         card_info = _require_card_info(card)
         power, toughness = parse_pump(card_info.oracle_text or "")
         if power == 0 and toughness == 0:
@@ -460,15 +530,18 @@ class InteractiveGame:
             self._find_permanent(target_uid)
             or _last_creature(self._permanents(controller_idx))
         )
-        self._move_card_to_graveyard(card)
+        self._relocate_resolved_spell(spell, card)
         if target is None:
             return f"Cast {card_info.name} (no target)"
         target.counters["+1/+1"] = target.counters.get("+1/+1", 0) + max(power, toughness)
         return f"{card_info.name} pumped {target.name}"
 
-    def _resolve_removal(self, card: CardObject, targets: list[Target]) -> str:
+    def _resolve_removal(self, spell: SpellOnStack) -> str:
+        card = spell.source
+        assert card is not None
+        targets = spell.targets
         card_info = _require_card_info(card)
-        self._move_card_to_graveyard(card)
+        self._relocate_resolved_spell(spell, card)
         target_uid = _target_uid(targets)
         target = self._find_permanent(target_uid)
         if target is None:
@@ -476,11 +549,14 @@ class InteractiveGame:
         self.state.zones.leave_battlefield(target, Zone.GRAVEYARD, "destroy", self.state)
         return f"{card_info.name} destroyed {target.name}"
 
-    def _resolve_draw(self, card: CardObject, controller_idx: int) -> str:
+    def _resolve_draw(self, spell: SpellOnStack) -> str:
+        card = spell.source
+        assert card is not None
+        controller_idx = spell.controller_idx
         card_info = _require_card_info(card)
         count = parse_draw(card_info.oracle_text or "") or 1
         drawn = self._draw_cards(controller_idx, count)
-        self._move_card_to_graveyard(card)
+        self._relocate_resolved_spell(spell, card)
         return f"{card_info.name} drew {_card_names(drawn) or 'no cards'}"
 
     def _register_permanent_triggers(self, permanent: Permanent) -> None:
@@ -702,6 +778,13 @@ class InteractiveGame:
 
     def _move_card_to_graveyard(self, card: CardObject) -> None:
         self.state.zones.player_zones[card.owner_idx].graveyard.append(card)
+
+    def _relocate_resolved_spell(self, spell: SpellOnStack, card: CardObject) -> None:
+        """Exile flashback spells; other noncreature spells go to the graveyard."""
+        if spell.cast_via_flashback:
+            self.state.zones.player_zones[card.owner_idx].exile.append(card)
+        else:
+            self._move_card_to_graveyard(card)
 
     def _log(self, actor: str, action: str, detail: str = "") -> None:
         self.state.log.append(LogEntry(
