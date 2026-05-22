@@ -63,3 +63,22 @@ def test_kicked_burn_spell_deals_extra_damage():
     ]
     with_kicker = game.action_cast(0, target_player=1, kicker_times=1)
     assert with_kicker["opponentLife"] == 16
+
+
+def test_storm_spell_creates_and_resolves_copies():
+    """Storm puts one copy on the stack per other spell cast this turn."""
+    grapeshot = make_instant(
+        name="Grapeshot",
+        cmc=0,
+        mana_cost="",
+        oracle="Grapeshot deals 1 damage to any target. Storm",
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    game.state.players[0].spells_cast_this_turn = 2
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=grapeshot),
+    ]
+    data = game.action_cast(0, target_player=1)
+    assert data["opponentLife"] == 17
+    assert len(game.state.zones.player_zones[0].graveyard) == 1

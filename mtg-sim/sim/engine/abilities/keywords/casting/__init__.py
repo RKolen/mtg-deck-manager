@@ -6,6 +6,11 @@ from engine.abilities.keywords.casting.flashback import (
     flashback_mana_needed,
     has_flashback,
 )
+from engine.abilities.keywords.casting.storm import (
+    has_storm,
+    storm_copy_count,
+    supports_storm_copies,
+)
 from engine.abilities.keywords.casting.kicker import (
     cast_mana_needed,
     extra_draw_from_kicker,
@@ -33,5 +38,8 @@ __all__ = [
     'kicked_counter_count',
     'normalize_kicker_times',
     'pump_with_kicker',
+    'has_storm',
     'spell_damage',
+    'storm_copy_count',
+    'supports_storm_copies',
 ]

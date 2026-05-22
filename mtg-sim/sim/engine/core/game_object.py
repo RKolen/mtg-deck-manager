@@ -224,6 +224,7 @@ class SpellOnStack(GameObject):
     chosen_x: int = 0
     cast_via_flashback: bool = False
     kicker_times: int = 0
+    is_storm_copy: bool = False
 
 
 @dataclass

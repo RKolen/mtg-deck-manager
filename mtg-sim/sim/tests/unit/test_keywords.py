@@ -16,6 +16,8 @@ from engine.abilities.keywords.casting import (
     kicker_mana_per_time,
     normalize_kicker_times,
     spell_damage,
+    storm_copy_count,
+    supports_storm_copies,
 )
 from engine.abilities.activated import ActivationSpeed
 from engine.abilities.keywords import (
@@ -346,6 +348,21 @@ def test_kicker_cost_and_kicked_damage():
     assert spell_damage(card, 0) == 2
     assert spell_damage(card, 1) == 4
     assert cast_mana_needed(card, 1)[0] == int(card.cmc) + 4
+
+
+def test_storm_copy_count_is_other_spells_this_turn():
+    """Storm copies equal other spells cast before this one."""
+    assert storm_copy_count(1) == 0
+    assert storm_copy_count(2) == 1
+    assert storm_copy_count(5) == 4
+
+
+def test_supports_storm_copies_excludes_creatures():
+    """Creature storm is not modeled yet; instants with storm are."""
+    instant = make_instant('Grapeshot', oracle='Storm\nDeals 1 damage.')
+    creature = make_creature('Aven', oracle='Storm')
+    assert supports_storm_copies(instant)
+    assert not supports_storm_copies(creature)
 
 
 def test_multikicker_normalizes_times():

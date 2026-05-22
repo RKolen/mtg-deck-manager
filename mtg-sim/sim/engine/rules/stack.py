@@ -192,7 +192,7 @@ def _move_spell_card_to_graveyard(obj: StackObject, zones: ZoneManager) -> None:
     if not isinstance(obj, SpellOnStack):
         return
     source: CardObject | None = obj.source
-    if source is None:
+    if source is None or obj.is_storm_copy:
         return
     destination = (
         zones.player_zones[obj.owner_idx].exile
