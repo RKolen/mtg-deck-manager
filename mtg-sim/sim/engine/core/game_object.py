@@ -227,6 +227,7 @@ class SpellOnStack(GameObject):
     cast_via_jump_start: bool = False
     cast_via_aftermath: bool = False
     kicker_times: int = 0
+    entwined: bool = False
     is_storm_copy: bool = False
     cast_via_cascade: bool = False
 

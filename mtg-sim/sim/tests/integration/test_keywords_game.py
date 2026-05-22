@@ -135,6 +135,38 @@ def test_jump_start_cast_from_graveyard_exiles_on_resolve():
     assert exiled_spell.card_info.name == "Bolt"
 
 
+def test_entwined_charm_deals_damage_and_draws():
+    """Entwined cast applies both modes: damage to opponent and a card drawn."""
+    charm = make_instant(
+        name="Charm",
+        cmc=0,
+        mana_cost="",
+        oracle=(
+            "Choose one —\n"
+            "• Charm deals 2 damage to any target.\n"
+            "• Target player draws a card.\n"
+            "Entwine {0}"
+        ),
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=charm),
+    ]
+    without = game.action_cast(0, target_player=1, entwined=False)
+    assert without["opponentLife"] == 18
+    assert len(game.state.zones.player_zones[0].hand) == 0
+
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=charm),
+    ]
+    with_entwine = game.action_cast(0, target_player=1, entwined=True)
+    assert with_entwine["opponentLife"] == 18
+    assert len(game.state.zones.player_zones[0].hand) == 1
+
+
 def test_kicked_burn_spell_deals_extra_damage():
     """A kicked burn spell pays the kicker cost and uses kicked damage."""
     burst = make_instant(

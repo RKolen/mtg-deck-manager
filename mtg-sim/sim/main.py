@@ -183,6 +183,7 @@ class GameActionRequest(BaseModel):
     action: str
     handIdx: int | None = None
     kickerTimes: int = 0
+    entwined: bool = False
     convokeCreatureIds: list[str] = []
     delveGraveyardIndices: list[int] = []
     improviseArtifactIds: list[str] = []
@@ -264,6 +265,7 @@ async def _dispatch_action(game: InteractiveGame, req: GameActionRequest) -> dic
             req.targetUid,
             req.targetPlayer,
             kicker_times=req.kickerTimes,
+            entwined=req.entwined,
             convoke_creature_ids=convoke_ids,
             delve_graveyard_indices=req.delveGraveyardIndices,
             improvise_artifact_ids=improvise_ids,

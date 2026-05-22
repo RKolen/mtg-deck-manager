@@ -14,8 +14,13 @@ from engine.abilities.keywords.casting import (
     jump_start_discard_error,
     jump_start_mana_needed,
     cast_mana_needed,
+    cast_mana_with_entwine,
+    entwined_extra_draw,
     escape_mana_needed,
     extra_draw_from_kicker,
+    has_entwine,
+    normalize_entwined,
+    resolve_burn_damage,
     flashback_mana_needed,
     has_escape,
     has_flashback,
@@ -26,7 +31,6 @@ from engine.abilities.keywords.casting import (
     normalize_kicker_times,
     pump_with_kicker,
     resolve_cast_adjustments,
-    spell_damage,
 )
 from engine.abilities.keywords.casting.cast_adjustments import CastAdjustmentInput
 from engine.game.cast_modifiers import apply_post_cast_modifiers
@@ -73,10 +77,19 @@ class SpellStackMixin(GameRuntimeMixin):
         paid_kicker = normalize_kicker_times(card_info, opts.kicker_times)
         if opts.kicker_times > 0 and paid_kicker == 0:
             return {**self.to_client(), "error": f"{card_info.name} does not have kicker"}
+        paid_entwined = normalize_entwined(card_info, opts.entwined)
+        if opts.entwined and not paid_entwined:
+            return {**self.to_client(), "error": f"{card_info.name} does not have entwine"}
         mana_needed, life_cost = (
             cast_mana_needed(card_info, paid_kicker)
             if has_kicker(card_info)
             else payment_requirements(card_info)
+        )
+        mana_needed, life_cost = cast_mana_with_entwine(
+            card_info,
+            mana_needed,
+            life_cost,
+            paid_entwined,
         )
         adjustments = resolve_cast_adjustments(
             card_info,
@@ -109,9 +122,11 @@ class SpellStackMixin(GameRuntimeMixin):
             card=card,
             target_uid_str=target_uid_str,
             target_player_idx=target_player_idx,
-            context=SpellCastContext(kicker_times=paid_kicker),
+            context=SpellCastContext(kicker_times=paid_kicker, entwined=paid_entwined),
         )
         cast_detail = f"{card_info.name} on stack"
+        if paid_entwined:
+            cast_detail = f"{card_info.name} on stack (entwined)"
         if paid_kicker:
             cast_detail = f"{card_info.name} on stack (kicked x{paid_kicker})"
         if adjustments.delve_cards_exiled:
@@ -350,6 +365,7 @@ class SpellStackMixin(GameRuntimeMixin):
             cast_via_jump_start=opts.cast_via_jump_start,
             cast_via_aftermath=opts.cast_via_aftermath,
             kicker_times=opts.kicker_times,
+            entwined=opts.entwined,
         ))
         actor = "player" if player_idx == 0 else "opponent"
         for detail in apply_post_cast_modifiers(self, player_idx, card, targets, opts):
@@ -420,7 +436,8 @@ class SpellStackMixin(GameRuntimeMixin):
         targets = spell.targets
         card_info = require_card_info(card)
         controller_idx = spell.controller_idx
-        damage = spell_damage(card_info, spell.kicker_times)
+        damage = resolve_burn_damage(card_info, spell.entwined, spell.kicker_times)
+        extra_draw = entwined_extra_draw(card_info, spell.entwined)
         self._relocate_resolved_spell(spell, card)
         target_uid_val = target_uid(targets)
         target_player_idx = first_target_player(targets)
@@ -431,7 +448,11 @@ class SpellStackMixin(GameRuntimeMixin):
             )
             self.state.players[victim_idx].life -= damage
             label = "opponent" if victim_idx == 1 else "you"
-            return f"{card_info.name} dealt {damage} damage to {label}"
+            detail = f"{card_info.name} dealt {damage} damage to {label}"
+            if extra_draw:
+                drawn = self._draw_cards(controller_idx, extra_draw)
+                detail = f"{detail} and drew {card_names(drawn) or 'no cards'}"
+            return detail
         target = self._find_permanent(target_uid_val)
         if target is None:
             return f"Cast {card_info.name} (no valid target)"

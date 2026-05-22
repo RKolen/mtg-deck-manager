@@ -18,6 +18,13 @@ from engine.abilities.keywords.casting import (
     jump_start_discard_error,
     jump_start_mana_needed,
     cast_mana_needed,
+    cast_mana_with_entwine,
+    entwine_cost,
+    entwined_extra_draw,
+    has_entwine,
+    normalize_entwined,
+    entwine_mana_needed,
+    resolve_burn_damage,
     escape_cost,
     escape_exiles_required,
     escape_mana_needed,
@@ -398,6 +405,46 @@ def test_can_cast_via_flashback_allows_instant_timing():
     card = make_instant('Ray', oracle='Flashback {0}')
     assert can_cast_via_flashback(card, 'attack', stack_is_empty=False)
     assert not can_cast_via_flashback(card, 'upkeep', stack_is_empty=True)
+
+
+def test_has_entwine_parses_cost_and_cast_mana():
+    """Entwine cost parses and adds to the base cast mana when paid."""
+    card = make_instant(
+        'Charm',
+        cmc=0,
+        oracle=(
+            'Choose one —\n'
+            '• Charm deals 2 damage to any target.\n'
+            '• Target player draws a card.\n'
+            'Entwine {2}'
+        ),
+    )
+    assert has_entwine(card)
+    cost = entwine_cost(card)
+    assert cost is not None
+    assert cost.mana_value == 2
+    assert entwine_mana_needed(card) == 2
+    assert normalize_entwined(card, True)
+    assert not normalize_entwined(card, False)
+    assert cast_mana_with_entwine(card, 0, 0, True) == (2, 0)
+
+
+def test_entwined_charm_deals_damage_and_draws():
+    """Entwined modal charms apply damage plus the draw mode (MVP)."""
+    card = make_instant(
+        'Charm',
+        cmc=0,
+        oracle=(
+            'Choose one —\n'
+            '• Charm deals 2 damage to any target.\n'
+            '• Target player draws a card.\n'
+            'Entwine {0}'
+        ),
+    )
+    assert resolve_burn_damage(card, False, 0) == 2
+    assert resolve_burn_damage(card, True, 0) == 2
+    assert entwined_extra_draw(card, False) == 0
+    assert entwined_extra_draw(card, True) == 1
 
 
 def test_has_aftermath_and_main_phase_timing():

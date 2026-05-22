@@ -40,6 +40,15 @@ from engine.abilities.keywords.casting.convoke import (
     normalize_convoke_creature_ids,
     resolve_convoke_for_cast,
 )
+from engine.abilities.keywords.casting.entwine import (
+    cast_mana_with_entwine,
+    entwine_cost,
+    entwined_extra_draw,
+    has_entwine,
+    normalize_entwined,
+    entwine_mana_needed,
+    resolve_burn_damage,
+)
 from engine.abilities.keywords.casting.delve import (
     has_delve,
     normalize_delve_graveyard_indices,
@@ -90,6 +99,13 @@ __all__ = [
     'exile_for_escape_cost',
     'has_escape',
     'cast_mana_needed',
+    'cast_mana_with_entwine',
+    'entwine_cost',
+    'entwined_extra_draw',
+    'entwine_mana_needed',
+    'has_entwine',
+    'normalize_entwined',
+    'resolve_burn_damage',
     'CastAdjustmentInput',
     'CastAdjustmentResult',
     'has_convoke',

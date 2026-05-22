@@ -25,6 +25,7 @@ class CastAnnounceOptions:
     """Optional costs when announcing a cast from hand."""
 
     kicker_times: int = 0
+    entwined: bool = False
     convoke_creature_ids: tuple[int, ...] = ()
     delve_graveyard_indices: tuple[int, ...] = ()
     improvise_artifact_ids: tuple[int, ...] = ()
@@ -40,6 +41,7 @@ class SpellCastContext:
     cast_via_aftermath: bool = False
     from_graveyard: bool = False
     kicker_times: int = 0
+    entwined: bool = False
 
 
 def expand_deck(cards: list[CardInfo], player_idx: int) -> list[CardObject]:
