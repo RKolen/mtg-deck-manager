@@ -18,6 +18,7 @@ class CombatDamageResult:
     damage_to_player: int = 0
     infect_damage_to_player: int = 0
     blocked_attackers: int = 0
+    dealt_combat_damage: bool = False
 
 
 @dataclass(frozen=True)
@@ -86,6 +87,8 @@ def resolve_combat_damage(
         game.players[defending_player_idx].poison += result.infect_damage_to_player
     if result.damage_to_player:
         game.players[defending_player_idx].life -= result.damage_to_player
+    if result.dealt_combat_damage:
+        game.players[attacking_player_idx].combat_damage_dealt_this_turn = True
     game.check_sbas()
     return result
 
@@ -176,7 +179,7 @@ def _assign_combat_damage(
     for blocker in blockers:
         if _deals_in_step(blocker, first_strike_step):
             damage = power(blocker)
-            _mark_combat_damage(attacker, blocker, damage)
+            _mark_combat_damage(context, attacker, blocker, damage)
             context.game.fire_combat_damage_triggers(
                 blocker,
                 damage,
@@ -243,7 +246,7 @@ def _assign_attacker_damage(
     remaining = attacker_power
     for blocker in blockers:
         assigned = min(remaining, _lethal_damage(attacker, blocker))
-        _mark_combat_damage(blocker, attacker, assigned)
+        _mark_combat_damage(context, blocker, attacker, assigned)
         context.game.fire_combat_damage_triggers(
             attacker,
             assigned,
@@ -261,8 +264,15 @@ def _lethal_damage(source: Permanent, receiver: Permanent) -> int:
     return keywords.lethal_damage_needed(source, receiver, _toughness(receiver))
 
 
-def _mark_combat_damage(receiver: Permanent, source: Permanent, damage: int) -> None:
+def _mark_combat_damage(
+    context: _CombatContext,
+    receiver: Permanent,
+    source: Permanent,
+    damage: int,
+) -> None:
     """Mark combat damage, respecting infect, wither, and deathtouch."""
+    if damage > 0:
+        context.result.dealt_combat_damage = True
     apply_combat_damage_to_creature(receiver, source, damage)
 
 
@@ -280,6 +290,7 @@ def _add_player_damage(context: _CombatContext, attacker: Permanent, damage: int
     """Record combat damage dealt to the defending player."""
     if damage <= 0:
         return
+    context.result.dealt_combat_damage = True
     if keywords.has_infect(attacker):
         context.result.infect_damage_to_player += damage
     else:

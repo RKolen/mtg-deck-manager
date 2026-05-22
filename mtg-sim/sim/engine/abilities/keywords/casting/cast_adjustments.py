@@ -8,6 +8,7 @@ from deck_registry import CardInfo
 from engine.abilities.keywords.casting.convoke import resolve_convoke_for_cast
 from engine.abilities.keywords.casting.delve import resolve_delve_for_cast
 from engine.abilities.keywords.casting.improvise import resolve_improvise_for_cast
+from engine.abilities.keywords.casting.sneak import SneakCastInput, resolve_sneak_for_cast
 from engine.core.zones import ZoneManager
 
 
@@ -19,6 +20,7 @@ class CastAdjustmentResult:
     convoke_creature_ids: tuple[int, ...] = ()
     delve_cards_exiled: int = 0
     improvise_artifact_ids: tuple[int, ...] = ()
+    sneak_lands_exiled: int = 0
     error: str | None = None
 
 
@@ -29,6 +31,8 @@ class CastAdjustmentInput:
     convoke_creature_ids: tuple[int, ...] = ()
     delve_graveyard_indices: tuple[int, ...] = ()
     improvise_artifact_ids: tuple[int, ...] = ()
+    sneak_land_hand_indices: tuple[int, ...] = ()
+    spell_hand_idx: int = -1
 
 
 def resolve_cast_adjustments(
@@ -74,9 +78,29 @@ def resolve_cast_adjustments(
             error=err,
         )
 
+    mana, sneak_count, err = resolve_sneak_for_cast(
+        card,
+        mana,
+        zones,
+        player_idx,
+        SneakCastInput(
+            options.spell_hand_idx,
+            options.sneak_land_hand_indices,
+        ),
+    )
+    if err is not None:
+        return CastAdjustmentResult(
+            mana_needed,
+            convoke_creature_ids=tuple(convoke_ids),
+            delve_cards_exiled=delve_count,
+            improvise_artifact_ids=tuple(improvise_ids),
+            error=err,
+        )
+
     return CastAdjustmentResult(
         mana,
         convoke_creature_ids=tuple(convoke_ids),
         delve_cards_exiled=delve_count,
         improvise_artifact_ids=tuple(improvise_ids),
+        sneak_lands_exiled=sneak_count,
     )

@@ -19,6 +19,10 @@ from engine.abilities.keywords.casting.mutate import (
 )
 from engine.abilities.keywords.casting.entwine import cast_mana_with_entwine
 from engine.abilities.keywords.casting.kicker import cast_mana_needed, has_kicker
+from engine.abilities.keywords.casting.freerunning import (
+    freerunning_mana_needed,
+    normalize_freerunning_cast,
+)
 from engine.abilities.keywords.casting.miracle import (
     miracle_mana_needed,
     normalize_miracle_cast,
@@ -41,6 +45,8 @@ class AnnounceCastManaOptions:
     overloaded: bool = False
     bestow_target_uid: str | None = None
     cast_for_miracle: bool = False
+    cast_for_freerunning: bool = False
+    freerunning_available: bool = False
     replicate_times: int = 0
     paid_buyback: bool = False
     cast_for_emerge: bool = False
@@ -64,6 +70,12 @@ def resolve_announce_cast_mana(
     opts = options or AnnounceCastManaOptions()
     if normalize_miracle_cast(card, opts.cast_for_miracle):
         mana_needed, life_cost = miracle_mana_needed(card)
+    elif normalize_freerunning_cast(
+        card,
+        opts.cast_for_freerunning,
+        opts.freerunning_available,
+    ):
+        mana_needed, life_cost = freerunning_mana_needed(card)
     elif normalize_overloaded(card, opts.overloaded):
         mana_needed, life_cost = overload_mana_needed(card)
     elif normalize_emerge_cast(card, opts.cast_for_emerge):

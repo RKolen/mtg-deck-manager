@@ -100,11 +100,42 @@ from engine.abilities.keywords.casting.cast_mana import (
     AnnounceCastManaOptions,
     resolve_announce_cast_mana,
 )
+from engine.abilities.keywords.casting.freerunning import (
+    freerunning_cost,
+    freerunning_mana_needed,
+    has_freerunning,
+    normalize_freerunning_cast,
+)
+from engine.abilities.keywords.casting.madness import (
+    can_cast_via_madness,
+    has_madness,
+    madness_cost,
+    madness_mana_needed,
+)
 from engine.abilities.keywords.casting.miracle import (
     has_miracle,
     miracle_cost,
     miracle_mana_needed,
     normalize_miracle_cast,
+)
+from engine.abilities.keywords.casting.sneak import (
+    SNEAK_MANA_PER_LAND,
+    SneakCastInput,
+    has_sneak,
+    normalize_sneak_land_hand_indices,
+    resolve_sneak_for_cast,
+)
+from engine.abilities.keywords.casting.suspend import (
+    SUSPEND_EXILE_MODE,
+    can_suspend,
+    exile_for_suspend,
+    has_suspend,
+    remove_suspended_card_from_exile,
+    suspend_cost,
+    suspend_mana_needed,
+    suspend_setup_error,
+    suspend_time_counters,
+    tick_suspend_counters,
 )
 from engine.abilities.keywords.casting.spree import (
     SpreeMode,
@@ -258,7 +289,30 @@ __all__ = [
     'overload_hits_each_creature',
     'overload_mana_needed',
     'overload_opponent_indices',
+    'SNEAK_MANA_PER_LAND',
+    'SneakCastInput',
+    'SUSPEND_EXILE_MODE',
+    'can_cast_via_madness',
+    'can_suspend',
+    'exile_for_suspend',
+    'freerunning_cost',
+    'freerunning_mana_needed',
+    'has_freerunning',
+    'has_madness',
     'has_miracle',
+    'has_sneak',
+    'has_suspend',
+    'madness_cost',
+    'madness_mana_needed',
+    'normalize_freerunning_cast',
+    'normalize_sneak_land_hand_indices',
+    'remove_suspended_card_from_exile',
+    'resolve_sneak_for_cast',
+    'suspend_cost',
+    'suspend_mana_needed',
+    'suspend_setup_error',
+    'suspend_time_counters',
+    'tick_suspend_counters',
     'SpreeMode',
     'has_spree',
     'normalize_spree_modes',

@@ -194,6 +194,8 @@ class GameActionRequest(BaseModel):
     castForMutate: bool = False
     mutateTargetUid: str | None = None
     spreeModeIndices: list[int] = []
+    sneakLandHandIndices: list[int] = []
+    castForFreerunning: bool = False
     convokeCreatureIds: list[str] = []
     delveGraveyardIndices: list[int] = []
     improviseArtifactIds: list[str] = []
@@ -287,10 +289,18 @@ async def _dispatch_action(game: InteractiveGame, req: GameActionRequest) -> dic
             cast_for_mutate=req.castForMutate,
             mutate_target_uid=req.mutateTargetUid,
             spree_mode_indices=req.spreeModeIndices,
+            sneak_land_hand_indices=req.sneakLandHandIndices,
+            cast_for_freerunning=req.castForFreerunning,
             convoke_creature_ids=convoke_ids,
             delve_graveyard_indices=req.delveGraveyardIndices,
             improvise_artifact_ids=improvise_ids,
         )
+    if req.action == "cast_madness":
+        assert req.handIdx is not None
+        return game.action_cast_madness(req.handIdx, req.targetUid, req.targetPlayer)
+    if req.action == "suspend":
+        assert req.handIdx is not None
+        return game.action_suspend(req.handIdx)
     if req.action == "cast_flashback":
         assert req.handIdx is not None
         return game.action_cast_flashback(req.handIdx, req.targetUid, req.targetPlayer)

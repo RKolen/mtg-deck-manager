@@ -38,6 +38,7 @@ class PlayerInfo:
     mana_pool: ManaPool = field(default_factory=ManaPool)
     land_played: bool = False
     spells_cast_this_turn: int = 0
+    combat_damage_dealt_this_turn: bool = False
     has_lost: bool = False
 
 

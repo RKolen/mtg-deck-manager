@@ -6,7 +6,6 @@ from engine.abilities.keywords.casting import (
     aftermath_mana_needed,
     normalize_buyback,
     emerge_sacrifice_error,
-    has_emerge,
     normalize_emerge_cast,
     normalize_emerge_sacrifice_id,
     sacrifice_for_emerge,
@@ -49,6 +48,15 @@ from engine.abilities.keywords.casting import (
     entwined_extra_draw,
     normalize_bestow,
     normalize_miracle_cast,
+    normalize_freerunning_cast,
+    can_cast_via_madness,
+    madness_mana_needed,
+    exile_for_suspend,
+    suspend_mana_needed,
+    suspend_setup_error,
+    suspend_time_counters,
+    tick_suspend_counters,
+    remove_suspended_card_from_exile,
     normalize_overloaded,
     normalize_replicate_times,
     overload_creature_targets,
@@ -137,6 +145,13 @@ class SpellStackMixin(GameRuntimeMixin):
         paid_miracle = normalize_miracle_cast(card_info, opts.cast_for_miracle)
         if opts.cast_for_miracle and not paid_miracle:
             return {**self.to_client(), "error": f"{card_info.name} does not have miracle"}
+        paid_freerunning = normalize_freerunning_cast(
+            card_info,
+            opts.cast_for_freerunning,
+            self.state.players[0].combat_damage_dealt_this_turn,
+        )
+        if opts.cast_for_freerunning and not paid_freerunning:
+            return {**self.to_client(), "error": f"{card_info.name} cannot use freerunning"}
         paid_replicate = normalize_replicate_times(card_info, opts.replicate_times)
         if opts.replicate_times > 0 and paid_replicate == 0:
             return {**self.to_client(), "error": f"{card_info.name} does not have replicate"}
@@ -185,6 +200,8 @@ class SpellStackMixin(GameRuntimeMixin):
                 overloaded=paid_overloaded,
                 bestow_target_uid=opts.bestow_target_uid,
                 cast_for_miracle=paid_miracle,
+                cast_for_freerunning=paid_freerunning,
+                freerunning_available=self.state.players[0].combat_damage_dealt_this_turn,
                 replicate_times=paid_replicate,
                 paid_buyback=paid_buyback,
                 cast_for_emerge=paid_emerge,
@@ -200,6 +217,8 @@ class SpellStackMixin(GameRuntimeMixin):
                 convoke_creature_ids=opts.convoke_creature_ids,
                 delve_graveyard_indices=opts.delve_graveyard_indices,
                 improvise_artifact_ids=opts.improvise_artifact_ids,
+                sneak_land_hand_indices=opts.sneak_land_hand_indices,
+                spell_hand_idx=hand_idx,
             ),
             self.state.zones,
             0,
@@ -237,7 +256,6 @@ class SpellStackMixin(GameRuntimeMixin):
                 entwined=paid_entwined,
                 overloaded=paid_overloaded,
                 cast_via_bestow=paid_bestow,
-                cast_for_miracle=paid_miracle,
                 replicate_times=paid_replicate,
                 paid_buyback=paid_buyback,
                 cast_for_emerge=paid_emerge,
@@ -248,6 +266,8 @@ class SpellStackMixin(GameRuntimeMixin):
         cast_detail = f"{card_info.name} on stack"
         if paid_miracle:
             cast_detail = f"{cast_detail} (miracle)"
+        if paid_freerunning:
+            cast_detail = f"{cast_detail} (freerunning)"
         if paid_replicate:
             cast_detail = f"{cast_detail} (replicate x{paid_replicate})"
         if paid_overloaded:
@@ -278,11 +298,116 @@ class SpellStackMixin(GameRuntimeMixin):
             cast_detail = (
                 f"{cast_detail} (improvise x{len(adjustments.improvise_artifact_ids)})"
             )
+        if adjustments.sneak_lands_exiled:
+            cast_detail = f"{cast_detail} (sneak x{adjustments.sneak_lands_exiled})"
         self._log("player", "cast", cast_detail)
         self.state.fire_spell_cast_triggers(card, tuple(targets))
         if auto_resolve:
             self._auto_pass_stack()
         return self.to_client()
+
+    def _announce_madness_cast(
+        self,
+        hand_idx: int,
+        target_uid_str: str | None,
+        target_player_idx: int | None,
+        auto_resolve: bool,
+    ) -> dict:
+        """Cast a card from hand for its madness cost."""
+        card = self._zones(0).hand[hand_idx]
+        if not isinstance(card, CardObject):
+            return {**self.to_client(), "error": "Invalid card"}
+        card_info = require_card_info(card)
+        if not can_cast_via_madness(card_info, self.phase, self.state.stack.is_empty):
+            return {**self.to_client(), "error": "Cannot cast for madness now"}
+        mana_needed, life_cost = madness_mana_needed(card_info)
+        if not self._tap_lands_for_mana(0, mana_needed):
+            return {
+                **self.to_client(),
+                "error": (
+                    f"Not enough mana ({self._available_mana(0)} available, "
+                    f"need {mana_needed})"
+                ),
+            }
+        self.state.players[0].spells_cast_this_turn += 1
+        if life_cost:
+            self.state.players[0].life -= life_cost
+            self._log("player", "phyrexian", f"Paid {life_cost} life for {card_info.name}")
+        targets = self._put_spell_on_stack(
+            player_idx=0,
+            card=card,
+            target_uid_str=target_uid_str,
+            target_player_idx=target_player_idx,
+            context=SpellCastContext(cast_via_madness=True),
+        )
+        self._log("player", "madness", f"{card_info.name} on stack")
+        self.state.fire_spell_cast_triggers(card, tuple(targets))
+        if auto_resolve:
+            self._auto_pass_stack()
+        return self.to_client()
+
+    def action_suspend(self, hand_idx: int) -> dict:
+        """Exile a card from hand with suspend counters after paying the suspend cost."""
+        card = self._zones(0).hand[hand_idx]
+        if not isinstance(card, CardObject):
+            return {**self.to_client(), "error": "Invalid card"}
+        card_info = require_card_info(card)
+        setup_err = suspend_setup_error(
+            self.state.zones,
+            0,
+            hand_idx,
+            phase=self.phase,
+            stack_is_empty=self.state.stack.is_empty,
+        )
+        if setup_err:
+            return {**self.to_client(), "error": setup_err}
+        counters = suspend_time_counters(card_info)
+        if counters <= 0:
+            return {**self.to_client(), "error": f"{card_info.name} has no suspend counters"}
+        mana_needed, life_cost = suspend_mana_needed(card_info)
+        if not self._tap_lands_for_mana(0, mana_needed):
+            return {
+                **self.to_client(),
+                "error": (
+                    f"Not enough mana ({self._available_mana(0)} available, "
+                    f"need {mana_needed})"
+                ),
+            }
+        if life_cost:
+            self.state.players[0].life -= life_cost
+            self._log("player", "phyrexian", f"Paid {life_cost} life for {card_info.name}")
+        exile_for_suspend(self.state.zones, 0, hand_idx, counters)
+        self._log("player", "suspend", f"Suspended {card_info.name} ({counters} counters)")
+        return self.to_client()
+
+    def _cast_suspended_spell(
+        self,
+        player_idx: int,
+        card: CardObject,
+        auto_resolve: bool,
+    ) -> None:
+        """Put a suspended card on the stack free when its last time counter is removed."""
+        card_info = require_card_info(card)
+        remove_suspended_card_from_exile(self.state.zones, player_idx, card)
+        self.state.players[player_idx].spells_cast_this_turn += 1
+        targets = self._put_spell_on_stack(
+            player_idx=player_idx,
+            card=card,
+            target_uid_str=None,
+            target_player_idx=None,
+            context=SpellCastContext(cast_via_suspend=True, from_exile=True),
+        )
+        actor = "player" if player_idx == 0 else "opponent"
+        self._log(actor, "suspend_cast", f"{card_info.name} on stack (suspend)")
+        self.state.fire_spell_cast_triggers(card, tuple(targets))
+        if auto_resolve:
+            self._auto_pass_stack()
+
+    def _tick_suspend_upkeep(self, player_idx: int) -> None:
+        """Remove one time counter from suspended cards and cast those that reach zero."""
+        ready = tick_suspend_counters(self.state.zones, player_idx)
+        for card in ready:
+            self._cast_suspended_spell(player_idx, card, auto_resolve=True)
 
     def _announce_flashback_cast(
         self,
@@ -705,6 +830,8 @@ class SpellStackMixin(GameRuntimeMixin):
             cast_via_mutate=opts.cast_via_mutate,
             cast_via_foretell=opts.cast_via_foretell,
             cast_via_plot=opts.cast_via_plot,
+            cast_via_madness=opts.cast_via_madness,
+            cast_via_suspend=opts.cast_via_suspend,
             modes=list(opts.spree_mode_indices),
         ))
         actor = "player" if player_idx == 0 else "opponent"
@@ -769,9 +896,10 @@ class SpellStackMixin(GameRuntimeMixin):
             damage = spree_mode_damage(effect)
             if damage:
                 target_uid_val = target_uid(spell.targets)
+                target_player_idx = first_target_player(spell.targets)
                 victim_idx = (
-                    first_target_player(spell.targets)
-                    if first_target_player(spell.targets) is not None
+                    target_player_idx
+                    if target_player_idx is not None
                     else 1 - controller_idx
                 )
                 if target_uid_val is None:

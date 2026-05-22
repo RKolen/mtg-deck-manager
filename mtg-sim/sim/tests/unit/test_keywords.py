@@ -38,14 +38,11 @@ from engine.abilities.keywords.casting import (
     emerge_mana_needed,
     emerge_sacrifice_error,
     FORETELL_EXILE_MODE,
-    FORETELL_SETUP_MANA,
     can_cast_foretold,
     exile_for_foretell,
     foretell_setup_error,
-    has_foretell,
     PLOT_EXILE_MODE,
     exile_for_plot,
-    has_plot,
     is_plottable_sorcery,
     has_mutate,
     mutate_host_error,
@@ -696,7 +693,8 @@ def test_discard_land_for_retrace_requires_land():
         CardObject(controller_idx=0, owner_idx=0, card_info=make_instant('Bolt')),
         CardObject(controller_idx=0, owner_idx=0, card_info=make_land('Island')),
     ]
-    assert retrace_land_discard_error(game.zones, 0, None) == "Retrace requires discarding a land card"
+    retrace_err = "Retrace requires discarding a land card"
+    assert retrace_land_discard_error(game.zones, 0, None) == retrace_err
     assert retrace_land_discard_error(game.zones, 0, 0) == "Retrace requires discarding a land card"
     assert retrace_land_discard_error(game.zones, 0, 1) is None
     discarded = discard_land_for_retrace(game.zones, 0, 1)

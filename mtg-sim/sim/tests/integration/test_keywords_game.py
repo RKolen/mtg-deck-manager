@@ -247,6 +247,84 @@ def test_spree_cast_applies_chosen_modes():
     assert len(game.state.zones.player_zones[0].hand) == 1
 
 
+def test_sneak_cast_exiles_land_and_reduces_cost():
+    """Sneak exiles a land from hand to pay less mana for the spell."""
+    bolt = make_instant(
+        name="Bolt",
+        cmc=2,
+        mana_cost="{1}{R}",
+        oracle="Sneak\nBolt deals 2 damage to any target.",
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    land = make_land()
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=bolt),
+        CardObject(controller_idx=0, owner_idx=0, card_info=land),
+    ]
+    data = game.action_cast(0, target_player=1, sneak_land_hand_indices=[1])
+    assert "error" not in data
+    assert data["opponentLife"] == 18
+    assert len(game.state.zones.player_zones[0].exile) == 1
+
+
+def test_freerunning_cast_after_combat_damage():
+    """Freerunning uses the alternate cost when combat damage was dealt this turn."""
+    slither = make_instant(
+        name="Slither",
+        cmc=3,
+        mana_cost="{2}{B}",
+        oracle="Freerunning {0}\nSlither deals 2 damage to any target.",
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    game.state.players[0].combat_damage_dealt_this_turn = True
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=slither),
+    ]
+    data = game.action_cast(0, target_player=1, cast_for_freerunning=True)
+    assert "error" not in data
+    assert data["opponentLife"] == 18
+
+
+def test_madness_cast_from_hand():
+    """Madness casts from hand for the madness cost."""
+    temper = make_instant(
+        name="Fiery Temper",
+        oracle="Madness {0}\nFiery Temper deals 3 damage to any target.",
+        mana_cost="{1}{R}",
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=temper),
+    ]
+    data = game.action_cast_madness(0, target_player=1)
+    assert "error" not in data
+    assert data["opponentLife"] == 17
+
+
+def test_suspend_casts_on_next_upkeep():
+    """A suspended card with one counter is cast free when the counter is removed."""
+    bolt = make_instant(
+        name="Bolt",
+        oracle="Suspend 1—{0}\nBolt deals 2 damage to any target.",
+        mana_cost="{R}",
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=bolt),
+    ]
+    data = game.action_suspend(0)
+    assert "error" not in data
+    assert len(game.state.zones.player_zones[0].exile) == 1
+    game.action_end_turn()
+    data = game.action_draw()
+    assert "error" not in data
+    assert data["opponentLife"] == 18
+
+
 def test_mutate_adds_counters_to_host():
     """Casting for mutate buffs the host instead of entering as a separate creature."""
     snapdax = make_creature(

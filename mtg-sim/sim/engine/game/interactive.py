@@ -107,6 +107,8 @@ class InteractiveGame(SpellStackMixin):  # pylint: disable=too-many-public-metho
         convoke_creature_ids: list[int] | None = None,
         delve_graveyard_indices: list[int] | None = None,
         improvise_artifact_ids: list[int] | None = None,
+        sneak_land_hand_indices: list[int] | None = None,
+        cast_for_freerunning: bool = False,
     ) -> dict:
         """Cast a spell through the stack, auto-passing while no responses exist."""
         return self._announce_cast(
@@ -130,7 +132,23 @@ class InteractiveGame(SpellStackMixin):  # pylint: disable=too-many-public-metho
                 convoke_creature_ids=tuple(convoke_creature_ids or ()),
                 delve_graveyard_indices=tuple(delve_graveyard_indices or ()),
                 improvise_artifact_ids=tuple(improvise_artifact_ids or ()),
+                sneak_land_hand_indices=tuple(sneak_land_hand_indices or ()),
+                cast_for_freerunning=cast_for_freerunning,
             ),
+        )
+
+    def action_cast_madness(
+        self,
+        hand_idx: int,
+        target_uid: str | None = None,
+        target_player: int | None = None,
+    ) -> dict:
+        """Cast a card from hand for its madness cost."""
+        return self._announce_madness_cast(
+            hand_idx,
+            target_uid,
+            target_player,
+            auto_resolve=True,
         )
 
     def action_cast_to_stack(
@@ -464,7 +482,9 @@ class InteractiveGame(SpellStackMixin):  # pylint: disable=too-many-public-metho
         player.mana_pool.empty()
         player.land_played = False
         player.spells_cast_this_turn = 0
+        player.combat_damage_dealt_this_turn = False
         self._fire_step_triggers(Step.UPKEEP)
+        self._tick_suspend_upkeep(player_idx)
 
 
     def _opponent_main_phase(self) -> None:

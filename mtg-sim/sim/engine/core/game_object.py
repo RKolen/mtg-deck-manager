@@ -51,6 +51,7 @@ class CardObject(GameObject):
 
     card_info: CardInfo | None = None
     exiled_cast_mode: str | None = None
+    suspend_time_counters: int = 0
 
 
 @dataclass
@@ -240,6 +241,8 @@ class SpellOnStack(GameObject):
     cast_via_mutate: bool = False
     cast_via_foretell: bool = False
     cast_via_plot: bool = False
+    cast_via_madness: bool = False
+    cast_via_suspend: bool = False
 
 
 def spell_is_ephemeral_copy(spell: SpellOnStack) -> bool:

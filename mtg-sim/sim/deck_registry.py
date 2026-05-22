@@ -10,9 +10,9 @@ from __future__ import annotations
 import json
 import logging
 import os
-import urllib.parse
 from dataclasses import dataclass, field
 from functools import lru_cache
+from urllib.parse import urljoin
 
 import requests
 
@@ -98,7 +98,7 @@ def _graphql(query: str, variables: dict | None = None) -> dict:
     """POST a GraphQL query to Drupal and return the data payload."""
     if not DRUPAL_URL:
         return {}
-    url = f"{DRUPAL_URL.rstrip('/')}/graphql"
+    url = urljoin(f"{DRUPAL_URL.rstrip('/')}/", "graphql")
     payload: dict = {"query": query}
     if variables:
         payload["variables"] = variables

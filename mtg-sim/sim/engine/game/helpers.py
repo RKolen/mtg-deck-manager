@@ -39,6 +39,8 @@ class CastAnnounceOptions:
     cast_for_mutate: bool = False
     mutate_target_uid: str | None = None
     spree_mode_indices: tuple[int, ...] = ()
+    sneak_land_hand_indices: tuple[int, ...] = ()
+    cast_for_freerunning: bool = False
 
 
 @dataclass(frozen=True)
@@ -63,6 +65,8 @@ class SpellCastContext:
     cast_via_mutate: bool = False
     cast_via_foretell: bool = False
     cast_via_plot: bool = False
+    cast_via_madness: bool = False
+    cast_via_suspend: bool = False
     spree_mode_indices: tuple[int, ...] = ()
 
 
