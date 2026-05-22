@@ -14,6 +14,12 @@ from engine.abilities.keywords.casting import (
     has_jump_start,
     jump_start_discard_error,
     jump_start_mana_needed,
+    can_cast_via_retrace,
+    discard_land_for_retrace,
+    has_retrace,
+    retrace_land_discard_error,
+    retrace_life_cost,
+    retrace_mana_needed,
     bestow_host_error,
     entwined_extra_draw,
     normalize_bestow,
@@ -392,6 +398,60 @@ class SpellStackMixin(GameRuntimeMixin):
             self._auto_pass_stack()
         return self.to_client()
 
+    def _announce_retrace_cast(
+        self,
+        graveyard_idx: int,
+        target_uid_str: str | None,
+        target_player_idx: int | None,
+        auto_resolve: bool,
+        discard_hand_idx: int | None = None,
+    ) -> dict:
+        """Discard a land, pay the spell's mana cost, and cast from the graveyard."""
+        card = self._zones(0).graveyard[graveyard_idx]
+        if not isinstance(card, CardObject):
+            return {**self.to_client(), "error": "Invalid card"}
+        card_info = require_card_info(card)
+        if not has_retrace(card_info):
+            return {**self.to_client(), "error": f"{card_info.name} does not have retrace"}
+        if not can_cast_via_retrace(card_info, self.phase, self.state.stack.is_empty):
+            return {**self.to_client(), "error": "Cannot cast retrace now"}
+        discard_err = retrace_land_discard_error(self.state.zones, 0, discard_hand_idx)
+        if discard_err:
+            return {**self.to_client(), "error": discard_err}
+        mana_needed = retrace_mana_needed(card_info)
+        if not self._tap_lands_for_mana(0, mana_needed):
+            return {
+                **self.to_client(),
+                "error": (
+                    f"Not enough mana ({self._available_mana(0)} available, "
+                    f"need {mana_needed})"
+                ),
+            }
+        assert discard_hand_idx is not None
+        life_cost = retrace_life_cost(card_info)
+        if life_cost:
+            self.state.players[0].life -= life_cost
+            self._log("player", "phyrexian", f"Paid {life_cost} life for {card_info.name}")
+        discarded = discard_land_for_retrace(self.state.zones, 0, discard_hand_idx)
+        self.state.players[0].spells_cast_this_turn += 1
+        targets = self._put_spell_on_stack(
+            player_idx=0,
+            card=card,
+            target_uid_str=target_uid_str,
+            target_player_idx=target_player_idx,
+            context=SpellCastContext(cast_via_retrace=True, from_graveyard=True),
+        )
+        discard_info = require_card_info(discarded)
+        self._log(
+            "player",
+            "retrace",
+            f"{card_info.name} on stack (discarded {discard_info.name})",
+        )
+        self.state.fire_spell_cast_triggers(card, tuple(targets))
+        if auto_resolve:
+            self._auto_pass_stack()
+        return self.to_client()
+
     def _put_spell_on_stack(
         self,
         player_idx: int,
@@ -415,6 +475,7 @@ class SpellStackMixin(GameRuntimeMixin):
             cast_via_flashback=opts.cast_via_flashback,
             cast_via_escape=opts.cast_via_escape,
             cast_via_jump_start=opts.cast_via_jump_start,
+            cast_via_retrace=opts.cast_via_retrace,
             cast_via_aftermath=opts.cast_via_aftermath,
             kicker_times=opts.kicker_times,
             entwined=opts.entwined,

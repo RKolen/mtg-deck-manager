@@ -205,6 +205,22 @@ class InteractiveGame(SpellStackMixin):  # pylint: disable=too-many-public-metho
             discard_hand_idx=discard_hand_idx,
         )
 
+    def action_cast_retrace(
+        self,
+        graveyard_idx: int,
+        target_uid: str | None = None,
+        target_player: int | None = None,
+        discard_hand_idx: int | None = None,
+    ) -> dict:
+        """Cast a card from the graveyard for its mana cost and a discarded land."""
+        return self._announce_retrace_cast(
+            graveyard_idx,
+            target_uid,
+            target_player,
+            auto_resolve=True,
+            discard_hand_idx=discard_hand_idx,
+        )
+
     def action_cast_aftermath(
         self,
         graveyard_idx: int,

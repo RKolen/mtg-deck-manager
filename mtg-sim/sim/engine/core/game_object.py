@@ -225,6 +225,7 @@ class SpellOnStack(GameObject):
     cast_via_flashback: bool = False
     cast_via_escape: bool = False
     cast_via_jump_start: bool = False
+    cast_via_retrace: bool = False
     cast_via_aftermath: bool = False
     kicker_times: int = 0
     entwined: bool = False

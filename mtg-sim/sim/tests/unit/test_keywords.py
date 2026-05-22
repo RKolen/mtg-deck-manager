@@ -10,7 +10,12 @@ from engine.abilities.keywords.casting import (
     can_cast_via_flashback,
     aftermath_mana_needed,
     can_cast_aftermath,
+    can_cast_via_retrace,
     can_cast_via_jump_start,
+    discard_land_for_retrace,
+    has_retrace,
+    retrace_land_discard_error,
+    retrace_mana_needed,
     has_aftermath,
     discard_for_jump_start,
     has_jump_start,
@@ -553,6 +558,49 @@ def test_has_jump_start_parses_alternate_cost():
     assert cost is not None
     assert cost.mana_value == 2
     assert jump_start_mana_needed(card) == 2
+
+
+def test_has_retrace_and_normal_mana_cost():
+    """Retrace uses the card's printed mana cost, not a separate alt cost."""
+    card = make_instant(
+        'Loam',
+        cmc=2,
+        mana_cost='{1}{G}',
+        oracle='Draw a card.\nRetrace',
+    )
+    assert has_retrace(card)
+    assert retrace_mana_needed(card) == 2
+
+
+def test_discard_land_for_retrace_requires_land():
+    """Retrace rejects non-land discards."""
+    game = fresh_game()
+    game.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=make_instant('Bolt')),
+        CardObject(controller_idx=0, owner_idx=0, card_info=make_land('Island')),
+    ]
+    assert retrace_land_discard_error(game.zones, 0, None) == "Retrace requires discarding a land card"
+    assert retrace_land_discard_error(game.zones, 0, 0) == "Retrace requires discarding a land card"
+    assert retrace_land_discard_error(game.zones, 0, 1) is None
+    discarded = discard_land_for_retrace(game.zones, 0, 1)
+    assert discarded.card_info is not None
+    assert discarded.card_info.is_land
+    assert len(game.zones.player_zones[0].hand) == 1
+    assert len(game.zones.player_zones[0].graveyard) == 1
+
+
+def test_can_cast_via_retrace_follows_spell_timing():
+    """Instant-speed retrace works in combat; sorcery retrace needs a main phase."""
+    instant = make_instant('Charm', oracle='Retrace\nDeal 1 damage.')
+    sorcery = make_card(
+        name='Ritual',
+        type_line='Sorcery',
+        cmc=2.0,
+        oracle='Draw a card.\nRetrace',
+    )
+    assert can_cast_via_retrace(instant, 'attack', stack_is_empty=False)
+    assert not can_cast_via_retrace(sorcery, 'attack', stack_is_empty=False)
+    assert can_cast_via_retrace(sorcery, 'main1', stack_is_empty=True)
 
 
 def test_discard_for_jump_start_moves_card_to_graveyard():

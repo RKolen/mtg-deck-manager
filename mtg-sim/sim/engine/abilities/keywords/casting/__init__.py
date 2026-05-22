@@ -94,6 +94,14 @@ from engine.abilities.keywords.casting.delve import (
     normalize_delve_graveyard_indices,
     resolve_delve_for_cast,
 )
+from engine.abilities.keywords.casting.retrace import (
+    can_cast_via_retrace,
+    discard_land_for_retrace,
+    has_retrace,
+    retrace_land_discard_error,
+    retrace_life_cost,
+    retrace_mana_needed,
+)
 from engine.abilities.keywords.casting.jump_start import (
     can_cast_via_jump_start,
     discard_for_jump_start,
@@ -126,6 +134,12 @@ __all__ = [
     'can_cast_via_escape',
     'has_aftermath',
     'can_cast_via_flashback',
+    'can_cast_via_retrace',
+    'discard_land_for_retrace',
+    'has_retrace',
+    'retrace_land_discard_error',
+    'retrace_life_cost',
+    'retrace_mana_needed',
     'can_cast_via_jump_start',
     'discard_for_jump_start',
     'has_jump_start',

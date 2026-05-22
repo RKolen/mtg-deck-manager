@@ -135,6 +135,35 @@ def test_jump_start_cast_from_graveyard_exiles_on_resolve():
     assert exiled_spell.card_info.name == "Bolt"
 
 
+def test_retrace_cast_from_graveyard_returns_spell_to_graveyard():
+    """Retrace discards a land, casts from the graveyard, and does not exile on resolve."""
+    loam = make_instant(
+        name="Life from the Loam",
+        cmc=0,
+        mana_cost="",
+        oracle="Draw a card.\nRetrace",
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    land = CardObject(controller_idx=0, owner_idx=0, card_info=make_land("Forest"))
+    spell = CardObject(controller_idx=0, owner_idx=0, card_info=loam)
+    game.state.zones.player_zones[0].hand = [land]
+    game.state.zones.player_zones[0].graveyard = [spell]
+    data = game.action_cast_retrace(0, discard_hand_idx=0)
+    assert "error" not in data
+    assert not data["stack"]
+    assert len(game.state.zones.player_zones[0].exile) == 0
+    graveyard = game.state.zones.player_zones[0].graveyard
+    assert len(graveyard) == 2
+    names = [
+        c.card_info.name
+        for c in graveyard
+        if isinstance(c, CardObject) and c.card_info is not None
+    ]
+    assert "Forest" in names
+    assert "Life from the Loam" in names
+
+
 def test_miracle_cast_pays_reduced_mana_and_deals_damage():
     """Casting for miracle uses the miracle cost instead of the printed cost."""
     mastery = make_instant(
