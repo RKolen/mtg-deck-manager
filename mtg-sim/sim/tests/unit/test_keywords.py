@@ -112,14 +112,18 @@ from engine.abilities.keywords import (
 )
 from engine.core.game_object import (
     CardObject,
+    SpellAlternateCast,
+    SpellCastPayment,
     SpellOnStack,
+    SpellStackCopyFlags,
     Target,
     ZoneCard,
     spell_returns_to_hand_on_resolve,
 )
 from engine.core.mana import ManaCost
 from engine.core.zones import Zone
-from engine.rules.combat import legal_blocker, resolve_combat_damage
+from engine.rules.combat import legal_blocker
+from tests.conftest import resolve_single_attacker
 from tests.conftest import (
     fresh_game,
     make_card,
@@ -767,16 +771,26 @@ def test_spell_returns_to_hand_on_resolve_only_with_buyback():
         owner_idx=0,
         card_info=make_instant('Echo', oracle='Buyback {1}\nDeal 1 damage.'),
     )
-    buyback_spell = SpellOnStack(controller_idx=0, owner_idx=0, source=card, paid_buyback=True)
+    buyback_spell = SpellOnStack(
+        controller_idx=0,
+        owner_idx=0,
+        source=card,
+        payment=SpellCastPayment(paid_buyback=True),
+    )
     assert spell_returns_to_hand_on_resolve(buyback_spell)
-    unpaid = SpellOnStack(controller_idx=0, owner_idx=0, source=card, paid_buyback=False)
+    unpaid = SpellOnStack(
+        controller_idx=0,
+        owner_idx=0,
+        source=card,
+        payment=SpellCastPayment(paid_buyback=False),
+    )
     assert not spell_returns_to_hand_on_resolve(unpaid)
     copy = SpellOnStack(
         controller_idx=0,
         owner_idx=0,
         source=card,
-        paid_buyback=True,
-        is_storm_copy=True,
+        payment=SpellCastPayment(paid_buyback=True),
+        copies=SpellStackCopyFlags(storm=True),
     )
     assert not spell_returns_to_hand_on_resolve(copy)
 
@@ -918,7 +932,7 @@ def test_flashback_fizzle_exiles_source_card():
         controller_idx=1,
         owner_idx=0,
         source=card,
-        cast_via_flashback=True,
+        alternate=SpellAlternateCast(flashback=True),
         targets=[Target(obj_id=99999)],
     )
     game.stack.push(spell)
@@ -937,7 +951,7 @@ def test_aftermath_fizzle_exiles_source_card():
         controller_idx=1,
         owner_idx=0,
         source=card,
-        cast_via_aftermath=True,
+        alternate=SpellAlternateCast(aftermath=True),
         targets=[Target(obj_id=99999)],
     )
     game.stack.push(spell)
@@ -956,7 +970,7 @@ def test_jump_start_fizzle_exiles_source_card():
         controller_idx=1,
         owner_idx=0,
         source=card,
-        cast_via_jump_start=True,
+        alternate=SpellAlternateCast(jump_start=True),
         targets=[Target(obj_id=99999)],
     )
     game.stack.push(spell)
@@ -975,7 +989,7 @@ def test_escape_fizzle_exiles_source_card():
         controller_idx=1,
         owner_idx=0,
         source=card,
-        cast_via_escape=True,
+        alternate=SpellAlternateCast(escape=True),
         targets=[Target(obj_id=99999)],
     )
     game.stack.push(spell)
@@ -1012,13 +1026,7 @@ def test_infect_combat_damage_adds_poison():
         game.zones,
         sick=False,
     )
-    result = resolve_combat_damage(
-        game,
-        attacking_player_idx=1,
-        defending_player_idx=0,
-        attacker_ids=[str(attacker.obj_id)],
-        blocker_assignments={},
-    )
+    result = resolve_single_attacker(game, attacker)
     assert result.infect_damage_to_player == 1
     assert game.players[0].poison == 1
 
@@ -1079,11 +1087,9 @@ def test_islandwalk_unblockable_when_defender_has_island():
     )
     blocker = place_on_battlefield(make_creature('Soldier', 2, 2), 0, game.zones)
     place_on_battlefield(make_land('Island'), 0, game.zones, sick=False)
-    result = resolve_combat_damage(
+    result = resolve_single_attacker(
         game,
-        attacking_player_idx=1,
-        defending_player_idx=0,
-        attacker_ids=[str(attacker.obj_id)],
+        attacker,
         blocker_assignments={str(blocker.obj_id): str(attacker.obj_id)},
     )
     assert result.damage_to_player == 2

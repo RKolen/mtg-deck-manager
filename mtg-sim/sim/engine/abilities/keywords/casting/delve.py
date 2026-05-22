@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from deck_registry import CardInfo
+from engine.abilities.keywords.casting._indices import normalize_unique_indices
 from engine.abilities.keywords.registry import has_registered_keyword
 from engine.core.game_object import CardObject
 from engine.core.zones import ZoneManager
@@ -20,13 +21,7 @@ def normalize_delve_graveyard_indices(
     """Return deduped graveyard indices when delve applies; otherwise []."""
     if not graveyard_indices or not has_delve(card):
         return []
-    seen: set[int] = set()
-    unique: list[int] = []
-    for idx in graveyard_indices:
-        if idx not in seen:
-            seen.add(idx)
-            unique.append(idx)
-    return unique
+    return normalize_unique_indices(graveyard_indices)
 
 
 def delve_exile_error(

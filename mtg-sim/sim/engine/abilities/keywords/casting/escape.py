@@ -5,7 +5,9 @@ from __future__ import annotations
 import re
 
 from deck_registry import CardInfo
-from engine.abilities.keywords.casting.flashback import INSTANT_SPEED_PHASES
+from engine.abilities.keywords.actions._parse import word_to_int
+from engine.abilities.keywords.casting._indices import normalize_unique_indices
+from engine.abilities.keywords.casting._timing import INSTANT_SPEED_PHASES
 from engine.abilities.keywords.registry import has_registered_keyword
 from engine.core.game_object import CardObject
 from engine.core.mana import ManaCost
@@ -19,20 +21,6 @@ _ESCAPE_EXILE_RE = re.compile(
     r'exile (\w+) other cards',
     re.IGNORECASE,
 )
-_EXILE_WORD_TO_INT = {
-    'a': 1,
-    'an': 1,
-    'one': 1,
-    'two': 2,
-    'three': 3,
-    'four': 4,
-    'five': 5,
-    'six': 6,
-    'seven': 7,
-    'eight': 8,
-}
-
-
 def has_escape(card: CardInfo) -> bool:
     """Return True when the card may be cast for its escape cost."""
     return has_registered_keyword(card.oracle_text, 'Escape') or bool(
@@ -53,8 +41,7 @@ def escape_exiles_required(card: CardInfo) -> int:
     match = _ESCAPE_EXILE_RE.search(card.oracle_text or '')
     if match is None:
         return 4
-    word = match.group(1).lower()
-    return _EXILE_WORD_TO_INT.get(word, int(word) if word.isdigit() else 4)
+    return word_to_int(match.group(1))
 
 
 def escape_mana_needed(card: CardInfo) -> int:
@@ -75,19 +62,11 @@ def can_cast_via_escape(card: CardInfo, phase: str, stack_is_empty: bool) -> boo
 
 
 def normalize_escape_exile_indices(
-    card: CardInfo,
+    _card: CardInfo,
     graveyard_indices: list[int],
 ) -> list[int]:
     """Return deduped graveyard indices of cards to exile for escape."""
-    if not graveyard_indices:
-        return []
-    seen: set[int] = set()
-    unique: list[int] = []
-    for idx in graveyard_indices:
-        if idx not in seen:
-            seen.add(idx)
-            unique.append(idx)
-    return unique
+    return normalize_unique_indices(graveyard_indices)
 
 
 def escape_payment_error(
@@ -105,9 +84,11 @@ def escape_payment_error(
             f"({len(exile_indices)} selected)"
         )
     graveyard = zones.player_zones[player_idx].graveyard
-    if spell_graveyard_idx < 0 or spell_graveyard_idx >= len(graveyard):
-        return f"Escape spell graveyard index {spell_graveyard_idx} out of range"
-    spell_card = graveyard[spell_graveyard_idx]
+    spell_card = (
+        graveyard[spell_graveyard_idx]
+        if 0 <= spell_graveyard_idx < len(graveyard)
+        else None
+    )
     if not isinstance(spell_card, CardObject):
         return "Escape spell is not a card"
     capped = exile_indices[:required]

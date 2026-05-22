@@ -62,7 +62,7 @@ def ai_burn_target(opponent_life: int, opponent_creatures: list[Permanent]) -> s
         if p.card_info and p.card_info.numeric_power >= 3
     ]
     if big_threats:
-        return big_threats[0].uid
+        return str(big_threats[0].obj_id)
     return "player"
 
 
@@ -102,10 +102,10 @@ def ai_resolve_card(
         return {"type": "burn", "damage": dmg, "target": target}
     if category == "removal":
         victim = ai_removal_target(opp_creatures)
-        return {"type": "removal", "target_uid": victim.uid if victim else None}
+        return {"type": "removal", "target_uid": str(victim.obj_id) if victim else None}
     if category == "pump":
         pp, pt = parse_pump(card.oracle_text or "")
         target = ai_pump_target(own_creatures)
         return {"type": "pump", "pp": pp, "pt": pt,
-                "target_uid": target.uid if target else None}
+                "target_uid": str(target.obj_id) if target else None}
     return {"type": "spell"}

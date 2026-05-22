@@ -93,23 +93,8 @@ class InteractiveGame(ActivatedActionsMixin, SpellStackMixin):  # pylint: disabl
         hand_idx: int,
         target_uid: str | None = None,
         target_player: int | None = None,
-        kicker_times: int = 0,
-        entwined: bool = False,
-        overloaded: bool = False,
-        bestow_target_uid: str | None = None,
-        cast_for_miracle: bool = False,
-        replicate_times: int = 0,
-        paid_buyback: bool = False,
-        cast_for_emerge: bool = False,
-        emerge_sacrifice_ids: list[int] | None = None,
-        cast_for_mutate: bool = False,
-        mutate_target_uid: str | None = None,
-        spree_mode_indices: list[int] | None = None,
-        convoke_creature_ids: list[int] | None = None,
-        delve_graveyard_indices: list[int] | None = None,
-        improvise_artifact_ids: list[int] | None = None,
-        sneak_land_hand_indices: list[int] | None = None,
-        cast_for_freerunning: bool = False,
+        *,
+        cast_options: CastAnnounceOptions | None = None,
     ) -> dict:
         """Cast a spell through the stack, auto-passing while no responses exist."""
         return self._announce_cast(
@@ -117,25 +102,7 @@ class InteractiveGame(ActivatedActionsMixin, SpellStackMixin):  # pylint: disabl
             target_uid,
             target_player,
             auto_resolve=True,
-            cast_options=CastAnnounceOptions(
-                kicker_times=kicker_times,
-                entwined=entwined,
-                overloaded=overloaded,
-                bestow_target_uid=bestow_target_uid,
-                cast_for_miracle=cast_for_miracle,
-                replicate_times=replicate_times,
-                paid_buyback=paid_buyback,
-                cast_for_emerge=cast_for_emerge,
-                emerge_sacrifice_ids=tuple(emerge_sacrifice_ids or ()),
-                cast_for_mutate=cast_for_mutate,
-                mutate_target_uid=mutate_target_uid,
-                spree_mode_indices=tuple(spree_mode_indices or ()),
-                convoke_creature_ids=tuple(convoke_creature_ids or ()),
-                delve_graveyard_indices=tuple(delve_graveyard_indices or ()),
-                improvise_artifact_ids=tuple(improvise_artifact_ids or ()),
-                sneak_land_hand_indices=tuple(sneak_land_hand_indices or ()),
-                cast_for_freerunning=cast_for_freerunning,
-            ),
+            cast_options=cast_options,
         )
 
     def action_cast_madness(
@@ -157,21 +124,8 @@ class InteractiveGame(ActivatedActionsMixin, SpellStackMixin):  # pylint: disabl
         hand_idx: int,
         target_uid: str | None = None,
         target_player: int | None = None,
-        kicker_times: int = 0,
-        entwined: bool = False,
-        overloaded: bool = False,
-        bestow_target_uid: str | None = None,
-        cast_for_miracle: bool = False,
-        replicate_times: int = 0,
-        paid_buyback: bool = False,
-        cast_for_emerge: bool = False,
-        emerge_sacrifice_ids: list[int] | None = None,
-        cast_for_mutate: bool = False,
-        mutate_target_uid: str | None = None,
-        spree_mode_indices: list[int] | None = None,
-        convoke_creature_ids: list[int] | None = None,
-        delve_graveyard_indices: list[int] | None = None,
-        improvise_artifact_ids: list[int] | None = None,
+        *,
+        cast_options: CastAnnounceOptions | None = None,
     ) -> dict:
         """Cast a spell and leave it on the stack for explicit priority passes."""
         return self._announce_cast(
@@ -179,23 +133,7 @@ class InteractiveGame(ActivatedActionsMixin, SpellStackMixin):  # pylint: disabl
             target_uid,
             target_player,
             auto_resolve=False,
-            cast_options=CastAnnounceOptions(
-                kicker_times=kicker_times,
-                entwined=entwined,
-                overloaded=overloaded,
-                bestow_target_uid=bestow_target_uid,
-                cast_for_miracle=cast_for_miracle,
-                replicate_times=replicate_times,
-                paid_buyback=paid_buyback,
-                cast_for_emerge=cast_for_emerge,
-                emerge_sacrifice_ids=tuple(emerge_sacrifice_ids or ()),
-                cast_for_mutate=cast_for_mutate,
-                mutate_target_uid=mutate_target_uid,
-                spree_mode_indices=tuple(spree_mode_indices or ()),
-                convoke_creature_ids=tuple(convoke_creature_ids or ()),
-                delve_graveyard_indices=tuple(delve_graveyard_indices or ()),
-                improvise_artifact_ids=tuple(improvise_artifact_ids or ()),
-            ),
+            cast_options=cast_options,
         )
 
     def action_cast_flashback(
@@ -485,6 +423,7 @@ class InteractiveGame(ActivatedActionsMixin, SpellStackMixin):  # pylint: disabl
         player.land_played = False
         player.spells_cast_this_turn = 0
         player.combat_damage_dealt_this_turn = False
+        player.was_dealt_damage_this_turn = False
         self._fire_step_triggers(Step.UPKEEP)
         self._tick_suspend_upkeep(player_idx)
 

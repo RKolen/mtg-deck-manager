@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from deck_registry import CardInfo
 from engine.cards.oracle_parse import is_affordable
 from engine.core.game_object import CardObject, Permanent
 from engine.core.game_object import SpellOnStack
@@ -13,6 +14,7 @@ from engine.core.game_object import (
     spell_is_ephemeral_copy,
     spell_returns_to_hand_on_resolve,
 )
+from engine.game._hand_card import graveyard_card_or_error, hand_card_or_error
 from engine.game.helpers import card_to_client, has_instant_timing, is_land, require_card_info
 
 if TYPE_CHECKING:
@@ -158,6 +160,48 @@ class GameRuntimeMixin:
 
     def _zones(self, player_idx: int):
         return self.state.zones.player_zones[player_idx]
+
+    def _client_error(self, message: str) -> dict:
+        """Return a client payload with an error message."""
+        return {**self.to_client(), "error": message}
+
+    def _hand_card_checked(
+        self,
+        player_idx: int,
+        hand_idx: int,
+    ) -> tuple[CardObject | None, dict | None]:
+        """Return (card, error_dict); error_dict is set when lookup fails."""
+        card, _info, err = hand_card_or_error(self.state.zones, player_idx, hand_idx)
+        if err:
+            return None, self._client_error(err)
+        return card, None
+
+    def _graveyard_card_checked(
+        self,
+        player_idx: int,
+        graveyard_idx: int,
+    ) -> tuple[CardObject | None, dict | None]:
+        """Return (card, error_dict); error_dict is set when lookup fails."""
+        card, _info, err = graveyard_card_or_error(
+            self.state.zones,
+            player_idx,
+            graveyard_idx,
+        )
+        if err:
+            return None, self._client_error(err)
+        return card, None
+
+    def _load_hand_card(
+        self,
+        player_idx: int,
+        hand_idx: int,
+    ) -> tuple[CardObject | None, CardInfo | None, dict | None]:
+        """Return (card, card_info, None) or (None, None, error_dict)."""
+        card, err = self._hand_card_checked(player_idx, hand_idx)
+        if err is not None:
+            return None, None, err
+        assert card is not None
+        return card, require_card_info(card), None
 
     def _find_permanent(self, uid: str | None) -> Permanent | None:
         if uid is None:

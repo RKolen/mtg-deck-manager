@@ -25,8 +25,8 @@ def create_game(
 ) -> InteractiveGame:
     """Create and register a new interactive game session."""
     zones = ZoneManager()
-    zones.player_zones[0].library = expand_deck(player_cards, 0)
-    zones.player_zones[1].library = expand_deck(opponent_cards, 1)
+    zones.player_zones[0].library.extend(expand_deck(player_cards, 0))
+    zones.player_zones[1].library.extend(expand_deck(opponent_cards, 1))
     random.shuffle(zones.player_zones[0].library)
     random.shuffle(zones.player_zones[1].library)
     runner = TurnRunner()

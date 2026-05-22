@@ -7,6 +7,10 @@ import re
 from deck_registry import CardInfo
 from engine.abilities.keywords import has_flash
 from engine.abilities.keywords.registry import has_registered_keyword
+from engine.abilities.keywords.casting._hand_discard import (
+    hand_discard_error,
+    pop_hand_to_graveyard,
+)
 from engine.core.game_object import CardObject
 from engine.core.zones import ZoneManager
 
@@ -51,15 +55,19 @@ def retrace_land_discard_error(
     discard_hand_idx: int | None,
 ) -> str | None:
     """Return an error message when the retrace land discard is illegal."""
-    if discard_hand_idx is None:
-        return "Retrace requires discarding a land card"
-    hand = zones.player_zones[player_idx].hand
-    if discard_hand_idx < 0 or discard_hand_idx >= len(hand):
-        return f"Discard hand index {discard_hand_idx} out of range"
-    card = hand[discard_hand_idx]
-    if not isinstance(card, CardObject) or not _hand_land(card):
-        return "Retrace requires discarding a land card"
-    return None
+
+    def _land_only(card: CardObject) -> str | None:
+        if not _hand_land(card):
+            return "Retrace requires discarding a land card"
+        return None
+
+    return hand_discard_error(
+        zones,
+        player_idx,
+        discard_hand_idx,
+        missing_message="Retrace requires discarding a land card",
+        validate_card=_land_only,
+    )
 
 
 def discard_land_for_retrace(
@@ -68,8 +76,4 @@ def discard_land_for_retrace(
     discard_hand_idx: int,
 ) -> CardObject:
     """Discard a land from hand to pay retrace (call after retrace_land_discard_error)."""
-    hand = zones.player_zones[player_idx].hand
-    card = hand.pop(discard_hand_idx)
-    assert isinstance(card, CardObject)
-    zones.player_zones[player_idx].graveyard.append(card)
-    return card
+    return pop_hand_to_graveyard(zones, player_idx, discard_hand_idx)

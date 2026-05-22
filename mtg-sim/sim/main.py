@@ -29,7 +29,6 @@ Python engine (faster, less accurate). Set FORGE_JAR to enable real simulation.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
 import logging
 import os
 import pathlib
@@ -50,6 +49,7 @@ from pydantic import BaseModel, Field
 from deck_registry import fetch_meta_deck, fetch_player_deck
 from forge_adapter import ForgeAdapter
 from engine.game import InteractiveGame, create_game, get_game, remove_game
+from engine.game.action_dispatch import dispatch_game_action
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -248,133 +248,12 @@ def _dispatch_blocker_action(game: InteractiveGame, req: GameActionRequest) -> d
 
 
 async def _dispatch_action(game: InteractiveGame, req: GameActionRequest) -> dict:
-    """Dispatch a single game action and return the updated state dict.
-
-    Simple actions (no arguments) are resolved via a lookup table.
-    Actions that require request parameters are handled explicitly.
-    """
-    simple: dict[str, Callable[[], dict]] = {
-        "keep": game.action_keep,
-        "mulligan": game.action_mulligan,
-        "draw": game.action_draw,
-        "pass_priority": game.action_pass_priority,
-        "go_to_attack": game.action_go_to_attack,
-        "confirm_attack": game.action_confirm_attack,
-        "skip_attack": game.action_skip_attack,
-    }
-    handler = simple.get(req.action)
-    if handler is not None:
-        return handler()
-    if req.action == "play_land":
-        assert req.handIdx is not None
-        return game.action_play_land(req.handIdx)
-    if req.action == "cast":
-        assert req.handIdx is not None
-        convoke_ids = [int(uid) for uid in req.convokeCreatureIds]
-        improvise_ids = [int(uid) for uid in req.improviseArtifactIds]
-        emerge_ids = [int(uid) for uid in req.emergeSacrificeIds]
-        return game.action_cast(
-            req.handIdx,
-            req.targetUid,
-            req.targetPlayer,
-            kicker_times=req.kickerTimes,
-            entwined=req.entwined,
-            overloaded=req.overloaded,
-            bestow_target_uid=req.bestowTargetUid,
-            cast_for_miracle=req.castForMiracle,
-            replicate_times=req.replicateTimes,
-            paid_buyback=req.paidBuyback,
-            cast_for_emerge=req.castForEmerge,
-            emerge_sacrifice_ids=emerge_ids,
-            cast_for_mutate=req.castForMutate,
-            mutate_target_uid=req.mutateTargetUid,
-            spree_mode_indices=req.spreeModeIndices,
-            sneak_land_hand_indices=req.sneakLandHandIndices,
-            cast_for_freerunning=req.castForFreerunning,
-            convoke_creature_ids=convoke_ids,
-            delve_graveyard_indices=req.delveGraveyardIndices,
-            improvise_artifact_ids=improvise_ids,
-        )
-    if req.action == "cast_madness":
-        assert req.handIdx is not None
-        return game.action_cast_madness(req.handIdx, req.targetUid, req.targetPlayer)
-    if req.action == "suspend":
-        assert req.handIdx is not None
-        return game.action_suspend(req.handIdx)
-    if req.action == "cycle":
-        assert req.handIdx is not None
-        return game.action_cycle(req.handIdx)
-    if req.action == "channel":
-        assert req.handIdx is not None
-        return game.action_channel(req.handIdx, req.targetPlayer)
-    if req.action == "unearth":
-        assert req.handIdx is not None
-        return game.action_unearth(req.handIdx)
-    if req.action == "crew":
-        assert req.permanentUid is not None
-        crew_ids = [str(uid) for uid in (req.convokeCreatureIds or [])]
-        return game.action_crew(req.permanentUid, crew_ids)
-    if req.action == "mount":
-        assert req.permanentUid is not None
-        mount_ids = [str(uid) for uid in (req.convokeCreatureIds or [])]
-        return game.action_mount(req.permanentUid, mount_ids)
-    if req.action == "level_up":
-        assert req.permanentUid is not None
-        return game.action_level_up(req.permanentUid)
-    if req.action == "activate":
-        assert req.permanentUid is not None
-        return game.action_activate(
-            req.permanentUid,
-            req.handIdx or 0,
-            host_uid=req.targetUid,
-        )
-    if req.action == "cast_flashback":
-        assert req.handIdx is not None
-        return game.action_cast_flashback(req.handIdx, req.targetUid, req.targetPlayer)
-    if req.action == "cast_escape":
-        assert req.handIdx is not None
-        return game.action_cast_escape(
-            req.handIdx,
-            req.targetUid,
-            req.targetPlayer,
-            escape_exile_indices=req.escapeExileIndices,
-        )
-    if req.action == "cast_jump_start":
-        assert req.handIdx is not None
-        return game.action_cast_jump_start(
-            req.handIdx,
-            req.targetUid,
-            req.targetPlayer,
-            discard_hand_idx=req.discardHandIdx,
-        )
-    if req.action == "cast_retrace":
-        assert req.handIdx is not None
-        return game.action_cast_retrace(
-            req.handIdx,
-            req.targetUid,
-            req.targetPlayer,
-            discard_hand_idx=req.discardHandIdx,
-        )
-    if req.action == "foretell":
-        assert req.handIdx is not None
-        return game.action_foretell(req.handIdx)
-    if req.action == "cast_foretell":
-        assert req.handIdx is not None
-        return game.action_cast_foretell(req.handIdx, req.targetUid, req.targetPlayer)
-    if req.action == "plot":
-        assert req.handIdx is not None
-        return game.action_plot(req.handIdx)
-    if req.action == "cast_plot":
-        assert req.handIdx is not None
-        return game.action_cast_plot(req.handIdx, req.targetUid, req.targetPlayer)
-    if req.action == "cast_aftermath":
-        assert req.handIdx is not None
-        return game.action_cast_aftermath(req.handIdx, req.targetUid, req.targetPlayer)
-    if req.action == "toggle_attacker":
-        assert req.permanentUid is not None
-        return game.action_toggle_attacker(req.permanentUid)
+    """Dispatch a single game action and return the updated state dict."""
     if req.action == "end_turn":
         return await asyncio.to_thread(game.action_end_turn)
+    result = dispatch_game_action(game, req)
+    if result is not None:
+        return result
     blocker_result = _dispatch_blocker_action(game, req)
     if blocker_result is not None:
         return blocker_result

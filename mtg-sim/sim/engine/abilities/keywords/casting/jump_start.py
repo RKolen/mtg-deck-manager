@@ -7,6 +7,10 @@ import re
 from deck_registry import CardInfo
 from engine.abilities.keywords.casting.flashback import INSTANT_SPEED_PHASES
 from engine.abilities.keywords.registry import has_registered_keyword
+from engine.abilities.keywords.casting._hand_discard import (
+    hand_discard_error,
+    pop_hand_to_graveyard,
+)
 from engine.core.game_object import CardObject
 from engine.core.mana import ManaCost
 from engine.core.zones import ZoneManager
@@ -55,14 +59,12 @@ def jump_start_discard_error(
     discard_hand_idx: int | None,
 ) -> str | None:
     """Return an error message when the jump-start discard is illegal."""
-    if discard_hand_idx is None:
-        return "Jump-start requires discarding a card"
-    hand = zones.player_zones[player_idx].hand
-    if discard_hand_idx < 0 or discard_hand_idx >= len(hand):
-        return f"Discard hand index {discard_hand_idx} out of range"
-    if not isinstance(hand[discard_hand_idx], CardObject):
-        return "Cannot discard that object"
-    return None
+    return hand_discard_error(
+        zones,
+        player_idx,
+        discard_hand_idx,
+        missing_message="Jump-start requires discarding a card",
+    )
 
 
 def discard_for_jump_start(
@@ -71,8 +73,4 @@ def discard_for_jump_start(
     discard_hand_idx: int,
 ) -> CardObject:
     """Discard a card from hand to pay jump-start (call after jump_start_discard_error)."""
-    hand = zones.player_zones[player_idx].hand
-    card = hand.pop(discard_hand_idx)
-    assert isinstance(card, CardObject)
-    zones.player_zones[player_idx].graveyard.append(card)
-    return card
+    return pop_hand_to_graveyard(zones, player_idx, discard_hand_idx)

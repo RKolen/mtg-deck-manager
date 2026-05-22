@@ -2,20 +2,18 @@
 
 from __future__ import annotations
 
+from deck_registry import CardInfo
 from engine.abilities import activated
 from engine.abilities.activated import ActivationSpeed
 from engine.core.game_object import CardObject, Permanent
 from engine.core.zones import Zone
+from engine.game._hand_card import load_hand_card_for_action, run_with_hand_card
 from engine.game.helpers import require_card_info
 from engine.game.runtime import GameRuntimeMixin
 
 
 class ActivatedActionsMixin(GameRuntimeMixin):
     """Cycling, channel, crew, unearth, level up, and permanent activations."""
-
-    def _client_error(self, message: str) -> dict:
-        """Return a client payload with an error message."""
-        return {**self.to_client(), "error": message}
 
     def _resolve_equip_activation(
         self,
@@ -75,10 +73,9 @@ class ActivatedActionsMixin(GameRuntimeMixin):
 
     def action_cycle(self, hand_idx: int) -> dict:
         """Activate cycling from hand: pay, discard, draw."""
-        card = self._zones(0).hand[hand_idx]
-        if not isinstance(card, CardObject):
-            return {**self.to_client(), "error": "Invalid card"}
-        card_info = require_card_info(card)
+        return run_with_hand_card(self, hand_idx, lambda c, i: self._resolve_cycle(c, i, hand_idx))
+
+    def _resolve_cycle(self, _card: CardObject, card_info: CardInfo, hand_idx: int) -> dict:
         if not activated.can_cycle(card_info, self.phase, self.state.stack.is_empty):
             return {**self.to_client(), "error": "Cannot cycle now"}
         mana_needed = activated.cycling_mana_needed(card_info)
@@ -95,10 +92,10 @@ class ActivatedActionsMixin(GameRuntimeMixin):
         target_player: int | None = None,
     ) -> dict:
         """Activate channel from hand: pay, discard, apply a simple effect."""
-        card = self._zones(0).hand[hand_idx]
-        if not isinstance(card, CardObject):
-            return {**self.to_client(), "error": "Invalid card"}
-        card_info = require_card_info(card)
+        card, card_info, err = load_hand_card_for_action(self, hand_idx)
+        if err is not None:
+            return err
+        assert card is not None and card_info is not None
         if not activated.can_channel(card_info, self.phase, self.state.stack.is_empty):
             return {**self.to_client(), "error": "Cannot channel now"}
         mana_needed = activated.channel_mana_needed(card_info)
@@ -120,9 +117,10 @@ class ActivatedActionsMixin(GameRuntimeMixin):
 
     def action_unearth(self, graveyard_idx: int) -> dict:
         """Activate unearth from the graveyard."""
-        card = self._zones(0).graveyard[graveyard_idx]
-        if not isinstance(card, CardObject):
-            return {**self.to_client(), "error": "Invalid card"}
+        card, err = self._graveyard_card_checked(0, graveyard_idx)
+        if err is not None:
+            return err
+        assert card is not None
         card_info = require_card_info(card)
         if not activated.can_unearth(card_info, self.phase, self.state.stack.is_empty):
             return {**self.to_client(), "error": "Cannot unearth now"}

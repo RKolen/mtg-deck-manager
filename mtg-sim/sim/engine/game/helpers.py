@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from deck_registry import CardInfo
 from engine.abilities.keywords import has_flash
@@ -13,11 +13,29 @@ from engine.core.game_object import (
     Effect,
     GameObject,
     Permanent,
+    SpellAlternateCast,
+    SpellCastPayment,
+    SpellOnStack,
+    SpellStackCopyFlags,
     TokenObject,
     TriggeredAbilityOnStack,
 )
 from engine.core.game_object import Target
 from engine.core.game_state import GameState
+
+
+@dataclass(frozen=True)
+class CastModifierIds:
+    """Target and payment helper ids for announcing a cast."""
+
+    bestow_target_uid: str | None = None
+    mutate_target_uid: str | None = None
+    emerge_sacrifice_ids: tuple[int, ...] = ()
+    spree_mode_indices: tuple[int, ...] = ()
+    convoke_creature_ids: tuple[int, ...] = ()
+    delve_graveyard_indices: tuple[int, ...] = ()
+    improvise_artifact_ids: tuple[int, ...] = ()
+    sneak_land_hand_indices: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -27,47 +45,46 @@ class CastAnnounceOptions:
     kicker_times: int = 0
     entwined: bool = False
     overloaded: bool = False
-    bestow_target_uid: str | None = None
-    convoke_creature_ids: tuple[int, ...] = ()
-    delve_graveyard_indices: tuple[int, ...] = ()
-    improvise_artifact_ids: tuple[int, ...] = ()
     cast_for_miracle: bool = False
     replicate_times: int = 0
     paid_buyback: bool = False
     cast_for_emerge: bool = False
-    emerge_sacrifice_ids: tuple[int, ...] = ()
     cast_for_mutate: bool = False
-    mutate_target_uid: str | None = None
-    spree_mode_indices: tuple[int, ...] = ()
-    sneak_land_hand_indices: tuple[int, ...] = ()
     cast_for_freerunning: bool = False
+    modifiers: CastModifierIds = field(default_factory=CastModifierIds)
 
 
 @dataclass(frozen=True)
 class SpellCastContext:
     """Options when placing a spell on the stack."""
 
-    cast_via_flashback: bool = False
-    cast_via_escape: bool = False
-    cast_via_jump_start: bool = False
-    cast_via_retrace: bool = False
-    cast_via_aftermath: bool = False
     from_graveyard: bool = False
     from_exile: bool = False
-    kicker_times: int = 0
-    entwined: bool = False
-    overloaded: bool = False
-    cast_via_bestow: bool = False
-    cast_for_miracle: bool = False
+    alternate: SpellAlternateCast = field(default_factory=SpellAlternateCast)
+    payment: SpellCastPayment = field(default_factory=SpellCastPayment)
     replicate_times: int = 0
-    paid_buyback: bool = False
-    cast_for_emerge: bool = False
-    cast_via_mutate: bool = False
-    cast_via_foretell: bool = False
-    cast_via_plot: bool = False
-    cast_via_madness: bool = False
-    cast_via_suspend: bool = False
     spree_mode_indices: tuple[int, ...] = ()
+
+
+def spell_on_stack_from_context(
+    controller_idx: int,
+    card: CardObject,
+    targets: list[Target],
+    context: SpellCastContext,
+    *,
+    copy_flags: SpellStackCopyFlags | None = None,
+) -> SpellOnStack:
+    """Build a SpellOnStack from announce/stack placement context."""
+    return SpellOnStack(
+        controller_idx=controller_idx,
+        owner_idx=card.owner_idx,
+        source=card,
+        targets=targets,
+        modes=list(context.spree_mode_indices),
+        alternate=context.alternate,
+        payment=context.payment,
+        copies=copy_flags or SpellStackCopyFlags(),
+    )
 
 
 def expand_deck(cards: list[CardInfo], player_idx: int) -> list[CardObject]:

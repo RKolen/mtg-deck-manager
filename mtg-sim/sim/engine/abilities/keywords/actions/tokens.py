@@ -8,6 +8,7 @@ from engine.abilities.keywords.actions._parse import word_to_int
 from engine.abilities.keywords.actions.counters import put_plus_counters
 from engine.abilities.keywords.actions.detect import has_keyword_action
 from engine.abilities.keywords.actions.library import mill_cards
+from engine.abilities.keywords._token_factory import enter_token_from_blueprint
 from engine.cards.oracle_parse import TokenBlueprint, parse_token_blueprint
 from engine.core.game_object import Permanent, TokenObject
 from engine.core.zones import ZoneManager
@@ -100,18 +101,7 @@ def create_token_from_blueprint(
     blueprint: TokenBlueprint,
 ) -> str:
     """Create a token permanent and return its display name."""
-    token = TokenObject(
-        controller_idx=controller_idx,
-        owner_idx=controller_idx,
-        name=blueprint.name,
-        type_line=blueprint.type_line,
-        colors=blueprint.colors,
-        power=blueprint.power,
-        toughness=blueprint.toughness,
-        oracle_text=blueprint.oracle_text,
-    )
-    zones.enter_battlefield(token, controller_idx, 'token')
-    return blueprint.name
+    return enter_token_from_blueprint(zones, controller_idx, blueprint, cause='token')
 
 
 def create_creature_token_from_oracle(

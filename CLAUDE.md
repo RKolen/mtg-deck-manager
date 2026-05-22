@@ -1,6 +1,6 @@
 # Claude Guidance for Drupal Projects
 
-> **Also read**: [AGENTS.MD](AGENTS.MD) — project-wide agent rules covering DDEV
+> **Also read**: [AGENTS.md](AGENTS.md) — project-wide agent rules covering DDEV
 > usage, PHP quality standards, contrib patch policy, and directory layout.
 > Both files must be followed together.
 

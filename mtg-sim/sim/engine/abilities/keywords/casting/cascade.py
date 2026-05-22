@@ -7,7 +7,8 @@ from dataclasses import dataclass
 from deck_registry import CardInfo
 from engine.abilities.keywords.registry import has_registered_keyword
 from engine.cards.oracle_parse import spell_category
-from engine.core.game_object import CardObject, SpellOnStack, Target, ZoneCard
+from engine.core.game_object import CardObject, SpellOnStack, SpellStackCopyFlags, Target, ZoneCard
+from engine.game.helpers import SpellCastContext, spell_on_stack_from_context
 
 
 @dataclass(frozen=True)
@@ -84,10 +85,10 @@ def make_cascade_spell(
     targets: list[Target],
 ) -> SpellOnStack:
     """Build a free cascade spell on the stack."""
-    return SpellOnStack(
-        controller_idx=controller_idx,
-        owner_idx=card.owner_idx,
-        source=card,
-        targets=targets,
-        cast_via_cascade=True,
+    return spell_on_stack_from_context(
+        controller_idx,
+        card,
+        targets,
+        SpellCastContext(),
+        copy_flags=SpellStackCopyFlags(cascade=True),
     )

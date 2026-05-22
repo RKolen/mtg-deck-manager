@@ -98,6 +98,8 @@ from engine.abilities.keywords.casting.bestow import (
 )
 from engine.abilities.keywords.casting.cast_mana import (
     AnnounceCastManaOptions,
+    CastManaModifiers,
+    CastManaTiming,
     resolve_announce_cast_mana,
 )
 from engine.abilities.keywords.casting.freerunning import (
@@ -331,6 +333,8 @@ __all__ = [
     'replicate_extra_mana',
     'replicate_mana_per_time',
     'AnnounceCastManaOptions',
+    'CastManaModifiers',
+    'CastManaTiming',
     'resolve_announce_cast_mana',
     'resolve_overload_burn_damage',
     'supports_replicate_copies',

@@ -5,6 +5,7 @@ from engine.core.zones import Zone
 from engine.game import create_game
 from engine.rules.combat import can_attack
 from tests.conftest import (
+    cast_announce_options,
     make_artifact,
     make_card,
     make_creature,
@@ -178,7 +179,11 @@ def test_miracle_cast_pays_reduced_mana_and_deals_damage():
     game.state.zones.player_zones[0].hand = [
         CardObject(controller_idx=0, owner_idx=0, card_info=mastery),
     ]
-    data = game.action_cast(0, target_player=1, cast_for_miracle=True)
+    data = game.action_cast(
+        0,
+        target_player=1,
+        cast_options=cast_announce_options(cast_for_miracle=True),
+    )
     assert data["opponentLife"] == 18
 
 
@@ -195,7 +200,11 @@ def test_replicate_spell_creates_and_resolves_copies():
     game.state.zones.player_zones[0].hand = [
         CardObject(controller_idx=0, owner_idx=0, card_info=bolt),
     ]
-    data = game.action_cast(0, target_player=1, replicate_times=2)
+    data = game.action_cast(
+        0,
+        target_player=1,
+        cast_options=cast_announce_options(replicate_times=2),
+    )
     assert data["opponentLife"] == 17
     assert len(game.state.zones.player_zones[0].graveyard) == 1
 
@@ -218,7 +227,7 @@ def test_overloaded_spell_damages_each_creature():
     game.state.zones.player_zones[0].hand = [
         CardObject(controller_idx=0, owner_idx=0, card_info=mortars),
     ]
-    data = game.action_cast(0, overloaded=True)
+    data = game.action_cast(0, cast_options=cast_announce_options(overloaded=True))
     assert "error" not in data
     assert soldier.damage_marked == 4
     assert bear.damage_marked == 4
@@ -241,7 +250,11 @@ def test_spree_cast_applies_chosen_modes():
     game.state.zones.player_zones[0].hand = [
         CardObject(controller_idx=0, owner_idx=0, card_info=score),
     ]
-    data = game.action_cast(0, target_player=1, spree_mode_indices=[0, 1])
+    data = game.action_cast(
+        0,
+        target_player=1,
+        cast_options=cast_announce_options(spree_mode_indices=[0, 1]),
+    )
     assert "error" not in data
     assert data["opponentLife"] == 18
     assert len(game.state.zones.player_zones[0].hand) == 1
@@ -262,7 +275,11 @@ def test_sneak_cast_exiles_land_and_reduces_cost():
         CardObject(controller_idx=0, owner_idx=0, card_info=bolt),
         CardObject(controller_idx=0, owner_idx=0, card_info=land),
     ]
-    data = game.action_cast(0, target_player=1, sneak_land_hand_indices=[1])
+    data = game.action_cast(
+        0,
+        target_player=1,
+        cast_options=cast_announce_options(sneak_land_hand_indices=[1]),
+    )
     assert "error" not in data
     assert data["opponentLife"] == 18
     assert len(game.state.zones.player_zones[0].exile) == 1
@@ -282,7 +299,11 @@ def test_freerunning_cast_after_combat_damage():
     game.state.zones.player_zones[0].hand = [
         CardObject(controller_idx=0, owner_idx=0, card_info=slither),
     ]
-    data = game.action_cast(0, target_player=1, cast_for_freerunning=True)
+    data = game.action_cast(
+        0,
+        target_player=1,
+        cast_options=cast_announce_options(cast_for_freerunning=True),
+    )
     assert "error" not in data
     assert data["opponentLife"] == 18
 
@@ -339,8 +360,10 @@ def test_mutate_adds_counters_to_host():
     ]
     data = game.action_cast(
         0,
-        cast_for_mutate=True,
-        mutate_target_uid=str(host.obj_id),
+        cast_options=cast_announce_options(
+            cast_for_mutate=True,
+            mutate_target_uid=str(host.obj_id),
+        ),
     )
     assert "error" not in data
     assert host.counters.get("+1/+1", 0) > 0
@@ -408,8 +431,10 @@ def test_emerge_cast_sacrifices_creature_and_enters_battlefield():
     ]
     data = game.action_cast(
         0,
-        cast_for_emerge=True,
-        emerge_sacrifice_ids=[fodder.obj_id],
+        cast_options=cast_announce_options(
+            cast_for_emerge=True,
+            emerge_sacrifice_ids=[fodder.obj_id],
+        ),
     )
     assert "error" not in data
     assert not data["stack"]
@@ -438,7 +463,10 @@ def test_bestow_attaches_creature_to_host():
     game.state.zones.player_zones[0].hand = [
         CardObject(controller_idx=0, owner_idx=0, card_info=spirit_info),
     ]
-    data = game.action_cast(0, bestow_target_uid=str(host.obj_id))
+    data = game.action_cast(
+        0,
+        cast_options=cast_announce_options(bestow_target_uid=str(host.obj_id)),
+    )
     assert "error" not in data
     bestowed = next(
         p for p in game.state.zones.battlefield
@@ -465,7 +493,11 @@ def test_entwined_charm_deals_damage_and_draws():
     game.state.zones.player_zones[0].hand = [
         CardObject(controller_idx=0, owner_idx=0, card_info=charm),
     ]
-    without = game.action_cast(0, target_player=1, entwined=False)
+    without = game.action_cast(
+        0,
+        target_player=1,
+        cast_options=cast_announce_options(entwined=False),
+    )
     assert without["opponentLife"] == 18
     assert len(game.state.zones.player_zones[0].hand) == 0
 
@@ -474,7 +506,11 @@ def test_entwined_charm_deals_damage_and_draws():
     game.state.zones.player_zones[0].hand = [
         CardObject(controller_idx=0, owner_idx=0, card_info=charm),
     ]
-    with_entwine = game.action_cast(0, target_player=1, entwined=True)
+    with_entwine = game.action_cast(
+        0,
+        target_player=1,
+        cast_options=cast_announce_options(entwined=True),
+    )
     assert with_entwine["opponentLife"] == 18
     assert len(game.state.zones.player_zones[0].hand) == 1
 
@@ -492,7 +528,11 @@ def test_buyback_spell_returns_to_hand_after_resolve():
     game.state.zones.player_zones[0].hand = [
         CardObject(controller_idx=0, owner_idx=0, card_info=echo),
     ]
-    without = game.action_cast(0, target_player=1, paid_buyback=False)
+    without = game.action_cast(
+        0,
+        target_player=1,
+        cast_options=cast_announce_options(paid_buyback=False),
+    )
     assert without["opponentLife"] == 18
     assert len(game.state.zones.player_zones[0].graveyard) == 1
     assert len(game.state.zones.player_zones[0].hand) == 0
@@ -502,7 +542,11 @@ def test_buyback_spell_returns_to_hand_after_resolve():
     game.state.zones.player_zones[0].hand = [
         CardObject(controller_idx=0, owner_idx=0, card_info=echo),
     ]
-    with_buyback = game.action_cast(0, target_player=1, paid_buyback=True)
+    with_buyback = game.action_cast(
+        0,
+        target_player=1,
+        cast_options=cast_announce_options(paid_buyback=True),
+    )
     assert with_buyback["opponentLife"] == 18
     assert len(game.state.zones.player_zones[0].graveyard) == 0
     hand = game.state.zones.player_zones[0].hand
@@ -529,7 +573,11 @@ def test_kicked_burn_spell_deals_extra_damage():
     game.state.zones.player_zones[0].hand = [
         CardObject(controller_idx=0, owner_idx=0, card_info=burst),
     ]
-    without = game.action_cast(0, target_player=1, kicker_times=0)
+    without = game.action_cast(
+        0,
+        target_player=1,
+        cast_options=cast_announce_options(kicker_times=0),
+    )
     assert without["opponentLife"] == 18
 
     game = create_game(make_deck(lands=20), make_deck(lands=20))
@@ -537,7 +585,11 @@ def test_kicked_burn_spell_deals_extra_damage():
     game.state.zones.player_zones[0].hand = [
         CardObject(controller_idx=0, owner_idx=0, card_info=burst),
     ]
-    with_kicker = game.action_cast(0, target_player=1, kicker_times=1)
+    with_kicker = game.action_cast(
+        0,
+        target_player=1,
+        cast_options=cast_announce_options(kicker_times=1),
+    )
     assert with_kicker["opponentLife"] == 16
 
 
@@ -612,7 +664,9 @@ def test_convoke_cast_taps_creatures_to_pay_mana():
     data = game.action_cast(
         0,
         target_player=1,
-        convoke_creature_ids=[soldier.obj_id, knight.obj_id],
+        cast_options=cast_announce_options(
+            convoke_creature_ids=[soldier.obj_id, knight.obj_id],
+        ),
     )
     assert data["opponentLife"] == 16
     assert soldier.tapped
@@ -637,7 +691,10 @@ def test_delve_cast_exiles_graveyard_to_pay_mana():
     game.state.zones.player_zones[0].hand = [
         CardObject(controller_idx=0, owner_idx=0, card_info=draw),
     ]
-    data = game.action_cast(0, delve_graveyard_indices=[0, 1])
+    data = game.action_cast(
+        0,
+        cast_options=cast_announce_options(delve_graveyard_indices=[0, 1]),
+    )
     assert "error" not in data
     exiled_names = {
         c.card_info.name
@@ -664,6 +721,9 @@ def test_improvise_cast_taps_artifacts_to_pay_mana():
     game.state.zones.player_zones[0].hand = [
         CardObject(controller_idx=0, owner_idx=0, card_info=draw),
     ]
-    data = game.action_cast(0, improvise_artifact_ids=[relic.obj_id])
+    data = game.action_cast(
+        0,
+        cast_options=cast_announce_options(improvise_artifact_ids=[relic.obj_id]),
+    )
     assert "error" not in data
     assert relic.tapped

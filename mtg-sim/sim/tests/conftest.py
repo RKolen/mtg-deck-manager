@@ -6,13 +6,86 @@ parameters inside test functions. Import directly from this module.
 
 from __future__ import annotations
 
+from typing import Any
+
 from deck_registry import CardInfo
 from engine.abilities.keywords import enters_ready
 from engine.core.game_object import CardObject, Permanent
 from engine.core.game_state import GameState, PlayerInfo
 from engine.core.turn_structure import TurnRunner
 from engine.core.zones import ZoneManager
+from engine.game.helpers import CastAnnounceOptions, CastModifierIds
+from engine.rules.combat import resolve_combat_damage
 from engine.rules.stack import Stack
+
+
+# ---------------------------------------------------------------------------
+# Cast / combat helpers
+# ---------------------------------------------------------------------------
+
+_MODIFIER_KW_KEYS = frozenset({
+    "bestow_target_uid",
+    "mutate_target_uid",
+    "emerge_sacrifice_ids",
+    "spree_mode_indices",
+    "convoke_creature_ids",
+    "delve_graveyard_indices",
+    "improvise_artifact_ids",
+    "sneak_land_hand_indices",
+})
+
+
+def _as_tuple(values: tuple[int, ...] | list[int]) -> tuple[int, ...]:
+    return tuple(values)
+
+
+def _modifier_ids_from_kw(modifier_kw: dict[str, Any]) -> CastModifierIds:
+    return CastModifierIds(
+        bestow_target_uid=modifier_kw.get("bestow_target_uid"),
+        mutate_target_uid=modifier_kw.get("mutate_target_uid"),
+        emerge_sacrifice_ids=_as_tuple(modifier_kw.get("emerge_sacrifice_ids", ())),
+        spree_mode_indices=_as_tuple(modifier_kw.get("spree_mode_indices", ())),
+        convoke_creature_ids=_as_tuple(modifier_kw.get("convoke_creature_ids", ())),
+        delve_graveyard_indices=_as_tuple(modifier_kw.get("delve_graveyard_indices", ())),
+        improvise_artifact_ids=_as_tuple(modifier_kw.get("improvise_artifact_ids", ())),
+        sneak_land_hand_indices=_as_tuple(modifier_kw.get("sneak_land_hand_indices", ())),
+    )
+
+
+def cast_announce_options(**kwargs: Any) -> CastAnnounceOptions:
+    """Build CastAnnounceOptions for integration tests."""
+    flat = dict(kwargs)
+    modifier_kw = {key: flat.pop(key) for key in list(flat) if key in _MODIFIER_KW_KEYS}
+    return CastAnnounceOptions(
+        kicker_times=int(flat.get("kicker_times", 0)),
+        entwined=bool(flat.get("entwined", False)),
+        overloaded=bool(flat.get("overloaded", False)),
+        cast_for_miracle=bool(flat.get("cast_for_miracle", False)),
+        replicate_times=int(flat.get("replicate_times", 0)),
+        paid_buyback=bool(flat.get("paid_buyback", False)),
+        cast_for_emerge=bool(flat.get("cast_for_emerge", False)),
+        cast_for_mutate=bool(flat.get("cast_for_mutate", False)),
+        cast_for_freerunning=bool(flat.get("cast_for_freerunning", False)),
+        modifiers=_modifier_ids_from_kw(modifier_kw),
+    )
+
+
+def resolve_single_attacker(
+    game: GameState,
+    attacker: Permanent,
+    *,
+    attacking_player_idx: int = 1,
+    defending_player_idx: int = 0,
+    blocker_assignments: dict[str, str] | None = None,
+):
+    """Resolve combat damage for one attacker (shared by keyword/combat tests)."""
+    return resolve_combat_damage(
+        game,
+        attacking_player_idx=attacking_player_idx,
+        defending_player_idx=defending_player_idx,
+        attacker_ids=[str(attacker.obj_id)],
+        blocker_assignments=blocker_assignments or {},
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -194,7 +194,9 @@ class ZoneManager:
             cause="draw",
             player_idx=player_idx,
         ))
-        return card
+        if isinstance(card, CardObject):
+            return card
+        return None
 
     def play_from_hand(self, card: CardObject, player_idx: int) -> None:
         """Remove a card from hand when it is cast or played as a land."""

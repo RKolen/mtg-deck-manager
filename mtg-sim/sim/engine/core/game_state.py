@@ -39,6 +39,7 @@ class PlayerInfo:
     land_played: bool = False
     spells_cast_this_turn: int = 0
     combat_damage_dealt_this_turn: bool = False
+    was_dealt_damage_this_turn: bool = False
     has_lost: bool = False
 
 
@@ -153,6 +154,10 @@ class GameState:
             spell_cast_event(spell, targets),
             self,
         )
+
+    def mark_player_was_dealt_damage(self, player_idx: int) -> None:
+        """Record that a player was dealt damage this turn (Raid and similar)."""
+        self.players[player_idx].was_dealt_damage_this_turn = True
 
     def gain_life(
         self,

@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from deck_registry import CardInfo
+from engine.abilities.keywords.casting._timing import INSTANT_SPEED_PHASES
 from engine.abilities.keywords.casting.alt_cost_mana import alt_cost_mana_needed
 from engine.abilities.keywords.registry import has_registered_keyword
 from engine.core.mana import ManaCost
@@ -13,12 +14,6 @@ _MADNESS_COST_RE = re.compile(
     r'madness\s*((?:\{[^}]+\})+)',
     re.IGNORECASE,
 )
-INSTANT_SPEED_PHASES = frozenset({
-    'main1',
-    'main2',
-    'attack',
-    'declare_blockers',
-})
 
 
 def has_madness(card: CardInfo) -> bool:

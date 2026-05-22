@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from deck_registry import CardInfo
 from engine.abilities.keywords.casting.bestow import (
@@ -37,22 +37,36 @@ from engine.abilities.keywords.casting.spree import spree_extra_mana
 
 
 @dataclass(frozen=True)
-class AnnounceCastManaOptions:
-    """Optional costs included in announce-cast mana resolution."""
+class CastManaModifiers:
+    """Optional cost modifiers for announce-cast mana."""
 
     kicker_times: int = 0
     entwined: bool = False
     overloaded: bool = False
     bestow_target_uid: str | None = None
-    cast_for_miracle: bool = False
-    cast_for_freerunning: bool = False
-    freerunning_available: bool = False
     replicate_times: int = 0
     paid_buyback: bool = False
     cast_for_emerge: bool = False
     cast_for_mutate: bool = False
     mutate_target_uid: str | None = None
     spree_mode_indices: tuple[int, ...] = ()
+
+
+@dataclass(frozen=True)
+class CastManaTiming:
+    """Timing-sensitive alternate costs for announce-cast mana."""
+
+    cast_for_miracle: bool = False
+    cast_for_freerunning: bool = False
+    freerunning_available: bool = False
+
+
+@dataclass(frozen=True)
+class AnnounceCastManaOptions:
+    """Optional costs included in announce-cast mana resolution."""
+
+    modifiers: CastManaModifiers = field(default_factory=CastManaModifiers)
+    timing: CastManaTiming = field(default_factory=CastManaTiming)
 
 
 def _payment_requirements(card: CardInfo) -> tuple[int, int]:
@@ -68,33 +82,35 @@ def resolve_announce_cast_mana(
 ) -> tuple[int, int]:
     """Return mana, life, and optional costs applied in priority order."""
     opts = options or AnnounceCastManaOptions()
-    if normalize_miracle_cast(card, opts.cast_for_miracle):
+    mods = opts.modifiers
+    timing = opts.timing
+    if normalize_miracle_cast(card, timing.cast_for_miracle):
         mana_needed, life_cost = miracle_mana_needed(card)
     elif normalize_freerunning_cast(
         card,
-        opts.cast_for_freerunning,
-        opts.freerunning_available,
+        timing.cast_for_freerunning,
+        timing.freerunning_available,
     ):
         mana_needed, life_cost = freerunning_mana_needed(card)
-    elif normalize_overloaded(card, opts.overloaded):
+    elif normalize_overloaded(card, mods.overloaded):
         mana_needed, life_cost = overload_mana_needed(card)
-    elif normalize_emerge_cast(card, opts.cast_for_emerge):
+    elif normalize_emerge_cast(card, mods.cast_for_emerge):
         mana_needed, life_cost = emerge_mana_needed(card)
-    elif normalize_mutate_cast(card, opts.cast_for_mutate, opts.mutate_target_uid):
+    elif normalize_mutate_cast(card, mods.cast_for_mutate, mods.mutate_target_uid):
         mana_needed, life_cost = mutate_mana_needed(card)
-    elif normalize_bestow(card, opts.bestow_target_uid):
+    elif normalize_bestow(card, mods.bestow_target_uid):
         mana_needed, life_cost = bestow_mana_needed(card)
     elif has_kicker(card):
-        mana_needed, life_cost = cast_mana_needed(card, opts.kicker_times)
+        mana_needed, life_cost = cast_mana_needed(card, mods.kicker_times)
     else:
         mana_needed, life_cost = _payment_requirements(card)
     mana_needed, life_cost = cast_mana_with_entwine(
         card,
         mana_needed,
         life_cost,
-        opts.entwined,
+        mods.entwined,
     )
-    mana_needed += replicate_extra_mana(card, opts.replicate_times)
-    mana_needed += buyback_extra_mana(card, opts.paid_buyback)
-    mana_needed += spree_extra_mana(card, opts.spree_mode_indices)
+    mana_needed += replicate_extra_mana(card, mods.replicate_times)
+    mana_needed += buyback_extra_mana(card, mods.paid_buyback)
+    mana_needed += spree_extra_mana(card, mods.spree_mode_indices)
     return mana_needed, life_cost

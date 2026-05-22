@@ -53,10 +53,14 @@ def test_scry_puts_selected_cards_on_bottom():
     game.zones.player_zones[0].library.extend(cards)
     scry_cards(game.zones, 0, 2, bottom_indices=(0,))
     lib = game.zones.player_zones[0].library
-    assert lib[0].card_info is not None
-    assert lib[0].card_info.name == 'Second'
-    assert lib[1].card_info is not None
-    assert lib[1].card_info.name == 'Top'
+    top = lib[0]
+    second = lib[1]
+    assert isinstance(top, CardObject)
+    assert isinstance(second, CardObject)
+    assert top.card_info is not None
+    assert top.card_info.name == 'Second'
+    assert second.card_info is not None
+    assert second.card_info.name == 'Top'
 
 
 def test_surveil_mills_to_graveyard():
@@ -103,12 +107,21 @@ def test_resolve_mill_spell_on_stack():
                 card_info=make_instant(f'G{idx}'),
             ),
         )
+    def draw_cards(player_idx: int, count: int) -> list[CardObject]:
+        drawn: list[CardObject] = []
+        for _ in range(count):
+            card = game.zones.draw(player_idx)
+            if card is None:
+                break
+            drawn.append(card)
+        return drawn
+
     detail = resolve_spell_keyword_actions(ActionContext(
         zones=game.zones,
         game=game,
         controller_idx=0,
         oracle_text='Target player mills four cards.',
-        draw_fn=game.zones.draw,
+        draw_fn=draw_cards,
     ))
     assert 'milled 4' in detail
     assert len(game.zones.player_zones[1].graveyard) == 4

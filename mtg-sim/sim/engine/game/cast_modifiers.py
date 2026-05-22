@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Protocol
-
 from engine.abilities.keywords.casting.cascade import (
     cascade_targets,
     has_cascade,
@@ -14,19 +12,17 @@ from engine.abilities.keywords.casting.cascade import (
 )
 from engine.abilities.keywords.casting.replicate import supports_replicate_copies
 from engine.abilities.keywords.casting.storm import storm_copy_count, supports_storm_copies
-from engine.core.game_object import CardObject, SpellOnStack, Target
+from engine.core.game_object import CardObject, SpellStackCopyFlags, Target
 from engine.core.game_state import GameState
-from engine.game.helpers import SpellCastContext, require_card_info
-
-
-class PostCastHost(Protocol):
-    """Minimal surface for post-cast keyword hooks."""
-
-    state: GameState
+from engine.game.helpers import (
+    SpellCastContext,
+    require_card_info,
+    spell_on_stack_from_context,
+)
 
 
 def apply_post_cast_modifiers(
-    game: PostCastHost,
+    game: GameState,
     player_idx: int,
     card: CardObject,
     targets: list[Target],
@@ -48,7 +44,7 @@ def apply_post_cast_modifiers(
 
 
 def _push_storm_copies(
-    game: PostCastHost,
+    game: GameState,
     player_idx: int,
     card: CardObject,
     targets: list[Target],
@@ -58,33 +54,21 @@ def _push_storm_copies(
     card_info = require_card_info(card)
     if not supports_storm_copies(card_info):
         return 0
-    copies = storm_copy_count(game.state.players[player_idx].spells_cast_this_turn)
+    copies = storm_copy_count(game.players[player_idx].spells_cast_this_turn)
+    flags = SpellStackCopyFlags(storm=True)
     for _ in range(copies):
-        game.state.stack.push(SpellOnStack(
-            controller_idx=player_idx,
-            owner_idx=card.owner_idx,
-            source=card,
-            targets=list(targets),
-            cast_via_flashback=context.cast_via_flashback,
-            cast_via_escape=context.cast_via_escape,
-            cast_via_jump_start=context.cast_via_jump_start,
-            cast_via_retrace=context.cast_via_retrace,
-            cast_via_mutate=context.cast_via_mutate,
-            cast_via_foretell=context.cast_via_foretell,
-            cast_via_plot=context.cast_via_plot,
-            cast_via_aftermath=context.cast_via_aftermath,
-            kicker_times=context.kicker_times,
-            entwined=context.entwined,
-            overloaded=context.overloaded,
-            cast_via_bestow=context.cast_via_bestow,
-            modes=list(context.spree_mode_indices),
-            is_storm_copy=True,
+        game.stack.push(spell_on_stack_from_context(
+            player_idx,
+            card,
+            list(targets),
+            context,
+            copy_flags=flags,
         ))
     return copies
 
 
 def _push_replicate_copies(
-    game: PostCastHost,
+    game: GameState,
     player_idx: int,
     card: CardObject,
     targets: list[Target],
@@ -95,32 +79,20 @@ def _push_replicate_copies(
     times = context.replicate_times
     if not supports_replicate_copies(card_info) or times <= 0:
         return 0
+    flags = SpellStackCopyFlags(replicate=True)
     for _ in range(times):
-        game.state.stack.push(SpellOnStack(
-            controller_idx=player_idx,
-            owner_idx=card.owner_idx,
-            source=card,
-            targets=list(targets),
-            cast_via_flashback=context.cast_via_flashback,
-            cast_via_escape=context.cast_via_escape,
-            cast_via_jump_start=context.cast_via_jump_start,
-            cast_via_retrace=context.cast_via_retrace,
-            cast_via_mutate=context.cast_via_mutate,
-            cast_via_foretell=context.cast_via_foretell,
-            cast_via_plot=context.cast_via_plot,
-            cast_via_aftermath=context.cast_via_aftermath,
-            kicker_times=context.kicker_times,
-            entwined=context.entwined,
-            overloaded=context.overloaded,
-            cast_via_bestow=context.cast_via_bestow,
-            modes=list(context.spree_mode_indices),
-            is_replicate_copy=True,
+        game.stack.push(spell_on_stack_from_context(
+            player_idx,
+            card,
+            list(targets),
+            context,
+            copy_flags=flags,
         ))
     return times
 
 
 def _push_cascade_cast(
-    game: PostCastHost,
+    game: GameState,
     player_idx: int,
     cascade_source: CardObject,
     parent_targets: list[Target],
@@ -129,13 +101,13 @@ def _push_cascade_cast(
     source_info = require_card_info(cascade_source)
     if not has_cascade(source_info):
         return None
-    library = game.state.zones.player_zones[player_idx].library
+    library = game.zones.player_zones[player_idx].library
     reveal = reveal_cascade_hit(library, spell_mana_value(source_info))
     return_cascade_bottom(library, reveal.bottom_cards)
     if reveal.hit is None:
         return None
     hit_info = require_card_info(reveal.hit)
     hit_targets = cascade_targets(reveal.hit, parent_targets, player_idx)
-    game.state.players[player_idx].spells_cast_this_turn += 1
-    game.state.stack.push(make_cascade_spell(reveal.hit, player_idx, hit_targets))
+    game.players[player_idx].spells_cast_this_turn += 1
+    game.stack.push(make_cascade_spell(reveal.hit, player_idx, hit_targets))
     return hit_info.name

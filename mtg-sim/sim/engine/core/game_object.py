@@ -216,6 +216,43 @@ class Permanent(GameObject):
 
 
 @dataclass
+class SpellAlternateCast:
+    """Graveyard and exile alternate cast flags on a spell."""
+
+    flashback: bool = False
+    escape: bool = False
+    jump_start: bool = False
+    retrace: bool = False
+    aftermath: bool = False
+    foretell: bool = False
+    plot: bool = False
+    madness: bool = False
+    suspend: bool = False
+
+
+@dataclass
+class SpellCastPayment:
+    """Optional costs paid when a spell was announced."""
+
+    kicker_times: int = 0
+    entwined: bool = False
+    overloaded: bool = False
+    bestow: bool = False
+    paid_buyback: bool = False
+    emerge: bool = False
+    mutate: bool = False
+
+
+@dataclass
+class SpellStackCopyFlags:
+    """Storm, replicate, and cascade copy markers."""
+
+    storm: bool = False
+    replicate: bool = False
+    cascade: bool = False
+
+
+@dataclass
 class SpellOnStack(GameObject):
     """A spell that has been cast and placed on the stack (CR 112.1a)."""
 
@@ -224,45 +261,25 @@ class SpellOnStack(GameObject):
     targets: list[Target] = field(default_factory=list)
     modes: list[int] = field(default_factory=list)
     chosen_x: int = 0
-    cast_via_flashback: bool = False
-    cast_via_escape: bool = False
-    cast_via_jump_start: bool = False
-    cast_via_retrace: bool = False
-    cast_via_aftermath: bool = False
-    kicker_times: int = 0
-    entwined: bool = False
-    overloaded: bool = False
-    cast_via_bestow: bool = False
-    is_storm_copy: bool = False
-    is_replicate_copy: bool = False
-    cast_via_cascade: bool = False
-    paid_buyback: bool = False
-    cast_for_emerge: bool = False
-    cast_via_mutate: bool = False
-    cast_via_foretell: bool = False
-    cast_via_plot: bool = False
-    cast_via_madness: bool = False
-    cast_via_suspend: bool = False
+    alternate: SpellAlternateCast = field(default_factory=SpellAlternateCast)
+    payment: SpellCastPayment = field(default_factory=SpellCastPayment)
+    copies: SpellStackCopyFlags = field(default_factory=SpellStackCopyFlags)
 
 
 def spell_is_ephemeral_copy(spell: SpellOnStack) -> bool:
     """Return True when a stack copy should not move its source card to a zone."""
-    return spell.is_storm_copy or spell.is_replicate_copy
+    return spell.copies.storm or spell.copies.replicate
 
 
 def spell_exiles_from_graveyard_cast(spell: SpellOnStack) -> bool:
     """Return True when a graveyard alt-cast spell exiles on leaving the stack."""
-    return (
-        spell.cast_via_flashback
-        or spell.cast_via_escape
-        or spell.cast_via_jump_start
-        or spell.cast_via_aftermath
-    )
+    alt = spell.alternate
+    return alt.flashback or alt.escape or alt.jump_start or alt.aftermath
 
 
 def spell_returns_to_hand_on_resolve(spell: SpellOnStack) -> bool:
     """Return True when a resolved spell returns to its owner's hand (buyback)."""
-    return spell.paid_buyback and not spell_is_ephemeral_copy(spell)
+    return spell.payment.paid_buyback and not spell_is_ephemeral_copy(spell)
 
 
 @dataclass

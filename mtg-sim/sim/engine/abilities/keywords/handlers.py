@@ -50,10 +50,9 @@ def consume_regeneration_shield(perm: Permanent) -> bool:
 
 def storm_copy_count(game: GameState) -> int:
     """Return number of storm copies for the active player's cast count."""
-    from engine.abilities.keywords.casting.storm import storm_copy_count as _count
-
     active = game.active_player_idx
-    return _count(game.players[active].spells_cast_this_turn)
+    count = game.players[active].spells_cast_this_turn
+    return max(0, count - 1)
 
 
 def _effective_toughness(perm: Permanent) -> int:

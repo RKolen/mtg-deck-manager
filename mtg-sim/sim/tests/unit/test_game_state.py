@@ -1,5 +1,6 @@
 """Unit tests for engine/core/game_state.py."""
 
+from engine.core.game_object import CardObject
 from tests.conftest import (
     add_to_hand,
     fresh_game,
@@ -51,8 +52,12 @@ def test_fresh_zones_loads_libraries():
         player_cards=[make_card("Player Library Card")],
         opponent_cards=[make_card("Opponent Library Card")],
     )
-    player_card = zones.player_zones[0].library[0].card_info
-    opponent_card = zones.player_zones[1].library[0].card_info
+    player_top = zones.player_zones[0].library[0]
+    opponent_top = zones.player_zones[1].library[0]
+    assert isinstance(player_top, CardObject)
+    assert isinstance(opponent_top, CardObject)
+    player_card = player_top.card_info
+    opponent_card = opponent_top.card_info
     assert player_card is not None
     assert opponent_card is not None
     assert player_card.name == "Player Library Card"

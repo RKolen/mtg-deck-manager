@@ -87,6 +87,7 @@ def resolve_combat_damage(
         game.players[defending_player_idx].poison += result.infect_damage_to_player
     if result.damage_to_player:
         game.players[defending_player_idx].life -= result.damage_to_player
+        game.mark_player_was_dealt_damage(defending_player_idx)
     if result.dealt_combat_damage:
         game.players[attacking_player_idx].combat_damage_dealt_this_turn = True
     game.check_sbas()

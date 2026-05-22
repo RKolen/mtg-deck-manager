@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from engine.abilities import activated
-from engine.abilities.activated import ActivationSpeed
 from engine.core.game_object import CardObject
 from tests.conftest import (
     fresh_game,

@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
+from deck_registry import CardInfo
 from engine.abilities.keywords.casting import (
     aftermath_mana_needed,
-    normalize_buyback,
-    emerge_sacrifice_error,
-    normalize_emerge_cast,
-    normalize_emerge_sacrifice_id,
     sacrifice_for_emerge,
     FORETELL_SETUP_MANA,
     cast_from_foretell_exile,
@@ -20,15 +19,11 @@ from engine.abilities.keywords.casting import (
     plot_setup_error,
     plotted_cast_error,
     mutate_bonus_counters,
-    mutate_host_error,
-    normalize_mutate_cast,
     has_spree,
-    normalize_spree_modes,
     spree_mode_damage,
     spree_mode_draw,
     spree_mode_is_destroy,
     spree_modes,
-    spree_selection_error,
     can_cast_aftermath,
     can_cast_via_escape,
     can_cast_via_flashback,
@@ -44,11 +39,7 @@ from engine.abilities.keywords.casting import (
     retrace_land_discard_error,
     retrace_life_cost,
     retrace_mana_needed,
-    bestow_host_error,
     entwined_extra_draw,
-    normalize_bestow,
-    normalize_miracle_cast,
-    normalize_freerunning_cast,
     can_cast_via_madness,
     madness_mana_needed,
     exile_for_suspend,
@@ -57,17 +48,16 @@ from engine.abilities.keywords.casting import (
     suspend_time_counters,
     tick_suspend_counters,
     remove_suspended_card_from_exile,
-    normalize_overloaded,
-    normalize_replicate_times,
     overload_creature_targets,
     overload_hits_each_creature,
     overload_opponent_indices,
     AnnounceCastManaOptions,
+    CastManaModifiers,
+    CastManaTiming,
     resolve_announce_cast_mana,
     resolve_overload_burn_damage,
     escape_mana_needed,
     extra_draw_from_kicker,
-    normalize_entwined,
     resolve_burn_damage,
     flashback_mana_needed,
     has_escape,
@@ -75,7 +65,6 @@ from engine.abilities.keywords.casting import (
     escape_payment_error,
     exile_for_escape_cost,
     kicked_counter_count,
-    normalize_kicker_times,
     pump_with_kicker,
     resolve_cast_adjustments,
 )
@@ -87,11 +76,20 @@ from engine.abilities.keywords.actions import (
     resolve_spell_keyword_actions,
 )
 from engine.abilities.keywords.actions.tokens import connive
+from engine.abilities.keywords.ability_words import register_permanent_ability_words
+from engine.game._hand_card import load_hand_card_for_action, run_with_hand_card
+from engine.game.cast_announce_validate import (
+    HandCastPlacement,
+    PaidAnnounceCast,
+    validate_announce_cast,
+)
 from engine.game.cast_modifiers import apply_post_cast_modifiers
-from engine.cards.oracle_parse import parse_draw, parse_token_blueprint, spell_category
+from engine.cards.oracle_parse import parse_draw, spell_category
 from engine.core.game_object import (
     ActivatedAbilityOnStack,
     CardObject,
+    SpellAlternateCast,
+    SpellCastPayment,
     SpellOnStack,
     Target,
     spell_is_ephemeral_copy,
@@ -101,19 +99,60 @@ from engine.core.game_object import TriggeredAbilityOnStack
 from engine.core.zones import Zone
 from engine.game.helpers import (
     CastAnnounceOptions,
-    CreateTokenEffect,
     SpellCastContext,
     can_cast_now,
     require_card_info,
     resolve_ability_effect,
+    spell_on_stack_from_context,
     target_player as first_target_player,
     target_uid,
     targets_from_request,
 )
 from engine.game.helpers import card_names, last_creature
 from engine.game.runtime import GameRuntimeMixin
-from engine.rules.triggers import TriggerKey, is_noncreature_nonland_spell_cast
-from engine.rules.triggers import is_spell_targeting_source
+
+
+@dataclass(frozen=True)
+class MadnessCastRequest:
+    """Targets and timing for a madness cast from hand."""
+
+    hand_idx: int
+    target_uid_str: str | None
+    target_player_idx: int | None
+    auto_resolve: bool
+
+
+def _announce_cast_detail(
+    card_name: str,
+    paid: PaidAnnounceCast,
+    sacrificed_name: str,
+) -> str:
+    """Build a log detail string for an announced cast."""
+    mods = paid.modifiers
+    detail = f"{card_name} on stack"
+    if mods.miracle:
+        detail = f"{detail} (miracle)"
+    if mods.freerunning:
+        detail = f"{detail} (freerunning)"
+    if mods.replicate_times:
+        detail = f"{detail} (replicate x{mods.replicate_times})"
+    if mods.overloaded:
+        detail = f"{detail} (overloaded)"
+    if mods.bestow:
+        detail = f"{detail} (bestow)"
+    if mods.entwined:
+        detail = f"{detail} (entwined)"
+    if mods.kicker_times:
+        detail = f"{detail} (kicked x{mods.kicker_times})"
+    if mods.buyback:
+        detail = f"{detail} (buyback)"
+    if mods.emerge:
+        detail = f"{detail} (emerge, sacrificed {sacrificed_name})"
+    if mods.mutate:
+        detail = f"{detail} (mutate)"
+    if mods.spree_modes:
+        detail = f"{detail} (spree modes {list(mods.spree_modes)})"
+    return detail
 
 
 class SpellStackMixin(GameRuntimeMixin):
@@ -129,102 +168,77 @@ class SpellStackMixin(GameRuntimeMixin):
     ) -> dict:
         """Pay costs and place a spell on the stack."""
         opts = cast_options or CastAnnounceOptions()
-        card = self._zones(0).hand[hand_idx]
-        if not isinstance(card, CardObject):
-            return {**self.to_client(), "error": "Invalid card"}
-        card_info = require_card_info(card)
+        card, card_info, err = load_hand_card_for_action(self, hand_idx)
+        if err is not None:
+            return err
+        assert card is not None and card_info is not None
         assert can_cast_now(card_info, self.phase, self.state.stack.is_empty)
-        paid_kicker = normalize_kicker_times(card_info, opts.kicker_times)
-        if opts.kicker_times > 0 and paid_kicker == 0:
-            return {**self.to_client(), "error": f"{card_info.name} does not have kicker"}
-        paid_entwined = normalize_entwined(card_info, opts.entwined)
-        if opts.entwined and not paid_entwined:
-            return {**self.to_client(), "error": f"{card_info.name} does not have entwine"}
-        paid_overloaded = normalize_overloaded(card_info, opts.overloaded)
-        if opts.overloaded and not paid_overloaded:
-            return {**self.to_client(), "error": f"{card_info.name} does not have overload"}
-        paid_bestow = normalize_bestow(card_info, opts.bestow_target_uid)
-        if opts.bestow_target_uid and not paid_bestow:
-            return {**self.to_client(), "error": f"{card_info.name} does not have bestow"}
-        host_err = bestow_host_error(self.state.zones, 0, opts.bestow_target_uid)
-        if host_err:
-            return {**self.to_client(), "error": host_err}
-        paid_miracle = normalize_miracle_cast(card_info, opts.cast_for_miracle)
-        if opts.cast_for_miracle and not paid_miracle:
-            return {**self.to_client(), "error": f"{card_info.name} does not have miracle"}
-        paid_freerunning = normalize_freerunning_cast(
-            card_info,
-            opts.cast_for_freerunning,
-            self.state.players[0].combat_damage_dealt_this_turn,
-        )
-        if opts.cast_for_freerunning and not paid_freerunning:
-            return {**self.to_client(), "error": f"{card_info.name} cannot use freerunning"}
-        paid_replicate = normalize_replicate_times(card_info, opts.replicate_times)
-        if opts.replicate_times > 0 and paid_replicate == 0:
-            return {**self.to_client(), "error": f"{card_info.name} does not have replicate"}
-        paid_buyback = normalize_buyback(card_info, opts.paid_buyback)
-        if opts.paid_buyback and not paid_buyback:
-            return {**self.to_client(), "error": f"{card_info.name} does not have buyback"}
-        paid_emerge = normalize_emerge_cast(card_info, opts.cast_for_emerge)
-        if opts.cast_for_emerge and not paid_emerge:
-            return {**self.to_client(), "error": f"{card_info.name} does not have emerge"}
-        emerge_err = emerge_sacrifice_error(
+        paid, val_err = validate_announce_cast(
             self.state.zones,
             0,
             card_info,
-            opts.cast_for_emerge,
-            list(opts.emerge_sacrifice_ids),
+            opts,
+            self.state.players[0].combat_damage_dealt_this_turn,
+            target_uid_str,
         )
-        if emerge_err:
-            return {**self.to_client(), "error": emerge_err}
-        emerge_sacrifice_id = normalize_emerge_sacrifice_id(
-            card_info,
-            opts.cast_for_emerge,
-            list(opts.emerge_sacrifice_ids),
-        )
-        paid_mutate = normalize_mutate_cast(
-            card_info,
-            opts.cast_for_mutate,
-            opts.mutate_target_uid,
-        )
-        if opts.cast_for_mutate and not paid_mutate:
-            return {**self.to_client(), "error": f"{card_info.name} does not have mutate"}
-        mutate_err = mutate_host_error(self.state.zones, 0, card_info, opts.mutate_target_uid)
-        if mutate_err:
-            return {**self.to_client(), "error": mutate_err}
-        paid_spree = normalize_spree_modes(card_info, list(opts.spree_mode_indices))
-        spree_err = spree_selection_error(card_info, list(opts.spree_mode_indices))
-        if spree_err:
-            return {**self.to_client(), "error": spree_err}
-        cast_target_uid = (
-            opts.mutate_target_uid or opts.bestow_target_uid or target_uid_str
-        )
+        if val_err:
+            return {**self.to_client(), "error": val_err}
+        assert paid is not None
         mana_needed, life_cost = resolve_announce_cast_mana(
             card_info,
             AnnounceCastManaOptions(
-                kicker_times=paid_kicker,
-                entwined=paid_entwined,
-                overloaded=paid_overloaded,
-                bestow_target_uid=opts.bestow_target_uid,
-                cast_for_miracle=paid_miracle,
-                cast_for_freerunning=paid_freerunning,
-                freerunning_available=self.state.players[0].combat_damage_dealt_this_turn,
-                replicate_times=paid_replicate,
-                paid_buyback=paid_buyback,
-                cast_for_emerge=paid_emerge,
-                cast_for_mutate=paid_mutate,
-                mutate_target_uid=opts.mutate_target_uid,
-                spree_mode_indices=paid_spree,
+                modifiers=CastManaModifiers(
+                    kicker_times=paid.modifiers.kicker_times,
+                    entwined=paid.modifiers.entwined,
+                    overloaded=paid.modifiers.overloaded,
+                    bestow_target_uid=opts.modifiers.bestow_target_uid,
+                    replicate_times=paid.modifiers.replicate_times,
+                    paid_buyback=paid.modifiers.buyback,
+                    cast_for_emerge=paid.modifiers.emerge,
+                    cast_for_mutate=paid.modifiers.mutate,
+                    mutate_target_uid=opts.modifiers.mutate_target_uid,
+                    spree_mode_indices=paid.modifiers.spree_modes,
+                ),
+                timing=CastManaTiming(
+                    cast_for_miracle=paid.modifiers.miracle,
+                    cast_for_freerunning=paid.modifiers.freerunning,
+                    freerunning_available=self.state.players[0].combat_damage_dealt_this_turn,
+                ),
             ),
         )
+        return self._place_validated_hand_cast(
+            HandCastPlacement(
+                card=card,
+                card_info=card_info,
+                paid=paid,
+                opts=opts,
+                hand_idx=hand_idx,
+                target_player_idx=target_player_idx,
+                mana_needed=mana_needed,
+                life_cost=life_cost,
+                auto_resolve=auto_resolve,
+            ),
+        )
+
+    def _place_validated_hand_cast(self, placement: HandCastPlacement) -> dict:
+        """Pay adjustments, put the spell on the stack, and optionally auto-pass."""
+        card = placement.card
+        card_info = placement.card_info
+        paid = placement.paid
+        opts = placement.opts
+        hand_idx = placement.hand_idx
+        target_player_idx = placement.target_player_idx
+        mana_needed = placement.mana_needed
+        life_cost = placement.life_cost
+        auto_resolve = placement.auto_resolve
         adjustments = resolve_cast_adjustments(
             card_info,
             mana_needed,
             CastAdjustmentInput(
-                convoke_creature_ids=opts.convoke_creature_ids,
-                delve_graveyard_indices=opts.delve_graveyard_indices,
-                improvise_artifact_ids=opts.improvise_artifact_ids,
-                sneak_land_hand_indices=opts.sneak_land_hand_indices,
+                convoke_creature_ids=opts.modifiers.convoke_creature_ids,
+                delve_graveyard_indices=opts.modifiers.delve_graveyard_indices,
+                improvise_artifact_ids=opts.modifiers.improvise_artifact_ids,
+                sneak_land_hand_indices=opts.modifiers.sneak_land_hand_indices,
                 spell_hand_idx=hand_idx,
             ),
             self.state.zones,
@@ -246,53 +260,35 @@ class SpellStackMixin(GameRuntimeMixin):
             self.state.players[0].life -= life_cost
             self._log("player", "phyrexian", f"Paid {life_cost} life for {card_info.name}")
         sacrificed_name = ""
-        if emerge_sacrifice_id is not None:
+        if paid.emerge_sacrifice_id is not None:
             sacrificed = sacrifice_for_emerge(
                 self.state.zones,
                 self.state,
-                emerge_sacrifice_id,
+                paid.emerge_sacrifice_id,
             )
             sacrificed_name = sacrificed.name
+        mods = paid.modifiers
+        stack_context = SpellCastContext(
+            payment=SpellCastPayment(
+                kicker_times=mods.kicker_times,
+                entwined=mods.entwined,
+                overloaded=mods.overloaded,
+                bestow=mods.bestow,
+                paid_buyback=mods.buyback,
+                emerge=mods.emerge,
+                mutate=mods.mutate,
+            ),
+            replicate_times=mods.replicate_times,
+            spree_mode_indices=mods.spree_modes,
+        )
         targets = self._put_spell_on_stack(
             player_idx=0,
             card=card,
-            target_uid_str=cast_target_uid,
+            target_uid_str=paid.cast_target_uid,
             target_player_idx=target_player_idx,
-            context=SpellCastContext(
-                kicker_times=paid_kicker,
-                entwined=paid_entwined,
-                overloaded=paid_overloaded,
-                cast_via_bestow=paid_bestow,
-                replicate_times=paid_replicate,
-                paid_buyback=paid_buyback,
-                cast_for_emerge=paid_emerge,
-                cast_via_mutate=paid_mutate,
-                spree_mode_indices=paid_spree,
-            ),
+            context=stack_context,
         )
-        cast_detail = f"{card_info.name} on stack"
-        if paid_miracle:
-            cast_detail = f"{cast_detail} (miracle)"
-        if paid_freerunning:
-            cast_detail = f"{cast_detail} (freerunning)"
-        if paid_replicate:
-            cast_detail = f"{cast_detail} (replicate x{paid_replicate})"
-        if paid_overloaded:
-            cast_detail = f"{cast_detail} (overloaded)"
-        if paid_bestow:
-            cast_detail = f"{cast_detail} (bestow)"
-        if paid_entwined:
-            cast_detail = f"{cast_detail} (entwined)"
-        if paid_kicker:
-            cast_detail = f"{cast_detail} (kicked x{paid_kicker})"
-        if paid_buyback:
-            cast_detail = f"{cast_detail} (buyback)"
-        if paid_emerge:
-            cast_detail = f"{cast_detail} (emerge, sacrificed {sacrificed_name})"
-        if paid_mutate:
-            cast_detail = f"{cast_detail} (mutate)"
-        if paid_spree:
-            cast_detail = f"{cast_detail} (spree modes {list(paid_spree)})"
+        cast_detail = _announce_cast_detail(card_info.name, paid, sacrificed_name)
         if adjustments.delve_cards_exiled:
             cast_detail = (
                 f"{cast_detail} (delve x{adjustments.delve_cards_exiled})"
@@ -321,10 +317,24 @@ class SpellStackMixin(GameRuntimeMixin):
         auto_resolve: bool,
     ) -> dict:
         """Cast a card from hand for its madness cost."""
-        card = self._zones(0).hand[hand_idx]
-        if not isinstance(card, CardObject):
-            return {**self.to_client(), "error": "Invalid card"}
-        card_info = require_card_info(card)
+        request = MadnessCastRequest(
+            hand_idx=hand_idx,
+            target_uid_str=target_uid_str,
+            target_player_idx=target_player_idx,
+            auto_resolve=auto_resolve,
+        )
+        return run_with_hand_card(
+            self,
+            hand_idx,
+            lambda card, card_info: self._resolve_madness_cast(card, card_info, request),
+        )
+
+    def _resolve_madness_cast(
+        self,
+        card: CardObject,
+        card_info: CardInfo,
+        request: MadnessCastRequest,
+    ) -> dict:
         if not can_cast_via_madness(card_info, self.phase, self.state.stack.is_empty):
             return {**self.to_client(), "error": "Cannot cast for madness now"}
         mana_needed, life_cost = madness_mana_needed(card_info)
@@ -343,13 +353,13 @@ class SpellStackMixin(GameRuntimeMixin):
         targets = self._put_spell_on_stack(
             player_idx=0,
             card=card,
-            target_uid_str=target_uid_str,
-            target_player_idx=target_player_idx,
-            context=SpellCastContext(cast_via_madness=True),
+            target_uid_str=request.target_uid_str,
+            target_player_idx=request.target_player_idx,
+            context=SpellCastContext(alternate=SpellAlternateCast(madness=True)),
         )
         self._log("player", "madness", f"{card_info.name} on stack")
         self.state.fire_spell_cast_triggers(card, tuple(targets))
-        if auto_resolve:
+        if request.auto_resolve:
             self._auto_pass_stack()
         return self.to_client()
 
@@ -402,7 +412,10 @@ class SpellStackMixin(GameRuntimeMixin):
             card=card,
             target_uid_str=None,
             target_player_idx=None,
-            context=SpellCastContext(cast_via_suspend=True, from_exile=True),
+            context=SpellCastContext(
+                alternate=SpellAlternateCast(suspend=True),
+                from_exile=True,
+            ),
         )
         actor = "player" if player_idx == 0 else "opponent"
         self._log(actor, "suspend_cast", f"{card_info.name} on stack (suspend)")
@@ -451,7 +464,10 @@ class SpellStackMixin(GameRuntimeMixin):
             card=card,
             target_uid_str=target_uid_str,
             target_player_idx=target_player_idx,
-            context=SpellCastContext(cast_via_flashback=True, from_graveyard=True),
+            context=SpellCastContext(
+                alternate=SpellAlternateCast(flashback=True),
+                from_graveyard=True,
+            ),
         )
         self._log("player", "flashback", f"{card_info.name} on stack")
         self.state.fire_spell_cast_triggers(card, tuple(targets))
@@ -493,7 +509,10 @@ class SpellStackMixin(GameRuntimeMixin):
             card=card,
             target_uid_str=target_uid_str,
             target_player_idx=target_player_idx,
-            context=SpellCastContext(cast_via_aftermath=True, from_graveyard=True),
+            context=SpellCastContext(
+                alternate=SpellAlternateCast(aftermath=True),
+                from_graveyard=True,
+            ),
         )
         self._log("player", "aftermath", f"{card_info.name} on stack")
         self.state.fire_spell_cast_triggers(card, tuple(targets))
@@ -548,7 +567,10 @@ class SpellStackMixin(GameRuntimeMixin):
             card=card,
             target_uid_str=target_uid_str,
             target_player_idx=target_player_idx,
-            context=SpellCastContext(cast_via_escape=True, from_graveyard=True),
+            context=SpellCastContext(
+                alternate=SpellAlternateCast(escape=True),
+                from_graveyard=True,
+            ),
         )
         detail = f"{card_info.name} on stack"
         if exiled:
@@ -596,7 +618,10 @@ class SpellStackMixin(GameRuntimeMixin):
             card=card,
             target_uid_str=target_uid_str,
             target_player_idx=target_player_idx,
-            context=SpellCastContext(cast_via_jump_start=True, from_graveyard=True),
+            context=SpellCastContext(
+                alternate=SpellAlternateCast(jump_start=True),
+                from_graveyard=True,
+            ),
         )
         discard_info = require_card_info(discarded)
         self._log(
@@ -650,7 +675,10 @@ class SpellStackMixin(GameRuntimeMixin):
             card=card,
             target_uid_str=target_uid_str,
             target_player_idx=target_player_idx,
-            context=SpellCastContext(cast_via_retrace=True, from_graveyard=True),
+            context=SpellCastContext(
+                alternate=SpellAlternateCast(retrace=True),
+                from_graveyard=True,
+            ),
         )
         discard_info = require_card_info(discarded)
         self._log(
@@ -735,7 +763,10 @@ class SpellStackMixin(GameRuntimeMixin):
             card=card,
             target_uid_str=target_uid_str,
             target_player_idx=target_player_idx,
-            context=SpellCastContext(cast_via_foretell=True, from_exile=True),
+            context=SpellCastContext(
+                alternate=SpellAlternateCast(foretell=True),
+                from_exile=True,
+            ),
         )
         self._log("player", "cast", f"{card_info.name} on stack (foretell)")
         self.state.fire_spell_cast_triggers(card, tuple(targets))
@@ -795,7 +826,10 @@ class SpellStackMixin(GameRuntimeMixin):
             card=card,
             target_uid_str=target_uid_str,
             target_player_idx=target_player_idx,
-            context=SpellCastContext(cast_via_plot=True, from_exile=True),
+            context=SpellCastContext(
+                alternate=SpellAlternateCast(plot=True),
+                from_exile=True,
+            ),
         )
         self._log("player", "cast", f"{card_info.name} on stack (plot)")
         self.state.fire_spell_cast_triggers(card, tuple(targets))
@@ -818,31 +852,14 @@ class SpellStackMixin(GameRuntimeMixin):
             self.state.zones.cast_from_graveyard(card, player_idx)
         elif not opts.from_exile:
             self.state.zones.play_from_hand(card, player_idx)
-        self.state.stack.push(SpellOnStack(
-            controller_idx=player_idx,
-            owner_idx=card.owner_idx,
-            source=card,
-            targets=targets,
-            cast_via_flashback=opts.cast_via_flashback,
-            cast_via_escape=opts.cast_via_escape,
-            cast_via_jump_start=opts.cast_via_jump_start,
-            cast_via_retrace=opts.cast_via_retrace,
-            cast_via_aftermath=opts.cast_via_aftermath,
-            kicker_times=opts.kicker_times,
-            entwined=opts.entwined,
-            overloaded=opts.overloaded,
-            cast_via_bestow=opts.cast_via_bestow,
-            paid_buyback=opts.paid_buyback,
-            cast_for_emerge=opts.cast_for_emerge,
-            cast_via_mutate=opts.cast_via_mutate,
-            cast_via_foretell=opts.cast_via_foretell,
-            cast_via_plot=opts.cast_via_plot,
-            cast_via_madness=opts.cast_via_madness,
-            cast_via_suspend=opts.cast_via_suspend,
-            modes=list(opts.spree_mode_indices),
+        self.state.stack.push(spell_on_stack_from_context(
+            player_idx,
+            card,
+            targets,
+            opts,
         ))
         actor = "player" if player_idx == 0 else "opponent"
-        for detail in apply_post_cast_modifiers(self, player_idx, card, targets, opts):
+        for detail in apply_post_cast_modifiers(self.state, player_idx, card, targets, opts):
             self._log(actor, "storm" if "storm" in detail else "cascade", detail)
         self.state.turn.action_taken()
         return targets
@@ -949,7 +966,7 @@ class SpellStackMixin(GameRuntimeMixin):
                     else 1 - controller_idx
                 )
                 if target_uid_val is None:
-                    self.state.players[victim_idx].life -= damage
+                    self._deal_damage_to_player(victim_idx, damage)
                     parts.append(f"dealt {damage} damage")
                 else:
                     target = self._find_permanent(target_uid_val)
@@ -983,7 +1000,7 @@ class SpellStackMixin(GameRuntimeMixin):
         if spell_returns_to_hand_on_resolve(spell):
             self._zones(card.owner_idx).hand.append(card)
             return f"{card_info.name} returned to hand (buyback)"
-        if spell.cast_via_mutate:
+        if spell.payment.mutate:
             host_id = target_uid(spell.targets)
             if host_id is not None:
                 host = self._find_permanent(host_id)
@@ -999,21 +1016,21 @@ class SpellStackMixin(GameRuntimeMixin):
             spell.controller_idx,
             "resolve",
         )
-        if spell.cast_via_bestow:
+        if spell.payment.bestow:
             host_id = target_uid(spell.targets)
             if host_id is not None:
                 permanent.attached_to = int(host_id)
                 host = self._find_permanent(host_id)
                 host_name = host.name if host is not None else "creature"
                 detail = f"Bestowed {card_info.name} on {host_name}"
-                counters = kicked_counter_count(card_info, spell.kicker_times)
+                counters = kicked_counter_count(card_info, spell.payment.kicker_times)
                 if counters:
                     permanent.counters["+1/+1"] = (
                         permanent.counters.get("+1/+1", 0) + counters
                     )
                 self._register_permanent_triggers(permanent)
                 return detail
-        counters = kicked_counter_count(card_info, spell.kicker_times)
+        counters = kicked_counter_count(card_info, spell.payment.kicker_times)
         if counters:
             permanent.counters["+1/+1"] = permanent.counters.get("+1/+1", 0) + counters
         self._register_permanent_triggers(permanent)
@@ -1029,8 +1046,8 @@ class SpellStackMixin(GameRuntimeMixin):
         targets = spell.targets
         card_info = require_card_info(card)
         controller_idx = spell.controller_idx
-        if spell.overloaded:
-            damage = resolve_overload_burn_damage(card_info, spell.kicker_times)
+        if spell.payment.overloaded:
+            damage = resolve_overload_burn_damage(card_info, spell.payment.kicker_times)
             self._relocate_resolved_spell(spell, card)
             if overload_hits_each_creature(card_info):
                 for perm in overload_creature_targets(self.state.zones.battlefield):
@@ -1038,10 +1055,10 @@ class SpellStackMixin(GameRuntimeMixin):
                 self.state.check_sbas()
                 return f"{card_info.name} dealt {damage} damage to each creature"
             for idx in overload_opponent_indices(controller_idx):
-                self.state.players[idx].life -= damage
+                self._deal_damage_to_player(idx, damage)
             return f"{card_info.name} dealt {damage} damage to each opponent"
-        damage = resolve_burn_damage(card_info, spell.entwined, spell.kicker_times)
-        extra_draw = entwined_extra_draw(card_info, spell.entwined)
+        damage = resolve_burn_damage(card_info, spell.payment.entwined, spell.payment.kicker_times)
+        extra_draw = entwined_extra_draw(card_info, spell.payment.entwined)
         self._relocate_resolved_spell(spell, card)
         target_uid_val = target_uid(targets)
         target_player_idx = first_target_player(targets)
@@ -1050,7 +1067,7 @@ class SpellStackMixin(GameRuntimeMixin):
             victim_idx = (
                 target_player_idx if target_player_idx is not None else default_player
             )
-            self.state.players[victim_idx].life -= damage
+            self._deal_damage_to_player(victim_idx, damage)
             label = "opponent" if victim_idx == 1 else "you"
             detail = f"{card_info.name} dealt {damage} damage to {label}"
             if extra_draw:
@@ -1071,7 +1088,7 @@ class SpellStackMixin(GameRuntimeMixin):
         targets = spell.targets
         card_info = require_card_info(card)
         controller_idx = spell.controller_idx
-        power, toughness = pump_with_kicker(card_info, spell.kicker_times)
+        power, toughness = pump_with_kicker(card_info, spell.payment.kicker_times)
         target_uid_val = target_uid(targets)
         target = (
             self._find_permanent(target_uid_val)
@@ -1110,7 +1127,7 @@ class SpellStackMixin(GameRuntimeMixin):
             return f"{card_info.name} {detail}"
         count = (parse_draw(oracle) or 1) + extra_draw_from_kicker(
             card_info,
-            spell.kicker_times,
+            spell.payment.kicker_times,
         )
         drawn = self._draw_cards(controller_idx, count)
         self._relocate_resolved_spell(spell, card)
@@ -1118,19 +1135,11 @@ class SpellStackMixin(GameRuntimeMixin):
 
     def _register_permanent_triggers(self, permanent) -> None:
         """Register parsed triggered abilities from a newly resolved permanent."""
-        oracle = permanent.oracle_text.lower()
-        if "heroic" in oracle:
-            blueprint = parse_token_blueprint(permanent.oracle_text)
-            if blueprint is not None:
-                self.state.trigger_registry.register(
-                    permanent,
-                    TriggerKey.SPELL_CAST,
-                    is_spell_targeting_source,
-                    effect=CreateTokenEffect(blueprint),
-                )
-        if "prowess" in oracle:
-            self.state.trigger_registry.register(
-                permanent,
-                TriggerKey.SPELL_CAST,
-                is_noncreature_nonland_spell_cast,
-            )
+        register_permanent_ability_words(permanent, self.state.trigger_registry)
+
+    def _deal_damage_to_player(self, player_idx: int, amount: int) -> None:
+        """Deal damage to a player and mark Raid-related flags."""
+        if amount <= 0:
+            return
+        self.state.players[player_idx].life -= amount
+        self.state.mark_player_was_dealt_damage(player_idx)

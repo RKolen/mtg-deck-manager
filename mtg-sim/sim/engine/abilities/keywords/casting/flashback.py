@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from deck_registry import CardInfo
+from engine.abilities.keywords.casting._timing import INSTANT_SPEED_PHASES
 from engine.abilities.keywords.registry import has_registered_keyword
 from engine.core.mana import ManaCost
 
@@ -12,12 +13,6 @@ _FLASHBACK_COST_RE = re.compile(
     r'flashback\s*((?:\{[^}]+\})+)',
     re.IGNORECASE,
 )
-INSTANT_SPEED_PHASES = frozenset({
-    'main1',
-    'main2',
-    'attack',
-    'declare_blockers',
-})
 
 
 def has_flashback(card: CardInfo) -> bool:
