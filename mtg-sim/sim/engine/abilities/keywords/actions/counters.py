@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 from engine.abilities.keywords.actions._parse import parse_amount_after_keyword, word_to_int
 from engine.abilities.keywords.actions.detect import has_keyword_action
 from engine.core.game_object import Permanent
 from engine.core.zones import ZoneManager
 
-if True:
+if TYPE_CHECKING:
     from engine.core.game_state import GameState
 
 _BOLSTER_RE = re.compile(

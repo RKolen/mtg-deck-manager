@@ -10,6 +10,7 @@ from engine.abilities.keywords.actions._parse import (
     parse_amount_after_keyword,
     parse_each_player_mill,
     parse_target_player_mill,
+    word_to_int,
 )
 from engine.abilities.keywords.actions.detect import has_keyword_action
 from engine.core.game_object import CardObject
@@ -60,7 +61,6 @@ def mill_count(oracle_text: str) -> int:
         return target
     mills_match = _MILLS_VERB_RE.search(oracle_text)
     if mills_match is not None:
-        from engine.abilities.keywords.actions._parse import word_to_int
         return word_to_int(mills_match.group(1))
     return parse_amount_after_keyword(oracle_text, 'mill')
 

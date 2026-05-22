@@ -81,6 +81,7 @@ from engine.abilities.keywords.casting import (
 )
 from engine.abilities.keywords.casting.cast_adjustments import CastAdjustmentInput
 from engine.abilities.keywords.actions import (
+    ActionContext,
     has_connive,
     keyword_actions_in_oracle,
     resolve_spell_keyword_actions,
@@ -859,16 +860,16 @@ class SpellStackMixin(GameRuntimeMixin):
         second_uid = None
         if len(spell.targets) >= 2:
             second_uid = target_uid([spell.targets[1]])
-        detail = resolve_spell_keyword_actions(
-            self.state.zones,
-            self.state,
-            spell.controller_idx,
-            card.card_info.oracle_text or '',
-            target_uid(spell.targets),
-            self._draw_cards,
-            skip_actions=skip_actions,
+        detail = resolve_spell_keyword_actions(ActionContext(
+            zones=self.state.zones,
+            game=self.state,
+            controller_idx=spell.controller_idx,
+            oracle_text=card.card_info.oracle_text or '',
+            target_creature_uid=target_uid(spell.targets),
             second_creature_uid=second_uid,
-        )
+            draw_fn=self._draw_cards,
+            skip_actions=skip_actions,
+        ))
         if detail:
             self.state.check_sbas()
         return detail

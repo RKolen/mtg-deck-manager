@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
+from engine.abilities.keywords.actions._parse import parse_amount_after_keyword
 from engine.abilities.keywords.actions.counters import (
     bolster_amount,
     bolster_lowest_creature,
@@ -59,7 +61,7 @@ from engine.abilities.keywords.registry import has_registered_keyword
 from engine.core.game_object import CardObject, Permanent
 from engine.core.zones import Zone, ZoneManager
 
-if True:
+if TYPE_CHECKING:
     from engine.core.game_state import GameState
 
 DrawFn = Callable[[int, int], list[CardObject]]
@@ -103,7 +105,8 @@ def _apply_mill(ctx: ActionContext) -> str | None:
             milled = mill_cards(ctx.zones, idx, count)
             parts.append(f"P{idx + 1} milled {len(milled)}")
         return '; '.join(parts)
-    if 'target player mills' in ctx.oracle_text.lower() or 'target opponent mills' in ctx.oracle_text.lower():
+    oracle_lower = ctx.oracle_text.lower()
+    if 'target player mills' in oracle_lower or 'target opponent mills' in oracle_lower:
         victim = _opponent_idx(ctx.controller_idx)
         milled = mill_cards(ctx.zones, victim, count)
         return f"milled {len(milled)} (P{victim + 1})"
@@ -135,7 +138,6 @@ def _apply_surveil(ctx: ActionContext) -> str | None:
 def _apply_fateseal(ctx: ActionContext) -> str | None:
     if not has_fateseal(ctx.oracle_text):
         return None
-    from engine.abilities.keywords.actions._parse import parse_amount_after_keyword
     count = parse_amount_after_keyword(ctx.oracle_text, 'fateseal')
     opponent = _opponent_idx(ctx.controller_idx)
     moved = fateseal_cards(ctx.zones, opponent, count)
@@ -227,7 +229,6 @@ def _apply_explore(ctx: ActionContext) -> str | None:
 def _apply_investigate(ctx: ActionContext) -> str | None:
     if not has_investigate(ctx.oracle_text):
         return None
-    from engine.abilities.keywords.actions._parse import parse_amount_after_keyword
     times = parse_amount_after_keyword(ctx.oracle_text, 'investigate')
     names = investigate(ctx.zones, ctx.controller_idx, times)
     return f"investigated ({names})"
@@ -258,7 +259,6 @@ def _apply_populate(ctx: ActionContext) -> str | None:
 def _apply_treasure(ctx: ActionContext) -> str | None:
     if not has_treasure(ctx.oracle_text):
         return None
-    from engine.abilities.keywords.actions._parse import parse_amount_after_keyword
     times = parse_amount_after_keyword(ctx.oracle_text, 'treasure')
     names = [
         create_token_from_blueprint(
@@ -272,7 +272,6 @@ def _apply_treasure(ctx: ActionContext) -> str | None:
 def _apply_food(ctx: ActionContext) -> str | None:
     if not has_food(ctx.oracle_text):
         return None
-    from engine.abilities.keywords.actions._parse import parse_amount_after_keyword
     times = parse_amount_after_keyword(ctx.oracle_text, 'food')
     names = [
         create_token_from_blueprint(
@@ -300,7 +299,6 @@ def _apply_discover(ctx: ActionContext) -> str | None:
     max_mv = 0
     match_text = ctx.oracle_text.lower()
     if 'discover' in match_text:
-        from engine.abilities.keywords.actions._parse import parse_amount_after_keyword
         max_mv = parse_amount_after_keyword(ctx.oracle_text, 'discover')
     result = discover_from_library(ctx.zones, ctx.controller_idx, max_mv)
     if result.hit is None or result.hit.card_info is None:
@@ -339,7 +337,6 @@ def _apply_exile(ctx: ActionContext) -> str | None:
     target = _find_creature(ctx.zones, ctx.target_creature_uid)
     if target is None or not isinstance(target.source, CardObject):
         return None
-    card = target.source
     ctx.zones.leave_battlefield(target, Zone.EXILE, 'exile', ctx.game)
     return f"exiled {target.name}"
 
@@ -396,29 +393,6 @@ def resolve_keyword_actions(ctx: ActionContext) -> list[str]:
     return parts
 
 
-def resolve_spell_keyword_actions(
-    zones: ZoneManager,
-    game: GameState | None,
-    controller_idx: int,
-    oracle_text: str,
-    target_creature_uid: str | None,
-    draw_fn: DrawFn | None,
-    *,
-    skip_actions: frozenset[str] = frozenset(),
-    scry_bottom_indices: tuple[int, ...] = (),
-    second_creature_uid: str | None = None,
-) -> str:
+def resolve_spell_keyword_actions(ctx: ActionContext) -> str:
     """Resolve keyword actions for a spell; return a combined detail string or empty."""
-    ctx = ActionContext(
-        zones=zones,
-        game=game,
-        controller_idx=controller_idx,
-        oracle_text=oracle_text,
-        target_creature_uid=target_creature_uid,
-        second_creature_uid=second_creature_uid,
-        scry_bottom_indices=scry_bottom_indices,
-        draw_fn=draw_fn,
-        skip_actions=skip_actions,
-    )
-    parts = resolve_keyword_actions(ctx)
-    return '; '.join(parts)
+    return '; '.join(resolve_keyword_actions(ctx))

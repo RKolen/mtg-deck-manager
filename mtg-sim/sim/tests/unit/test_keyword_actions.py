@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from engine.abilities.keywords.actions import (
     ALL_KEYWORD_ACTIONS,
+    ActionContext,
     fight_creatures,
     has_fight,
     has_mill,
@@ -102,14 +103,13 @@ def test_resolve_mill_spell_on_stack():
                 card_info=make_instant(f'G{idx}'),
             ),
         )
-    detail = resolve_spell_keyword_actions(
-        game.zones,
-        game,
-        0,
-        'Target player mills four cards.',
-        None,
-        game.zones.draw,
-    )
+    detail = resolve_spell_keyword_actions(ActionContext(
+        zones=game.zones,
+        game=game,
+        controller_idx=0,
+        oracle_text='Target player mills four cards.',
+        draw_fn=game.zones.draw,
+    ))
     assert 'milled 4' in detail
     assert len(game.zones.player_zones[1].graveyard) == 4
 

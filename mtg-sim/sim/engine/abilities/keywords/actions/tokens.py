@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import re
 
+from engine.abilities.keywords.actions._parse import word_to_int
+from engine.abilities.keywords.actions.counters import put_plus_counters
 from engine.abilities.keywords.actions.detect import has_keyword_action
 from engine.abilities.keywords.actions.library import mill_cards
 from engine.cards.oracle_parse import TokenBlueprint, parse_token_blueprint
-from engine.core.game_object import CardObject, TokenObject
+from engine.core.game_object import Permanent, TokenObject
 from engine.core.zones import ZoneManager
 
 _CONNIVE_MILL_RE = re.compile(
@@ -56,7 +58,6 @@ def connive_mill_count(oracle_text: str) -> int:
     match = _CONNIVE_MILL_RE.search(oracle_text)
     if match is None:
         return 2
-    from engine.abilities.keywords.actions._parse import word_to_int
     return word_to_int(match.group(1))
 
 
@@ -135,9 +136,8 @@ def investigate(zones: ZoneManager, controller_idx: int, times: int = 1) -> str:
     return ', '.join(names)
 
 
-def explore_creature(perm) -> str:
+def explore_creature(perm: Permanent) -> str:
     """Explore (MVP): put a +1/+1 counter on the exploring creature."""
-    from engine.abilities.keywords.actions.counters import put_plus_counters
     put_plus_counters(perm, 1)
     return perm.name
 
