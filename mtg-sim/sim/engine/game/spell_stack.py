@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from engine.abilities.keywords.casting import (
+    aftermath_mana_needed,
+    can_cast_aftermath,
     can_cast_via_escape,
     can_cast_via_flashback,
     can_cast_via_jump_start,
+    has_aftermath,
     discard_for_jump_start,
     has_jump_start,
     jump_start_discard_error,
@@ -172,6 +175,48 @@ class SpellStackMixin(GameRuntimeMixin):
             self._auto_pass_stack()
         return self.to_client()
 
+    def _announce_aftermath_cast(
+        self,
+        graveyard_idx: int,
+        target_uid_str: str | None,
+        target_player_idx: int | None,
+        auto_resolve: bool,
+    ) -> dict:
+        """Pay mana and cast an aftermath card from the graveyard."""
+        card = self._zones(0).graveyard[graveyard_idx]
+        if not isinstance(card, CardObject):
+            return {**self.to_client(), "error": "Invalid card"}
+        card_info = require_card_info(card)
+        if not has_aftermath(card_info):
+            return {**self.to_client(), "error": f"{card_info.name} does not have aftermath"}
+        if not can_cast_aftermath(card_info, self.phase, self.state.stack.is_empty):
+            return {**self.to_client(), "error": "Cannot cast aftermath now"}
+        mana_needed, life_cost = aftermath_mana_needed(card_info)
+        if not self._tap_lands_for_mana(0, mana_needed):
+            return {
+                **self.to_client(),
+                "error": (
+                    f"Not enough mana ({self._available_mana(0)} available, "
+                    f"need {mana_needed})"
+                ),
+            }
+        self.state.players[0].spells_cast_this_turn += 1
+        if life_cost:
+            self.state.players[0].life -= life_cost
+            self._log("player", "phyrexian", f"Paid {life_cost} life for {card_info.name}")
+        targets = self._put_spell_on_stack(
+            player_idx=0,
+            card=card,
+            target_uid_str=target_uid_str,
+            target_player_idx=target_player_idx,
+            context=SpellCastContext(cast_via_aftermath=True, from_graveyard=True),
+        )
+        self._log("player", "aftermath", f"{card_info.name} on stack")
+        self.state.fire_spell_cast_triggers(card, tuple(targets))
+        if auto_resolve:
+            self._auto_pass_stack()
+        return self.to_client()
+
     def _announce_escape_cast(
         self,
         graveyard_idx: int,
@@ -303,6 +348,7 @@ class SpellStackMixin(GameRuntimeMixin):
             cast_via_flashback=opts.cast_via_flashback,
             cast_via_escape=opts.cast_via_escape,
             cast_via_jump_start=opts.cast_via_jump_start,
+            cast_via_aftermath=opts.cast_via_aftermath,
             kicker_times=opts.kicker_times,
         ))
         actor = "player" if player_idx == 0 else "opponent"

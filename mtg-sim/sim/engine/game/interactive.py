@@ -181,6 +181,20 @@ class InteractiveGame(SpellStackMixin):  # pylint: disable=too-many-public-metho
             discard_hand_idx=discard_hand_idx,
         )
 
+    def action_cast_aftermath(
+        self,
+        graveyard_idx: int,
+        target_uid: str | None = None,
+        target_player: int | None = None,
+    ) -> dict:
+        """Cast an aftermath card from the graveyard during a main phase."""
+        return self._announce_aftermath_cast(
+            graveyard_idx,
+            target_uid,
+            target_player,
+            auto_resolve=True,
+        )
+
     def action_pass_priority(self) -> dict:
         """Pass priority once; resolve or advance when both players pass."""
         outcome = self.state.turn.pass_priority(self.state.stack.is_empty)

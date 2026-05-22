@@ -78,6 +78,30 @@ def test_escape_cast_from_graveyard_exiles_on_resolve():
     assert exiled_names == {"Scream", "A", "B"}
 
 
+def test_aftermath_cast_from_graveyard_exiles_on_resolve():
+    """Aftermath casts from the graveyard in main1 and exiles the card on resolve."""
+    start = make_instant(
+        name="Start",
+        cmc=0,
+        mana_cost="",
+        oracle="Start deals 2 damage to any target.\nAftermath",
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    card = CardObject(controller_idx=0, owner_idx=0, card_info=start)
+    game.state.zones.player_zones[0].graveyard = [card]
+    data = game.action_cast_aftermath(0, target_player=1)
+    assert data["opponentLife"] == 18
+    assert not data["stack"]
+    assert len(game.state.zones.player_zones[0].graveyard) == 0
+    exiled = game.state.zones.player_zones[0].exile
+    assert len(exiled) == 1
+    exiled_spell = exiled[0]
+    assert isinstance(exiled_spell, CardObject)
+    assert exiled_spell.card_info is not None
+    assert exiled_spell.card_info.name == "Start"
+
+
 def test_jump_start_cast_from_graveyard_exiles_on_resolve():
     """Jump-start discards, casts from the graveyard, and exiles the spell on resolve."""
     bolt = make_instant(

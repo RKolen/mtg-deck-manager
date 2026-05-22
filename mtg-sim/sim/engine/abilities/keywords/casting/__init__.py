@@ -1,5 +1,10 @@
 """Cast-modifier keywords (one module per keyword as integration proceeds)."""
 
+from engine.abilities.keywords.casting.aftermath import (
+    aftermath_mana_needed,
+    can_cast_aftermath,
+    has_aftermath,
+)
 from engine.abilities.keywords.casting.escape import (
     can_cast_via_escape,
     escape_cost,
@@ -67,7 +72,10 @@ from engine.abilities.keywords.casting.kicker import (
 )
 
 __all__ = [
+    'aftermath_mana_needed',
+    'can_cast_aftermath',
     'can_cast_via_escape',
+    'has_aftermath',
     'can_cast_via_flashback',
     'can_cast_via_jump_start',
     'discard_for_jump_start',

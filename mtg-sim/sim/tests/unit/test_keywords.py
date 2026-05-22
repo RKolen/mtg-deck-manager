@@ -8,7 +8,10 @@ from engine.abilities import activated, keywords
 from engine.abilities.keywords.casting import (
     can_cast_via_escape,
     can_cast_via_flashback,
+    aftermath_mana_needed,
+    can_cast_aftermath,
     can_cast_via_jump_start,
+    has_aftermath,
     discard_for_jump_start,
     has_jump_start,
     jump_start_cost,
@@ -397,6 +400,20 @@ def test_can_cast_via_flashback_allows_instant_timing():
     assert not can_cast_via_flashback(card, 'upkeep', stack_is_empty=True)
 
 
+def test_has_aftermath_and_main_phase_timing():
+    """Aftermath is detected and only castable in a main phase with an empty stack."""
+    card = make_instant(
+        'Start',
+        cmc=2,
+        oracle='Aftermath\nCreate a 2/2 black Zombie creature token.',
+    )
+    assert has_aftermath(card)
+    assert aftermath_mana_needed(card) == (2, 0)
+    assert can_cast_aftermath(card, 'main1', stack_is_empty=True)
+    assert not can_cast_aftermath(card, 'attack', stack_is_empty=True)
+    assert not can_cast_aftermath(card, 'main1', stack_is_empty=False)
+
+
 def test_has_jump_start_parses_alternate_cost():
     """Jump-start cost is parsed from oracle text."""
     card = make_instant(
@@ -413,7 +430,6 @@ def test_has_jump_start_parses_alternate_cost():
 def test_discard_for_jump_start_moves_card_to_graveyard():
     """Jump-start discard removes a card from hand and puts it in the graveyard."""
     game = fresh_game()
-    spell_info = make_instant('Bolt', oracle='Jump-start {0}\nDeal 2 damage.')
     to_discard = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant('Fodder'))
     game.zones.player_zones[0].hand.append(to_discard)
     assert jump_start_discard_error(game.zones, 0, 0) is None
@@ -576,6 +592,25 @@ def test_flashback_fizzle_exiles_source_card():
         owner_idx=0,
         source=card,
         cast_via_flashback=True,
+        targets=[Target(obj_id=99999)],
+    )
+    game.stack.push(spell)
+    result = game.stack.resolve_top(game.zones)
+    assert result.fizzled
+    assert card in game.zones.player_zones[0].exile
+    assert card not in game.zones.player_zones[0].graveyard
+
+
+def test_aftermath_fizzle_exiles_source_card():
+    """Fizzled aftermath spells exile instead of returning to the graveyard."""
+    game = fresh_game()
+    card_info = make_instant('Start', oracle='Aftermath\nDeal 1 damage.')
+    card = CardObject(controller_idx=0, owner_idx=0, card_info=card_info)
+    spell = SpellOnStack(
+        controller_idx=1,
+        owner_idx=0,
+        source=card,
+        cast_via_aftermath=True,
         targets=[Target(obj_id=99999)],
     )
     game.stack.push(spell)

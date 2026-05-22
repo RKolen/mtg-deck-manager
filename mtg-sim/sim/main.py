@@ -287,6 +287,9 @@ async def _dispatch_action(game: InteractiveGame, req: GameActionRequest) -> dic
             req.targetPlayer,
             discard_hand_idx=req.discardHandIdx,
         )
+    if req.action == "cast_aftermath":
+        assert req.handIdx is not None
+        return game.action_cast_aftermath(req.handIdx, req.targetUid, req.targetPlayer)
     if req.action == "toggle_attacker":
         assert req.permanentUid is not None
         return game.action_toggle_attacker(req.permanentUid)
