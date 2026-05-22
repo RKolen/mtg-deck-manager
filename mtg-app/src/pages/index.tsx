@@ -2,7 +2,7 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { gql } from 'graphql-request';
 import parse from 'html-react-parser';
-import { getGraphQLClient } from '../services/graphqlClient';
+import { getMtgGraphQLClient } from '../services/graphqlClient';
 
 interface PageNode {
   id: string;
@@ -12,7 +12,7 @@ interface PageNode {
 }
 
 async function fetchPages(): Promise<PageNode[]> {
-  const data = await getGraphQLClient().request<{ pages: PageNode[] }>(gql`
+  const data = await getMtgGraphQLClient().request<{ pages: PageNode[] }>(gql`
     query { pages { id title body pathAlias } }
   `);
   return data.pages;

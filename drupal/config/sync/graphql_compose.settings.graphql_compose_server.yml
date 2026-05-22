@@ -1,20 +1,88 @@
 _core:
   default_config_hash: _HhA1FOWwjz1siXeaMncMoIk-pKskQwXV6V4g8jh59s
-entity_config: {  }
-field_config: {  }
+entity_config:
+  node:
+    deck:
+      enabled: true
+      query_load_enabled: true
+      edges_enabled: true
+    mtg_card:
+      enabled: true
+      query_load_enabled: true
+      edges_enabled: true
+    collection_card:
+      enabled: true
+      query_load_enabled: true
+      edges_enabled: true
+field_config:
+  node:
+    deck:
+      field_format:
+        enabled: true
+      field_notes:
+        enabled: true
+      field_deck_cards:
+        enabled: true
+    mtg_card:
+      field_mana_cost:
+        enabled: true
+      field_cmc:
+        enabled: true
+      field_type_line:
+        enabled: true
+      field_colors:
+        enabled: true
+      field_color_identity:
+        enabled: true
+      field_oracle_text:
+        enabled: true
+      field_image_uri:
+        enabled: true
+      field_is_mana_producer:
+        enabled: true
+      field_produced_mana:
+        enabled: true
+      field_legal_formats:
+        enabled: true
+      field_price_usd:
+        enabled: true
+      field_price_usd_foil:
+        enabled: true
+      field_set_code:
+        enabled: true
+      field_set_name:
+        enabled: true
+      field_rarity:
+        enabled: true
+      field_collector_number:
+        enabled: true
+      field_power:
+        enabled: true
+      field_toughness:
+        enabled: true
+      field_loyalty:
+        enabled: true
+    collection_card:
+      field_card:
+        enabled: true
+      field_quantity_owned:
+        enabled: true
+      field_quantity_foil:
+        enabled: true
 settings:
   exclude_unpublished: true
-  expose_entity_ids: false
+  expose_entity_ids: true
   field_required_override: false
   schema_description: 'GraphQL Compose'
   schema_version: '1'
-  simple_queries: true
+  simple_queries: false
   simple_unions: true
   site_403: false
   site_404: false
-  site_front: true
   site_mail: false
   site_name: false
   site_slogan: false
+  site_front: true
   inflector_langcode: en
   inflector_singularize: true
+

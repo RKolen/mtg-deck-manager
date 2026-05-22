@@ -9,7 +9,7 @@ import type {
   MtgCardAttributes,
 } from '../types/drupal';
 import { createDrupalClient } from './httpClient';
-import { getGraphQLClient } from './graphqlClient';
+import { getGraphQLClient, getMtgGraphQLClient } from './graphqlClient';
 import { slugify } from '../utils/slugify';
 
 // ---------------------------------------------------------------------------
@@ -40,12 +40,35 @@ interface GqlMtgCard {
   loyalty: string | null;
 }
 
+interface GqlText {
+  value?: string | null;
+  processed?: string | null;
+}
+
+/** GraphQL Compose NodeDeck (id = entity id, uuid = public id). */
+interface GqlComposeDeck {
+  id: string;
+  uuid: string;
+  title: string;
+  format: string;
+  notes?: GqlText | null;
+}
+
+/** Custom MTG schema Deck (mutations). */
 interface GqlDeck {
   id: string;
   nid: number;
   title: string;
   format: string;
   notes: string | null;
+}
+
+interface GqlComposeCollectionCard {
+  id: string;
+  uuid: string;
+  quantityOwned: number;
+  quantityFoil: number;
+  card?: { uuid: string } | null;
 }
 
 interface GqlDeckCard {
@@ -101,6 +124,26 @@ function toCardResource(c: GqlMtgCard): JsonApiResource<MtgCardAttributes> {
   };
 }
 
+function composePlainText(text: GqlText | null | undefined): string | null {
+  if (!text) {
+    return null;
+  }
+  return text.value ?? text.processed ?? null;
+}
+
+function toDeckResourceFromCompose(d: GqlComposeDeck): JsonApiResource<DeckAttributes> {
+  return {
+    id: d.uuid,
+    type: 'node--deck',
+    attributes: {
+      title: d.title,
+      field_format: d.format,
+      field_notes: composePlainText(d.notes),
+      drupal_internal__nid: parseInt(d.id, 10),
+    },
+  };
+}
+
 function toDeckResource(d: GqlDeck): JsonApiResource<DeckAttributes> {
   return {
     id: d.id,
@@ -110,6 +153,24 @@ function toDeckResource(d: GqlDeck): JsonApiResource<DeckAttributes> {
       field_format: d.format,
       field_notes: d.notes ?? null,
       drupal_internal__nid: d.nid,
+    },
+  };
+}
+
+function toCollectionCardFromCompose(
+  cc: GqlComposeCollectionCard,
+): JsonApiResource<CollectionCardAttributes> {
+  return {
+    id: cc.uuid,
+    type: 'node--collection_card',
+    attributes: {
+      field_quantity_owned: cc.quantityOwned,
+      field_quantity_foil: cc.quantityFoil,
+    },
+    relationships: {
+      field_card: {
+        data: cc.card != null ? { id: cc.card.uuid, type: 'node--mtg_card' } : null,
+      },
     },
   };
 }
@@ -187,7 +248,13 @@ const CARD_DETAIL_FIELDS = gql`
   }
 `;
 
-const DECK_FIELDS = gql`
+const COMPOSE_DECK_FIELDS = gql`
+  fragment ComposeDeckFields on NodeDeck {
+    id uuid title format notes { value processed }
+  }
+`;
+
+const MTG_DECK_FIELDS = gql`
   fragment DeckFields on Deck {
     id nid title format notes
   }
@@ -234,7 +301,7 @@ export async function fetchCardsPage(
     }
   `;
 
-  const data = await getGraphQLClient().request<{
+  const data = await getMtgGraphQLClient().request<{
     cards: { cards: GqlMtgCard[]; nextCursor: string | null };
   }>(query, {
     page,
@@ -260,7 +327,7 @@ export async function fetchCardBySlug(
     }
   `;
 
-  const data = await getGraphQLClient().request<{ card: GqlMtgCard | null }>(query, { slug });
+  const data = await getMtgGraphQLClient().request<{ card: GqlMtgCard | null }>(query, { slug });
   return data.card != null ? toCardResource(data.card) : null;
 }
 
@@ -274,7 +341,7 @@ export async function findCardsByName(
     }
   `;
 
-  const data = await getGraphQLClient().request<{ cardsByName: GqlMtgCard[] }>(query, { name });
+  const data = await getMtgGraphQLClient().request<{ cardsByName: GqlMtgCard[] }>(query, { name });
   return data.cardsByName.map(toCardResource);
 }
 
@@ -284,11 +351,17 @@ export async function findCardsByName(
 
 export async function fetchDecks(): Promise<JsonApiResource<DeckAttributes>[]> {
   const query = gql`
-    ${DECK_FIELDS}
-    query GetDecks { decks { ...DeckFields } }
+    ${COMPOSE_DECK_FIELDS}
+    query GetDecks {
+      nodeDecks(first: 100, sortKey: TITLE) {
+        nodes { ...ComposeDeckFields }
+      }
+    }
   `;
-  const data = await getGraphQLClient().request<{ decks: GqlDeck[] }>(query);
-  return data.decks.map(toDeckResource);
+  const data = await getGraphQLClient().request<{
+    nodeDecks: { nodes: GqlComposeDeck[] };
+  }>(query);
+  return data.nodeDecks.nodes.map(toDeckResourceFromCompose);
 }
 
 export async function fetchDeckBySlug(
@@ -302,23 +375,23 @@ export async function fetchDeck(
   id: string,
 ): Promise<JsonApiResource<DeckAttributes>> {
   const query = gql`
-    ${DECK_FIELDS}
-    query GetDeck($id: ID!) { deck(id: $id) { ...DeckFields } }
+    ${COMPOSE_DECK_FIELDS}
+    query GetDeck($id: ID!) { nodeDeck(id: $id) { ...ComposeDeckFields } }
   `;
-  const data = await getGraphQLClient().request<{ deck: GqlDeck }>(query, { id });
-  return toDeckResource(data.deck);
+  const data = await getGraphQLClient().request<{ nodeDeck: GqlComposeDeck }>(query, { id });
+  return toDeckResourceFromCompose(data.nodeDeck);
 }
 
 export async function createDeck(
   attributes: Pick<DeckAttributes, 'title' | 'field_format' | 'field_notes'>,
 ): Promise<JsonApiResource<DeckAttributes>> {
   const mutation = gql`
-    ${DECK_FIELDS}
+    ${MTG_DECK_FIELDS}
     mutation CreateDeck($title: String!, $format: String!, $notes: String) {
       createDeck(title: $title, format: $format, notes: $notes) { ...DeckFields }
     }
   `;
-  const data = await getGraphQLClient().request<{ createDeck: GqlDeck }>(mutation, {
+  const data = await getMtgGraphQLClient().request<{ createDeck: GqlDeck }>(mutation, {
     title: attributes.title,
     format: attributes.field_format,
     notes: attributes.field_notes ?? null,
@@ -331,12 +404,12 @@ export async function updateDeck(
   attributes: Partial<DeckAttributes>,
 ): Promise<JsonApiResource<DeckAttributes>> {
   const mutation = gql`
-    ${DECK_FIELDS}
+    ${MTG_DECK_FIELDS}
     mutation UpdateDeck($id: ID!, $title: String, $format: String, $notes: String) {
       updateDeck(id: $id, title: $title, format: $format, notes: $notes) { ...DeckFields }
     }
   `;
-  const data = await getGraphQLClient().request<{ updateDeck: GqlDeck }>(mutation, {
+  const data = await getMtgGraphQLClient().request<{ updateDeck: GqlDeck }>(mutation, {
     id,
     title: attributes.title ?? null,
     format: attributes.field_format ?? null,
@@ -349,7 +422,7 @@ export async function deleteDeck(id: string): Promise<void> {
   const mutation = gql`
     mutation DeleteDeck($id: ID!) { deleteDeck(id: $id) }
   `;
-  await getGraphQLClient().request(mutation, { id });
+  await getMtgGraphQLClient().request(mutation, { id });
 }
 
 // ---------------------------------------------------------------------------
@@ -384,7 +457,7 @@ export async function fetchDeckCardsWithCards(
       }
     }
   `;
-  const data = await getGraphQLClient().request<{ deckCards: GqlDeckCard[] }>(query, { deckId });
+  const data = await getMtgGraphQLClient().request<{ deckCards: GqlDeckCard[] }>(query, { deckId });
   return data.deckCards.map(toDeckCardWithCard);
 }
 
@@ -451,18 +524,26 @@ export async function fetchCollectionCards(): Promise<
   JsonApiResource<CollectionCardAttributes>[]
 > {
   const query = gql`
-    ${COLLECTION_CARD_FIELDS}
-    query GetCollectionCards { collectionCards { ...CollectionCardFields } }
+    query GetCollectionCards {
+      nodeCollectionCards(first: 500) {
+        nodes {
+          id uuid quantityOwned quantityFoil
+          card { uuid }
+        }
+      }
+    }
   `;
-  const data = await getGraphQLClient().request<{ collectionCards: GqlCollectionCard[] }>(query);
-  return data.collectionCards.map(toCollectionCardResource);
+  const data = await getGraphQLClient().request<{
+    nodeCollectionCards: { nodes: GqlComposeCollectionCard[] };
+  }>(query);
+  return data.nodeCollectionCards.nodes.map(toCollectionCardFromCompose);
 }
 
 export async function fetchCollectionValue(): Promise<number> {
   const query = gql`
     query GetCollectionValue { collectionValue }
   `;
-  const data = await getGraphQLClient().request<{ collectionValue: number }>(query);
+  const data = await getMtgGraphQLClient().request<{ collectionValue: number }>(query);
   return data.collectionValue;
 }
 
@@ -488,7 +569,7 @@ export async function upsertCollectionCard(
       }
     }
   `;
-  const data = await getGraphQLClient().request<{ upsertCollectionCard: GqlCollectionCard }>(
+  const data = await getMtgGraphQLClient().request<{ upsertCollectionCard: GqlCollectionCard }>(
     mutation,
     { cardId, cardName, quantityOwned, quantityFoil, existingId: existingId ?? null },
   );
@@ -506,7 +587,7 @@ export async function fetchCollectionCardByCardId(
       }
     }
   `;
-  const data = await getGraphQLClient().request<{
+  const data = await getMtgGraphQLClient().request<{
     collectionCardByCardId: GqlCollectionCard | null;
   }>(query, { cardId });
   return data.collectionCardByCardId != null
