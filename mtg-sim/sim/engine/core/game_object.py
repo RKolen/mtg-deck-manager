@@ -186,7 +186,7 @@ class Permanent(GameObject):
 
     def has_keyword(self, keyword: str) -> bool:
         """Return True if the oracle text contains the given keyword (case-insensitive)."""
-        return keyword.lower() in self.oracle_text.lower()
+        return oracle_has_keyword(self.oracle_text, keyword)
 
     def to_dict(self) -> dict:
         """Serialise this permanent for clients and integration tests."""
@@ -261,6 +261,16 @@ def _parse_int(value: str) -> int:
         return 0
 
 
+def oracle_has_keyword(oracle_text: str, keyword: str) -> bool:
+    """Return True when oracle text contains the keyword (case-insensitive)."""
+    return keyword.lower() in oracle_text.lower()
+
+
 def _can_attack(perm: Permanent) -> bool:
     """Return whether a permanent is eligible to attack in the simple Phase B loop."""
-    return "Creature" in perm.type_line and not perm.tapped and not perm.sick
+    return (
+        "Creature" in perm.type_line
+        and not perm.tapped
+        and not perm.sick
+        and not oracle_has_keyword(perm.oracle_text, "defender")
+    )

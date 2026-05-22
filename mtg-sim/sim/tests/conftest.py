@@ -7,6 +7,7 @@ parameters inside test functions. Import directly from this module.
 from __future__ import annotations
 
 from deck_registry import CardInfo
+from engine.abilities.keywords import enters_ready
 from engine.core.game_object import CardObject, Permanent
 from engine.core.game_state import GameState, PlayerInfo
 from engine.core.turn_structure import TurnRunner
@@ -111,7 +112,8 @@ def place_on_battlefield(
         card_info=card_info,
     )
     perm = zones.enter_battlefield(card_obj, player_idx, "test_setup")
-    perm.sick = sick
+    if not enters_ready(perm):
+        perm.sick = sick
     return perm
 
 

@@ -16,6 +16,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from engine.abilities.keyword_handlers import consume_regeneration_shield
+from engine.abilities.keywords import is_indestructible
 from engine.core.game_object import Permanent, TokenObject
 from engine.core.zones import Zone
 
@@ -93,14 +95,16 @@ def _check_creature_sbas(game: GameState) -> list[SBAEvent]:
             continue
         toughness = _effective_toughness(perm)
         if toughness <= 0:
-            game.zones.leave_battlefield(perm, Zone.GRAVEYARD, "sba")
+            game.zones.leave_battlefield(perm, Zone.GRAVEYARD, "sba", game)
             events.append(SBAEvent(
                 rule="704.5f",
                 description=f"{perm.name} has {toughness} toughness",
                 obj_id=perm.obj_id,
             ))
-        elif perm.damage_marked >= toughness and not _is_indestructible(perm):
-            game.zones.leave_battlefield(perm, Zone.GRAVEYARD, "sba")
+        elif perm.damage_marked >= toughness and not is_indestructible(perm):
+            if consume_regeneration_shield(perm):
+                continue
+            game.zones.leave_battlefield(perm, Zone.GRAVEYARD, "sba", game)
             events.append(SBAEvent(
                 rule="704.5g",
                 description=f"{perm.name} has {perm.damage_marked} damage (toughness {toughness})",
@@ -116,7 +120,7 @@ def _check_planeswalker_sbas(game: GameState) -> list[SBAEvent]:
         if not _is_planeswalker(perm):
             continue
         if perm.counters.get("loyalty", 1) <= 0:
-            game.zones.leave_battlefield(perm, Zone.GRAVEYARD, "sba")
+            game.zones.leave_battlefield(perm, Zone.GRAVEYARD, "sba", game)
             events.append(SBAEvent(
                 rule="704.5i",
                 description=f"{perm.name} has 0 loyalty",
@@ -142,7 +146,7 @@ def _check_legend_rule(game: GameState) -> list[SBAEvent]:
             if name in seen:
                 older = seen[name] if seen[name].timestamp < perm.timestamp else perm
                 newer = perm if older is seen[name] else seen[name]
-                game.zones.leave_battlefield(newer, Zone.GRAVEYARD, "sba")
+                game.zones.leave_battlefield(newer, Zone.GRAVEYARD, "sba", game)
                 events.append(SBAEvent(
                     rule="704.5j",
                     description=f"Legend rule: kept older {name}",
@@ -164,7 +168,7 @@ def _check_attachment_sbas(game: GameState) -> list[SBAEvent]:
         host = game.zones.find_permanent(perm.attached_to)
         if _is_aura(perm):
             if host is None:
-                game.zones.leave_battlefield(perm, Zone.GRAVEYARD, "sba")
+                game.zones.leave_battlefield(perm, Zone.GRAVEYARD, "sba", game)
                 events.append(SBAEvent(
                     rule="704.5m",
                     description=f"Aura {perm.name} has no legal host",
@@ -257,10 +261,6 @@ def _is_aura(perm: Permanent) -> bool:
 
 def _is_equipment(perm: Permanent) -> bool:
     return "Equipment" in perm.type_line
-
-
-def _is_indestructible(perm: Permanent) -> bool:
-    return "indestructible" in perm.oracle_text.lower()
 
 
 def _set_winner(game: GameState, winner_idx: int) -> None:

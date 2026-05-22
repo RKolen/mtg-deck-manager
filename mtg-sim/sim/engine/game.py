@@ -29,6 +29,7 @@ from engine.core.game_object import SpellOnStack, Target
 from engine.core.game_state import GameState, LogEntry, PlayerInfo
 from engine.core.turn_structure import PriorityPassOutcome, Step, TurnRunner
 from engine.core.zones import Zone, ZoneManager
+from engine.abilities.keywords import has_flash
 from engine.rules.combat import can_attack, eligible_attackers, legal_blocker
 from engine.rules.combat import resolve_combat_damage, tap_attackers
 from engine.rules.stack import Stack
@@ -472,7 +473,7 @@ class InteractiveGame:
         target = self._find_permanent(target_uid)
         if target is None:
             return f"Cast {card_info.name} (target not found)"
-        self.state.zones.leave_battlefield(target, Zone.GRAVEYARD, "destroy")
+        self.state.zones.leave_battlefield(target, Zone.GRAVEYARD, "destroy", self.state)
         return f"{card_info.name} destroyed {target.name}"
 
     def _resolve_draw(self, card: CardObject, controller_idx: int) -> str:
@@ -824,7 +825,7 @@ def _can_cast_now(card: CardInfo, phase: str, stack_is_empty: bool) -> bool:
 
 def _has_instant_timing(card: CardInfo) -> bool:
     """Return whether a spell can be cast at instant speed."""
-    return "Instant" in card.type_line or "Flash" in (card.oracle_text or "")
+    return has_flash(card)
 
 
 def _targets_from_request(target_uid: str | None, target_player: int | None) -> list[Target]:

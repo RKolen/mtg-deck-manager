@@ -14,8 +14,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from engine.abilities.keywords import can_target_permanent
 from engine.core.game_object import (
     CardObject,
+    Permanent,
     SpellOnStack,
     StackObject,
     Target,
@@ -74,7 +76,7 @@ class Stack:
 
         obj = self.objects.pop()
 
-        if _has_targets(obj) and _all_targets_illegal(obj, zones):
+        if _has_targets(obj) and _all_targets_illegal(obj, zones, obj.controller_idx):
             _move_spell_card_to_graveyard(obj, zones)
             return StackResolution(obj=obj, fizzled=True, reason="all_targets_illegal")
 
@@ -122,23 +124,33 @@ def _has_targets(obj: StackObject) -> bool:
     return bool(_get_targets(obj))
 
 
-def _target_is_legal(target: Target, zones: ZoneManager) -> bool:
-    """True when a target is still in a legal state for resolution.
-
-    Phase A legality: player targets always legal; permanent targets legal
-    if their obj_id is still on the battlefield.
-    """
+def _target_is_legal(target: Target, zones: ZoneManager, controller_idx: int) -> bool:
+    """True when a target is still legal for resolution (CR 608.2b)."""
     if target.player_idx is not None:
         return True
-    if target.obj_id is not None:
-        return zones.find_permanent(target.obj_id) is not None
-    return False
+    if target.obj_id is None:
+        return False
+    perm = zones.find_permanent(target.obj_id)
+    if perm is None:
+        return False
+    return _permanent_target_legal(perm, controller_idx)
 
 
-def _all_targets_illegal(obj: StackObject, zones: ZoneManager) -> bool:
+def _permanent_target_legal(target: Permanent, controller_idx: int) -> bool:
+    """Apply hexproof, shroud, ward, and protection to a permanent target."""
+    return can_target_permanent(target, controller_idx)
+
+
+def _all_targets_illegal(
+    obj: StackObject,
+    zones: ZoneManager,
+    controller_idx: int,
+) -> bool:
     """True when every declared target is illegal (triggers fizzle)."""
     targets = _get_targets(obj)
-    return bool(targets) and all(not _target_is_legal(t, zones) for t in targets)
+    return bool(targets) and all(
+        not _target_is_legal(t, zones, controller_idx) for t in targets
+    )
 
 
 def _move_spell_card_to_graveyard(obj: StackObject, zones: ZoneManager) -> None:

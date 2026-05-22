@@ -15,6 +15,7 @@ from __future__ import annotations
 import enum
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from engine.core.game_object import (
     CardObject,
@@ -24,6 +25,9 @@ from engine.core.game_object import (
     StackObject,
     TokenObject,
 )
+
+if TYPE_CHECKING:
+    from engine.core.game_state import GameState
 
 
 class Zone(enum.Enum):
@@ -112,6 +116,8 @@ class ZoneManager:
             source=source,
             sick=True,
         )
+        if "Creature" in perm.type_line and "haste" in perm.oracle_text.lower():
+            perm.sick = False
         self.battlefield.append(perm)
         self._emit(ZoneMoveEvent(
             obj=perm,
@@ -126,13 +132,27 @@ class ZoneManager:
     # Leaving the battlefield
     # ------------------------------------------------------------------
 
-    def leave_battlefield(self, perm: Permanent, to_zone: Zone, cause: str) -> None:
+    def leave_battlefield(
+        self,
+        perm: Permanent,
+        to_zone: Zone,
+        cause: str,
+        game: GameState | None = None,
+    ) -> None:
         """Remove a permanent from the battlefield and route its source card.
 
         Tokens cease to exist rather than entering any other zone (CR 111.7).
         Non-token cards are placed in to_zone under their owner's control.
+        When game is provided, persist/undying may prevent destruction.
         """
         if perm not in self.battlefield:
+            return
+
+        if (
+            game is not None
+            and to_zone == Zone.GRAVEYARD
+            and game.try_keyword_death_replacement(perm)
+        ):
             return
 
         self.battlefield.remove(perm)

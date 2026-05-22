@@ -19,6 +19,7 @@ from engine.core.mana import ManaPool
 from engine.core.turn_structure import TurnRunner
 from engine.core.turn_structure import Step
 from engine.core.zones import ZoneManager, ZoneMoveEvent
+from engine.abilities.keywords import enters_ready, has_persist, has_undying
 from engine.rules.state_based import check_sbas
 from engine.rules.stack import Stack
 from engine.rules.triggers import AttackTriggerEvent, BlockTriggerEvent
@@ -94,6 +95,23 @@ class GameState:
     def check_sbas(self) -> list:
         """Apply state-based actions and return the emitted SBA events."""
         return check_sbas(self)
+
+    def try_keyword_death_replacement(self, perm: Permanent) -> bool:
+        """Apply persist/undying instead of destroying a creature; return True if replaced."""
+        if 'Creature' not in perm.type_line or perm.is_token:
+            return False
+        if has_persist(perm) and perm.counters.get('-1/-1', 0) == 0:
+            perm.counters['-1/-1'] = 1
+            perm.damage_marked = 0
+            self.log_event('rules', 'persist', f'{perm.name} returned with -1/-1')
+            return True
+        if has_undying(perm) and perm.counters.get('+1/+1', 0) == 0:
+            perm.counters['+1/+1'] = 1
+            perm.damage_marked = 0
+            perm.sick = not enters_ready(perm)
+            self.log_event('rules', 'undying', f'{perm.name} returned with +1/+1')
+            return True
+        return False
 
     def _handle_zone_move(self, event: ZoneMoveEvent) -> None:
         """Put matching triggered abilities on the stack."""

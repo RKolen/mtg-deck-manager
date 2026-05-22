@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from engine.abilities import keywords
+from engine.abilities.keyword_handlers import apply_combat_damage_to_creature
 from engine.core.game_object import Permanent
 from engine.core.game_state import GameState
 
@@ -14,6 +16,7 @@ class CombatDamageResult:
 
     attackers: list[Permanent]
     damage_to_player: int = 0
+    infect_damage_to_player: int = 0
     blocked_attackers: int = 0
 
 
@@ -29,27 +32,17 @@ class _CombatContext:
 
 def can_attack(perm: Permanent) -> bool:
     """Return whether a permanent can attack under current combat rules."""
-    return (
-        _is_creature(perm)
-        and not perm.tapped
-        and not perm.sick
-        and not _has_keyword(perm, "defender")
-    )
+    return keywords.can_attack(perm)
 
 
 def can_block(perm: Permanent) -> bool:
     """Return whether a permanent can be declared as a blocker."""
-    return _is_creature(perm) and not perm.tapped
+    return keywords.can_block(perm)
 
 
 def legal_blocker(blocker: Permanent, attacker: Permanent, game: GameState) -> bool:
     """Return whether blocker can block attacker."""
-    del game
-    if not can_block(blocker):
-        return False
-    if _has_keyword(attacker, "flying"):
-        return _has_keyword(blocker, "flying") or _has_keyword(blocker, "reach")
-    return True
+    return keywords.legal_blocker(blocker, attacker, game)
 
 
 def power(perm: Permanent) -> int:
@@ -66,7 +59,7 @@ def eligible_attackers(permanents: list[Permanent]) -> list[Permanent]:
 def tap_attackers(attackers: list[Permanent]) -> None:
     """Tap attackers as part of declaring them unless they have vigilance."""
     for attacker in attackers:
-        if not _has_keyword(attacker, "vigilance"):
+        if keywords.should_tap_attacker(attacker):
             attacker.tapped = True
 
 
@@ -85,14 +78,26 @@ def resolve_combat_damage(
 
     for attacker in attackers:
         blockers = _blockers_for(game, defending_player_idx, attacker, blocker_assignments)
-        is_blocked = _has_enough_blockers(attacker, blockers)
+        is_blocked = _attacker_is_blocked(context, attacker, blockers)
         _resolve_first_strike_damage(context, attacker, blockers, is_blocked)
         _resolve_regular_combat_damage(context, attacker, blockers, is_blocked)
 
+    if result.infect_damage_to_player:
+        game.players[defending_player_idx].poison += result.infect_damage_to_player
     if result.damage_to_player:
         game.players[defending_player_idx].life -= result.damage_to_player
     game.check_sbas()
     return result
+
+
+def _attacker_is_blocked(
+    context: _CombatContext,
+    attacker: Permanent,
+    blockers: list[Permanent],
+) -> bool:
+    if keywords.landwalk_unblockable(attacker, context.defending_player_idx, context.game):
+        return False
+    return keywords.has_enough_blockers(attacker, blockers)
 
 
 def _resolve_first_strike_damage(
@@ -103,7 +108,7 @@ def _resolve_first_strike_damage(
 ) -> None:
     """Resolve first-strike damage, then SBAs before regular damage."""
     first_strikers = [
-        perm for perm in [attacker, *blockers] if _has_early_strike(perm)
+        perm for perm in [attacker, *blockers] if keywords.deals_in_first_strike_step(perm)
     ]
     if not first_strikers:
         return
@@ -143,7 +148,7 @@ def _assign_combat_damage(
     if not is_blocked:
         if attacker_deals:
             damage = power(attacker)
-            context.result.damage_to_player += damage
+            _add_player_damage(context, attacker, damage)
             context.game.fire_combat_damage_triggers(
                 attacker,
                 damage,
@@ -161,7 +166,7 @@ def _assign_combat_damage(
     if attacker_deals:
         damage = power(attacker)
         player_damage = _assign_attacker_damage(context, attacker, blockers, damage)
-        context.result.damage_to_player += player_damage
+        _add_player_damage(context, attacker, player_damage)
         context.game.fire_combat_damage_triggers(
             attacker,
             player_damage,
@@ -212,24 +217,10 @@ def _blockers_for(
     return blockers
 
 
-def _has_enough_blockers(attacker: Permanent, blockers: list[Permanent]) -> bool:
-    if _has_keyword(attacker, "menace"):
-        return len(blockers) >= 2
-    return bool(blockers)
-
-
 def _deals_in_step(perm: Permanent, first_strike_step: bool) -> bool:
     if first_strike_step:
-        return _has_early_strike(perm)
-    return _has_double_strike(perm) or not _has_early_strike(perm)
-
-
-def _has_early_strike(perm: Permanent) -> bool:
-    return _has_keyword(perm, "first strike") or _has_double_strike(perm)
-
-
-def _has_double_strike(perm: Permanent) -> bool:
-    return _has_keyword(perm, "double strike")
+        return keywords.deals_in_first_strike_step(perm)
+    return keywords.deals_in_regular_step(perm)
 
 
 def _apply_lifelink(
@@ -238,7 +229,7 @@ def _apply_lifelink(
     source: Permanent,
     damage_dealt: int,
 ) -> None:
-    if damage_dealt > 0 and _has_keyword(source, "lifelink"):
+    if damage_dealt > 0 and keywords.has_lifelink(source):
         game.gain_life(controller_idx, damage_dealt, source.obj_id)
 
 
@@ -261,24 +252,18 @@ def _assign_attacker_damage(
         remaining -= assigned
         if remaining <= 0:
             return 0
-    if _has_keyword(attacker, "trample"):
+    if keywords.has_trample(attacker):
         return remaining
     return 0
 
 
 def _lethal_damage(source: Permanent, receiver: Permanent) -> int:
-    if _has_keyword(source, "deathtouch"):
-        return 1
-    return max(0, _toughness(receiver) - receiver.damage_marked)
+    return keywords.lethal_damage_needed(source, receiver, _toughness(receiver))
 
 
 def _mark_combat_damage(receiver: Permanent, source: Permanent, damage: int) -> None:
-    """Mark combat damage, treating deathtouch damage as lethal."""
-    if damage <= 0:
-        return
-    receiver.damage_marked += damage
-    if _has_keyword(source, "deathtouch"):
-        receiver.damage_marked = max(receiver.damage_marked, _toughness(receiver))
+    """Mark combat damage, respecting infect, wither, and deathtouch."""
+    apply_combat_damage_to_creature(receiver, source, damage)
 
 
 def _toughness(perm: Permanent) -> int:
@@ -291,16 +276,18 @@ def _toughness(perm: Permanent) -> int:
     )
 
 
+def _add_player_damage(context: _CombatContext, attacker: Permanent, damage: int) -> None:
+    """Record combat damage dealt to the defending player."""
+    if damage <= 0:
+        return
+    if keywords.has_infect(attacker):
+        context.result.infect_damage_to_player += damage
+    else:
+        context.result.damage_to_player += damage
+
+
 def _find_permanent(game: GameState, uid: str) -> Permanent | None:
     try:
         return game.zones.find_permanent(int(uid))
     except ValueError:
         return None
-
-
-def _is_creature(perm: Permanent) -> bool:
-    return "Creature" in perm.type_line
-
-
-def _has_keyword(perm: Permanent, keyword: str) -> bool:
-    return keyword.lower() in perm.oracle_text.lower()
