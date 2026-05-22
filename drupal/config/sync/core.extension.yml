@@ -19,6 +19,7 @@ module:
   filter: 0
   gin_toolbar: 0
   graphql: 0
+  graphql_compose: 0
   image: 0
   jsonapi: 0
   key: 0
