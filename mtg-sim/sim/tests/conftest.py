@@ -95,6 +95,22 @@ def make_instant(
     )
 
 
+def make_artifact(
+    name: str = "Test Artifact",
+    cmc: float = 2.0,
+    oracle: str = "",
+    mana_cost: str = "{2}",
+) -> CardInfo:
+    """Create an artifact CardInfo."""
+    return make_card(
+        name=name,
+        type_line="Artifact",
+        cmc=cmc,
+        oracle=oracle,
+        mana_cost=mana_cost,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Zone helpers
 # ---------------------------------------------------------------------------

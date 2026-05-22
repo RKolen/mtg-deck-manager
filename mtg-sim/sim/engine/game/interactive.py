@@ -92,6 +92,8 @@ class InteractiveGame(SpellStackMixin):  # pylint: disable=too-many-public-metho
         target_player: int | None = None,
         kicker_times: int = 0,
         convoke_creature_ids: list[int] | None = None,
+        delve_graveyard_indices: list[int] | None = None,
+        improvise_artifact_ids: list[int] | None = None,
     ) -> dict:
         """Cast a spell through the stack, auto-passing while no responses exist."""
         return self._announce_cast(
@@ -102,6 +104,8 @@ class InteractiveGame(SpellStackMixin):  # pylint: disable=too-many-public-metho
             cast_options=CastAnnounceOptions(
                 kicker_times=kicker_times,
                 convoke_creature_ids=tuple(convoke_creature_ids or ()),
+                delve_graveyard_indices=tuple(delve_graveyard_indices or ()),
+                improvise_artifact_ids=tuple(improvise_artifact_ids or ()),
             ),
         )
 
@@ -112,6 +116,8 @@ class InteractiveGame(SpellStackMixin):  # pylint: disable=too-many-public-metho
         target_player: int | None = None,
         kicker_times: int = 0,
         convoke_creature_ids: list[int] | None = None,
+        delve_graveyard_indices: list[int] | None = None,
+        improvise_artifact_ids: list[int] | None = None,
     ) -> dict:
         """Cast a spell and leave it on the stack for explicit priority passes."""
         return self._announce_cast(
@@ -122,6 +128,8 @@ class InteractiveGame(SpellStackMixin):  # pylint: disable=too-many-public-metho
             cast_options=CastAnnounceOptions(
                 kicker_times=kicker_times,
                 convoke_creature_ids=tuple(convoke_creature_ids or ()),
+                delve_graveyard_indices=tuple(delve_graveyard_indices or ()),
+                improvise_artifact_ids=tuple(improvise_artifact_ids or ()),
             ),
         )
 

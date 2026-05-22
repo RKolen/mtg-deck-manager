@@ -12,9 +12,10 @@ from engine.abilities.keywords.casting import (
     kicked_counter_count,
     normalize_kicker_times,
     pump_with_kicker,
-    resolve_convoke_for_cast,
+    resolve_cast_adjustments,
     spell_damage,
 )
+from engine.abilities.keywords.casting.cast_adjustments import CastAdjustmentInput
 from engine.game.cast_modifiers import apply_post_cast_modifiers
 from engine.cards.oracle_parse import parse_draw, parse_token_blueprint, spell_category
 from engine.core.game_object import ActivatedAbilityOnStack, CardObject, SpellOnStack, Target
@@ -64,15 +65,20 @@ class SpellStackMixin(GameRuntimeMixin):
             if has_kicker(card_info)
             else payment_requirements(card_info)
         )
-        mana_needed, tapped_convoke, convoke_err = resolve_convoke_for_cast(
+        adjustments = resolve_cast_adjustments(
             card_info,
             mana_needed,
-            list(opts.convoke_creature_ids),
+            CastAdjustmentInput(
+                convoke_creature_ids=opts.convoke_creature_ids,
+                delve_graveyard_indices=opts.delve_graveyard_indices,
+                improvise_artifact_ids=opts.improvise_artifact_ids,
+            ),
             self.state.zones,
             0,
         )
-        if convoke_err:
-            return {**self.to_client(), "error": convoke_err}
+        if adjustments.error:
+            return {**self.to_client(), "error": adjustments.error}
+        mana_needed = adjustments.mana_needed
         if not self._tap_lands_for_mana(0, mana_needed):
             return {
                 **self.to_client(),
@@ -95,8 +101,18 @@ class SpellStackMixin(GameRuntimeMixin):
         cast_detail = f"{card_info.name} on stack"
         if paid_kicker:
             cast_detail = f"{card_info.name} on stack (kicked x{paid_kicker})"
-        if tapped_convoke:
-            cast_detail = f"{cast_detail} (convoke x{len(tapped_convoke)})"
+        if adjustments.delve_cards_exiled:
+            cast_detail = (
+                f"{cast_detail} (delve x{adjustments.delve_cards_exiled})"
+            )
+        if adjustments.convoke_creature_ids:
+            cast_detail = (
+                f"{cast_detail} (convoke x{len(adjustments.convoke_creature_ids)})"
+            )
+        if adjustments.improvise_artifact_ids:
+            cast_detail = (
+                f"{cast_detail} (improvise x{len(adjustments.improvise_artifact_ids)})"
+            )
         self._log("player", "cast", cast_detail)
         self.state.fire_spell_cast_triggers(card, tuple(targets))
         if auto_resolve:

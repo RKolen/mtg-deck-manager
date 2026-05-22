@@ -11,13 +11,19 @@ from engine.abilities.keywords.casting import (
     flashback_cost,
     flashback_mana_needed,
     has_convoke,
+    has_delve,
     has_flashback,
+    has_improvise,
     has_kicker,
     is_multikicker,
     kicker_mana_per_time,
     normalize_convoke_creature_ids,
+    normalize_delve_graveyard_indices,
+    normalize_improvise_artifact_ids,
     normalize_kicker_times,
     resolve_convoke_for_cast,
+    resolve_delve_for_cast,
+    resolve_improvise_for_cast,
     spell_damage,
     storm_copy_count,
     supports_storm_copies,
@@ -405,6 +411,41 @@ def test_resolve_convoke_taps_creatures_and_reduces_mana():
     assert mana_left == 2
     assert tapped == ids
     assert creature_a.tapped and creature_b.tapped
+
+
+def test_has_delve_and_exiles_graveyard_cards():
+    """Delve exiles graveyard cards and reduces generic mana by one each."""
+    game = fresh_game()
+    spell = make_instant('Dig', cmc=3, oracle='Delve\nDraw a card.')
+    filler = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant('Filler'))
+    game.zones.player_zones[0].graveyard.extend([filler, filler])
+    assert has_delve(spell)
+    assert normalize_delve_graveyard_indices(spell, [0, 1]) == [0, 1]
+    mana_left, exiled, err = resolve_delve_for_cast(spell, 3, [0, 1], game.zones, 0)
+    assert err is None
+    assert mana_left == 1
+    assert exiled == 2
+    assert len(game.zones.player_zones[0].graveyard) == 0
+    assert len(game.zones.player_zones[0].exile) == 2
+
+
+def test_resolve_improvise_taps_artifacts_and_reduces_mana():
+    """Each improvised artifact taps and reduces generic mana by one."""
+    game = fresh_game()
+    spell = make_instant('Scheme', cmc=3, oracle='Improvise\nDraw a card.')
+    relic = place_on_battlefield(
+        make_card('Relic', type_line='Artifact'),
+        0,
+        game.zones,
+    )
+    assert has_improvise(spell)
+    ids = [relic.obj_id]
+    assert normalize_improvise_artifact_ids(spell, ids) == ids
+    mana_left, tapped, err = resolve_improvise_for_cast(spell, 3, ids, game.zones, 0)
+    assert err is None
+    assert mana_left == 2
+    assert tapped == ids
+    assert relic.tapped
 
 
 def test_storm_copy_count_is_other_spells_this_turn():

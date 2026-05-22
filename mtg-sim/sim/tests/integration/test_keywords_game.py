@@ -5,7 +5,7 @@ from engine.core.zones import Zone
 from engine.game import create_game
 from engine.rules.combat import can_attack
 from tests.conftest import (
-    make_card,
+    make_artifact,
     make_creature,
     make_deck,
     make_instant,
@@ -42,7 +42,10 @@ def test_flashback_cast_from_graveyard_exiles_on_resolve():
     assert not data["stack"]
     assert len(game.state.zones.player_zones[0].graveyard) == 0
     assert len(game.state.zones.player_zones[0].exile) == 1
-    assert game.state.zones.player_zones[0].exile[0].card_info.name == "Shock"
+    exiled = game.state.zones.player_zones[0].exile[0]
+    assert isinstance(exiled, CardObject)
+    assert exiled.card_info is not None
+    assert exiled.card_info.name == "Shock"
 
 
 def test_kicked_burn_spell_deals_extra_damage():
@@ -149,3 +152,53 @@ def test_convoke_cast_taps_creatures_to_pay_mana():
     assert data["opponentLife"] == 16
     assert soldier.tapped
     assert knight.tapped
+
+
+def test_delve_cast_exiles_graveyard_to_pay_mana():
+    """Delve lets a 3-mana spell be paid with two exiled graveyard cards and one land."""
+    draw = make_instant(
+        name="Treasure Cruise",
+        cmc=3,
+        mana_cost="",
+        oracle="Draw three cards. Delve",
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    land = CardObject(controller_idx=0, owner_idx=0, card_info=make_land())
+    game.state.zones.enter_battlefield(land, 0, "test_setup", Zone.HAND)
+    filler_a = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant("Filler A"))
+    filler_b = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant("Filler B"))
+    game.state.zones.player_zones[0].graveyard.extend([filler_a, filler_b])
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=draw),
+    ]
+    data = game.action_cast(0, delve_graveyard_indices=[0, 1])
+    assert "error" not in data
+    exiled_names = {
+        c.card_info.name
+        for c in game.state.zones.player_zones[0].exile
+        if isinstance(c, CardObject) and c.card_info is not None
+    }
+    assert exiled_names == {"Filler A", "Filler B"}
+
+
+def test_improvise_cast_taps_artifacts_to_pay_mana():
+    """Improvise lets a 3-mana spell be paid with one tapped artifact and two lands."""
+    draw = make_instant(
+        name="Pecking Order",
+        cmc=3,
+        mana_cost="",
+        oracle="Draw a card. Improvise",
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    for _ in range(2):
+        land = CardObject(controller_idx=0, owner_idx=0, card_info=make_land())
+        game.state.zones.enter_battlefield(land, 0, "test_setup", Zone.HAND)
+    relic = place_on_battlefield(make_artifact("Relic"), 0, game.state.zones)
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=draw),
+    ]
+    data = game.action_cast(0, improvise_artifact_ids=[relic.obj_id])
+    assert "error" not in data
+    assert relic.tapped

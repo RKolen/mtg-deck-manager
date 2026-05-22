@@ -26,6 +26,8 @@ class CastAnnounceOptions:
 
     kicker_times: int = 0
     convoke_creature_ids: tuple[int, ...] = ()
+    delve_graveyard_indices: tuple[int, ...] = ()
+    improvise_artifact_ids: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)
