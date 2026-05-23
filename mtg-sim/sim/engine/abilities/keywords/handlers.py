@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from engine.abilities.keywords.combat import has_deathtouch
 from engine.abilities.keywords.counters import has_infect, has_wither
+from engine.abilities.keywords.other.absorb import reduce_combat_damage
 from engine.core.game_object import Permanent, TokenObject
 
 if TYPE_CHECKING:
@@ -20,6 +21,9 @@ def apply_combat_damage_to_creature(
     damage: int,
 ) -> None:
     """Apply combat damage respecting infect, wither, and deathtouch."""
+    if damage <= 0:
+        return
+    damage = reduce_combat_damage(receiver, damage)
     if damage <= 0:
         return
     if has_infect(source):

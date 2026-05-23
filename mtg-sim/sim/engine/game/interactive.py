@@ -478,6 +478,7 @@ class InteractiveGame(ActivatedActionsMixin, SpellStackMixin):  # pylint: disabl
         """Untap permanents and clear per-turn player state."""
         self.state.turn.begin_turn(player_idx)
         for perm in self._permanents(player_idx):
+            perm.counters.pop('valiant_this_turn', None)
             if perm.counters.pop('exerted', 0) or perm.counters.pop('detained', 0):
                 continue
             perm.tapped = False
@@ -607,7 +608,7 @@ class InteractiveGame(ActivatedActionsMixin, SpellStackMixin):  # pylint: disabl
                 attackers[0].controller_idx,
                 len(attackers),
             )
-        self._apply_annihilator_triggers(attacker_ids)
+        self._apply_attack_keywords(attacker_ids)
         for attacker in attackers:
             self.state.fire_attack_triggers(attacker)
         self._auto_pass_stack()

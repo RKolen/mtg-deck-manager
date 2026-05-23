@@ -22,8 +22,11 @@ from engine.abilities.keywords.ability_words.conditions import (
     is_alliance_ally_enters,
     is_celebration_spell_cast,
     is_converge_spell_cast,
+    is_chroma_spell_cast,
     is_eerie_spell_cast,
     is_lieutenant_etb,
+    is_renew_creature_leaves,
+    is_valiant_first_attack,
     is_coven_spell_cast,
     is_kinship_upkeep,
     is_morbid_spell_cast,
@@ -46,6 +49,7 @@ from engine.abilities.keywords.ability_words.effects import (
     KinshipEffect,
     ParleyEffect,
     ProwessEffect,
+    ValiantEffect,
 )
 from engine.cards.oracle_parse import parse_token_blueprint
 from engine.core.game_object import Permanent
@@ -113,6 +117,9 @@ _WIRED: dict[str, _AbilityWordWire] = {
     'Kinship': _AbilityWordWire(TriggerKey.BEGINNING_OF_UPKEEP, is_kinship_upkeep),
     'Eerie': _AbilityWordWire(TriggerKey.SPELL_CAST, is_eerie_spell_cast),
     'Lieutenant': _AbilityWordWire(TriggerKey.ENTERS_BATTLEFIELD, is_lieutenant_etb),
+    'Chroma': _AbilityWordWire(TriggerKey.SPELL_CAST, is_chroma_spell_cast),
+    'Renew': _AbilityWordWire(TriggerKey.LEAVES_BATTLEFIELD, is_renew_creature_leaves),
+    'Valiant': _AbilityWordWire(TriggerKey.ATTACKS, is_valiant_first_attack),
 }
 
 
@@ -142,6 +149,14 @@ def register_permanent_ability_words(
                 wire.trigger_key,
                 wire.condition,
                 effect=KinshipEffect(),
+            )
+            continue
+        if word == 'Valiant':
+            registry.register(
+                permanent,
+                wire.trigger_key,
+                wire.condition,
+                effect=ValiantEffect(),
             )
             continue
         clause = clause_after_ability_word(oracle, word)

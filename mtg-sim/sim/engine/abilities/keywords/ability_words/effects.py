@@ -12,6 +12,7 @@ from engine.cards.oracle_parse import (
 )
 from engine.core.game_object import CardObject
 from engine.abilities.keywords._token_factory import enter_token_from_blueprint
+from engine.abilities.keywords.ability_words.clause import clause_after_ability_word
 from engine.abilities.keywords.actions.counters import put_plus_counters
 from engine.core.game_object import (
     ActivatedAbilityOnStack,
@@ -99,6 +100,26 @@ class ProwessEffect(Effect):
     def describe(self) -> str:
         """Return a short description for logs."""
         return "Prowess (+1/+1)"
+
+
+class ValiantEffect(Effect):
+    """Mark the source as having attacked with valiant this turn."""
+
+    def resolve(self, game: GameState, source: GameObject) -> str:
+        """Apply valiant clause and mark first attack used."""
+        permanent = _permanent_from_stack_source(game, source)
+        if permanent is None:
+            return ''
+        permanent.counters['valiant_this_turn'] = 1
+        clause_effect = AbilityWordEffect(
+            clause_after_ability_word(permanent.oracle_text, 'Valiant') or '',
+        )
+        detail = clause_effect.resolve(game, source)
+        return detail or f"{permanent.name} valiant"
+
+    def describe(self) -> str:
+        """Return a short description for logs."""
+        return 'Valiant'
 
 
 class KinshipEffect(Effect):

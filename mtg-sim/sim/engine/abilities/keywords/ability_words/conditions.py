@@ -512,6 +512,61 @@ def is_adamant_spell_cast(
     )
 
 
+def _chroma_count(mana_cost: str) -> int:
+    colors: set[str] = set()
+    upper = (mana_cost or '').upper()
+    for letter in 'WUBRG':
+        if f'{{{letter}}}' in upper:
+            colors.add(letter)
+    return len(colors)
+
+
+def is_chroma_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Chroma: you cast a spell (X = colors in its mana cost)."""
+    del game
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and _chroma_count(event.mana_cost) > 0
+    )
+
+
+def is_renew_creature_leaves(
+    event: TriggerEvent,
+    _game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Renew: another creature you control left the battlefield."""
+    return (
+        isinstance(event, ZoneMoveEvent)
+        and event.from_zone == Zone.BATTLEFIELD
+        and isinstance(event.obj, Permanent)
+        and 'Creature' in event.obj.type_line
+        and event.obj.controller_idx == definition.controller_idx
+        and event.obj.obj_id != definition.source_permanent_id
+    )
+
+
+def is_valiant_first_attack(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Valiant: this creature attacks for the first time this turn."""
+    if not isinstance(event, AttackTriggerEvent):
+        return False
+    if event.attacker_id != definition.source_permanent_id:
+        return False
+    source = game.zones.find_permanent(definition.source_permanent_id)
+    if source is None:
+        return False
+    return not source.counters.get('valiant_this_turn')
+
+
 def is_eerie_spell_cast(
     event: TriggerEvent,
     game: GameState,

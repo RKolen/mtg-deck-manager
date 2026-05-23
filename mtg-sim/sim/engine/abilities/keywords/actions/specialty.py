@@ -12,7 +12,7 @@ from engine.abilities.keywords.actions.targets import find_creature_by_uid
 from engine.abilities.keywords.actions.library import seek_card
 from engine.abilities.keywords.actions.tokens import create_creature_token_from_oracle
 from engine.abilities.keywords.registry import has_registered_keyword
-from engine.cards.oracle_parse import TokenBlueprint, parse_token_blueprint
+from engine.cards.oracle_parse import TokenBlueprint, parse_damage, parse_token_blueprint
 from engine.core.game_object import CardObject
 from engine.core.zones import Zone
 
@@ -370,6 +370,92 @@ def create_role_token(zones: ZoneManager, controller_idx: int, oracle_text: str)
         return f"created role {created}" if created else None
     enter_token_from_blueprint(zones, controller_idx, blueprint, cause='role')
     return f"created {blueprint.name}"
+
+
+def has_double(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Double as a keyword action."""
+    return has_keyword_action(oracle_text, 'Double')
+
+
+def has_assemble(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Assemble as a keyword action."""
+    return has_keyword_action(oracle_text, 'Assemble')
+
+
+def has_abandon(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Abandon as a keyword action."""
+    return has_keyword_action(oracle_text, 'Abandon')
+
+
+def has_open_attraction(oracle_text: str | None) -> bool:
+    """Return True when oracle opens an Attraction."""
+    return has_registered_keyword(oracle_text, 'Open an Attraction')
+
+
+def has_meld(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Meld as a keyword action."""
+    return has_keyword_action(oracle_text, 'Meld')
+
+
+def apply_double_damage(
+    game: GameState,
+    controller_idx: int,
+    oracle_text: str,
+) -> str | None:
+    """Double: deal damage twice (simplified)."""
+    damage = parse_damage(oracle_text)
+    if damage <= 0:
+        return None
+    opponent = 1 - controller_idx
+    game.players[opponent].life -= damage * 2
+    game.mark_player_was_dealt_damage(opponent)
+    return f"double dealt {damage * 2} to P{opponent + 1}"
+
+
+def open_attraction(game: GameState, controller_idx: int) -> str:
+    """Open an Attraction: advance the attractions counter."""
+    game.players[controller_idx].attractions += 1
+    count = game.players[controller_idx].attractions
+    return f"opened Attraction #{count}"
+
+
+def assemble_legion(zones: ZoneManager, controller_idx: int) -> str:
+    """Assemble: create a 2/2 Knight token."""
+    blueprint = TokenBlueprint(
+        name='Knight',
+        type_line='Creature — Knight',
+        power='2',
+        toughness='2',
+        oracle_text='',
+    )
+    name = enter_token_from_blueprint(zones, controller_idx, blueprint, cause='assemble')
+    return f"assembled {name}"
+
+
+def abandon_hand(zones: ZoneManager, controller_idx: int) -> str:
+    """Abandon: discard two cards from hand."""
+    hand = zones.player_zones[controller_idx].hand
+    discarded = 0
+    while hand and discarded < 2:
+        card = hand.pop()
+        if isinstance(card, CardObject):
+            zones.player_zones[controller_idx].graveyard.append(card)
+            discarded += 1
+    return f"abandoned {discarded} card(s)"
+
+
+def meld_permanents(zones: ZoneManager, top_uid: str | None, bottom_uid: str | None) -> str | None:
+    """Meld: log melding two permanents (simplified)."""
+    if top_uid is None or bottom_uid is None:
+        return None
+    try:
+        top = zones.find_permanent(int(top_uid))
+        bottom = zones.find_permanent(int(bottom_uid))
+    except ValueError:
+        return None
+    if top is None or bottom is None:
+        return None
+    return f"melded {top.name} with {bottom.name}"
 
 
 def detain_creature(zones: ZoneManager, target_uid: str | None) -> str | None:

@@ -72,8 +72,18 @@ from engine.abilities.keywords.actions.specialty import (
     has_behold,
     has_clash,
     has_collect_evidence,
+    abandon_hand,
+    apply_double_damage,
+    assemble_legion,
+    has_abandon,
+    has_assemble,
     has_conjure,
     has_detain,
+    has_double,
+    has_meld,
+    has_open_attraction,
+    meld_permanents,
+    open_attraction,
     has_discard_action,
     has_exert,
     has_forage,
@@ -562,6 +572,40 @@ def _apply_role_token(ctx: ActionContext) -> str | None:
     return create_role_token(ctx.zones, ctx.controller_idx, ctx.oracle_text)
 
 
+def _apply_double(ctx: ActionContext) -> str | None:
+    if not has_double(ctx.oracle_text) or ctx.game is None:
+        return None
+    return apply_double_damage(ctx.game, ctx.controller_idx, ctx.oracle_text)
+
+
+def _apply_open_attraction(ctx: ActionContext) -> str | None:
+    if not has_open_attraction(ctx.oracle_text) or ctx.game is None:
+        return None
+    return open_attraction(ctx.game, ctx.controller_idx)
+
+
+def _apply_assemble(ctx: ActionContext) -> str | None:
+    if not has_assemble(ctx.oracle_text):
+        return None
+    return assemble_legion(ctx.zones, ctx.controller_idx)
+
+
+def _apply_abandon(ctx: ActionContext) -> str | None:
+    if not has_abandon(ctx.oracle_text):
+        return None
+    return abandon_hand(ctx.zones, ctx.controller_idx)
+
+
+def _apply_meld(ctx: ActionContext) -> str | None:
+    if not has_meld(ctx.oracle_text):
+        return None
+    return meld_permanents(
+        ctx.zones,
+        ctx.target_creature_uid,
+        ctx.second_creature_uid,
+    )
+
+
 def _apply_exile(ctx: ActionContext) -> str | None:
     if not has_registered_keyword(ctx.oracle_text, 'Exile'):
         return None
@@ -623,6 +667,11 @@ _HANDLERS: dict[str, Callable[[ActionContext], str | None]] = {
     'Attach': _apply_attach,
     'Vote': _apply_vote,
     'Role token': _apply_role_token,
+    'Double': _apply_double,
+    'Open an Attraction': _apply_open_attraction,
+    'Assemble': _apply_assemble,
+    'Abandon': _apply_abandon,
+    'Meld': _apply_meld,
 }
 
 

@@ -6,6 +6,7 @@ from deck_registry import CardInfo
 from engine.abilities import activated
 from engine.abilities.activated import ActivationSpeed
 from engine.abilities.activated._cost_keyword import INSTANT_SPEED_PHASES
+from engine.abilities.keywords.other.afflict import apply_afflict_on_attack
 from engine.abilities.keywords.other.annihilator import apply_annihilator_on_attack
 from engine.abilities.keywords.other.blitz import sacrifice_blitz_creatures
 from engine.abilities.keywords.other.dash import return_dash_creatures_to_hand
@@ -216,15 +217,19 @@ class ActivatedActionsMixin(GameRuntimeMixin):
         """Return dashed creatures to hand at end of turn."""
         return return_dash_creatures_to_hand(self.state, player_idx)
 
-    def _apply_annihilator_triggers(self, attacker_ids: list[str]) -> None:
-        """Apply annihilator for each attacking creature."""
+    def _apply_attack_keywords(self, attacker_ids: list[str]) -> None:
+        """Apply annihilator, afflict, and similar on-attack keywords."""
         for attacker_id in attacker_ids:
             perm = self._find_permanent(attacker_id)
             if perm is None:
                 continue
-            detail = apply_annihilator_on_attack(self.state, perm)
-            if detail:
-                self._log('rules', 'annihilator', detail)
+            for apply_fn, tag in (
+                (apply_annihilator_on_attack, 'annihilator'),
+                (apply_afflict_on_attack, 'afflict'),
+            ):
+                detail = apply_fn(self.state, perm)
+                if detail:
+                    self._log('rules', tag, detail)
 
     def _sacrifice_blitz_at_turn_end(self, player_idx: int) -> None:
         """Sacrifice blitzed creatures at end of turn."""

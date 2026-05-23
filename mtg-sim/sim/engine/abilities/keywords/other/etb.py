@@ -10,6 +10,7 @@ from engine.abilities.keywords.other.blitz import apply_blitz_etb
 from engine.abilities.keywords.other.bloodthirst import apply_bloodthirst_etb
 from engine.abilities.keywords.other.dash import apply_dash_etb
 from engine.abilities.keywords.other.devour import apply_devour_etb
+from engine.abilities.keywords.other.embalm import apply_embalm_etb
 from engine.abilities.keywords.other.fabricate import apply_fabricate_etb
 from engine.abilities.keywords.other.living_weapon import (
     apply_living_weapon,
@@ -58,6 +59,10 @@ def apply_etb_other_abilities(game: GameState, permanent: Permanent) -> list[str
     backup_detail = apply_backup_etb(permanent, zones.battlefield)
     if backup_detail:
         parts.append(backup_detail)
+
+    embalm_detail = apply_embalm_etb(zones, permanent)
+    if embalm_detail:
+        parts.append(embalm_detail)
 
     ascend_detail = update_ascend_status(game, permanent.controller_idx)
     if ascend_detail:

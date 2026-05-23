@@ -75,6 +75,7 @@ class SpellCastTriggerEvent:
     controller_idx: int
     spell_name: str
     type_line: str
+    mana_cost: str = ''
     targets: tuple[Target, ...] = ()
 
 
@@ -357,6 +358,7 @@ def spell_cast_event(
         controller_idx=spell.controller_idx,
         spell_name=card_info.name if card_info is not None else "",
         type_line=card_info.type_line if card_info is not None else "",
+        mana_cost=card_info.mana_cost if card_info is not None else "",
         targets=targets,
     )
 

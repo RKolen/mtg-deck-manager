@@ -49,6 +49,7 @@ class PlayerInfo:
     permanents_entered_this_turn: int = 0
     ascended: bool = False
     dungeon_room: int = 0
+    attractions: int = 0
     has_lost: bool = False
 
 
