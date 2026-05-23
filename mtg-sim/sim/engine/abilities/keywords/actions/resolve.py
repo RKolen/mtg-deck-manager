@@ -27,14 +27,18 @@ from engine.abilities.keywords.actions.library import (
     fateseal_cards,
     has_discover,
     has_fateseal,
+    has_manifest,
     has_mill,
     has_scry,
+    has_seek,
     has_shuffle,
     has_surveil,
+    manifest_top_of_library,
     mill_cards,
     mill_count,
     scry_cards,
     scry_count,
+    seek_card,
     shuffle_library,
     surveil_cards,
     surveil_count,
@@ -293,6 +297,27 @@ def _apply_shuffle(ctx: ActionContext) -> str | None:
     return "shuffled library"
 
 
+def _apply_seek(ctx: ActionContext) -> str | None:
+    if not has_seek(ctx.oracle_text):
+        return None
+    card = seek_card(ctx.zones, ctx.controller_idx, ctx.oracle_text)
+    if card is None or card.card_info is None:
+        return 'seek (no match)'
+    ctx.zones.player_zones[ctx.controller_idx].hand.append(card)
+    return f"sought {card.card_info.name}"
+
+
+def _apply_manifest(ctx: ActionContext) -> str | None:
+    if not has_manifest(ctx.oracle_text):
+        return None
+    if 'manifest dread' in ctx.oracle_text.lower():
+        return None
+    perm = manifest_top_of_library(ctx.zones, ctx.controller_idx)
+    if perm is None:
+        return 'manifest (empty library)'
+    return f"manifested {perm.name} (face down)"
+
+
 def _apply_discover(ctx: ActionContext) -> str | None:
     if not has_discover(ctx.oracle_text):
         return None
@@ -360,6 +385,8 @@ _HANDLERS: dict[str, Callable[[ActionContext], str | None]] = {
     'Food': _apply_food,
     'Shuffle': _apply_shuffle,
     'Discover': _apply_discover,
+    'Seek': _apply_seek,
+    'Manifest': _apply_manifest,
     'Regenerate': _apply_regenerate,
     'Destroy': _apply_destroy,
     'Exile': _apply_exile,

@@ -23,6 +23,7 @@ from engine.abilities.keywords import enters_ready, has_persist, has_undying
 from engine.rules.state_based import check_sbas
 from engine.rules.stack import Stack
 from engine.rules.triggers import AttackTriggerEvent, BlockTriggerEvent
+from engine.rules.triggers import MassAttackTriggerEvent
 from engine.rules.triggers import CombatDamageTriggerEvent
 from engine.rules.triggers import LifeGainedTriggerEvent
 from engine.rules.triggers import StepTriggerEvent, TriggerRegistry, spell_cast_event
@@ -134,6 +135,22 @@ class GameState:
             attacking_player_idx=attacker.controller_idx,
         )
         self.trigger_registry.put_triggers_on_stack(event, self)
+
+    def fire_mass_attack_triggers(
+        self,
+        attacking_player_idx: int,
+        attacker_count: int,
+    ) -> None:
+        """Put Battalion-style triggers for declaring multiple attackers."""
+        if attacker_count <= 0:
+            return
+        self.trigger_registry.put_triggers_on_stack(
+            MassAttackTriggerEvent(
+                attacking_player_idx=attacking_player_idx,
+                attacker_count=attacker_count,
+            ),
+            self,
+        )
 
     def fire_block_triggers(self, blocker: Permanent, attacker: Permanent) -> None:
         """Put triggered abilities for a declared blocker on the stack."""

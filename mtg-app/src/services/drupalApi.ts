@@ -433,11 +433,27 @@ export async function deleteDeck(id: string): Promise<void> {
 // Deck cards (GraphQL Compose paragraphs + MTG extension mutations)
 // ---------------------------------------------------------------------------
 
+/** GraphQL Compose NodeMtgCard (oracleText is a Text object, not a scalar). */
+interface GqlComposeMtgCard {
+  uuid: string;
+  title: string;
+  manaCost: string | null;
+  cmc: number | null;
+  typeLine: string | null;
+  colors: string[];
+  colorIdentity: string[];
+  oracleText?: GqlText | null;
+  imageUri: string | null;
+  isManaProducer: boolean;
+  producedMana: string[];
+  legalFormats: string[];
+}
+
 interface GqlComposeDeckCard {
   uuid: string;
   quantity: number;
   isSideboard: boolean;
-  card: GqlMtgCard | null;
+  card: GqlComposeMtgCard | null;
 }
 
 const COMPOSE_DECK_CARD_FIELDS = gql`
@@ -454,7 +470,7 @@ const COMPOSE_DECK_CARD_FIELDS = gql`
         typeLine
         colors
         colorIdentity
-        oracleText
+        oracleText { value processed }
         imageUri
         isManaProducer
         producedMana
@@ -464,8 +480,30 @@ const COMPOSE_DECK_CARD_FIELDS = gql`
   }
 `;
 
-function composeCardToGql(card: GqlMtgCard & { uuid?: string }): GqlMtgCard {
-  return { ...card, id: card.uuid ?? card.id };
+function composeMtgCardToGql(card: GqlComposeMtgCard): GqlMtgCard {
+  return {
+    id: card.uuid,
+    title: card.title,
+    manaCost: card.manaCost,
+    cmc: card.cmc,
+    typeLine: card.typeLine,
+    colors: card.colors,
+    colorIdentity: card.colorIdentity,
+    oracleText: composePlainText(card.oracleText),
+    imageUri: card.imageUri,
+    isManaProducer: card.isManaProducer,
+    producedMana: card.producedMana,
+    legalFormats: card.legalFormats,
+    priceUsd: null,
+    priceUsdFoil: null,
+    setCode: null,
+    setName: null,
+    rarity: null,
+    collectorNumber: null,
+    power: null,
+    toughness: null,
+    loyalty: null,
+  };
 }
 
 function toDeckCardFromCompose(slot: GqlComposeDeckCard): DeckCardWithCard {
@@ -476,7 +514,7 @@ function toDeckCardFromCompose(slot: GqlComposeDeckCard): DeckCardWithCard {
     id: slot.uuid,
     quantity: slot.quantity,
     isSideboard: slot.isSideboard,
-    card: composeCardToGql(slot.card),
+    card: composeMtgCardToGql(slot.card),
   });
   return mapped;
 }
@@ -489,16 +527,20 @@ export async function fetchDeckCardsWithCards(
     query GetDeckWithCards($id: ID!) {
       nodeDeck(id: $id) {
         deckCards {
-          ...ComposeDeckCardFields
+          ... on ParagraphDeckCard {
+            ...ComposeDeckCardFields
+          }
         }
       }
     }
   `;
   const data = await getGraphQLClient().request<{
-    nodeDeck: { deckCards: GqlComposeDeckCard[] } | null;
+    nodeDeck: { deckCards: (GqlComposeDeckCard | null)[] } | null;
   }>(query, { id: deckId });
   const slots = data.nodeDeck?.deckCards ?? [];
-  return slots.filter(s => s.card != null).map(toDeckCardFromCompose);
+  return slots
+    .filter((s): s is GqlComposeDeckCard => s != null && s.card != null)
+    .map(toDeckCardFromCompose);
 }
 
 async function deckCardAdd(

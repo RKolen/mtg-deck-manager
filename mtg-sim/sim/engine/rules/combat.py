@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from engine.abilities import keywords
 from engine.abilities.keywords.handlers import apply_combat_damage_to_creature
-from engine.core.game_object import Permanent
+from engine.core.game_object import Permanent, effective_power
 from engine.core.game_state import GameState
 
 
@@ -48,8 +48,7 @@ def legal_blocker(blocker: Permanent, attacker: Permanent, game: GameState) -> b
 
 def power(perm: Permanent) -> int:
     """Return current combat power using printed P/T plus +/- counters."""
-    base = perm.card_info.numeric_power if perm.card_info is not None else 0
-    return base + perm.counters.get("+1/+1", 0) - perm.counters.get("-1/-1", 0)
+    return effective_power(perm)
 
 
 def eligible_attackers(permanents: list[Permanent]) -> list[Permanent]:

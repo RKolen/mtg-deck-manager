@@ -307,11 +307,25 @@ StackObject: TypeAlias = SpellOnStack | ActivatedAbilityOnStack | TriggeredAbili
 
 def _power_toughness(perm: Permanent) -> tuple[int, int]:
     """Return printed/token power and toughness without continuous effects."""
+    if perm.face_down:
+        return 2, 2
     if perm.card_info is not None:
         return perm.card_info.numeric_power, perm.card_info.numeric_toughness
     if isinstance(perm.source, TokenObject):
         return _parse_int(perm.source.power), _parse_int(perm.source.toughness)
     return 0, 0
+
+
+def effective_power(perm: Permanent) -> int:
+    """Return combat power including counters and face-down 2/2 stats."""
+    power, _ = _power_toughness(perm)
+    return power + perm.counters.get('+1/+1', 0) - perm.counters.get('-1/-1', 0)
+
+
+def effective_toughness(perm: Permanent) -> int:
+    """Return combat toughness including counters and face-down 2/2 stats."""
+    _, toughness = _power_toughness(perm)
+    return toughness + perm.counters.get('+1/+1', 0) - perm.counters.get('-1/-1', 0)
 
 
 def _parse_int(value: str) -> int:

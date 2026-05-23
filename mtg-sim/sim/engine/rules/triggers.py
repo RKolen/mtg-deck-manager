@@ -23,6 +23,7 @@ class TriggerKey(StrEnum):
     LEAVES_BATTLEFIELD = "leaves_battlefield"
     DIES = "dies"
     ATTACKS = "attacks"
+    MASS_ATTACK = "mass_attack"
     BLOCKS = "blocks"
     BEGINNING_OF_UPKEEP = "beginning_of_upkeep"
     BEGINNING_OF_COMBAT = "beginning_of_combat"
@@ -47,6 +48,14 @@ class AttackTriggerEvent:
 
     attacker_id: int
     attacking_player_idx: int
+
+
+@dataclass(frozen=True)
+class MassAttackTriggerEvent:
+    """Synthetic event when a player declares multiple attackers at once."""
+
+    attacking_player_idx: int
+    attacker_count: int
 
 
 @dataclass(frozen=True)
@@ -93,6 +102,7 @@ TriggerEvent = (
     ZoneMoveEvent
     | StepTriggerEvent
     | AttackTriggerEvent
+    | MassAttackTriggerEvent
     | BlockTriggerEvent
     | SpellCastTriggerEvent
     | LifeGainedTriggerEvent

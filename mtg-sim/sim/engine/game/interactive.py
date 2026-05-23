@@ -529,10 +529,18 @@ class InteractiveGame(ActivatedActionsMixin, SpellStackMixin):  # pylint: disabl
 
     def _fire_attack_triggers(self, attacker_ids: list[str]) -> None:
         """Put declared-attacker triggers on the stack and resolve them."""
-        for attacker_id in attacker_ids:
-            attacker = self._find_permanent(attacker_id)
-            if attacker is not None:
-                self.state.fire_attack_triggers(attacker)
+        attackers = [
+            perm
+            for attacker_id in attacker_ids
+            if (perm := self._find_permanent(attacker_id)) is not None
+        ]
+        if attackers:
+            self.state.fire_mass_attack_triggers(
+                attackers[0].controller_idx,
+                len(attackers),
+            )
+        for attacker in attackers:
+            self.state.fire_attack_triggers(attacker)
         self._auto_pass_stack()
 
     def _fire_block_triggers(self) -> None:

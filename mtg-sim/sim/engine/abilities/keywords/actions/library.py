@@ -13,8 +13,8 @@ from engine.abilities.keywords.actions._parse import (
     word_to_int,
 )
 from engine.abilities.keywords.actions.detect import has_keyword_action
-from engine.core.game_object import CardObject
-from engine.core.zones import ZoneManager
+from engine.core.game_object import CardObject, Permanent
+from engine.core.zones import Zone, ZoneManager
 
 _MILLS_VERB_RE = re.compile(r'\bmills?\s+(\w+|\d+)', re.IGNORECASE)
 
@@ -161,3 +161,78 @@ def discover_from_library(
         bottom.append(card)
     lib.extend(bottom)
     return DiscoverResult(hit=hit, bottom_count=len(bottom))
+
+
+_SEEK_TYPE_RE = re.compile(r'\bseek (?:a|an) (\w+)', re.IGNORECASE)
+
+
+def has_seek(oracle_text: str | None) -> bool:
+    """Return True when oracle text contains the Seek action."""
+    return has_keyword_action(oracle_text, 'Seek')
+
+
+def has_manifest(oracle_text: str | None) -> bool:
+    """Return True when oracle text contains the Manifest action."""
+    return has_keyword_action(oracle_text, 'Manifest')
+
+
+def seek_card_type(oracle_text: str) -> str | None:
+    """Parse the card type from 'Seek a creature card' style text."""
+    match = _SEEK_TYPE_RE.search(oracle_text)
+    if match is None:
+        return None
+    return match.group(1).lower()
+
+
+def _card_matches_seek_type(card: CardObject, type_word: str) -> bool:
+    if card.card_info is None:
+        return False
+    type_line = card.card_info.type_line.lower()
+    aliases = {
+        'creature': 'creature',
+        'land': 'land',
+        'instant': 'instant',
+        'sorcery': 'sorcery',
+        'artifact': 'artifact',
+        'enchantment': 'enchantment',
+        'planeswalker': 'planeswalker',
+        'battle': 'battle',
+        'basic': 'land',
+    }
+    label = aliases.get(type_word, type_word)
+    return label in type_line
+
+
+def seek_card(
+    zones: ZoneManager,
+    player_idx: int,
+    oracle_text: str,
+) -> CardObject | None:
+    """Seek: put the first matching card from library into hand."""
+    type_word = seek_card_type(oracle_text)
+    if type_word is None:
+        return None
+    lib = zones.player_zones[player_idx].library
+    for idx, card in enumerate(lib):
+        if isinstance(card, CardObject) and _card_matches_seek_type(card, type_word):
+            lib.pop(idx)
+            return card
+    return None
+
+
+def manifest_top_of_library(
+    zones: ZoneManager,
+    player_idx: int,
+    *,
+    cause: str = 'manifest',
+) -> Permanent | None:
+    """Manifest: put the top library card onto the battlefield face down as a 2/2."""
+    lib = zones.player_zones[player_idx].library
+    if not lib:
+        return None
+    card = lib[0]
+    if not isinstance(card, CardObject):
+        return None
+    perm = zones.enter_battlefield(card, player_idx, cause, Zone.LIBRARY)
+    perm.face_down = True
+    return perm

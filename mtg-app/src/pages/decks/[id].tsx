@@ -1692,7 +1692,12 @@ const DeckPage: React.FC<DeckPageProps> = ({ params }) => {
 
   const deckId = deck?.id;
 
-  const { data: deckCards = [], isLoading: cardsLoading } = useQuery<DeckCardWithCard[]>({
+  const {
+    data: deckCards = [],
+    isLoading: cardsLoading,
+    isError: cardsError,
+    error: cardsErrorDetail,
+  } = useQuery<DeckCardWithCard[]>({
     queryKey: ['deckCards', deckId],
     queryFn: () => fetchDeckCardsWithCards(deckId!),
     enabled: deckId != null,
@@ -1768,7 +1773,12 @@ const DeckPage: React.FC<DeckPageProps> = ({ params }) => {
         </button>
       </div>
 
-      {cardsLoading && tab === 'editor' ? (
+      {cardsError ? (
+        <p style={{ color: '#c00' }}>
+          Failed to load deck cards:{' '}
+          {cardsErrorDetail instanceof Error ? cardsErrorDetail.message : 'Unknown error'}
+        </p>
+      ) : cardsLoading && tab === 'editor' ? (
         <p>Loading cards...</p>
       ) : tab === 'editor' ? (
         <DeckEditor deckId={deckId!} cards={deckCards} />

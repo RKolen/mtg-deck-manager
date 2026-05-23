@@ -7,11 +7,14 @@ from typing import TYPE_CHECKING
 
 from engine.abilities.keywords.ability_words.clause import clause_after_ability_word
 from engine.abilities.keywords.ability_words.conditions import (
+    is_battalion_mass_attack,
     is_controller_enchantment_enters,
     is_controller_instant_or_sorcery_cast,
     is_controller_land_enters,
     is_raid_at_beginning_of_combat,
     is_source_enraged,
+    is_source_etb_delirium,
+    is_source_etb_metalcraft,
 )
 from engine.abilities.keywords.ability_words.detect import has_ability_word
 from engine.abilities.keywords.ability_words.effects import (
@@ -52,6 +55,15 @@ _WIRED: dict[str, _AbilityWordWire] = {
     'Enrage': _AbilityWordWire(
         TriggerKey.DEALS_COMBAT_DAMAGE,
         is_source_enraged,
+    ),
+    'Battalion': _AbilityWordWire(TriggerKey.MASS_ATTACK, is_battalion_mass_attack),
+    'Metalcraft': _AbilityWordWire(
+        TriggerKey.ENTERS_BATTLEFIELD,
+        is_source_etb_metalcraft,
+    ),
+    'Delirium': _AbilityWordWire(
+        TriggerKey.ENTERS_BATTLEFIELD,
+        is_source_etb_delirium,
     ),
 }
 

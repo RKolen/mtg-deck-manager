@@ -7,17 +7,21 @@ from engine.abilities.keywords.actions import (
     ActionContext,
     fight_creatures,
     has_fight,
+    has_manifest,
     has_mill,
     has_scry,
+    has_seek,
     has_surveil,
+    manifest_top_of_library,
     mill_cards,
     proliferate,
     resolve_spell_keyword_actions,
     scry_cards,
+    seek_card,
     surveil_cards,
 )
 from engine.abilities.keywords.actions.detect import keyword_actions_in_oracle
-from engine.core.game_object import CardObject
+from engine.core.game_object import CardObject, effective_power
 from tests.conftest import fresh_game, make_creature, make_instant, place_on_battlefield
 
 
@@ -140,3 +144,47 @@ def test_has_mill_scry_fight_detect_oracle():
     assert has_scry('Scry 2.')
     assert has_fight('Fight target creature.')
     assert has_surveil('Surveil 1.')
+    assert has_seek('Seek a creature card.')
+    assert has_manifest('Manifest the top card of your library.')
+
+
+def test_seek_puts_matching_creature_in_hand():
+    """Seek moves the first matching card from library to hand."""
+    game = fresh_game()
+    bear = CardObject(controller_idx=0, owner_idx=0, card_info=make_creature('Bear', 2, 2))
+    bolt = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant('Bolt'))
+    game.zones.player_zones[0].library.extend([bolt, bear])
+    card = seek_card(game.zones, 0, 'Seek a creature card.')
+    assert card is bear
+    assert bear not in game.zones.player_zones[0].library
+
+
+def test_manifest_puts_face_down_creature_on_battlefield():
+    """Manifest puts the top library card face down as a 2/2."""
+    game = fresh_game()
+    hidden = CardObject(
+        controller_idx=0,
+        owner_idx=0,
+        card_info=make_creature('Hidden', 5, 5),
+    )
+    game.zones.player_zones[0].library.append(hidden)
+    perm = manifest_top_of_library(game.zones, 0)
+    assert perm is not None
+    assert perm.face_down
+    assert effective_power(perm) == 2
+
+
+def test_resolve_seek_spell_action():
+    """Seek on a spell resolves through ActionContext."""
+    game = fresh_game()
+    game.zones.player_zones[0].library.append(
+        CardObject(controller_idx=0, owner_idx=0, card_info=make_creature('Bear', 2, 2)),
+    )
+    detail = resolve_spell_keyword_actions(ActionContext(
+        zones=game.zones,
+        game=game,
+        controller_idx=0,
+        oracle_text='Seek a creature card.',
+    ))
+    assert 'sought Bear' in detail
+    assert len(game.zones.player_zones[0].hand) == 1

@@ -10,9 +10,10 @@ from engine.abilities.keywords.ability_words.effects import (
 )
 from engine.core.game_object import CardObject, TriggeredAbilityOnStack
 from engine.core.turn_structure import Step
-from engine.core.zones import Zone
+from engine.core.zones import Zone, ZoneMoveEvent
 from tests.conftest import (
     fresh_game,
+    make_artifact,
     make_card,
     make_creature,
     make_instant,
@@ -114,6 +115,76 @@ def test_magecraft_triggers_on_instant_cast():
     register_permanent_ability_words(source, game.trigger_registry)
     spell = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant("Bolt"))
     game.fire_spell_cast_triggers(spell)
+    trigger = _top_trigger(game)
+    assert trigger.source_permanent_id == source.obj_id
+
+
+def test_battalion_triggers_when_attacking_with_three_creatures():
+    """Battalion fires once when three or more creatures attack."""
+    game = fresh_game()
+    source = place_on_battlefield(
+        make_creature("Boros Elite", 3, 2, oracle="Battalion — It gets +2/+2 until end of turn."),
+        0,
+        game.zones,
+    )
+    register_permanent_ability_words(source, game.trigger_registry)
+    game.fire_mass_attack_triggers(0, 3)
+    trigger = _top_trigger(game)
+    assert trigger.source_permanent_id == source.obj_id
+
+
+def _fire_source_etb(game, source) -> None:
+    """Re-emit an ETB event after registering triggers (test helper)."""
+    game.trigger_registry.put_triggers_on_stack(
+        ZoneMoveEvent(
+            obj=source,
+            from_zone=Zone.HAND,
+            to_zone=Zone.BATTLEFIELD,
+            cause='test_etb',
+            player_idx=source.controller_idx,
+        ),
+        game,
+    )
+
+
+def test_metalcraft_triggers_on_etb_with_three_artifacts():
+    """Metalcraft ETB abilities check artifact count on entry."""
+    game = fresh_game()
+    for _ in range(3):
+        place_on_battlefield(make_artifact("Relic"), 0, game.zones)
+    card = CardObject(
+        controller_idx=0,
+        owner_idx=0,
+        card_info=make_creature("Pia", 2, 2, oracle="Metalcraft — Draw a card."),
+    )
+    source = game.zones.enter_battlefield(card, 0, "test", Zone.HAND)
+    register_permanent_ability_words(source, game.trigger_registry)
+    _fire_source_etb(game, source)
+    trigger = _top_trigger(game)
+    assert trigger.source_permanent_id == source.obj_id
+
+
+def test_delirium_triggers_on_etb_with_four_graveyard_types():
+    """Delirium ETB abilities check graveyard diversity on entry."""
+    game = fresh_game()
+    types = [
+        make_creature("Bear", 2, 2),
+        make_instant("Bolt"),
+        make_artifact("Relic"),
+        make_land("Swamp", "B"),
+    ]
+    for card_info in types:
+        game.zones.player_zones[0].graveyard.append(
+            CardObject(controller_idx=0, owner_idx=0, card_info=card_info),
+        )
+    card = CardObject(
+        controller_idx=0,
+        owner_idx=0,
+        card_info=make_creature("Grief", 2, 2, oracle="Delirium — Draw a card."),
+    )
+    source = game.zones.enter_battlefield(card, 0, "test", Zone.HAND)
+    register_permanent_ability_words(source, game.trigger_registry)
+    _fire_source_etb(game, source)
     trigger = _top_trigger(game)
     assert trigger.source_permanent_id == source.obj_id
 

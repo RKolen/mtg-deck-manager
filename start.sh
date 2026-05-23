@@ -3,6 +3,7 @@
 #
 # Usage:
 #   ./start.sh           # start all services in the background
+#   ./start.sh --fresh   # same, but clear Gatsby cache before starting
 #   ./start.sh --stop    # stop all services
 set -euo pipefail
 
@@ -29,14 +30,74 @@ for var in GATSBY_PORT DRUPAL_URL OLLAMA_PORT MILVUS_PORT SIM_PORT; do
   fi
 done
 
+FRESH_START=false
+if [[ "${1:-}" == "--fresh" ]]; then
+  FRESH_START=true
+fi
+
+# Kill every process listening on a TCP port (Gatsby spawns child processes).
+stop_port_listeners() {
+  local port="$1"
+  local pids
+  pids=$(lsof -ti :"$port" 2>/dev/null || true)
+  if [[ -z "$pids" ]]; then
+    return 0
+  fi
+  # shellcheck disable=SC2086
+  kill $pids 2>/dev/null || true
+  sleep 1
+  pids=$(lsof -ti :"$port" 2>/dev/null || true)
+  if [[ -n "$pids" ]]; then
+    # shellcheck disable=SC2086
+    kill -9 $pids 2>/dev/null || true
+    sleep 1
+  fi
+}
+
+wait_for_port_free() {
+  local port="$1"
+  local attempts="${2:-30}"
+  local i
+  for ((i = 1; i <= attempts; i++)); do
+    if ! lsof -ti :"$port" > /dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "ERROR: port $port is still in use after ${attempts}s"
+  lsof -i :"$port" 2>/dev/null || true
+  return 1
+}
+
+wait_for_gatsby_ready() {
+  local port="$1"
+  local attempts="${2:-90}"
+  local i code
+  for ((i = 1; i <= attempts; i++)); do
+    code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 2 "http://localhost:${port}/" || true)
+    if [[ "$code" == "200" ]]; then
+      echo "    Gatsby ready (HTTP 200) after ${i} attempt(s)."
+      return 0
+    fi
+    sleep 2
+  done
+  echo "    WARNING: Gatsby did not return HTTP 200 within $((attempts * 2))s (last code: ${code:-none})."
+  echo "    Check .gatsby.log for compile errors."
+  return 1
+}
+
 # ---------------------------------------------------------------------------
 # --stop: shut everything down
 # ---------------------------------------------------------------------------
 if [[ "${1:-}" == "--stop" ]]; then
   echo "==> Stopping Gatsby dev server..."
-  OLD_GATSBY=$(lsof -ti :"$GATSBY_PORT" 2>/dev/null || true)
-  if [[ -n "$OLD_GATSBY" ]]; then
-    kill "$OLD_GATSBY" 2>/dev/null && echo "    Gatsby stopped."
+  if lsof -ti :"$GATSBY_PORT" > /dev/null 2>&1; then
+    stop_port_listeners "$GATSBY_PORT"
+    if wait_for_port_free "$GATSBY_PORT" 10; then
+      echo "    Gatsby stopped."
+    else
+      echo "    Gatsby may still be running."
+    fi
   else
     echo "    Gatsby was not running."
   fi
@@ -131,18 +192,25 @@ if [[ ! -f ".env.development" ]]; then
   GATSBY_STARTED=false
 else
   echo "==> Stopping any existing Gatsby instance on port $GATSBY_PORT..."
-  OLD_GATSBY=$(lsof -ti :"$GATSBY_PORT" 2>/dev/null || true)
-  if [[ -n "$OLD_GATSBY" ]]; then
-    kill "$OLD_GATSBY" 2>/dev/null && echo "    Killed existing process(es): $OLD_GATSBY"
+  stop_port_listeners "$GATSBY_PORT"
+  wait_for_port_free "$GATSBY_PORT"
+
+  if [[ "$FRESH_START" == true ]]; then
+    echo "==> Clearing Gatsby cache (--fresh)..."
+    npm run clean > /dev/null 2>&1
   fi
 
-  echo "==> Clearing Gatsby cache..."
-  npm run clean > /dev/null 2>&1
-
   echo "==> Starting Gatsby dev server (background)..."
-  NODE_EXTRA_CA_CERTS="$HOME/.local/share/mkcert/rootCA.pem" npx gatsby develop --port "$GATSBY_PORT" > "$SCRIPT_DIR/.gatsby.log" 2>&1 &
+  : > "$SCRIPT_DIR/.gatsby.log"
+  (
+    cd "$FRONTEND_DIR"
+    export NODE_EXTRA_CA_CERTS="${NODE_EXTRA_CA_CERTS:-$HOME/.local/share/mkcert/rootCA.pem}"
+    exec npx gatsby develop --port "$GATSBY_PORT" -H localhost
+  ) >> "$SCRIPT_DIR/.gatsby.log" 2>&1 &
   GATSBY_PID=$!
   echo "    Gatsby PID: $GATSBY_PID (logs: .gatsby.log)"
+  echo "    Waiting for first compile..."
+  wait_for_gatsby_ready "$GATSBY_PORT" || true
   echo "    Frontend:   http://localhost:$GATSBY_PORT"
   GATSBY_STARTED=true
 fi
@@ -160,3 +228,4 @@ echo "  Ollama:        http://localhost:$OLLAMA_PORT"
 echo "  Milvus:        localhost:$MILVUS_PORT"
 echo ""
 echo "Run './start.sh --stop' to shut everything down."
+echo "Run './start.sh --fresh' to clear the Gatsby cache on the next start."
