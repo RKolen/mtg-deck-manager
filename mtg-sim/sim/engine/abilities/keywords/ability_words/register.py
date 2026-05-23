@@ -18,8 +18,12 @@ from engine.abilities.keywords.ability_words.conditions import (
     is_formidable_spell_cast,
     is_hellbent_spell_cast,
     is_addendum_spell_cast,
+    is_adamant_spell_cast,
+    is_alliance_ally_enters,
     is_celebration_spell_cast,
+    is_converge_spell_cast,
     is_coven_spell_cast,
+    is_kinship_upkeep,
     is_morbid_spell_cast,
     is_pack_tactics_attack,
     is_parley_at_beginning_of_combat,
@@ -37,6 +41,7 @@ from engine.abilities.keywords.ability_words.conditions import (
 from engine.abilities.keywords.ability_words.detect import has_ability_word
 from engine.abilities.keywords.ability_words.effects import (
     AbilityWordEffect,
+    KinshipEffect,
     ParleyEffect,
     ProwessEffect,
 )
@@ -100,6 +105,10 @@ _WIRED: dict[str, _AbilityWordWire] = {
     'Addendum': _AbilityWordWire(TriggerKey.SPELL_CAST, is_addendum_spell_cast),
     'Celebration': _AbilityWordWire(TriggerKey.SPELL_CAST, is_celebration_spell_cast),
     'Pack tactics': _AbilityWordWire(TriggerKey.ATTACKS, is_pack_tactics_attack),
+    'Alliance': _AbilityWordWire(TriggerKey.ENTERS_BATTLEFIELD, is_alliance_ally_enters),
+    'Converge': _AbilityWordWire(TriggerKey.SPELL_CAST, is_converge_spell_cast),
+    'Adamant': _AbilityWordWire(TriggerKey.SPELL_CAST, is_adamant_spell_cast),
+    'Kinship': _AbilityWordWire(TriggerKey.BEGINNING_OF_UPKEEP, is_kinship_upkeep),
 }
 
 
@@ -121,6 +130,14 @@ def register_permanent_ability_words(
                 wire.trigger_key,
                 wire.condition,
                 effect=ParleyEffect(),
+            )
+            continue
+        if word == 'Kinship':
+            registry.register(
+                permanent,
+                wire.trigger_key,
+                wire.condition,
+                effect=KinshipEffect(),
             )
             continue
         clause = clause_after_ability_word(oracle, word)

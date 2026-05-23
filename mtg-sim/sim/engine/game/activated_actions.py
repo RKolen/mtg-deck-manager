@@ -6,6 +6,7 @@ from deck_registry import CardInfo
 from engine.abilities import activated
 from engine.abilities.activated import ActivationSpeed
 from engine.abilities.activated._cost_keyword import INSTANT_SPEED_PHASES
+from engine.abilities.keywords.other.dash import return_dash_creatures_to_hand
 from engine.core.game_object import CardObject, Permanent
 from engine.core.zones import Zone
 from engine.game._hand_card import load_hand_card_for_action, run_with_hand_card
@@ -208,3 +209,7 @@ class ActivatedActionsMixin(GameRuntimeMixin):
             if activated.is_unearth_creature(perm):
                 self.state.zones.leave_battlefield(perm, Zone.EXILE, "unearth")
                 self._log("rules", "unearth_exile", f"{perm.name} exiled")
+
+    def _return_dash_creatures_to_hand(self, player_idx: int) -> list[str]:
+        """Return dashed creatures to hand at end of turn."""
+        return return_dash_creatures_to_hand(self.state, player_idx)

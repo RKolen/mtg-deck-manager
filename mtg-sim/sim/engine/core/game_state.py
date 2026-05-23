@@ -21,6 +21,7 @@ from engine.core.turn_structure import Step
 from engine.core.zones import Zone, ZoneManager, ZoneMoveEvent
 from engine.abilities.keywords import enters_ready, has_persist, has_undying
 from engine.abilities.keywords.other.extort import apply_extort_on_spell_cast
+from engine.abilities.keywords.other.ascend import update_ascend_status
 from engine.abilities.keywords.other.modular import apply_modular_on_die
 from engine.rules.state_based import check_sbas
 from engine.rules.stack import Stack
@@ -45,6 +46,8 @@ class PlayerInfo:
     was_dealt_damage_this_turn: bool = False
     revolt_this_turn: bool = False
     permanents_entered_this_turn: int = 0
+    ascended: bool = False
+    dungeon_room: int = 0
     has_lost: bool = False
 
 
@@ -125,6 +128,9 @@ class GameState:
         """Track Morbid, Revolt, Celebration, and similar ability-word state."""
         if isinstance(event.obj, Permanent) and event.to_zone == Zone.BATTLEFIELD:
             self.players[event.player_idx].permanents_entered_this_turn += 1
+            ascend_detail = update_ascend_status(self, event.player_idx)
+            if ascend_detail:
+                self.log_event('rules', 'ascend', ascend_detail)
         if not isinstance(event.obj, Permanent):
             return
         if (

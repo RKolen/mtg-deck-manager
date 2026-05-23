@@ -458,6 +458,74 @@ def is_parley_at_beginning_of_combat(
     )
 
 
+def is_alliance_ally_enters(
+    event: TriggerEvent,
+    _game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Alliance: another Ally entered under your control."""
+    return (
+        isinstance(event, ZoneMoveEvent)
+        and event.to_zone == Zone.BATTLEFIELD
+        and isinstance(event.obj, Permanent)
+        and 'Ally' in event.obj.type_line
+        and event.player_idx == definition.controller_idx
+        and event.obj.obj_id != definition.source_permanent_id
+    )
+
+
+def _colors_among_permanents(game: GameState, player_idx: int) -> int:
+    """Count distinct mana colors among permanents (simplified converge)."""
+    colors: set[str] = set()
+    for perm in game.zones.battlefield:
+        if perm.controller_idx != player_idx or perm.card_info is None:
+            continue
+        for letter in 'WUBRG':
+            if f'{{{letter}}}' in (perm.card_info.mana_cost or '').upper():
+                colors.add(letter)
+    return len(colors)
+
+
+def is_converge_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Converge: you cast a spell (X = colors among permanents you control)."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and _colors_among_permanents(game, definition.controller_idx) > 0
+    )
+
+
+def is_adamant_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Adamant: you cast a spell during your main phase."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and is_main_phase(game.turn.current_step)
+    )
+
+
+def is_kinship_upkeep(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Kinship: beginning of upkeep on your turn."""
+    del game
+    return (
+        isinstance(event, StepTriggerEvent)
+        and event.step == Step.UPKEEP
+        and event.active_player_idx == definition.controller_idx
+    )
+
+
 def is_flurry_spell_cast(
     event: TriggerEvent,
     game: GameState,

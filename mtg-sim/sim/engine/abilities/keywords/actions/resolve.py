@@ -70,8 +70,20 @@ from engine.abilities.keywords.actions.specialty import (
     has_monstrosity,
     has_reveal,
     learn_draw,
+    clash,
+    collect_evidence,
+    discard_from_hand,
+    has_clash,
+    has_collect_evidence,
+    has_discard_action,
+    has_incubate,
+    has_suspect,
+    has_venture,
+    incubate,
     monstrosity_creature,
     reveal_top_card,
+    suspect_creature,
+    venture_into_dungeon,
 )
 from engine.abilities.keywords.actions.targets import find_creature_by_uid
 from engine.abilities.keywords.actions.tokens import (
@@ -467,6 +479,44 @@ def _apply_monstrosity(ctx: ActionContext) -> str | None:
     return monstrosity_creature(ctx.zones, ctx.target_creature_uid, ctx.oracle_text)
 
 
+def _apply_suspect(ctx: ActionContext) -> str | None:
+    if not has_suspect(ctx.oracle_text):
+        return None
+    return suspect_creature(ctx.zones, ctx.target_creature_uid)
+
+
+def _apply_incubate(ctx: ActionContext) -> str | None:
+    if not has_incubate(ctx.oracle_text):
+        return None
+    return incubate(ctx.zones, ctx.controller_idx, ctx.oracle_text)
+
+
+def _apply_clash(ctx: ActionContext) -> str | None:
+    if not has_clash(ctx.oracle_text):
+        return None
+    return clash(ctx.zones)
+
+
+def _apply_collect_evidence(ctx: ActionContext) -> str | None:
+    if not has_collect_evidence(ctx.oracle_text):
+        return None
+    return collect_evidence(ctx.zones, ctx.controller_idx)
+
+
+def _apply_discard_action(ctx: ActionContext) -> str | None:
+    if not has_discard_action(ctx.oracle_text):
+        return None
+    return discard_from_hand(ctx.zones, ctx.controller_idx)
+
+
+def _apply_venture(ctx: ActionContext) -> str | None:
+    if not has_venture(ctx.oracle_text):
+        return None
+    if ctx.game is None:
+        return None
+    return venture_into_dungeon(ctx.game, ctx.controller_idx)
+
+
 def _apply_exile(ctx: ActionContext) -> str | None:
     if not has_registered_keyword(ctx.oracle_text, 'Exile'):
         return None
@@ -517,6 +567,12 @@ _HANDLERS: dict[str, Callable[[ActionContext], str | None]] = {
     'Adapt': _apply_adapt,
     'Reveal': _apply_reveal,
     'Monstrosity': _apply_monstrosity,
+    'Suspect': _apply_suspect,
+    'Incubate': _apply_incubate,
+    'Clash': _apply_clash,
+    'Collect evidence': _apply_collect_evidence,
+    'Discard': _apply_discard_action,
+    'Venture into the dungeon': _apply_venture,
 }
 
 

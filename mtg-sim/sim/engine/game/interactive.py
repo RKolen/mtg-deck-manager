@@ -302,6 +302,8 @@ class InteractiveGame(ActivatedActionsMixin, SpellStackMixin):  # pylint: disabl
         assert self.phase in ("main1", "main2", "attack")
         self._fire_step_triggers(Step.END_STEP)
         self._exile_unearth_at_turn_end(0)
+        for detail in self._return_dash_creatures_to_hand(0):
+            self._log("rules", "dash", detail)
         self._log("player", "end_turn", f"End of turn {self.turn}")
         self.phase = "opp_turn"
         self._opponent_main_phase()

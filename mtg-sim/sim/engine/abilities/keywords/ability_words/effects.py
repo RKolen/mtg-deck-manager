@@ -101,6 +101,41 @@ class ProwessEffect(Effect):
         return "Prowess (+1/+1)"
 
 
+class KinshipEffect(Effect):
+    """Reveal the top card of your library; draw if it shares a creature type."""
+
+    def resolve(self, game: GameState, source: GameObject) -> str:
+        """Compare the top card's types to the kinship source."""
+        permanent = _permanent_from_stack_source(game, source)
+        if permanent is None:
+            return ''
+        library = game.zones.player_zones[permanent.controller_idx].library
+        if not library:
+            return 'kinship (empty library)'
+        top = library[-1]
+        if not isinstance(top, CardObject) or top.card_info is None:
+            return 'kinship (no card)'
+        source_types = {
+            part.strip()
+            for part in permanent.type_line.split('—')[0].split()
+            if part.strip() not in ('Legendary', 'Creature', 'Artifact', 'Enchantment')
+        }
+        top_types = set(top.card_info.type_line.split('—')[0].split())
+        if source_types & top_types:
+            drawn = game.zones.draw(permanent.controller_idx)
+            name = (
+                drawn.card_info.name
+                if drawn is not None and isinstance(drawn, CardObject) and drawn.card_info
+                else 'card'
+            )
+            return f"kinship matched, drew {name}"
+        return f"kinship revealed {top.card_info.name} (no match)"
+
+    def describe(self) -> str:
+        """Return a short description for logs."""
+        return 'Kinship'
+
+
 class ParleyEffect(Effect):
     """Each player reveals their top card; highest mana value draws (simplified)."""
 

@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from engine.abilities.keywords.other.ascend import update_ascend_status
 from engine.abilities.keywords.other.bloodthirst import apply_bloodthirst_etb
+from engine.abilities.keywords.other.dash import apply_dash_etb
+from engine.abilities.keywords.other.devour import apply_devour_etb
+from engine.abilities.keywords.other.fabricate import apply_fabricate_etb
 from engine.abilities.keywords.other.living_weapon import (
     apply_living_weapon,
     has_living_weapon,
@@ -32,5 +36,21 @@ def apply_etb_other_abilities(game: GameState, permanent: Permanent) -> list[str
     bloodthirst_detail = apply_bloodthirst_etb(game, permanent)
     if bloodthirst_detail:
         parts.append(bloodthirst_detail)
+
+    fabricate_detail = apply_fabricate_etb(zones, permanent)
+    if fabricate_detail:
+        parts.append(fabricate_detail)
+
+    devour_detail = apply_devour_etb(game, permanent)
+    if devour_detail:
+        parts.append(devour_detail)
+
+    dash_detail = apply_dash_etb(permanent)
+    if dash_detail:
+        parts.append(dash_detail)
+
+    ascend_detail = update_ascend_status(game, permanent.controller_idx)
+    if ascend_detail:
+        parts.append(ascend_detail)
 
     return parts

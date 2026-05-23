@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from engine.abilities.keywords._token_factory import enter_token_from_blueprint
 from engine.abilities.keywords.actions._parse import parse_amount_after_keyword
 from engine.abilities.keywords.actions.counters import put_plus_counters
 from engine.abilities.keywords.actions.detect import has_keyword_action
 from engine.abilities.keywords.actions.targets import find_creature_by_uid
 from engine.abilities.keywords.registry import has_registered_keyword
+from engine.cards.oracle_parse import TokenBlueprint
 from engine.core.game_object import CardObject
 from engine.core.zones import Zone
 
@@ -169,6 +171,117 @@ def monstrosity_creature(
     put_plus_counters(target, amount)
     target.counters['monstrous'] = 1
     return f"{target.name} became monstrous (+{amount}/+{amount})"
+
+
+def has_suspect(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Suspect as a keyword action."""
+    return has_keyword_action(oracle_text, 'Suspect')
+
+
+def has_incubate(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Incubate as a keyword action."""
+    return has_keyword_action(oracle_text, 'Incubate')
+
+
+def has_clash(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Clash as a keyword action."""
+    return has_keyword_action(oracle_text, 'Clash')
+
+
+def has_collect_evidence(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Collect evidence as a keyword action."""
+    return has_registered_keyword(oracle_text, 'Collect evidence')
+
+
+def has_discard_action(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Discard as a keyword action."""
+    return has_keyword_action(oracle_text, 'Discard')
+
+
+def has_venture(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Venture into the dungeon."""
+    return has_registered_keyword(oracle_text, 'Venture into the dungeon')
+
+
+def suspect_creature(zones: ZoneManager, target_uid: str | None) -> str | None:
+    """Mark a creature suspect (simplified)."""
+    target = find_creature_by_uid(zones, target_uid)
+    if target is None:
+        return None
+    target.counters['suspect'] = 1
+    return f"suspected {target.name}"
+
+
+def incubate(zones: ZoneManager, controller_idx: int, oracle_text: str) -> str:
+    """Create an incubator token with +1/+1 counters (simplified)."""
+    amount = parse_amount_after_keyword(oracle_text, 'incubate')
+    blueprint = TokenBlueprint(
+        name='Incubator',
+        type_line='Artifact — Phyrexian Incubator',
+        power='0',
+        toughness='0',
+        oracle_text='',
+    )
+    enter_token_from_blueprint(zones, controller_idx, blueprint, cause='incubate')
+    for perm in reversed(zones.battlefield):
+        if perm.controller_idx == controller_idx and 'Incubator' in perm.type_line:
+            put_plus_counters(perm, amount)
+            break
+    return f"incubated ({amount} counter(s))"
+
+
+def clash(zones: ZoneManager) -> str:
+    """Each player reveals their top card; highest mana value wins a draw."""
+    scores: list[tuple[int, int, str]] = []
+    for pidx in (0, 1):
+        library = zones.player_zones[pidx].library
+        if not library:
+            scores.append((pidx, -1, ''))
+            continue
+        top = library[-1]
+        if isinstance(top, CardObject) and top.card_info is not None:
+            mv = int(top.card_info.cmc)
+            name = top.card_info.name
+        else:
+            mv = 0
+            name = 'card'
+        scores.append((pidx, mv, name))
+    winner_idx, best_mv, winner_card = max(scores, key=lambda item: item[1])
+    if best_mv < 0:
+        return 'clash (no libraries)'
+    drawn = zones.draw(winner_idx)
+    draw_name = (
+        drawn.card_info.name
+        if drawn is not None and isinstance(drawn, CardObject) and drawn.card_info
+        else 'nothing'
+    )
+    return f"clash: P{winner_idx + 1} won with {winner_card} (MV {best_mv}), drew {draw_name}"
+
+
+def collect_evidence(zones: ZoneManager, controller_idx: int) -> str | None:
+    """Collect evidence when six or more cards are in your graveyard."""
+    if len(zones.player_zones[controller_idx].graveyard) < 6:
+        return None
+    return 'collected evidence (6+ cards in graveyard)'
+
+
+def discard_from_hand(zones: ZoneManager, controller_idx: int) -> str:
+    """Discard the last card from hand (simplified Discard action)."""
+    hand = zones.player_zones[controller_idx].hand
+    if not hand:
+        return 'discarded (empty hand)'
+    card = hand.pop()
+    assert isinstance(card, CardObject)
+    zones.player_zones[controller_idx].graveyard.append(card)
+    name = card.card_info.name if card.card_info else 'card'
+    return f"discarded {name}"
+
+
+def venture_into_dungeon(game: GameState, controller_idx: int) -> str:
+    """Advance the dungeon room counter (simplified)."""
+    player = game.players[controller_idx]
+    player.dungeon_room += 1
+    return f"ventured to dungeon room {player.dungeon_room}"
 
 
 def detain_creature(zones: ZoneManager, target_uid: str | None) -> str | None:

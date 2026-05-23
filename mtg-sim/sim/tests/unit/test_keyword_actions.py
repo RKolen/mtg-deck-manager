@@ -34,7 +34,7 @@ def test_all_seventy_two_keyword_actions_registered():
 
 def test_keyword_action_handler_coverage():
     """Most common keyword actions have resolution handlers (see plan.md)."""
-    assert len(_HANDLERS) >= 37
+    assert len(_HANDLERS) >= 43
     missing = [name for name in ALL_KEYWORD_ACTIONS if name not in _HANDLERS]
     assert 'Amass' not in missing
     assert 'Mill' not in missing
