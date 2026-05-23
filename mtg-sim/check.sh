@@ -12,7 +12,7 @@ if [[ ! -x "${VENV}/bin/python" ]]; then
 fi
 
 "${VENV}/bin/pip" install -q -r "${SIM}/requirements-dev.txt"
-echo "==> pyright (strict)"
+echo "==> pyright (strict, engine only)"
 "${VENV}/bin/pyright" "${SIM}"
 echo "==> pylint"
 "${VENV}/bin/pylint" "${SIM}"

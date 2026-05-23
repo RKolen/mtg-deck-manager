@@ -320,7 +320,12 @@ def _power_toughness(perm: Permanent) -> tuple[int, int]:
 def effective_power(perm: Permanent) -> int:
     """Return combat power including counters and face-down 2/2 stats."""
     power, _ = _power_toughness(perm)
-    return power + perm.counters.get('+1/+1', 0) - perm.counters.get('-1/-1', 0)
+    return (
+        power
+        + perm.counters.get('+1/+1', 0)
+        + perm.counters.get('+power/+0', 0)
+        - perm.counters.get('-1/-1', 0)
+    )
 
 
 def effective_toughness(perm: Permanent) -> int:

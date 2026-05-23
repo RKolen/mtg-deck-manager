@@ -11,7 +11,7 @@ from engine.abilities.activated._cost_keyword import (
     timing_allows_hand_activation,
 )
 from engine.abilities.keywords.ability_words.detect import has_ability_word
-from engine.abilities.keywords.actions.counters import put_plus_counters
+from engine.abilities.keywords.actions.counters import put_power_bonus
 from engine.abilities.keywords.actions.targets import find_creature_by_uid
 from engine.core.game_object import CardObject
 from engine.core.mana import ManaCost
@@ -79,6 +79,6 @@ def apply_bloodrush(
         return None
     power = bloodrush_power(card.card_info)
     discard_from_hand(zones, player_idx, hand_idx)
-    put_plus_counters(target, power)
+    put_power_bonus(target, power)
     name = card.card_info.name
     return f"bloodrush {name}: +{power}/+0 on {target.name}"

@@ -80,6 +80,13 @@ def put_plus_counters(perm: Permanent, count: int) -> None:
     perm.counters['+1/+1'] = perm.counters.get('+1/+1', 0) + count
 
 
+def put_power_bonus(perm: Permanent, amount: int) -> None:
+    """Add a temporary +N/+0 power bonus (bloodrush-style)."""
+    if amount <= 0:
+        return
+    perm.counters['+power/+0'] = perm.counters.get('+power/+0', 0) + amount
+
+
 def proliferate(game: GameState) -> list[str]:
     """Give one of each counter type to each permanent and player that has that type."""
     details: list[str] = []

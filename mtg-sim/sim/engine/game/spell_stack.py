@@ -77,6 +77,7 @@ from engine.abilities.keywords.actions import (
 )
 from engine.abilities.keywords.actions.tokens import connive
 from engine.abilities.keywords.ability_words import register_permanent_ability_words
+from engine.abilities.keywords.ability_words.spell_words import apply_spell_hosted_ability_words
 from engine.abilities.keywords.other.etb import apply_etb_other_abilities
 from engine.abilities.keywords.other.evoke import mark_evoked_cast
 from engine.abilities.keywords.other.register import register_permanent_other_keywords
@@ -310,6 +311,8 @@ class SpellStackMixin(GameRuntimeMixin):
             cast_detail = f"{cast_detail} (sneak x{adjustments.sneak_lands_exiled})"
         self._log("player", "cast", cast_detail)
         self.state.fire_spell_cast_triggers(card, tuple(targets))
+        for word_detail in apply_spell_hosted_ability_words(self.state, card_info, 0):
+            self._log("player", "ability_word", word_detail)
         if auto_resolve:
             self._auto_pass_stack()
         return self.to_client()

@@ -1003,3 +1003,91 @@ def is_fathomless_descent_spell_cast(
         and event.controller_idx == definition.controller_idx
         and _graveyard_size(game, definition.controller_idx) >= 10
     )
+
+
+def is_imprint_etb(
+    event: TriggerEvent,
+    _game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Imprint: this permanent entered the battlefield."""
+    return _is_source_enters_battlefield(event, definition)
+
+
+def is_repartee_opponent_attacks(
+    event: TriggerEvent,
+    _game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Repartee: an opponent declared an attacker."""
+    opponent = 1 - definition.controller_idx
+    return (
+        isinstance(event, AttackTriggerEvent)
+        and event.attacking_player_idx == opponent
+    )
+
+
+def is_sweep_spell_cast(
+    event: TriggerEvent,
+    _game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Sweep: you cast a spell (permanent-hosted reminder; spells use spell_words)."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+    )
+
+
+def is_secret_council_spell_cast(
+    event: TriggerEvent,
+    _game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Secret council: you cast a spell (votes simplified)."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+    )
+
+
+def is_will_of_council_spell_cast(
+    event: TriggerEvent,
+    _game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Will of the council: you cast a spell (votes simplified)."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+    )
+
+
+def is_councils_dilemma_spell_cast(
+    event: TriggerEvent,
+    _game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Council's dilemma: you cast a spell (votes simplified)."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+    )
+
+
+def is_will_of_planeswalkers_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Will of the Planeswalkers: you cast a spell while you control a planeswalker."""
+    if not (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+    ):
+        return False
+    return any(
+        perm.controller_idx == definition.controller_idx
+        and 'Planeswalker' in perm.type_line
+        for perm in game.zones.battlefield
+    )

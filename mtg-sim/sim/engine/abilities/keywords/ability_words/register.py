@@ -44,6 +44,13 @@ from engine.abilities.keywords.ability_words.conditions import (
     is_join_forces_spell_cast,
     is_tempting_offer_spell_cast,
     is_heros_reward_spell_cast,
+    is_councils_dilemma_spell_cast,
+    is_imprint_etb,
+    is_repartee_opponent_attacks,
+    is_secret_council_spell_cast,
+    is_sweep_spell_cast,
+    is_will_of_council_spell_cast,
+    is_will_of_planeswalkers_spell_cast,
     is_fateful_hour_spell_cast,
     is_grandeur_upkeep,
     is_lieutenant_etb,
@@ -175,6 +182,22 @@ _WIRED: dict[str, _AbilityWordWire] = {
     'Join forces': _AbilityWordWire(TriggerKey.SPELL_CAST, is_join_forces_spell_cast),
     'Tempting offer': _AbilityWordWire(TriggerKey.SPELL_CAST, is_tempting_offer_spell_cast),
     "Hero's Reward": _AbilityWordWire(TriggerKey.SPELL_CAST, is_heros_reward_spell_cast),
+    'Imprint': _AbilityWordWire(TriggerKey.ENTERS_BATTLEFIELD, is_imprint_etb),
+    'Repartee': _AbilityWordWire(TriggerKey.ATTACKS, is_repartee_opponent_attacks),
+    'Sweep': _AbilityWordWire(TriggerKey.SPELL_CAST, is_sweep_spell_cast),
+    'Secret council': _AbilityWordWire(TriggerKey.SPELL_CAST, is_secret_council_spell_cast),
+    'Will of the council': _AbilityWordWire(
+        TriggerKey.SPELL_CAST,
+        is_will_of_council_spell_cast,
+    ),
+    "Council's dilemma": _AbilityWordWire(
+        TriggerKey.SPELL_CAST,
+        is_councils_dilemma_spell_cast,
+    ),
+    'Will of the Planeswalkers': _AbilityWordWire(
+        TriggerKey.SPELL_CAST,
+        is_will_of_planeswalkers_spell_cast,
+    ),
 }
 
 

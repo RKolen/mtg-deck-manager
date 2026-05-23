@@ -78,7 +78,8 @@ def test_bloodrush_discards_and_pumps():
         str(target.obj_id),
     )
     assert detail is not None
-    assert target.counters.get('+1/+1') == 4
+    assert target.counters.get('+power/+0') == 4
+    assert target.counters.get('+1/+1', 0) == 0
     assert len(game.zones.player_zones[0].hand) == 0
 
 
