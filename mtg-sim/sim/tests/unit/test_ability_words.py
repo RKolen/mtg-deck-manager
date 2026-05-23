@@ -8,7 +8,7 @@ from engine.abilities.keywords.ability_words.effects import (
     AbilityWordEffect,
     ProwessEffect,
 )
-from engine.core.game_object import CardObject, TriggeredAbilityOnStack
+from engine.core.game_object import CardObject, Target, TriggeredAbilityOnStack
 from engine.core.turn_structure import Step
 from engine.core.zones import Zone, ZoneMoveEvent
 from tests.conftest import (
@@ -283,6 +283,41 @@ def test_inspired_triggers_when_source_attacks():
     )
     register_permanent_ability_words(source, game.trigger_registry)
     game.fire_attack_triggers(source)
+    trigger = _top_trigger(game)
+    assert trigger.source_permanent_id == source.obj_id
+
+
+def test_coven_triggers_with_three_distinct_powers():
+    """Coven fires when you control three creatures with different powers."""
+    game = fresh_game()
+    source = place_on_battlefield(
+        make_creature("Witch", 1, 1, oracle="Coven — Draw a card."),
+        0,
+        game.zones,
+    )
+    register_permanent_ability_words(source, game.trigger_registry)
+    for power in (1, 2, 3):
+        place_on_battlefield(make_creature(f"P{power}", power, 1), 0, game.zones)
+    spell = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant("Bolt"))
+    game.fire_spell_cast_triggers(spell)
+    trigger = _top_trigger(game)
+    assert trigger.source_permanent_id == source.obj_id
+
+
+def test_strive_triggers_with_multiple_targets():
+    """Strive fires when a spell is cast with two or more targets."""
+    game = fresh_game()
+    source = place_on_battlefield(
+        make_creature("Host", 1, 1, oracle="Strive — Draw a card."),
+        0,
+        game.zones,
+    )
+    register_permanent_ability_words(source, game.trigger_registry)
+    spell = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant("Bolt"))
+    game.fire_spell_cast_triggers(
+        spell,
+        (Target(obj_id=1), Target(obj_id=2)),
+    )
     trigger = _top_trigger(game)
     assert trigger.source_permanent_id == source.obj_id
 

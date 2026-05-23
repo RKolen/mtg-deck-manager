@@ -5,6 +5,7 @@ from __future__ import annotations
 from deck_registry import CardInfo
 from engine.abilities import activated
 from engine.abilities.activated import ActivationSpeed
+from engine.abilities.activated._cost_keyword import INSTANT_SPEED_PHASES
 from engine.core.game_object import CardObject, Permanent
 from engine.core.zones import Zone
 from engine.game._hand_card import load_hand_card_for_action, run_with_hand_card
@@ -46,13 +47,19 @@ class ActivatedActionsMixin(GameRuntimeMixin):
         detail = activated.activate_mana_ability(self.state, perm, spec)
         return activated.ActivationResult(ok=bool(detail), detail=detail)
 
+    def _activation_speed(self) -> activated.ActivationSpeed:
+        """Return whether activations are at instant or sorcery speed."""
+        if self.phase in INSTANT_SPEED_PHASES or not self.state.stack.is_empty:
+            return activated.ActivationSpeed.INSTANT
+        return activated.ActivationSpeed.SORCERY
+
     def action_activate(
         self,
         permanent_uid: str,
         ability_idx: int,
         host_uid: str | None = None,
     ) -> dict:
-        """Activate a mana or equip ability on a permanent."""
+        """Activate mana, equip, or other abilities on a permanent."""
         perm = self._find_permanent(permanent_uid)
         if perm is None:
             return self._client_error("Permanent not found")
@@ -60,12 +67,24 @@ class ActivatedActionsMixin(GameRuntimeMixin):
         if ability_idx < 0 or ability_idx >= len(specs):
             return self._client_error("Invalid ability index")
         spec = specs[ability_idx]
+        speed = self._activation_speed()
         if spec.equip:
             result = self._resolve_equip_activation(perm, spec, host_uid)
         elif spec.mana_ability:
             result = self._resolve_mana_activation(perm, spec)
         else:
-            return self._client_error("Unsupported activated ability")
+            if not activated.can_activate(perm, spec, self.state, 0, speed):
+                return self._client_error("Cannot activate now")
+            mana_needed = activated.activation_mana_value(spec.cost_text)
+            if mana_needed and not self._tap_lands_for_mana(0, mana_needed):
+                return self._client_error(f"Need {mana_needed} mana")
+            result = activated.activate_on_stack(
+                self.state,
+                perm,
+                spec,
+                ability_idx,
+                mana_paid=True,
+            )
         if not result.ok:
             return self._client_error(result.detail)
         self._log("player", "activate", result.detail)

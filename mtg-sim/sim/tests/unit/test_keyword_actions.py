@@ -34,10 +34,12 @@ def test_all_seventy_two_keyword_actions_registered():
 
 def test_keyword_action_handler_coverage():
     """Most common keyword actions have resolution handlers (see plan.md)."""
-    assert len(_HANDLERS) >= 28
+    assert len(_HANDLERS) >= 32
     missing = [name for name in ALL_KEYWORD_ACTIONS if name not in _HANDLERS]
     assert 'Amass' not in missing
     assert 'Mill' not in missing
+    assert 'Behold' not in missing
+    assert 'Forage' not in missing
 
 
 def test_amass_creates_army_with_counters():
@@ -195,6 +197,38 @@ def test_manifest_puts_face_down_creature_on_battlefield():
     assert perm is not None
     assert perm.face_down
     assert effective_power(perm) == 2
+
+
+def test_forage_exiles_three_from_graveyard():
+    """Forage exiles three cards from the controller's graveyard."""
+    game = fresh_game()
+    for idx in range(4):
+        game.zones.player_zones[0].graveyard.append(
+            CardObject(controller_idx=0, owner_idx=0, card_info=make_instant(f'G{idx}')),
+        )
+    detail = resolve_spell_keyword_actions(ActionContext(
+        zones=game.zones,
+        game=game,
+        controller_idx=0,
+        oracle_text='Forage',
+    ))
+    assert 'foraged' in detail
+    assert len(game.zones.player_zones[0].graveyard) == 1
+
+
+def test_behold_reveals_top_card():
+    """Behold logs the top card of the library."""
+    game = fresh_game()
+    game.zones.player_zones[0].library.append(
+        CardObject(controller_idx=0, owner_idx=0, card_info=make_instant('Top Card')),
+    )
+    detail = resolve_spell_keyword_actions(ActionContext(
+        zones=game.zones,
+        game=game,
+        controller_idx=0,
+        oracle_text='Behold',
+    ))
+    assert 'beheld Top Card' in detail
 
 
 def test_resolve_seek_spell_action():

@@ -351,6 +351,55 @@ def is_domain_spell_cast(
     )
 
 
+def _distinct_creature_powers(game: GameState, player_idx: int) -> int:
+    powers = {
+        effective_power(perm)
+        for perm in game.zones.battlefield
+        if perm.controller_idx == player_idx and 'Creature' in perm.type_line
+    }
+    return len(powers)
+
+
+def is_coven_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Coven: you cast a spell while controlling three+ creatures with different powers."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and _distinct_creature_powers(game, definition.controller_idx) >= 3
+    )
+
+
+def is_strive_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Strive: you cast a spell targeting two or more targets."""
+    del game
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and len(event.targets) >= 2
+    )
+
+
+def is_parley_at_beginning_of_combat(
+    event: TriggerEvent,
+    _game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Parley: beginning of combat on your turn."""
+    return (
+        isinstance(event, StepTriggerEvent)
+        and event.step == Step.BEGIN_COMBAT
+        and event.active_player_idx == definition.controller_idx
+    )
+
+
 def is_flurry_spell_cast(
     event: TriggerEvent,
     game: GameState,

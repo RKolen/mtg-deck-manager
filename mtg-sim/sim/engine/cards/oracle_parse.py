@@ -14,8 +14,11 @@ import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from engine.abilities.keywords.other.affinity import affinity_reduction
+
 if TYPE_CHECKING:
     from deck_registry import CardInfo
+    from engine.core.zones import ZoneManager
 
 _WORD_TO_INT = {"a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4}
 
@@ -100,18 +103,39 @@ def parse_token_blueprint(text: str) -> TokenBlueprint | None:
     )
 
 
-def is_affordable(card: CardInfo, available_mana: int) -> bool:
-    """True when the player can cast this spell with the given mana available.
+def mana_needed_to_cast(
+    card: CardInfo,
+    zones: ZoneManager | None = None,
+    controller_idx: int = 0,
+) -> int:
+    """Return untapped lands needed to cast this spell (simplified).
 
     Phyrexian pips ({W/P} etc.) can each be paid with 2 life instead of
     mana, reducing the minimum mana required by one per pip.
+    Affinity for artifacts reduces generic mana when zones are provided.
+    """
+    if card.is_land:
+        return 0
+    phyrexian_pips = (card.mana_cost or "").upper().count("/P")
+    mana_needed = max(0, int(card.cmc) - phyrexian_pips)
+    if zones is not None:
+        mana_needed = max(0, mana_needed - affinity_reduction(card, zones, controller_idx))
+    return mana_needed
+
+
+def is_affordable(
+    card: CardInfo,
+    available_mana: int,
+    zones: ZoneManager | None = None,
+    controller_idx: int = 0,
+) -> bool:
+    """True when the player can cast this spell with the given mana available.
+
     Lands are never castable (they are played, not cast).
     """
     if card.is_land:
         return False
-    phyrexian_pips = (card.mana_cost or "").upper().count("/P")
-    mana_needed = max(0, int(card.cmc) - phyrexian_pips)
-    return available_mana >= mana_needed
+    return available_mana >= mana_needed_to_cast(card, zones, controller_idx)
 
 
 def spell_category(card: CardInfo) -> str:

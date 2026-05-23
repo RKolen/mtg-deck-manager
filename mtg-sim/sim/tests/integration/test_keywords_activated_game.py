@@ -33,6 +33,22 @@ def test_unearth_creature_enters_battlefield():
     assert len(game.state.zones.battlefield) == 1
 
 
+def test_activate_draw_ability_on_stack():
+    """A generic tap ability draws after the stack resolves."""
+    sage = make_creature("Archivist", oracle="{T}: Draw a card.")
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    sage_perm = place_on_battlefield(sage, 0, game.state.zones, sick=False)
+    hand_before = len(game.state.zones.player_zones[0].hand)
+    data = game.action_activate(str(sage_perm.obj_id), 0)
+    assert "error" not in data
+    assert not game.state.stack.is_empty
+    game.action_pass_priority()
+    game.action_pass_priority()
+    assert game.state.stack.is_empty
+    assert len(game.state.zones.player_zones[0].hand) == hand_before + 1
+
+
 def test_crew_vehicle_in_combat():
     """A crewed vehicle can be declared as an attacker."""
     vehicle_info = make_card(

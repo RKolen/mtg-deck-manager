@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
 
+from engine.abilities.keywords.ability_words.effects import AbilityWordEffect
 from engine.core.game_object import ActivatedAbilityOnStack, Permanent, Target
 from engine.core.mana import ManaCost, mana_of
 
@@ -76,6 +77,18 @@ def requires_tap(cost_text: str) -> bool:
     return _TAP_COST in cost_text
 
 
+def activation_mana_value(cost_text: str) -> int:
+    """Return simplified generic mana (lands to tap) for an activation cost."""
+    stripped = cost_text.replace(_TAP_COST, "")
+    equip_match = _EQUIP_RE.search(stripped)
+    if equip_match is not None:
+        stripped = stripped[:equip_match.start()] + stripped[equip_match.end():]
+    stripped = stripped.strip()
+    if not stripped:
+        return 0
+    return ManaCost.parse(stripped).mana_value
+
+
 def equip_cost(cost_text: str) -> ManaCost | None:
     """Return parsed equip mana cost, or None when not an equip ability."""
     match = _EQUIP_RE.search(cost_text)
@@ -127,21 +140,46 @@ def activate_on_stack(
     spec: ActivatedAbilitySpec,
     ability_idx: int,
     targets: list[Target] | None = None,
+    *,
+    mana_paid: bool = False,
 ) -> ActivationResult:
     """Pay costs and put a non-mana activated ability on the stack."""
     if spec.mana_ability:
         detail = activate_mana_ability(game, perm, spec)
         return ActivationResult(ok=bool(detail), detail=detail, used_stack=False)
+    if spec.equip:
+        return ActivationResult(ok=False, detail="Use equip activation with a host")
+    if requires_tap(spec.cost_text) and perm.tapped:
+        return ActivationResult(ok=False, detail="Already tapped")
+    mana_needed = activation_mana_value(spec.cost_text)
+    if mana_needed > 0 and not mana_paid:
+        return ActivationResult(ok=False, detail=f"Need {mana_needed} mana")
     if requires_tap(spec.cost_text):
         perm.tapped = True
+    effect = AbilityWordEffect(spec.effect_text) if spec.effect_text else None
     game.stack.push(ActivatedAbilityOnStack(
         controller_idx=perm.controller_idx,
         owner_idx=perm.owner_idx,
         source_permanent_id=perm.obj_id,
         ability_idx=ability_idx,
+        effect=effect,
         targets=targets or [],
     ))
     return ActivationResult(ok=True, detail=f"{perm.name} activated", used_stack=True)
+
+
+def activatable_ability_indices(
+    perm: Permanent,
+    game: GameState,
+    controller_idx: int,
+    speed: ActivationSpeed,
+) -> list[int]:
+    """Return ability indices that can be activated at the given speed."""
+    indices: list[int] = []
+    for idx, spec in enumerate(parse_activated_abilities(perm.oracle_text)):
+        if can_activate(perm, spec, game, controller_idx, speed):
+            indices.append(idx)
+    return indices
 
 
 def activate_equip(

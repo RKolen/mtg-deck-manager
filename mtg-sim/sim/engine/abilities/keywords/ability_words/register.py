@@ -17,8 +17,11 @@ from engine.abilities.keywords.ability_words.conditions import (
     is_flurry_spell_cast,
     is_formidable_spell_cast,
     is_hellbent_spell_cast,
+    is_coven_spell_cast,
     is_morbid_spell_cast,
+    is_parley_at_beginning_of_combat,
     is_raid_at_beginning_of_combat,
+    is_strive_spell_cast,
     is_source_enraged,
     is_source_etb_delirium,
     is_source_etb_metalcraft,
@@ -31,6 +34,7 @@ from engine.abilities.keywords.ability_words.conditions import (
 from engine.abilities.keywords.ability_words.detect import has_ability_word
 from engine.abilities.keywords.ability_words.effects import (
     AbilityWordEffect,
+    ParleyEffect,
     ProwessEffect,
 )
 from engine.cards.oracle_parse import parse_token_blueprint
@@ -87,6 +91,9 @@ _WIRED: dict[str, _AbilityWordWire] = {
     'Undergrowth': _AbilityWordWire(TriggerKey.SPELL_CAST, is_undergrowth_spell_cast),
     'Domain': _AbilityWordWire(TriggerKey.SPELL_CAST, is_domain_spell_cast),
     'Flurry': _AbilityWordWire(TriggerKey.SPELL_CAST, is_flurry_spell_cast),
+    'Coven': _AbilityWordWire(TriggerKey.SPELL_CAST, is_coven_spell_cast),
+    'Strive': _AbilityWordWire(TriggerKey.SPELL_CAST, is_strive_spell_cast),
+    'Parley': _AbilityWordWire(TriggerKey.BEGINNING_OF_COMBAT, is_parley_at_beginning_of_combat),
 }
 
 
@@ -101,6 +108,14 @@ def register_permanent_ability_words(
 
     for word, wire in _WIRED.items():
         if not has_ability_word(oracle, word):
+            continue
+        if word == 'Parley':
+            registry.register(
+                permanent,
+                wire.trigger_key,
+                wire.condition,
+                effect=ParleyEffect(),
+            )
             continue
         clause = clause_after_ability_word(oracle, word)
         effect = AbilityWordEffect(clause) if clause else None

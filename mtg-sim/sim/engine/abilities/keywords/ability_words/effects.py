@@ -10,11 +10,27 @@ from engine.cards.oracle_parse import (
     parse_life_gain,
     parse_token_blueprint,
 )
+from engine.core.game_object import CardObject
 from engine.abilities.keywords._token_factory import enter_token_from_blueprint
 from engine.abilities.keywords.actions.counters import put_plus_counters
-from engine.core.game_object import Effect, GameObject, TriggeredAbilityOnStack
+from engine.core.game_object import (
+    ActivatedAbilityOnStack,
+    Effect,
+    GameObject,
+    TriggeredAbilityOnStack,
+)
 if TYPE_CHECKING:
     from engine.core.game_state import GameState
+
+
+def _permanent_from_stack_source(
+    game: GameState,
+    source: GameObject,
+):
+    """Return the source permanent for a triggered or activated ability on the stack."""
+    if isinstance(source, (TriggeredAbilityOnStack, ActivatedAbilityOnStack)):
+        return game.zones.find_permanent(source.source_permanent_id)
+    return None
 
 
 class AbilityWordEffect(Effect):
@@ -25,9 +41,7 @@ class AbilityWordEffect(Effect):
 
     def resolve(self, game: GameState, source: GameObject) -> str:
         """Draw, deal damage, gain life, or create a token from the clause."""
-        if not isinstance(source, TriggeredAbilityOnStack):
-            return ''
-        permanent = game.zones.find_permanent(source.source_permanent_id)
+        permanent = _permanent_from_stack_source(game, source)
         if permanent is None:
             return ''
         controller = permanent.controller_idx
@@ -76,9 +90,7 @@ class ProwessEffect(Effect):
 
     def resolve(self, game: GameState, source: GameObject) -> str:
         """Apply one +1/+1 counter to the prowess source."""
-        if not isinstance(source, TriggeredAbilityOnStack):
-            return ''
-        permanent = game.zones.find_permanent(source.source_permanent_id)
+        permanent = _permanent_from_stack_source(game, source)
         if permanent is None:
             return ''
         put_plus_counters(permanent, 1)
@@ -87,3 +99,41 @@ class ProwessEffect(Effect):
     def describe(self) -> str:
         """Return a short description for logs."""
         return "Prowess (+1/+1)"
+
+
+class ParleyEffect(Effect):
+    """Each player reveals their top card; highest mana value draws (simplified)."""
+
+    def resolve(self, game: GameState, source: GameObject) -> str:
+        """Reveal tops, then the active player with the highest mana value draws."""
+        permanent = _permanent_from_stack_source(game, source)
+        if permanent is None:
+            return ''
+        scores: list[tuple[int, int, str]] = []
+        for pidx in (0, 1):
+            library = game.zones.player_zones[pidx].library
+            if not library:
+                scores.append((pidx, -1, ''))
+                continue
+            top = library[-1]
+            if isinstance(top, CardObject) and top.card_info is not None:
+                mv = int(top.card_info.cmc)
+                name = top.card_info.name
+            else:
+                mv = 0
+                name = 'card'
+            scores.append((pidx, mv, name))
+        winner_idx, best_mv, winner_card = max(scores, key=lambda item: item[1])
+        if best_mv < 0:
+            return 'parley (no libraries)'
+        drawn = game.zones.draw(winner_idx)
+        draw_name = (
+            drawn.card_info.name
+            if drawn is not None and isinstance(drawn, CardObject) and drawn.card_info
+            else 'nothing'
+        )
+        return f"parley: P{winner_idx + 1} won with {winner_card} (MV {best_mv}), drew {draw_name}"
+
+    def describe(self) -> str:
+        """Return a short description for logs."""
+        return "Parley"

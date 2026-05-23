@@ -107,7 +107,12 @@ class GameRuntimeMixin:
         """Return whether the player can cast an instant in the current window."""
         return any(
             has_instant_timing(require_card_info(card))
-            and is_affordable(require_card_info(card), self._available_mana(0))
+            and is_affordable(
+                require_card_info(card),
+                self._available_mana(0),
+                self.state.zones,
+                0,
+            )
             for card in self._zones(0).hand
             if isinstance(card, CardObject) and not is_land(card)
         )

@@ -77,6 +77,7 @@ from engine.abilities.keywords.actions import (
 )
 from engine.abilities.keywords.actions.tokens import connive
 from engine.abilities.keywords.ability_words import register_permanent_ability_words
+from engine.abilities.keywords.other.etb import apply_etb_other_abilities
 from engine.game._hand_card import load_hand_card_for_action, run_with_hand_card
 from engine.game.cast_announce_validate import (
     HandCastPlacement,
@@ -1135,6 +1136,8 @@ class SpellStackMixin(GameRuntimeMixin):
 
     def _register_permanent_triggers(self, permanent) -> None:
         """Register parsed triggered abilities from a newly resolved permanent."""
+        for detail in apply_etb_other_abilities(self.state.zones, permanent):
+            self._log("rules", "ability_other", detail)
         register_permanent_ability_words(permanent, self.state.trigger_registry)
 
     def _deal_damage_to_player(self, player_idx: int, amount: int) -> None:

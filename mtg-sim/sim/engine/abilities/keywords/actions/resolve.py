@@ -52,6 +52,17 @@ from engine.abilities.keywords.actions.library import (
     surveil_cards,
     surveil_count,
 )
+from engine.abilities.keywords.actions.specialty import (
+    behold_draw_if_clause,
+    behold_top_card,
+    detain_creature,
+    exert_creature,
+    forage_cost,
+    has_behold,
+    has_detain,
+    has_exert,
+    has_forage,
+)
 from engine.abilities.keywords.actions.targets import find_creature_by_uid
 from engine.abilities.keywords.actions.tokens import (
     connive,
@@ -388,6 +399,34 @@ def _apply_destroy(ctx: ActionContext) -> str | None:
     return f"destroyed {target.name}"
 
 
+def _apply_behold(ctx: ActionContext) -> str | None:
+    if not has_behold(ctx.oracle_text):
+        return None
+    parts = [behold_top_card(ctx.zones, ctx.controller_idx)]
+    draw_detail = behold_draw_if_clause(ctx.oracle_text, ctx.zones, ctx.controller_idx)
+    if draw_detail:
+        parts.append(draw_detail)
+    return ', '.join(parts)
+
+
+def _apply_exert(ctx: ActionContext) -> str | None:
+    if not has_exert(ctx.oracle_text):
+        return None
+    return exert_creature(ctx.zones, ctx.target_creature_uid)
+
+
+def _apply_forage(ctx: ActionContext) -> str | None:
+    if not has_forage(ctx.oracle_text):
+        return None
+    return forage_cost(ctx.zones, ctx.controller_idx, ctx.game)
+
+
+def _apply_detain(ctx: ActionContext) -> str | None:
+    if not has_detain(ctx.oracle_text):
+        return None
+    return detain_creature(ctx.zones, ctx.target_creature_uid)
+
+
 def _apply_exile(ctx: ActionContext) -> str | None:
     if not has_registered_keyword(ctx.oracle_text, 'Exile'):
         return None
@@ -429,6 +468,10 @@ _HANDLERS: dict[str, Callable[[ActionContext], str | None]] = {
     'Regenerate': _apply_regenerate,
     'Destroy': _apply_destroy,
     'Exile': _apply_exile,
+    'Behold': _apply_behold,
+    'Exert': _apply_exert,
+    'Forage': _apply_forage,
+    'Detain': _apply_detain,
 }
 
 

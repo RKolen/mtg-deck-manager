@@ -11,6 +11,7 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass, field
 
+from engine.abilities import activated
 from engine.cards.oracle_parse import is_affordable, spell_category
 from engine.core.game_object import CardObject
 from engine.core.game_state import GameState
@@ -392,14 +393,73 @@ class InteractiveGame(ActivatedActionsMixin, SpellStackMixin):  # pylint: disabl
         if any(
             isinstance(c, CardObject)
             and not is_land(c)
-            and is_affordable(require_card_info(c), self._available_mana(0))
+            and is_affordable(
+                require_card_info(c),
+                self._available_mana(0),
+                self.state.zones,
+                0,
+            )
             for c in self._zones(0).hand
         ):
             actions.append("cast_spell")
+        if self._hand_can_cycle():
+            actions.append("cycle")
+        if self._hand_can_channel():
+            actions.append("channel")
+        if self._graveyard_can_unearth():
+            actions.append("unearth")
+        if self._battlefield_can_activate():
+            actions.append("activate")
         if self.phase == "main1":
             actions.append("go_to_attack")
         actions.append("end_turn")
         return actions
+
+    def _hand_can_cycle(self) -> bool:
+        """Return True when a hand card can activate cycling."""
+        if not self.state.stack.is_empty:
+            return False
+        return any(
+            isinstance(c, CardObject)
+            and activated.can_cycle(require_card_info(c), self.phase, True)
+            for c in self._zones(0).hand
+        )
+
+    def _hand_can_channel(self) -> bool:
+        """Return True when a hand card can activate channel."""
+        if not self.state.stack.is_empty:
+            return False
+        return any(
+            isinstance(c, CardObject)
+            and activated.can_channel(require_card_info(c), self.phase, True)
+            for c in self._zones(0).hand
+        )
+
+    def _graveyard_can_unearth(self) -> bool:
+        """Return True when a graveyard card can be unearthed."""
+        if not self.state.stack.is_empty:
+            return False
+        return any(
+            isinstance(c, CardObject)
+            and activated.can_unearth(require_card_info(c), self.phase, True)
+            for c in self._zones(0).graveyard
+        )
+
+    def _battlefield_can_activate(self) -> bool:
+        """Return True when a permanent has a legal non-mana activation."""
+        speed = (
+            activated.ActivationSpeed.INSTANT
+            if self.phase in ("attack", "declare_blockers") or not self.state.stack.is_empty
+            else activated.ActivationSpeed.SORCERY
+        )
+        for perm in self._permanents(0):
+            specs = activated.parse_activated_abilities(perm.oracle_text)
+            for spec in specs:
+                if spec.mana_ability or spec.equip:
+                    continue
+                if activated.can_activate(perm, spec, self.state, 0, speed):
+                    return True
+        return False
 
     def _start_player_turn_one(self) -> None:
         """Begin the first player-controlled turn after mulligans."""
@@ -415,6 +475,8 @@ class InteractiveGame(ActivatedActionsMixin, SpellStackMixin):  # pylint: disabl
         """Untap permanents and clear per-turn player state."""
         self.state.turn.begin_turn(player_idx)
         for perm in self._permanents(player_idx):
+            if perm.counters.pop('exerted', 0) or perm.counters.pop('detained', 0):
+                continue
             perm.tapped = False
             perm.sick = False
             perm.damage_marked = 0
