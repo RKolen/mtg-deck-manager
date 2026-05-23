@@ -6,6 +6,7 @@ Detection uses the shared registry; resolution lives in resolve.py and submodule
 
 from __future__ import annotations
 
+from engine.abilities.keywords.actions.amass import amass_army, has_amass
 from engine.abilities.keywords.actions.detect import (
     ALL_KEYWORD_ACTIONS,
     has_keyword_action,
@@ -51,6 +52,7 @@ from engine.abilities.keywords.actions.resolve import (
     resolve_keyword_actions,
     resolve_spell_keyword_actions,
 )
+from engine.abilities.keywords.actions.resolve import _HANDLERS
 from engine.abilities.keywords.actions.tokens import (
     has_connive,
     has_create,
@@ -64,6 +66,9 @@ from engine.abilities.keywords.actions.tokens import (
 __all__ = [
     'ALL_KEYWORD_ACTIONS',
     'ActionContext',
+    '_HANDLERS',
+    'amass_army',
+    'has_amass',
     'combat_power',
     'discover_from_library',
     'fateseal_cards',

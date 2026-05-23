@@ -5,6 +5,7 @@ from __future__ import annotations
 from engine.abilities.keywords.actions import (
     ALL_KEYWORD_ACTIONS,
     ActionContext,
+    amass_army,
     fight_creatures,
     has_fight,
     has_manifest,
@@ -21,6 +22,7 @@ from engine.abilities.keywords.actions import (
     surveil_cards,
 )
 from engine.abilities.keywords.actions.detect import keyword_actions_in_oracle
+from engine.abilities.keywords.actions.resolve import _HANDLERS
 from engine.core.game_object import CardObject, effective_power
 from tests.conftest import fresh_game, make_creature, make_instant, place_on_battlefield
 
@@ -28,6 +30,27 @@ from tests.conftest import fresh_game, make_creature, make_instant, place_on_bat
 def test_all_seventy_two_keyword_actions_registered():
     """Scryfall keyword-action catalog has 72 entries."""
     assert len(ALL_KEYWORD_ACTIONS) == 72
+
+
+def test_keyword_action_handler_coverage():
+    """Most common keyword actions have resolution handlers (see plan.md)."""
+    assert len(_HANDLERS) >= 28
+    missing = [name for name in ALL_KEYWORD_ACTIONS if name not in _HANDLERS]
+    assert 'Amass' not in missing
+    assert 'Mill' not in missing
+
+
+def test_amass_creates_army_with_counters():
+    """Amass creates an Army token and adds +1/+1 counters."""
+    game = fresh_game()
+    detail = amass_army(game.zones, 0, 'Amass 2.')
+    assert 'Army' in detail
+    armies = [
+        p for p in game.zones.battlefield
+        if p.controller_idx == 0 and 'Army' in p.type_line
+    ]
+    assert len(armies) == 1
+    assert armies[0].counters.get('+1/+1') == 2
 
 
 def test_mill_moves_library_to_graveyard():

@@ -21,6 +21,21 @@ if TYPE_CHECKING:
     from engine.core.game_state import GameState
 
 
+def is_controller_creature_enters(
+    event: TriggerEvent,
+    _game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Rally: a creature entered the battlefield under your control."""
+    return (
+        isinstance(event, ZoneMoveEvent)
+        and event.to_zone == Zone.BATTLEFIELD
+        and isinstance(event.obj, Permanent)
+        and 'Creature' in event.obj.type_line
+        and event.player_idx == definition.controller_idx
+    )
+
+
 def is_controller_land_enters(
     event: TriggerEvent,
     _game: GameState,
@@ -114,6 +129,32 @@ def _artifact_count(game: GameState, player_idx: int) -> int:
         for perm in game.zones.battlefield
         if perm.controller_idx == player_idx and 'Artifact' in perm.type_line
     )
+
+
+def _graveyard_size(game: GameState, player_idx: int) -> int:
+    return len(game.zones.player_zones[player_idx].graveyard)
+
+
+def _creature_cards_in_graveyard(game: GameState, player_idx: int) -> int:
+    count = 0
+    for card in game.zones.player_zones[player_idx].graveyard:
+        if not isinstance(card, CardObject) or card.card_info is None:
+            continue
+        if 'Creature' in card.card_info.type_line:
+            count += 1
+    return count
+
+
+def _domain_count(game: GameState, player_idx: int) -> int:
+    basic_types = ('Plains', 'Island', 'Swamp', 'Mountain', 'Forest')
+    found: set[str] = set()
+    for perm in game.zones.battlefield:
+        if perm.controller_idx != player_idx or 'Land' not in perm.type_line:
+            continue
+        for label in basic_types:
+            if label in perm.type_line:
+                found.add(label)
+    return len(found)
 
 
 def _delirium_met(game: GameState, player_idx: int) -> bool:
@@ -243,4 +284,81 @@ def is_source_inspired_attack(
     return (
         isinstance(event, AttackTriggerEvent)
         and event.attacker_id == definition.source_permanent_id
+    )
+
+
+def is_hellbent_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Hellbent: you cast a spell while you have no cards in hand."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and not game.zones.player_zones[definition.controller_idx].hand
+    )
+
+
+def is_threshold_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Threshold: you cast a spell with seven or more cards in your graveyard."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and _graveyard_size(game, definition.controller_idx) >= 7
+    )
+
+
+def is_source_etb_threshold(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Threshold: this permanent entered with seven or more cards in graveyard."""
+    return (
+        _is_source_enters_battlefield(event, definition)
+        and _graveyard_size(game, definition.controller_idx) >= 7
+    )
+
+
+def is_undergrowth_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Undergrowth: you cast a spell with creature cards in your graveyard."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and _creature_cards_in_graveyard(game, definition.controller_idx) > 0
+    )
+
+
+def is_domain_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Domain: you cast a spell while controlling a basic land type."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and _domain_count(game, definition.controller_idx) > 0
+    )
+
+
+def is_flurry_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Flurry: you cast your second or later spell this turn."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and game.players[definition.controller_idx].spells_cast_this_turn >= 2
     )

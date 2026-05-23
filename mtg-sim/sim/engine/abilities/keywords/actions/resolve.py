@@ -20,6 +20,15 @@ from engine.abilities.keywords.actions.counters import (
     support_amount,
     support_creatures,
 )
+from engine.abilities.keywords.actions.amass import amass_army, has_amass
+from engine.abilities.keywords.actions.board import (
+    has_sacrifice_action,
+    has_tap_action,
+    has_untap_action,
+    sacrifice_creature,
+    tap_creature,
+    untap_creature,
+)
 from engine.abilities.keywords.actions.detect import keyword_actions_in_oracle
 from engine.abilities.keywords.actions.fight import fight_creatures, has_fight
 from engine.abilities.keywords.actions.library import (
@@ -43,6 +52,7 @@ from engine.abilities.keywords.actions.library import (
     surveil_cards,
     surveil_count,
 )
+from engine.abilities.keywords.actions.targets import find_creature_by_uid
 from engine.abilities.keywords.actions.tokens import (
     connive,
     create_creature_token_from_oracle,
@@ -62,7 +72,7 @@ from engine.abilities.keywords.actions.tokens import (
 )
 from engine.abilities.keywords.handlers import grant_regeneration_shield
 from engine.abilities.keywords.registry import has_registered_keyword
-from engine.core.game_object import CardObject, Permanent
+from engine.core.game_object import CardObject
 from engine.core.zones import Zone, ZoneManager
 
 if TYPE_CHECKING:
@@ -88,15 +98,6 @@ class ActionContext:
 
 def _opponent_idx(controller_idx: int) -> int:
     return 1 - controller_idx
-
-
-def _find_creature(zones: ZoneManager, uid: str | None) -> Permanent | None:
-    if uid is None:
-        return None
-    try:
-        return zones.find_permanent(int(uid))
-    except ValueError:
-        return None
 
 
 def _apply_mill(ctx: ActionContext) -> str | None:
@@ -151,8 +152,8 @@ def _apply_fateseal(ctx: ActionContext) -> str | None:
 def _apply_fight(ctx: ActionContext) -> str | None:
     if not has_fight(ctx.oracle_text):
         return None
-    fighter = _find_creature(ctx.zones, ctx.target_creature_uid)
-    opponent = _find_creature(ctx.zones, ctx.second_creature_uid)
+    fighter = find_creature_by_uid(ctx.zones, ctx.target_creature_uid)
+    opponent = find_creature_by_uid(ctx.zones, ctx.second_creature_uid)
     if fighter is None or opponent is None:
         return "fight (need two creature targets)"
     dmg_a, dmg_b = fight_creatures(fighter, opponent)
@@ -195,7 +196,7 @@ def _apply_counter_action(ctx: ActionContext) -> str | None:
     if not has_counter_action(ctx.oracle_text):
         return None
     amount = counter_action_amount(ctx.oracle_text)
-    target = _find_creature(ctx.zones, ctx.target_creature_uid)
+    target = find_creature_by_uid(ctx.zones, ctx.target_creature_uid)
     if target is None:
         creatures = [
             p for p in ctx.zones.permanents_of(ctx.controller_idx)
@@ -217,7 +218,7 @@ def _apply_connive(ctx: ActionContext) -> str | None:
 def _apply_explore(ctx: ActionContext) -> str | None:
     if not has_explore(ctx.oracle_text):
         return None
-    target = _find_creature(ctx.zones, ctx.target_creature_uid)
+    target = find_creature_by_uid(ctx.zones, ctx.target_creature_uid)
     if target is None:
         creatures = [
             p for p in ctx.zones.permanents_of(ctx.controller_idx)
@@ -318,6 +319,39 @@ def _apply_manifest(ctx: ActionContext) -> str | None:
     return f"manifested {perm.name} (face down)"
 
 
+def _apply_manifest_dread(ctx: ActionContext) -> str | None:
+    if not has_registered_keyword(ctx.oracle_text, 'Manifest dread'):
+        return None
+    perm = manifest_top_of_library(ctx.zones, ctx.controller_idx)
+    if perm is None:
+        return 'manifest dread (empty library)'
+    return f"manifested dread {perm.name} (face down)"
+
+
+def _apply_amass(ctx: ActionContext) -> str | None:
+    if not has_amass(ctx.oracle_text):
+        return None
+    return amass_army(ctx.zones, ctx.controller_idx, ctx.oracle_text)
+
+
+def _apply_tap(ctx: ActionContext) -> str | None:
+    if not has_tap_action(ctx.oracle_text):
+        return None
+    return tap_creature(ctx.zones, ctx.target_creature_uid)
+
+
+def _apply_untap(ctx: ActionContext) -> str | None:
+    if not has_untap_action(ctx.oracle_text):
+        return None
+    return untap_creature(ctx.zones, ctx.target_creature_uid)
+
+
+def _apply_sacrifice(ctx: ActionContext) -> str | None:
+    if not has_sacrifice_action(ctx.oracle_text) or ctx.game is None:
+        return None
+    return sacrifice_creature(ctx.zones, ctx.game, ctx.target_creature_uid)
+
+
 def _apply_discover(ctx: ActionContext) -> str | None:
     if not has_discover(ctx.oracle_text):
         return None
@@ -335,7 +369,7 @@ def _apply_discover(ctx: ActionContext) -> str | None:
 def _apply_regenerate(ctx: ActionContext) -> str | None:
     if not has_registered_keyword(ctx.oracle_text, 'Regenerate'):
         return None
-    target = _find_creature(ctx.zones, ctx.target_creature_uid)
+    target = find_creature_by_uid(ctx.zones, ctx.target_creature_uid)
     if target is None:
         return None
     grant_regeneration_shield(target)
@@ -347,7 +381,7 @@ def _apply_destroy(ctx: ActionContext) -> str | None:
         return None
     if 'destroy target' not in ctx.oracle_text.lower():
         return None
-    target = _find_creature(ctx.zones, ctx.target_creature_uid)
+    target = find_creature_by_uid(ctx.zones, ctx.target_creature_uid)
     if target is None or ctx.game is None:
         return None
     ctx.zones.leave_battlefield(target, Zone.GRAVEYARD, 'destroy', ctx.game)
@@ -359,7 +393,7 @@ def _apply_exile(ctx: ActionContext) -> str | None:
         return None
     if 'exile target' not in ctx.oracle_text.lower():
         return None
-    target = _find_creature(ctx.zones, ctx.target_creature_uid)
+    target = find_creature_by_uid(ctx.zones, ctx.target_creature_uid)
     if target is None or not isinstance(target.source, CardObject):
         return None
     ctx.zones.leave_battlefield(target, Zone.EXILE, 'exile', ctx.game)
@@ -387,6 +421,11 @@ _HANDLERS: dict[str, Callable[[ActionContext], str | None]] = {
     'Discover': _apply_discover,
     'Seek': _apply_seek,
     'Manifest': _apply_manifest,
+    'Manifest dread': _apply_manifest_dread,
+    'Amass': _apply_amass,
+    'Tap': _apply_tap,
+    'Untap': _apply_untap,
+    'Sacrifice': _apply_sacrifice,
     'Regenerate': _apply_regenerate,
     'Destroy': _apply_destroy,
     'Exile': _apply_exile,

@@ -241,6 +241,37 @@ def test_revolt_triggers_on_etb_after_permanent_left():
     assert trigger.source_permanent_id == source.obj_id
 
 
+def test_rally_triggers_when_creature_enters():
+    """Rally fires when a creature enters under your control."""
+    game = fresh_game()
+    source = place_on_battlefield(
+        make_creature("Rally Leader", 1, 1, oracle="Rally — Draw a card."),
+        0,
+        game.zones,
+    )
+    register_permanent_ability_words(source, game.trigger_registry)
+    ally = CardObject(controller_idx=0, owner_idx=0, card_info=make_creature("Ally", 1, 1))
+    game.zones.enter_battlefield(ally, 0, "test", Zone.HAND)
+    trigger = _top_trigger(game)
+    assert trigger.source_permanent_id == source.obj_id
+
+
+def test_hellbent_triggers_with_empty_hand():
+    """Hellbent fires when you cast with no cards in hand."""
+    game = fresh_game()
+    source = place_on_battlefield(
+        make_creature("Host", 1, 1, oracle="Hellbent — Draw a card."),
+        0,
+        game.zones,
+    )
+    register_permanent_ability_words(source, game.trigger_registry)
+    game.zones.player_zones[0].hand.clear()
+    spell = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant("Bolt"))
+    game.fire_spell_cast_triggers(spell)
+    trigger = _top_trigger(game)
+    assert trigger.source_permanent_id == source.obj_id
+
+
 def test_inspired_triggers_when_source_attacks():
     """Inspired fires when the source creature attacks."""
     game = fresh_game()

@@ -8,18 +8,25 @@ from typing import TYPE_CHECKING
 from engine.abilities.keywords.ability_words.clause import clause_after_ability_word
 from engine.abilities.keywords.ability_words.conditions import (
     is_battalion_mass_attack,
+    is_controller_creature_enters,
     is_controller_enchantment_enters,
     is_controller_instant_or_sorcery_cast,
     is_controller_land_enters,
+    is_domain_spell_cast,
     is_ferocious_spell_cast,
+    is_flurry_spell_cast,
     is_formidable_spell_cast,
+    is_hellbent_spell_cast,
     is_morbid_spell_cast,
     is_raid_at_beginning_of_combat,
     is_source_enraged,
     is_source_etb_delirium,
     is_source_etb_metalcraft,
     is_source_etb_revolt,
+    is_source_etb_threshold,
     is_source_inspired_attack,
+    is_threshold_spell_cast,
+    is_undergrowth_spell_cast,
 )
 from engine.abilities.keywords.ability_words.detect import has_ability_word
 from engine.abilities.keywords.ability_words.effects import (
@@ -75,6 +82,11 @@ _WIRED: dict[str, _AbilityWordWire] = {
     'Formidable': _AbilityWordWire(TriggerKey.SPELL_CAST, is_formidable_spell_cast),
     'Revolt': _AbilityWordWire(TriggerKey.ENTERS_BATTLEFIELD, is_source_etb_revolt),
     'Inspired': _AbilityWordWire(TriggerKey.ATTACKS, is_source_inspired_attack),
+    'Rally': _AbilityWordWire(TriggerKey.ENTERS_BATTLEFIELD, is_controller_creature_enters),
+    'Hellbent': _AbilityWordWire(TriggerKey.SPELL_CAST, is_hellbent_spell_cast),
+    'Undergrowth': _AbilityWordWire(TriggerKey.SPELL_CAST, is_undergrowth_spell_cast),
+    'Domain': _AbilityWordWire(TriggerKey.SPELL_CAST, is_domain_spell_cast),
+    'Flurry': _AbilityWordWire(TriggerKey.SPELL_CAST, is_flurry_spell_cast),
 }
 
 
@@ -101,6 +113,7 @@ def register_permanent_ability_words(
 
     _register_heroic(permanent, registry, oracle)
     _register_prowess(permanent, registry, oracle)
+    _register_threshold(permanent, registry, oracle)
 
 
 def _register_heroic(
@@ -135,3 +148,28 @@ def _register_prowess(
         is_noncreature_nonland_spell_cast,
         effect=ProwessEffect(),
     )
+
+
+def _register_threshold(
+    permanent: Permanent,
+    registry: TriggerRegistry,
+    oracle: str,
+) -> None:
+    """Threshold: spell cast or ETB with seven or more cards in graveyard."""
+    if not has_ability_word(oracle, 'Threshold'):
+        return
+    clause = clause_after_ability_word(oracle, 'Threshold')
+    effect = AbilityWordEffect(clause) if clause else None
+    registry.register(
+        permanent,
+        TriggerKey.SPELL_CAST,
+        is_threshold_spell_cast,
+        effect=effect,
+    )
+    if 'enters the battlefield' in (clause or oracle).lower():
+        registry.register(
+            permanent,
+            TriggerKey.ENTERS_BATTLEFIELD,
+            is_source_etb_threshold,
+            effect=effect,
+        )
