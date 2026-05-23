@@ -413,6 +413,10 @@ def test_prowess_trigger_uses_stack_above_noncreature_spell():
 
     assert data["stack"][0]["type"] == "TriggeredAbilityOnStack"
     assert data["stack"][1]["name"] == "Titan's Strength"
+    game.action_pass_priority()
+    game.action_pass_priority()
+    swiftspear_perm = game.state.zones.creatures_of(0)[0]
+    assert swiftspear_perm.counters.get("+1/+1") == 1
 
 
 def test_player_attack_uses_combat_rules_for_unblocked_damage():

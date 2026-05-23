@@ -11,6 +11,7 @@ from engine.cards.oracle_parse import (
     parse_token_blueprint,
 )
 from engine.abilities.keywords._token_factory import enter_token_from_blueprint
+from engine.abilities.keywords.actions.counters import put_plus_counters
 from engine.core.game_object import Effect, GameObject, TriggeredAbilityOnStack
 if TYPE_CHECKING:
     from engine.core.game_state import GameState
@@ -68,3 +69,21 @@ class AbilityWordEffect(Effect):
     def describe(self) -> str:
         """Return a short description for logs."""
         return f"Ability word: {self.clause[:40]}"
+
+
+class ProwessEffect(Effect):
+    """Put a +1/+1 counter on the source permanent (Monastery Swiftspear-style)."""
+
+    def resolve(self, game: GameState, source: GameObject) -> str:
+        """Apply one +1/+1 counter to the prowess source."""
+        if not isinstance(source, TriggeredAbilityOnStack):
+            return ''
+        permanent = game.zones.find_permanent(source.source_permanent_id)
+        if permanent is None:
+            return ''
+        put_plus_counters(permanent, 1)
+        return f"{permanent.name} gets +1/+1 from Prowess"
+
+    def describe(self) -> str:
+        """Return a short description for logs."""
+        return "Prowess (+1/+1)"

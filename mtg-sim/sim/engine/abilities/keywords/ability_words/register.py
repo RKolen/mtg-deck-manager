@@ -14,7 +14,10 @@ from engine.abilities.keywords.ability_words.conditions import (
     is_source_enraged,
 )
 from engine.abilities.keywords.ability_words.detect import has_ability_word
-from engine.abilities.keywords.ability_words.effects import AbilityWordEffect
+from engine.abilities.keywords.ability_words.effects import (
+    AbilityWordEffect,
+    ProwessEffect,
+)
 from engine.cards.oracle_parse import parse_token_blueprint
 from engine.core.game_object import Permanent
 from engine.game.helpers import CreateTokenEffect
@@ -101,11 +104,12 @@ def _register_prowess(
     registry: TriggerRegistry,
     oracle: str,
 ) -> None:
-    """Prowess: noncreature spell cast gives +1/+1 (effect TODO; trigger registered)."""
+    """Prowess: noncreature spell cast gives +1/+1."""
     if not has_ability_word(oracle, 'Prowess'):
         return
     registry.register(
         permanent,
         TriggerKey.SPELL_CAST,
         is_noncreature_nonland_spell_cast,
+        effect=ProwessEffect(),
     )

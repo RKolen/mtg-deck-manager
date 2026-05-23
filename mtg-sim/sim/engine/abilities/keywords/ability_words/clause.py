@@ -7,7 +7,7 @@ import re
 
 def clause_after_ability_word(oracle_text: str, word: str) -> str:
     """Return the effect text after 'Landfall —' / 'Raid —' style lines."""
-    pattern = rf'\b{re.escape(word)}\s*[—–-]\s*(.+?)(?:\n\n|\Z)'
+    pattern = rf'\b{re.escape(word)}\s*[—–-]\s*(.+?)(?:\n\n|\n[A-Z]|\Z)'
     match = re.search(pattern, oracle_text, re.IGNORECASE | re.DOTALL)
     if match is None:
         return ''

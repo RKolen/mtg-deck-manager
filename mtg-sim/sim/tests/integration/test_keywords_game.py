@@ -727,3 +727,26 @@ def test_improvise_cast_taps_artifacts_to_pay_mana():
     )
     assert "error" not in data
     assert relic.tapped
+
+
+def test_landfall_triggers_when_land_is_played():
+    """Landfall registers on ETB and fires when a land enters."""
+    host = make_creature(
+        name="Landfall Host",
+        cmc=0,
+        mana_cost="",
+        oracle="Landfall — You gain 2 life.",
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=host),
+        CardObject(controller_idx=0, owner_idx=0, card_info=make_land()),
+    ]
+    game.action_cast(0)
+    assert game.state.players[0].life == 20
+    data = game.action_play_land(0)
+    assert any(entry["type"] == "TriggeredAbilityOnStack" for entry in data["stack"])
+    game.action_pass_priority()
+    game.action_pass_priority()
+    assert game.state.players[0].life == 22

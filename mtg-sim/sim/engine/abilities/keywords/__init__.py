@@ -12,8 +12,8 @@ Package layout (keep each file under ~1000 lines):
   counters.py        infect, persist, undying, indestructible, ...
   handlers.py        combat damage application, regeneration, storm
   casting/           cast modifiers (flashback, kicker, …)
-  actions.py         keyword actions (mostly Phase G effects)
-  ability_words.py   trigger registration helpers
+  actions/           keyword actions (Mill, Scry, Fight, …)
+  ability_words/     ability-word trigger registration
   other.py           ability_other bucket (split per keyword over time)
 
 Import from this package only; submodule imports are for tests and codegen.
@@ -79,8 +79,10 @@ from engine.abilities.keywords.targeting import (
     ward_cost,
 )
 from engine.abilities.keywords.timing import enters_ready, has_flash
+from engine.abilities.keywords.actions import ActionContext, resolve_spell_keyword_actions
 
 __all__ = [
+    'ActionContext',
     'KEYWORD_ENTRIES',
     'SCRYFALL_KEYWORD_COUNT',
     'KeywordEntry',
@@ -129,6 +131,7 @@ __all__ = [
     'protection_source_from_flags',
     'ProtectionSource',
     'registry_summary',
+    'resolve_spell_keyword_actions',
     'should_tap_attacker',
     'storm_copy_count',
     'ward_cost',
