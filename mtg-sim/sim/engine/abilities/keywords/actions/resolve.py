@@ -111,6 +111,8 @@ from engine.abilities.keywords.actions.specialty import (
     has_airbend,
     has_waterbend,
     bend_creature,
+    has_activate_action,
+    activate_keyword_action,
     has_detain,
     has_double,
     has_meld,
@@ -747,6 +749,12 @@ def _apply_waterbend(ctx: ActionContext) -> str | None:
     return bend_creature(ctx.zones, ctx.target_creature_uid, 'waterbend')
 
 
+def _apply_activate_action(ctx: ActionContext) -> str | None:
+    if not has_activate_action(ctx.oracle_text):
+        return None
+    return activate_keyword_action(ctx.zones, ctx.target_creature_uid)
+
+
 def _apply_exile(ctx: ActionContext) -> str | None:
     if not has_registered_keyword(ctx.oracle_text, 'Exile'):
         return None
@@ -831,6 +839,7 @@ _HANDLERS: dict[str, Callable[[ActionContext], str | None]] = {
     'Earthbend': _apply_earthbend,
     'Airbend': _apply_airbend,
     'Waterbend': _apply_waterbend,
+    'Activate': _apply_activate_action,
 }
 
 

@@ -16,6 +16,7 @@ from engine.abilities.keywords.casting.emerge import (
     normalize_emerge_cast,
     normalize_emerge_sacrifice_id,
 )
+from engine.abilities.keywords.casting.evoke import normalize_evoke_cast
 from engine.abilities.keywords.casting.entwine import normalize_entwined
 from engine.abilities.keywords.casting.freerunning import normalize_freerunning_cast
 from engine.abilities.keywords.casting.kicker import normalize_kicker_times
@@ -48,6 +49,7 @@ class PaidCastModifiers:
     replicate_times: int
     buyback: bool
     emerge: bool
+    evoke: bool
     mutate: bool
     spree_modes: tuple[int, ...]
 
@@ -109,6 +111,7 @@ def _normalized_paid_flags(
         replicate_times=normalize_replicate_times(card_info, opts.replicate_times),
         buyback=normalize_buyback(card_info, opts.paid_buyback),
         emerge=normalize_emerge_cast(card_info, opts.cast_for_emerge),
+        evoke=normalize_evoke_cast(card_info, opts.cast_for_evoke),
         mutate=normalize_mutate_cast(
             card_info,
             opts.cast_for_mutate,
@@ -155,6 +158,7 @@ def validate_announce_cast(
         ),
         lambda: _reject_keyword(opts.paid_buyback, paid.buyback, name, "buyback"),
         lambda: _reject_keyword(opts.cast_for_emerge, paid.emerge, name, "emerge"),
+        lambda: _reject_keyword(opts.cast_for_evoke, paid.evoke, name, "evoke"),
         lambda: emerge_sacrifice_error(
             zones,
             player_idx,

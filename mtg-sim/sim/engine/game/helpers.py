@@ -49,6 +49,7 @@ class CastAnnounceOptions:
     replicate_times: int = 0
     paid_buyback: bool = False
     cast_for_emerge: bool = False
+    cast_for_evoke: bool = False
     cast_for_mutate: bool = False
     cast_for_freerunning: bool = False
     modifiers: CastModifierIds = field(default_factory=CastModifierIds)

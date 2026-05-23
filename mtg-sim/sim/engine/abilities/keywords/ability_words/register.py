@@ -29,6 +29,13 @@ from engine.abilities.keywords.ability_words.conditions import (
     is_corrupted_spell_cast,
     is_survival_spell_cast,
     is_start_your_engines_spell_cast,
+    is_legacy_spell_cast,
+    is_paradox_spell_cast,
+    is_radiance_spell_cast,
+    is_teamwork_spell_cast,
+    is_vivid_spell_cast,
+    is_void_spell_cast,
+    is_fathomless_descent_spell_cast,
     is_fateful_hour_spell_cast,
     is_grandeur_upkeep,
     is_lieutenant_etb,
@@ -140,6 +147,17 @@ _WIRED: dict[str, _AbilityWordWire] = {
     'Start your engines!': _AbilityWordWire(
         TriggerKey.SPELL_CAST,
         is_start_your_engines_spell_cast,
+    ),
+    'Cohort': _AbilityWordWire(TriggerKey.ENTERS_BATTLEFIELD, is_alliance_ally_enters),
+    'Legacy': _AbilityWordWire(TriggerKey.SPELL_CAST, is_legacy_spell_cast),
+    'Paradox': _AbilityWordWire(TriggerKey.SPELL_CAST, is_paradox_spell_cast),
+    'Radiance': _AbilityWordWire(TriggerKey.SPELL_CAST, is_radiance_spell_cast),
+    'Teamwork': _AbilityWordWire(TriggerKey.SPELL_CAST, is_teamwork_spell_cast),
+    'Vivid': _AbilityWordWire(TriggerKey.SPELL_CAST, is_vivid_spell_cast),
+    'Void': _AbilityWordWire(TriggerKey.SPELL_CAST, is_void_spell_cast),
+    'Fathomless descent': _AbilityWordWire(
+        TriggerKey.SPELL_CAST,
+        is_fathomless_descent_spell_cast,
     ),
 }
 

@@ -13,6 +13,10 @@ from engine.abilities.keywords.casting.emerge import (
     emerge_mana_needed,
     normalize_emerge_cast,
 )
+from engine.abilities.keywords.casting.evoke import (
+    evoke_mana_needed,
+    normalize_evoke_cast,
+)
 from engine.abilities.keywords.casting.mutate import (
     mutate_mana_needed,
     normalize_mutate_cast,
@@ -47,6 +51,7 @@ class CastManaModifiers:
     replicate_times: int = 0
     paid_buyback: bool = False
     cast_for_emerge: bool = False
+    cast_for_evoke: bool = False
     cast_for_mutate: bool = False
     mutate_target_uid: str | None = None
     spree_mode_indices: tuple[int, ...] = ()
@@ -94,6 +99,8 @@ def resolve_announce_cast_mana(
         mana_needed, life_cost = freerunning_mana_needed(card)
     elif normalize_overloaded(card, mods.overloaded):
         mana_needed, life_cost = overload_mana_needed(card)
+    elif normalize_evoke_cast(card, mods.cast_for_evoke):
+        mana_needed, life_cost = evoke_mana_needed(card)
     elif normalize_emerge_cast(card, mods.cast_for_emerge):
         mana_needed, life_cost = emerge_mana_needed(card)
     elif normalize_mutate_cast(card, mods.cast_for_mutate, mods.mutate_target_uid):

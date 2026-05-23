@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from deck_registry import CardInfo
 from engine.abilities import activated
+from engine.abilities.activated.bloodrush import (
+    apply_bloodrush,
+    bloodrush_mana_needed,
+    can_bloodrush,
+)
 from engine.abilities.activated import ActivationSpeed
 from engine.abilities.activated._cost_keyword import INSTANT_SPEED_PHASES
 from engine.abilities.keywords.other.afflict import apply_afflict_on_attack
@@ -109,6 +114,31 @@ class ActivatedActionsMixin(GameRuntimeMixin):
         activated.cycle_from_hand(self.state.zones, 0, hand_idx)
         drawn = self._draw_cards(0, 1)
         self._log("player", "cycle", f"Cycled {card_info.name}, drew {len(drawn)}")
+        return self.to_client()
+
+    def action_bloodrush(self, hand_idx: int, target_creature_uid: str | None) -> dict:
+        """Bloodrush from hand: pay, discard, pump a creature."""
+        card, card_info, err = load_hand_card_for_action(self, hand_idx)
+        if err is not None:
+            return err
+        assert card is not None and card_info is not None
+        if not can_bloodrush(card_info, self.phase, self.state.stack.is_empty):
+            return {**self.to_client(), "error": "Cannot bloodrush now"}
+        mana_needed = bloodrush_mana_needed(card_info)
+        if not self._tap_lands_for_mana(0, mana_needed):
+            return {
+                **self.to_client(),
+                "error": f"Need {mana_needed} mana to bloodrush",
+            }
+        detail = apply_bloodrush(
+            self.state.zones,
+            0,
+            hand_idx,
+            target_creature_uid,
+        )
+        if detail is None:
+            return {**self.to_client(), "error": "Bloodrush failed"}
+        self._log("player", "bloodrush", detail)
         return self.to_client()
 
     def action_channel(

@@ -78,6 +78,7 @@ from engine.abilities.keywords.actions import (
 from engine.abilities.keywords.actions.tokens import connive
 from engine.abilities.keywords.ability_words import register_permanent_ability_words
 from engine.abilities.keywords.other.etb import apply_etb_other_abilities
+from engine.abilities.keywords.other.evoke import mark_evoked_cast
 from engine.abilities.keywords.other.register import register_permanent_other_keywords
 from engine.game._hand_card import load_hand_card_for_action, run_with_hand_card
 from engine.game.cast_announce_validate import (
@@ -197,6 +198,7 @@ class SpellStackMixin(GameRuntimeMixin):
                     replicate_times=paid.modifiers.replicate_times,
                     paid_buyback=paid.modifiers.buyback,
                     cast_for_emerge=paid.modifiers.emerge,
+                    cast_for_evoke=paid.modifiers.evoke,
                     cast_for_mutate=paid.modifiers.mutate,
                     mutate_target_uid=opts.modifiers.mutate_target_uid,
                     spree_mode_indices=paid.modifiers.spree_modes,
@@ -278,6 +280,7 @@ class SpellStackMixin(GameRuntimeMixin):
                 bestow=mods.bestow,
                 paid_buyback=mods.buyback,
                 emerge=mods.emerge,
+                evoke=mods.evoke,
                 mutate=mods.mutate,
             ),
             replicate_times=mods.replicate_times,
@@ -1035,6 +1038,8 @@ class SpellStackMixin(GameRuntimeMixin):
         counters = kicked_counter_count(card_info, spell.payment.kicker_times)
         if counters:
             permanent.counters["+1/+1"] = permanent.counters.get("+1/+1", 0) + counters
+        if spell.payment.evoke:
+            mark_evoked_cast(permanent)
         self._register_permanent_triggers(permanent)
         detail = f"Cast creature {card_info.name}"
         if counters:

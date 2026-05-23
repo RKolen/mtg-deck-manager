@@ -695,6 +695,32 @@ def has_waterbend(oracle_text: str | None) -> bool:
     return has_keyword_action(oracle_text, 'Waterbend')
 
 
+def has_activate_action(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Activate as a keyword action."""
+    return has_keyword_action(oracle_text, 'Activate')
+
+
+def activate_keyword_action(
+    zones: ZoneManager,
+    target_uid: str | None,
+) -> str | None:
+    """Activate: tap a target permanent (simplified)."""
+    if target_uid is None:
+        return 'activated (no target)'
+    target = find_creature_by_uid(zones, target_uid)
+    if target is None:
+        try:
+            perm = zones.find_permanent(int(target_uid))
+        except ValueError:
+            return None
+        if perm is None:
+            return None
+        perm.tapped = True
+        return f"activated {perm.name}"
+    target.tapped = True
+    return f"activated {target.name}"
+
+
 def bend_creature(
     zones: ZoneManager,
     target_uid: str | None,

@@ -24,6 +24,7 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
         replicate_times=req.replicateTimes,
         paid_buyback=req.paidBuyback,
         cast_for_emerge=req.castForEmerge,
+        cast_for_evoke=req.castForEvoke,
         cast_for_mutate=req.castForMutate,
         cast_for_freerunning=req.castForFreerunning,
         modifiers=CastModifierIds(
@@ -70,6 +71,10 @@ def _dispatch_hand_actions(game: InteractiveGame, req) -> dict | None:
         "suspend": lambda: game.action_suspend(req.handIdx),
         "cycle": lambda: game.action_cycle(req.handIdx),
         "channel": lambda: game.action_channel(req.handIdx, req.targetPlayer),
+        "bloodrush": lambda: game.action_bloodrush(
+            req.handIdx,
+            req.targetUid,
+        ),
         "unearth": lambda: game.action_unearth(req.handIdx),
         "foretell": lambda: game.action_foretell(req.handIdx),
         "plot": lambda: game.action_plot(req.handIdx),

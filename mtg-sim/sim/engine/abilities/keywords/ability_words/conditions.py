@@ -771,3 +771,117 @@ def is_start_your_engines_spell_cast(
         and event.controller_idx == definition.controller_idx
         and game.turn.context.turn_number >= 4
     )
+
+
+def is_legacy_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Legacy: you cast a spell while you have a legendary card in your graveyard."""
+    if not (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+    ):
+        return False
+    for card in game.zones.player_zones[definition.controller_idx].graveyard:
+        if not isinstance(card, CardObject) or card.card_info is None:
+            continue
+        if 'Legendary' in card.card_info.type_line:
+            return True
+    return False
+
+
+def is_paradox_spell_cast(
+    event: TriggerEvent,
+    _game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Paradox: you cast a spell with mana value 7 or greater."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and event.cmc >= 7
+    )
+
+
+def is_radiance_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Radiance: you cast a spell while you control a white permanent."""
+    if not (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+    ):
+        return False
+    for perm in game.zones.battlefield:
+        if perm.controller_idx != definition.controller_idx:
+            continue
+        if perm.card_info is not None and 'W' in (perm.card_info.mana_cost or '').upper():
+            return True
+        if 'Plains' in perm.type_line:
+            return True
+    return False
+
+
+def is_teamwork_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Teamwork: you cast a spell while you control two or more creatures."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and _creature_count(game, definition.controller_idx) >= 2
+    )
+
+
+def is_vivid_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Vivid: you cast a spell while you control a land with a charge counter."""
+    if not (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+    ):
+        return False
+    for perm in game.zones.battlefield:
+        if perm.controller_idx != definition.controller_idx:
+            continue
+        if 'Land' not in perm.type_line:
+            continue
+        if perm.counters.get('charge', 0) > 0 or 'Vivid' in perm.name:
+            return True
+    return False
+
+
+def is_void_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Void: you cast a spell while an opponent has no cards in hand."""
+    opponent = 1 - definition.controller_idx
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and not game.zones.player_zones[opponent].hand
+    )
+
+
+def is_fathomless_descent_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Fathomless descent: you cast a spell with ten or more cards in your graveyard."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and _graveyard_size(game, definition.controller_idx) >= 10
+    )

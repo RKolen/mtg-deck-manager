@@ -240,6 +240,7 @@ class SpellCastPayment:
     bestow: bool = False
     paid_buyback: bool = False
     emerge: bool = False
+    evoke: bool = False
     mutate: bool = False
 
 
