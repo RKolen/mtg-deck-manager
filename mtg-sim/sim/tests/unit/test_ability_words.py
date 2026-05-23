@@ -337,3 +337,35 @@ def test_prowess_puts_counter_when_trigger_resolves():
     assert isinstance(trigger.effect, ProwessEffect)
     trigger.effect.resolve(game, trigger)
     assert source.counters.get("+1/+1") == 1
+
+
+def test_fateful_hour_triggers_at_low_life():
+    """Fateful hour fires when the controller has 5 or less life."""
+    game = fresh_game(player_life=5)
+    source = place_on_battlefield(
+        make_creature("Zealot", 2, 2, oracle="Fateful hour — You gain 2 life."),
+        0,
+        game.zones,
+    )
+    register_permanent_ability_words(source, game.trigger_registry)
+    spell = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant("Bolt"))
+    game.fire_spell_cast_triggers(spell)
+    trigger = _top_trigger(game)
+    assert trigger.source_permanent_id == source.obj_id
+
+
+def test_underdog_triggers_when_outnumbered():
+    """Underdog fires when attacking with fewer creatures than an opponent."""
+    game = fresh_game()
+    source = place_on_battlefield(
+        make_creature("Underdog", 2, 2, oracle="Underdog — Draw a card."),
+        0,
+        game.zones,
+        sick=False,
+    )
+    place_on_battlefield(make_creature("Big", 4, 4), 1, game.zones)
+    place_on_battlefield(make_creature("Bigger", 5, 5), 1, game.zones)
+    register_permanent_ability_words(source, game.trigger_registry)
+    game.fire_attack_triggers(source)
+    trigger = _top_trigger(game)
+    assert trigger.source_permanent_id == source.obj_id

@@ -34,7 +34,7 @@ def test_all_seventy_two_keyword_actions_registered():
 
 def test_keyword_action_handler_coverage():
     """Most common keyword actions have resolution handlers (see plan.md)."""
-    assert len(_HANDLERS) >= 53
+    assert len(_HANDLERS) >= 63
     missing = [name for name in ALL_KEYWORD_ACTIONS if name not in _HANDLERS]
     assert 'Amass' not in missing
     assert 'Mill' not in missing
@@ -245,3 +245,34 @@ def test_resolve_seek_spell_action():
     ))
     assert 'sought Bear' in detail
     assert len(game.zones.player_zones[0].hand) == 1
+
+
+def test_resolve_heist_exiles_opponent_top():
+    """Heist exiles the top card of an opponent's library."""
+    game = fresh_game()
+    game.zones.player_zones[1].library.append(
+        CardObject(controller_idx=1, owner_idx=1, card_info=make_instant('Stolen')),
+    )
+    detail = resolve_spell_keyword_actions(ActionContext(
+        zones=game.zones,
+        game=game,
+        controller_idx=0,
+        oracle_text='Heist',
+    ))
+    assert 'heisted Stolen' in detail
+    assert len(game.zones.player_zones[0].exile) == 1
+
+
+def test_resolve_blight_puts_counter():
+    """Blight puts a blight counter on a target creature."""
+    game = fresh_game()
+    target = place_on_battlefield(make_creature('Victim', 2, 2), 1, game.zones)
+    detail = resolve_spell_keyword_actions(ActionContext(
+        zones=game.zones,
+        game=game,
+        controller_idx=0,
+        oracle_text='Blight',
+        target_creature_uid=str(target.obj_id),
+    ))
+    assert 'blighted' in detail
+    assert target.counters.get('blight') == 1

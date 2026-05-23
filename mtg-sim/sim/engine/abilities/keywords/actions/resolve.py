@@ -77,7 +77,27 @@ from engine.abilities.keywords.actions.specialty import (
     assemble_legion,
     has_abandon,
     has_assemble,
+    blight_creature,
+    cast_from_library,
+    cloak_creature,
+    endure_creature,
+    has_blight,
+    has_cast_action,
+    has_cloak,
     has_conjure,
+    has_endure,
+    has_heist,
+    has_harness,
+    has_play,
+    has_prepared,
+    has_set_in_motion,
+    has_time_travel,
+    heist_opponent_top,
+    harness_energy,
+    play_top_card,
+    prepared_creature,
+    set_in_motion,
+    time_travel,
     has_detain,
     has_double,
     has_meld,
@@ -606,6 +626,66 @@ def _apply_meld(ctx: ActionContext) -> str | None:
     )
 
 
+def _apply_blight(ctx: ActionContext) -> str | None:
+    if not has_blight(ctx.oracle_text):
+        return None
+    return blight_creature(ctx.zones, ctx.target_creature_uid)
+
+
+def _apply_cloak(ctx: ActionContext) -> str | None:
+    if not has_cloak(ctx.oracle_text):
+        return None
+    return cloak_creature(ctx.zones, ctx.target_creature_uid)
+
+
+def _apply_heist(ctx: ActionContext) -> str | None:
+    if not has_heist(ctx.oracle_text):
+        return None
+    return heist_opponent_top(ctx.zones, ctx.controller_idx)
+
+
+def _apply_endure(ctx: ActionContext) -> str | None:
+    if not has_endure(ctx.oracle_text):
+        return None
+    return endure_creature(ctx.zones, ctx.target_creature_uid)
+
+
+def _apply_harness(ctx: ActionContext) -> str | None:
+    if not has_harness(ctx.oracle_text):
+        return None
+    return harness_energy(ctx.zones, ctx.target_creature_uid)
+
+
+def _apply_play(ctx: ActionContext) -> str | None:
+    if not has_play(ctx.oracle_text):
+        return None
+    return play_top_card(ctx.zones, ctx.controller_idx)
+
+
+def _apply_set_in_motion(ctx: ActionContext) -> str | None:
+    if not has_set_in_motion(ctx.oracle_text):
+        return None
+    return set_in_motion(ctx.zones, ctx.target_creature_uid)
+
+
+def _apply_cast_action(ctx: ActionContext) -> str | None:
+    if not has_cast_action(ctx.oracle_text):
+        return None
+    return cast_from_library(ctx.zones, ctx.controller_idx)
+
+
+def _apply_prepared(ctx: ActionContext) -> str | None:
+    if not has_prepared(ctx.oracle_text):
+        return None
+    return prepared_creature(ctx.zones, ctx.target_creature_uid)
+
+
+def _apply_time_travel(ctx: ActionContext) -> str | None:
+    if not has_time_travel(ctx.oracle_text):
+        return None
+    return time_travel(ctx.zones, ctx.target_creature_uid)
+
+
 def _apply_exile(ctx: ActionContext) -> str | None:
     if not has_registered_keyword(ctx.oracle_text, 'Exile'):
         return None
@@ -672,6 +752,16 @@ _HANDLERS: dict[str, Callable[[ActionContext], str | None]] = {
     'Assemble': _apply_assemble,
     'Abandon': _apply_abandon,
     'Meld': _apply_meld,
+    'Blight': _apply_blight,
+    'Cloak': _apply_cloak,
+    'Heist': _apply_heist,
+    'Endure': _apply_endure,
+    'Harness': _apply_harness,
+    'Play': _apply_play,
+    'Set in motion': _apply_set_in_motion,
+    'Cast': _apply_cast_action,
+    'Prepared': _apply_prepared,
+    'Time Travel': _apply_time_travel,
 }
 
 

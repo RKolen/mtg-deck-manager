@@ -24,8 +24,13 @@ from engine.abilities.keywords.ability_words.conditions import (
     is_converge_spell_cast,
     is_chroma_spell_cast,
     is_eerie_spell_cast,
+    is_eminence_spell_cast,
+    is_fateful_hour_spell_cast,
+    is_grandeur_upkeep,
     is_lieutenant_etb,
     is_renew_creature_leaves,
+    is_spell_mastery_spell_cast,
+    is_underdog_attack,
     is_valiant_first_attack,
     is_coven_spell_cast,
     is_kinship_upkeep,
@@ -120,6 +125,11 @@ _WIRED: dict[str, _AbilityWordWire] = {
     'Chroma': _AbilityWordWire(TriggerKey.SPELL_CAST, is_chroma_spell_cast),
     'Renew': _AbilityWordWire(TriggerKey.LEAVES_BATTLEFIELD, is_renew_creature_leaves),
     'Valiant': _AbilityWordWire(TriggerKey.ATTACKS, is_valiant_first_attack),
+    'Fateful hour': _AbilityWordWire(TriggerKey.SPELL_CAST, is_fateful_hour_spell_cast),
+    'Spell mastery': _AbilityWordWire(TriggerKey.SPELL_CAST, is_spell_mastery_spell_cast),
+    'Grandeur': _AbilityWordWire(TriggerKey.BEGINNING_OF_UPKEEP, is_grandeur_upkeep),
+    'Underdog': _AbilityWordWire(TriggerKey.ATTACKS, is_underdog_attack),
+    'Eminence': _AbilityWordWire(TriggerKey.SPELL_CAST, is_eminence_spell_cast),
 }
 
 

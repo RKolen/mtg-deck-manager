@@ -274,6 +274,7 @@ class InteractiveGame(ActivatedActionsMixin, SpellStackMixin):  # pylint: disabl
     def action_confirm_attack(self) -> dict:
         """Resolve the player's declared attackers as unblocked damage."""
         assert self.phase == "attack"
+        self._apply_attack_keywords(self.pending_attackers)
         self._fire_attack_triggers(self.pending_attackers)
         result = resolve_combat_damage(
             self.state,
@@ -567,6 +568,7 @@ class InteractiveGame(ActivatedActionsMixin, SpellStackMixin):  # pylint: disabl
         tap_attackers(attackers)
         self.pending_opp_attackers = [str(p.obj_id) for p in attackers]
         self._log("opponent", "attack_declared", f"Attacks with {perm_names(attackers)}")
+        self._apply_attack_keywords(self.pending_opp_attackers)
         self._fire_attack_triggers(self.pending_opp_attackers)
         self.phase = "declare_blockers"
 

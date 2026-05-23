@@ -9,7 +9,7 @@ from engine.abilities.keywords.actions._parse import parse_amount_after_keyword
 from engine.abilities.keywords.actions.counters import put_plus_counters
 from engine.abilities.keywords.actions.detect import has_keyword_action
 from engine.abilities.keywords.actions.targets import find_creature_by_uid
-from engine.abilities.keywords.actions.library import seek_card
+from engine.abilities.keywords.actions.library import manifest_top_of_library, seek_card
 from engine.abilities.keywords.actions.tokens import create_creature_token_from_oracle
 from engine.abilities.keywords.registry import has_registered_keyword
 from engine.cards.oracle_parse import TokenBlueprint, parse_damage, parse_token_blueprint
@@ -466,3 +466,152 @@ def detain_creature(zones: ZoneManager, target_uid: str | None) -> str | None:
     target.counters['detained'] = 1
     target.tapped = True
     return f"detained {target.name}"
+
+
+def has_blight(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Blight as a keyword action."""
+    return has_keyword_action(oracle_text, 'Blight')
+
+
+def blight_creature(zones: ZoneManager, target_uid: str | None) -> str | None:
+    """Put a blight counter on a creature."""
+    target = find_creature_by_uid(zones, target_uid)
+    if target is None:
+        return None
+    target.counters['blight'] = int(target.counters.get('blight', 0)) + 1
+    return f"blighted {target.name}"
+
+
+def has_cloak(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Cloak as a keyword action."""
+    return has_keyword_action(oracle_text, 'Cloak')
+
+
+def cloak_creature(zones: ZoneManager, target_uid: str | None) -> str | None:
+    """Cloak: turn a creature face down (simplified)."""
+    target = find_creature_by_uid(zones, target_uid)
+    if target is None:
+        return None
+    target.face_down = True
+    return f"cloaked {target.name}"
+
+
+def has_heist(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Heist as a keyword action."""
+    return has_keyword_action(oracle_text, 'Heist')
+
+
+def heist_opponent_top(zones: ZoneManager, controller_idx: int) -> str:
+    """Heist: exile the top card of an opponent's library."""
+    opponent = 1 - controller_idx
+    lib = zones.player_zones[opponent].library
+    if not lib:
+        return 'heist (empty library)'
+    card = lib.pop(0)
+    zones.player_zones[controller_idx].exile.append(card)
+    name = card.card_info.name if isinstance(card, CardObject) and card.card_info else 'card'
+    return f"heisted {name}"
+
+
+def has_endure(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Endure as a keyword action."""
+    return has_keyword_action(oracle_text, 'Endure')
+
+
+def endure_creature(zones: ZoneManager, target_uid: str | None) -> str | None:
+    """Endure: indestructible until end of turn (simplified counter)."""
+    target = find_creature_by_uid(zones, target_uid)
+    if target is None:
+        return None
+    target.counters['endure'] = 1
+    return f"{target.name} endures"
+
+
+def has_harness(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Harness as a keyword action."""
+    return has_keyword_action(oracle_text, 'Harness')
+
+
+def harness_energy(zones: ZoneManager, target_uid: str | None) -> str | None:
+    """Harness: put an energy counter on a permanent."""
+    target = find_creature_by_uid(zones, target_uid)
+    if target is None:
+        return None
+    target.counters['energy'] = int(target.counters.get('energy', 0)) + 1
+    return f"harnessed energy on {target.name}"
+
+
+def has_play(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Play as a keyword action."""
+    return has_keyword_action(oracle_text, 'Play')
+
+
+def play_top_card(zones: ZoneManager, controller_idx: int) -> str:
+    """Play: put the top land from library onto the battlefield, else draw it."""
+    lib = zones.player_zones[controller_idx].library
+    if not lib:
+        return 'played (empty library)'
+    card = lib[0]
+    if not isinstance(card, CardObject) or card.card_info is None:
+        return 'played (unknown top card)'
+    if card.card_info.is_land:
+        zones.enter_battlefield(card, controller_idx, 'play', Zone.LIBRARY)
+        return f"played {card.card_info.name}"
+    drawn = zones.draw(controller_idx)
+    name = drawn.card_info.name if isinstance(drawn, CardObject) and drawn.card_info else 'card'
+    return f"played (drew {name})"
+
+
+def has_set_in_motion(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Set in motion as a keyword action."""
+    return has_keyword_action(oracle_text, 'Set in motion')
+
+
+def set_in_motion(zones: ZoneManager, target_uid: str | None) -> str | None:
+    """Set in motion: put a time counter on a permanent."""
+    target = find_creature_by_uid(zones, target_uid)
+    if target is None:
+        return None
+    target.counters['time'] = int(target.counters.get('time', 0)) + 1
+    return f"set {target.name} in motion"
+
+
+def has_cast_action(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Cast as a keyword action."""
+    return has_keyword_action(oracle_text, 'Cast')
+
+
+def cast_from_library(zones: ZoneManager, controller_idx: int) -> str:
+    """Cast: manifest the top card of your library (simplified)."""
+    perm = manifest_top_of_library(zones, controller_idx, cause='cast')
+    if perm is None:
+        return 'cast (empty library)'
+    return f"cast {perm.name} from library"
+
+
+def has_prepared(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Prepared as a keyword action."""
+    return has_keyword_action(oracle_text, 'Prepared')
+
+
+def prepared_creature(zones: ZoneManager, target_uid: str | None) -> str | None:
+    """Prepared: mark a creature as prepared."""
+    target = find_creature_by_uid(zones, target_uid)
+    if target is None:
+        return None
+    target.counters['prepared'] = 1
+    return f"prepared {target.name}"
+
+
+def has_time_travel(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Time Travel as a keyword action."""
+    return has_keyword_action(oracle_text, 'Time Travel')
+
+
+def time_travel(zones: ZoneManager, target_uid: str | None) -> str | None:
+    """Time Travel: put a lore counter on a permanent."""
+    target = find_creature_by_uid(zones, target_uid)
+    if target is None:
+        return None
+    target.counters['lore'] = int(target.counters.get('lore', 0)) + 1
+    return f"time traveled {target.name}"

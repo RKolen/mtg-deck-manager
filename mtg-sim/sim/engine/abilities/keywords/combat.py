@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from engine.abilities.keywords._core import has_keyword, is_artifact_creature, is_creature
+from engine.abilities.keywords.other.prowl import prowl_unblockable
 from engine.abilities.keywords.registry import detect_keywords
 
 if TYPE_CHECKING:
@@ -43,20 +44,22 @@ def can_block(perm: Permanent) -> bool:
     return is_creature(perm) and not perm.tapped
 
 
-def legal_blocker(blocker: Permanent, attacker: Permanent, game: GameState) -> bool:
-    """Return whether blocker may block attacker (evasion keywords)."""
-    del game
-    if not can_block(blocker):
-        return False
+def _evasion_allows_block(blocker: Permanent, attacker: Permanent) -> bool:
+    """Return False when evasion prevents this blocker from blocking the attacker."""
     if has_keyword(attacker, 'Flying'):
         return has_keyword(blocker, 'Flying') or has_keyword(blocker, 'Reach')
     if has_keyword(attacker, 'Shadow'):
         return has_keyword(blocker, 'Shadow')
-    if has_keyword(attacker, 'Fear'):
-        return is_artifact_creature(blocker)
-    if has_keyword(attacker, 'Intimidate'):
+    if has_keyword(attacker, 'Fear') or has_keyword(attacker, 'Intimidate'):
         return is_artifact_creature(blocker)
     return True
+
+
+def legal_blocker(blocker: Permanent, attacker: Permanent, game: GameState) -> bool:
+    """Return whether blocker may block attacker (evasion keywords)."""
+    if prowl_unblockable(attacker, game) or not can_block(blocker):
+        return False
+    return _evasion_allows_block(blocker, attacker)
 
 
 def menace_requires_two_blockers(attacker: Permanent) -> bool:

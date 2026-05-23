@@ -626,3 +626,82 @@ def is_flurry_spell_cast(
         and event.controller_idx == definition.controller_idx
         and game.players[definition.controller_idx].spells_cast_this_turn >= 2
     )
+
+
+def is_fateful_hour_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Fateful hour: you cast a spell while you have 5 or less life."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and game.players[definition.controller_idx].life <= 5
+    )
+
+
+def is_spell_mastery_spell_cast(
+    event: TriggerEvent,
+    _game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Spell mastery: you cast an instant or sorcery spell."""
+    return is_controller_instant_or_sorcery_cast(event, _game, definition)
+
+
+def is_grandeur_upkeep(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Grandeur: beginning of upkeep with a legendary card in hand."""
+    if not (
+        isinstance(event, StepTriggerEvent)
+        and event.step == Step.UPKEEP
+        and event.active_player_idx == definition.controller_idx
+    ):
+        return False
+    hand = game.zones.player_zones[definition.controller_idx].hand
+    for card in hand:
+        if not isinstance(card, CardObject) or card.card_info is None:
+            continue
+        if 'Legendary' in card.card_info.type_line:
+            return True
+    return False
+
+
+def _creature_count(game: GameState, player_idx: int) -> int:
+    return sum(
+        1
+        for perm in game.zones.battlefield
+        if perm.controller_idx == player_idx and 'Creature' in perm.type_line
+    )
+
+
+def is_underdog_attack(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Underdog: this attacks while you control fewer creatures than an opponent."""
+    if not isinstance(event, AttackTriggerEvent):
+        return False
+    if event.attacker_id != definition.source_permanent_id:
+        return False
+    mine = _creature_count(game, definition.controller_idx)
+    opponent = 1 - definition.controller_idx
+    theirs = _creature_count(game, opponent)
+    return mine < theirs
+
+
+def is_eminence_spell_cast(
+    event: TriggerEvent,
+    _game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Eminence: you cast a spell while this is on the battlefield."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+    )
