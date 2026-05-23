@@ -189,6 +189,73 @@ def test_delirium_triggers_on_etb_with_four_graveyard_types():
     assert trigger.source_permanent_id == source.obj_id
 
 
+def test_morbid_triggers_on_spell_after_creature_dies():
+    """Morbid fires when you cast a spell after a creature died this turn."""
+    game = fresh_game()
+    source = place_on_battlefield(
+        make_creature("Gravecrawler Host", 1, 1, oracle="Morbid — Draw a card."),
+        0,
+        game.zones,
+    )
+    register_permanent_ability_words(source, game.trigger_registry)
+    doomed = place_on_battlefield(make_creature("Doomed", 1, 1), 0, game.zones)
+    game.zones.leave_battlefield(doomed, Zone.GRAVEYARD, 'test', game)
+    assert game.creature_died_this_turn
+    spell = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant("Bolt"))
+    game.fire_spell_cast_triggers(spell)
+    trigger = _top_trigger(game)
+    assert trigger.source_permanent_id == source.obj_id
+
+
+def test_ferocious_triggers_when_casting_with_power_four_creature():
+    """Ferocious checks for a power-4+ creature you control."""
+    game = fresh_game()
+    place_on_battlefield(make_creature("Titan", 4, 5), 0, game.zones)
+    source = place_on_battlefield(
+        make_creature("Host", 1, 1, oracle="Ferocious — Draw a card."),
+        0,
+        game.zones,
+    )
+    register_permanent_ability_words(source, game.trigger_registry)
+    spell = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant("Growth"))
+    game.fire_spell_cast_triggers(spell)
+    trigger = _top_trigger(game)
+    assert trigger.source_permanent_id == source.obj_id
+
+
+def test_revolt_triggers_on_etb_after_permanent_left():
+    """Revolt fires when this permanent enters after you had a revolt."""
+    game = fresh_game()
+    old = place_on_battlefield(make_creature("Sacrifice", 1, 1), 0, game.zones)
+    game.zones.leave_battlefield(old, Zone.EXILE, 'test', game)
+    assert game.players[0].revolt_this_turn
+    card = CardObject(
+        controller_idx=0,
+        owner_idx=0,
+        card_info=make_creature("Renegade", 2, 1, oracle="Revolt — Draw a card."),
+    )
+    source = game.zones.enter_battlefield(card, 0, 'test', Zone.HAND)
+    register_permanent_ability_words(source, game.trigger_registry)
+    _fire_source_etb(game, source)
+    trigger = _top_trigger(game)
+    assert trigger.source_permanent_id == source.obj_id
+
+
+def test_inspired_triggers_when_source_attacks():
+    """Inspired fires when the source creature attacks."""
+    game = fresh_game()
+    source = place_on_battlefield(
+        make_creature("Wind-Scarred", 2, 2, oracle="Inspired — Draw a card."),
+        0,
+        game.zones,
+        sick=False,
+    )
+    register_permanent_ability_words(source, game.trigger_registry)
+    game.fire_attack_triggers(source)
+    trigger = _top_trigger(game)
+    assert trigger.source_permanent_id == source.obj_id
+
+
 def test_prowess_puts_counter_when_trigger_resolves():
     """Prowess adds a +1/+1 counter to the source permanent."""
     game = fresh_game()

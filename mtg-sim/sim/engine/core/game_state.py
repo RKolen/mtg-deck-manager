@@ -18,7 +18,7 @@ from engine.core.game_object import CardObject, Permanent, Target
 from engine.core.mana import ManaPool
 from engine.core.turn_structure import TurnRunner
 from engine.core.turn_structure import Step
-from engine.core.zones import ZoneManager, ZoneMoveEvent
+from engine.core.zones import Zone, ZoneManager, ZoneMoveEvent
 from engine.abilities.keywords import enters_ready, has_persist, has_undying
 from engine.rules.state_based import check_sbas
 from engine.rules.stack import Stack
@@ -41,6 +41,7 @@ class PlayerInfo:
     spells_cast_this_turn: int = 0
     combat_damage_dealt_this_turn: bool = False
     was_dealt_damage_this_turn: bool = False
+    revolt_this_turn: bool = False
     has_lost: bool = False
 
 
@@ -71,6 +72,7 @@ class GameState:
     trigger_registry: TriggerRegistry = field(default_factory=TriggerRegistry)
     log: list[LogEntry] = field(default_factory=list)
     winner: int | None = None
+    creature_died_this_turn: bool = False
 
     def __post_init__(self) -> None:
         """Subscribe the trigger registry to zone movement events."""
@@ -116,8 +118,21 @@ class GameState:
             return True
         return False
 
+    def _note_zone_move_flags(self, event: ZoneMoveEvent) -> None:
+        """Track Morbid, Revolt, and similar ability-word state for this turn."""
+        if not isinstance(event.obj, Permanent):
+            return
+        if event.from_zone == Zone.BATTLEFIELD:
+            self.players[event.obj.controller_idx].revolt_this_turn = True
+            if (
+                event.to_zone == Zone.GRAVEYARD
+                and 'Creature' in event.obj.type_line
+            ):
+                self.creature_died_this_turn = True
+
     def _handle_zone_move(self, event: ZoneMoveEvent) -> None:
         """Put matching triggered abilities on the stack."""
+        self._note_zone_move_flags(event)
         self.trigger_registry.put_triggers_on_stack(event, self)
 
     def fire_step_triggers(self, step: Step) -> None:

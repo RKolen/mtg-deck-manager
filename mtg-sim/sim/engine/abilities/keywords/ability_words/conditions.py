@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from engine.core.game_object import CardObject, Permanent
+from engine.core.game_object import CardObject, Permanent, effective_power
 from engine.core.zones import Zone, ZoneMoveEvent
 from engine.rules.triggers import (
+    AttackTriggerEvent,
     CombatDamageTriggerEvent,
     MassAttackTriggerEvent,
     SpellCastTriggerEvent,
@@ -170,4 +171,76 @@ def is_battalion_mass_attack(
         isinstance(event, MassAttackTriggerEvent)
         and event.attacking_player_idx == definition.controller_idx
         and event.attacker_count >= 3
+    )
+
+
+def _max_creature_power(game: GameState, player_idx: int) -> int:
+    powers = [
+        effective_power(perm)
+        for perm in game.zones.battlefield
+        if perm.controller_idx == player_idx and 'Creature' in perm.type_line
+    ]
+    return max(powers) if powers else 0
+
+
+def is_morbid_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Morbid: you cast a spell and a creature died this turn."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and game.creature_died_this_turn
+    )
+
+
+def is_ferocious_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Ferocious: you cast a spell while controlling a power-4+ creature."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and _max_creature_power(game, definition.controller_idx) >= 4
+    )
+
+
+def is_formidable_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Formidable: you cast a spell while controlling a power-8+ creature."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and _max_creature_power(game, definition.controller_idx) >= 8
+    )
+
+
+def is_source_etb_revolt(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Revolt: this permanent entered after you controlled a permanent leaving."""
+    return (
+        _is_source_enters_battlefield(event, definition)
+        and game.players[definition.controller_idx].revolt_this_turn
+    )
+
+
+def is_source_inspired_attack(
+    event: TriggerEvent,
+    _game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Inspired: this creature attacked."""
+    return (
+        isinstance(event, AttackTriggerEvent)
+        and event.attacker_id == definition.source_permanent_id
     )

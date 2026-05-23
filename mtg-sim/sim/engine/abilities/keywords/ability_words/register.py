@@ -11,10 +11,15 @@ from engine.abilities.keywords.ability_words.conditions import (
     is_controller_enchantment_enters,
     is_controller_instant_or_sorcery_cast,
     is_controller_land_enters,
+    is_ferocious_spell_cast,
+    is_formidable_spell_cast,
+    is_morbid_spell_cast,
     is_raid_at_beginning_of_combat,
     is_source_enraged,
     is_source_etb_delirium,
     is_source_etb_metalcraft,
+    is_source_etb_revolt,
+    is_source_inspired_attack,
 )
 from engine.abilities.keywords.ability_words.detect import has_ability_word
 from engine.abilities.keywords.ability_words.effects import (
@@ -65,6 +70,11 @@ _WIRED: dict[str, _AbilityWordWire] = {
         TriggerKey.ENTERS_BATTLEFIELD,
         is_source_etb_delirium,
     ),
+    'Morbid': _AbilityWordWire(TriggerKey.SPELL_CAST, is_morbid_spell_cast),
+    'Ferocious': _AbilityWordWire(TriggerKey.SPELL_CAST, is_ferocious_spell_cast),
+    'Formidable': _AbilityWordWire(TriggerKey.SPELL_CAST, is_formidable_spell_cast),
+    'Revolt': _AbilityWordWire(TriggerKey.ENTERS_BATTLEFIELD, is_source_etb_revolt),
+    'Inspired': _AbilityWordWire(TriggerKey.ATTACKS, is_source_inspired_attack),
 }
 
 
