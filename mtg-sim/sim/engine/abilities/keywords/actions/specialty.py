@@ -9,8 +9,10 @@ from engine.abilities.keywords.actions._parse import parse_amount_after_keyword
 from engine.abilities.keywords.actions.counters import put_plus_counters
 from engine.abilities.keywords.actions.detect import has_keyword_action
 from engine.abilities.keywords.actions.targets import find_creature_by_uid
+from engine.abilities.keywords.actions.library import seek_card
+from engine.abilities.keywords.actions.tokens import create_creature_token_from_oracle
 from engine.abilities.keywords.registry import has_registered_keyword
-from engine.cards.oracle_parse import TokenBlueprint
+from engine.cards.oracle_parse import TokenBlueprint, parse_token_blueprint
 from engine.core.game_object import CardObject
 from engine.core.zones import Zone
 
@@ -282,6 +284,92 @@ def venture_into_dungeon(game: GameState, controller_idx: int) -> str:
     player = game.players[controller_idx]
     player.dungeon_room += 1
     return f"ventured to dungeon room {player.dungeon_room}"
+
+
+def has_conjure(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Conjure as a keyword action."""
+    return has_keyword_action(oracle_text, 'Conjure')
+
+
+def has_transform(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Transform as a keyword action."""
+    return has_keyword_action(oracle_text, 'Transform')
+
+
+def has_attach(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Attach as a keyword action."""
+    return has_keyword_action(oracle_text, 'Attach')
+
+
+def has_vote(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Vote as a keyword action."""
+    return has_keyword_action(oracle_text, 'Vote')
+
+
+def has_role_token(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Role token as a keyword action."""
+    return has_registered_keyword(oracle_text, 'Role token')
+
+
+def conjure_to_hand(zones: ZoneManager, controller_idx: int, oracle_text: str) -> str:
+    """Conjure: put a card into hand (simplified as seek/draw)."""
+    sought = seek_card(zones, controller_idx, oracle_text)
+    if sought is not None:
+        zones.player_zones[controller_idx].hand.append(sought)
+        name = sought.card_info.name if sought.card_info else 'card'
+        return f"conjured {name}"
+    drawn = zones.draw(controller_idx)
+    if drawn is None:
+        return 'conjured (empty library)'
+    name = drawn.card_info.name if isinstance(drawn, CardObject) and drawn.card_info else 'card'
+    return f"conjured {name}"
+
+
+def transform_creature(zones: ZoneManager, target_uid: str | None) -> str | None:
+    """Transform: toggle face-down state (simplified)."""
+    target = find_creature_by_uid(zones, target_uid)
+    if target is None:
+        return None
+    target.face_down = not target.face_down
+    state = 'face-down' if target.face_down else 'face-up'
+    return f"{target.name} transformed ({state})"
+
+
+def attach_to_creature(
+    zones: ZoneManager,
+    equipment_uid: str | None,
+    host_uid: str | None,
+) -> str | None:
+    """Attach an aura or equipment to a host creature."""
+    if equipment_uid is None or host_uid is None:
+        return None
+    try:
+        equipment = zones.find_permanent(int(equipment_uid))
+        host = zones.find_permanent(int(host_uid))
+    except ValueError:
+        return None
+    if equipment is None or host is None:
+        return None
+    if 'Creature' not in host.type_line:
+        return None
+    equipment.attached_to = host.obj_id
+    return f"{equipment.name} attached to {host.name}"
+
+
+def resolve_vote(oracle_text: str) -> str:
+    """Vote: log a simplified council outcome (controller wins)."""
+    del oracle_text
+    return 'vote resolved (controller wins)'
+
+
+def create_role_token(zones: ZoneManager, controller_idx: int, oracle_text: str) -> str | None:
+    """Create a Role token from oracle text."""
+    blueprint = parse_token_blueprint(oracle_text)
+    if blueprint is None:
+        created = create_creature_token_from_oracle(zones, controller_idx, oracle_text)
+        return f"created role {created}" if created else None
+    enter_token_from_blueprint(zones, controller_idx, blueprint, cause='role')
+    return f"created {blueprint.name}"
 
 
 def detain_creature(zones: ZoneManager, target_uid: str | None) -> str | None:

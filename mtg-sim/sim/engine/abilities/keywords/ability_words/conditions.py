@@ -512,6 +512,40 @@ def is_adamant_spell_cast(
     )
 
 
+def is_eerie_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Eerie: you cast a spell while controlling an enchantment."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and any(
+            perm.controller_idx == definition.controller_idx
+            and 'Enchantment' in perm.type_line
+            for perm in game.zones.battlefield
+        )
+    )
+
+
+def is_lieutenant_etb(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Lieutenant: this entered while you control a legendary creature."""
+    if not _is_source_enters_battlefield(event, definition):
+        return False
+    return any(
+        perm.controller_idx == definition.controller_idx
+        and perm.obj_id != definition.source_permanent_id
+        and 'Legendary' in perm.type_line
+        and 'Creature' in perm.type_line
+        for perm in game.zones.battlefield
+    )
+
+
 def is_kinship_upkeep(
     event: TriggerEvent,
     game: GameState,

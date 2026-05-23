@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from engine.abilities.keywords.other.ascend import update_ascend_status
+from engine.abilities.keywords.other.backup import apply_backup_etb
+from engine.abilities.keywords.other.blitz import apply_blitz_etb
 from engine.abilities.keywords.other.bloodthirst import apply_bloodthirst_etb
 from engine.abilities.keywords.other.dash import apply_dash_etb
 from engine.abilities.keywords.other.devour import apply_devour_etb
@@ -48,6 +50,14 @@ def apply_etb_other_abilities(game: GameState, permanent: Permanent) -> list[str
     dash_detail = apply_dash_etb(permanent)
     if dash_detail:
         parts.append(dash_detail)
+
+    blitz_detail = apply_blitz_etb(permanent)
+    if blitz_detail:
+        parts.append(blitz_detail)
+
+    backup_detail = apply_backup_etb(permanent, zones.battlefield)
+    if backup_detail:
+        parts.append(backup_detail)
 
     ascend_detail = update_ascend_status(game, permanent.controller_idx)
     if ascend_detail:

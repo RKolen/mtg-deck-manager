@@ -22,6 +22,8 @@ from engine.abilities.keywords.ability_words.conditions import (
     is_alliance_ally_enters,
     is_celebration_spell_cast,
     is_converge_spell_cast,
+    is_eerie_spell_cast,
+    is_lieutenant_etb,
     is_coven_spell_cast,
     is_kinship_upkeep,
     is_morbid_spell_cast,
@@ -109,6 +111,8 @@ _WIRED: dict[str, _AbilityWordWire] = {
     'Converge': _AbilityWordWire(TriggerKey.SPELL_CAST, is_converge_spell_cast),
     'Adamant': _AbilityWordWire(TriggerKey.SPELL_CAST, is_adamant_spell_cast),
     'Kinship': _AbilityWordWire(TriggerKey.BEGINNING_OF_UPKEEP, is_kinship_upkeep),
+    'Eerie': _AbilityWordWire(TriggerKey.SPELL_CAST, is_eerie_spell_cast),
+    'Lieutenant': _AbilityWordWire(TriggerKey.ENTERS_BATTLEFIELD, is_lieutenant_etb),
 }
 
 

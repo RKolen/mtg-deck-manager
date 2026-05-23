@@ -52,37 +52,48 @@ from engine.abilities.keywords.actions.library import (
     surveil_cards,
     surveil_count,
 )
+from engine.abilities.keywords.actions.sweep import apply_sweep
 from engine.abilities.keywords.actions.specialty import (
     adapt_creature,
+    attach_to_creature,
     behold_draw_if_clause,
     behold_top_card,
+    clash,
+    collect_evidence,
+    conjure_to_hand,
+    create_role_token,
     detain_creature,
+    discard_from_hand,
     exert_creature,
     forage_cost,
     goad_creature,
     has_adapt,
+    has_attach,
     has_behold,
+    has_clash,
+    has_collect_evidence,
+    has_conjure,
     has_detain,
+    has_discard_action,
     has_exert,
     has_forage,
     has_goad,
+    has_incubate,
     has_learn,
     has_monstrosity,
     has_reveal,
-    learn_draw,
-    clash,
-    collect_evidence,
-    discard_from_hand,
-    has_clash,
-    has_collect_evidence,
-    has_discard_action,
-    has_incubate,
+    has_role_token,
     has_suspect,
+    has_transform,
     has_venture,
+    has_vote,
     incubate,
+    learn_draw,
     monstrosity_creature,
+    resolve_vote,
     reveal_top_card,
     suspect_creature,
+    transform_creature,
     venture_into_dungeon,
 )
 from engine.abilities.keywords.actions.targets import find_creature_by_uid
@@ -517,6 +528,40 @@ def _apply_venture(ctx: ActionContext) -> str | None:
     return venture_into_dungeon(ctx.game, ctx.controller_idx)
 
 
+def _apply_conjure(ctx: ActionContext) -> str | None:
+    if not has_conjure(ctx.oracle_text):
+        return None
+    return conjure_to_hand(ctx.zones, ctx.controller_idx, ctx.oracle_text)
+
+
+def _apply_transform(ctx: ActionContext) -> str | None:
+    if not has_transform(ctx.oracle_text):
+        return None
+    return transform_creature(ctx.zones, ctx.target_creature_uid)
+
+
+def _apply_attach(ctx: ActionContext) -> str | None:
+    if not has_attach(ctx.oracle_text):
+        return None
+    return attach_to_creature(
+        ctx.zones,
+        ctx.target_creature_uid,
+        ctx.second_creature_uid,
+    )
+
+
+def _apply_vote(ctx: ActionContext) -> str | None:
+    if not has_vote(ctx.oracle_text):
+        return None
+    return resolve_vote(ctx.oracle_text)
+
+
+def _apply_role_token(ctx: ActionContext) -> str | None:
+    if not has_role_token(ctx.oracle_text):
+        return None
+    return create_role_token(ctx.zones, ctx.controller_idx, ctx.oracle_text)
+
+
 def _apply_exile(ctx: ActionContext) -> str | None:
     if not has_registered_keyword(ctx.oracle_text, 'Exile'):
         return None
@@ -573,6 +618,11 @@ _HANDLERS: dict[str, Callable[[ActionContext], str | None]] = {
     'Collect evidence': _apply_collect_evidence,
     'Discard': _apply_discard_action,
     'Venture into the dungeon': _apply_venture,
+    'Conjure': _apply_conjure,
+    'Transform': _apply_transform,
+    'Attach': _apply_attach,
+    'Vote': _apply_vote,
+    'Role token': _apply_role_token,
 }
 
 
@@ -605,4 +655,8 @@ def resolve_keyword_actions(ctx: ActionContext) -> list[str]:
 
 def resolve_spell_keyword_actions(ctx: ActionContext) -> str:
     """Resolve keyword actions for a spell; return a combined detail string or empty."""
-    return '; '.join(resolve_keyword_actions(ctx))
+    parts = resolve_keyword_actions(ctx)
+    sweep_detail = apply_sweep(ctx.zones, ctx.controller_idx, ctx.oracle_text)
+    if sweep_detail:
+        parts.append(sweep_detail)
+    return '; '.join(parts)

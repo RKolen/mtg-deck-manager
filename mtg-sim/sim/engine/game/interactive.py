@@ -304,6 +304,7 @@ class InteractiveGame(ActivatedActionsMixin, SpellStackMixin):  # pylint: disabl
         self._exile_unearth_at_turn_end(0)
         for detail in self._return_dash_creatures_to_hand(0):
             self._log("rules", "dash", detail)
+        self._sacrifice_blitz_at_turn_end(0)
         self._log("player", "end_turn", f"End of turn {self.turn}")
         self.phase = "opp_turn"
         self._opponent_main_phase()
@@ -606,6 +607,7 @@ class InteractiveGame(ActivatedActionsMixin, SpellStackMixin):  # pylint: disabl
                 attackers[0].controller_idx,
                 len(attackers),
             )
+        self._apply_annihilator_triggers(attacker_ids)
         for attacker in attackers:
             self.state.fire_attack_triggers(attacker)
         self._auto_pass_stack()

@@ -21,6 +21,7 @@ from engine.core.turn_structure import Step
 from engine.core.zones import Zone, ZoneManager, ZoneMoveEvent
 from engine.abilities.keywords import enters_ready, has_persist, has_undying
 from engine.abilities.keywords.other.extort import apply_extort_on_spell_cast
+from engine.abilities.keywords.other.afterlife import apply_afterlife_on_die
 from engine.abilities.keywords.other.ascend import update_ascend_status
 from engine.abilities.keywords.other.modular import apply_modular_on_die
 from engine.rules.state_based import check_sbas
@@ -140,6 +141,9 @@ class GameState:
             modular_detail = apply_modular_on_die(self, event.obj)
             if modular_detail:
                 self.log_event('rules', 'modular', modular_detail)
+            afterlife_detail = apply_afterlife_on_die(self, event.obj)
+            if afterlife_detail:
+                self.log_event('rules', 'afterlife', afterlife_detail)
         if event.from_zone == Zone.BATTLEFIELD:
             self.players[event.obj.controller_idx].revolt_this_turn = True
             if (
