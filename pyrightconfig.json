@@ -1,0 +1,18 @@
+{
+  "venvPath": "mtg-sim",
+  "venv": ".venv",
+  "pythonVersion": "3.11",
+  "pythonPlatform": "Linux",
+  "typeCheckingMode": "basic",
+  "extraPaths": [
+    "mtg-sim/sim",
+    "mtg-sim/classifier"
+  ],
+  "exclude": [
+    "**/.venv/**",
+    "**/node_modules/**",
+    "**/__pycache__/**",
+    "**/.*/**",
+    "drupal/**"
+  ]
+}

@@ -1,3 +1,7 @@
 {
-  "python.defaultInterpreterPath": "${workspaceFolder}/mtg-sim/.venv/bin/python"
+  "python.defaultInterpreterPath": "${workspaceFolder}/mtg-sim/.venv/bin/python",
+  "python.analysis.typeCheckingMode": "strict",
+  "python.analysis.extraPaths": ["${workspaceFolder}/mtg-sim/sim"],
+  "python.analysis.diagnosticMode": "workspace",
+  "python.analysis.useLibraryCodeForTypes": true
 }

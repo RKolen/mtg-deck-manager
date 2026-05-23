@@ -98,26 +98,29 @@ def _normalized_paid_flags(
     combat_damage_dealt: bool,
 ) -> PaidCastModifiers:
     return PaidCastModifiers(
-        kicker_times=normalize_kicker_times(card_info, opts.kicker_times),
-        entwined=normalize_entwined(card_info, opts.entwined),
-        overloaded=normalize_overloaded(card_info, opts.overloaded),
-        bestow=normalize_bestow(card_info, opts.modifiers.bestow_target_uid),
-        miracle=normalize_miracle_cast(card_info, opts.cast_for_miracle),
+        kicker_times=normalize_kicker_times(card_info, opts.costs.kicker_times),
+        entwined=normalize_entwined(card_info, opts.costs.entwined),
+        overloaded=normalize_overloaded(card_info, opts.costs.overloaded),
+        bestow=normalize_bestow(card_info, opts.modifiers.targeting.bestow_target_uid),
+        miracle=normalize_miracle_cast(card_info, opts.alternate.cast_for_miracle),
         freerunning=normalize_freerunning_cast(
             card_info,
-            opts.cast_for_freerunning,
+            opts.alternate.cast_for_freerunning,
             combat_damage_dealt,
         ),
-        replicate_times=normalize_replicate_times(card_info, opts.replicate_times),
-        buyback=normalize_buyback(card_info, opts.paid_buyback),
-        emerge=normalize_emerge_cast(card_info, opts.cast_for_emerge),
-        evoke=normalize_evoke_cast(card_info, opts.cast_for_evoke),
+        replicate_times=normalize_replicate_times(card_info, opts.costs.replicate_times),
+        buyback=normalize_buyback(card_info, opts.costs.paid_buyback),
+        emerge=normalize_emerge_cast(card_info, opts.alternate.cast_for_emerge),
+        evoke=normalize_evoke_cast(card_info, opts.alternate.cast_for_evoke),
         mutate=normalize_mutate_cast(
             card_info,
-            opts.cast_for_mutate,
-            opts.modifiers.mutate_target_uid,
+            opts.alternate.cast_for_mutate,
+            opts.modifiers.targeting.mutate_target_uid,
         ),
-        spree_modes=normalize_spree_modes(card_info, list(opts.modifiers.spree_mode_indices)),
+        spree_modes=normalize_spree_modes(
+            card_info,
+            list(opts.modifiers.targeting.spree_mode_indices),
+        ),
     )
 
 
@@ -134,58 +137,70 @@ def validate_announce_cast(
     paid = _normalized_paid_flags(card_info, opts, combat_damage_dealt)
 
     err = _first_error([
-        lambda: _reject_keyword(opts.kicker_times > 0, paid.kicker_times > 0, name, "kicker"),
-        lambda: _reject_keyword(opts.entwined, paid.entwined, name, "entwine"),
-        lambda: _reject_keyword(opts.overloaded, paid.overloaded, name, "overload"),
         lambda: _reject_keyword(
-            bool(opts.modifiers.bestow_target_uid),
+            opts.costs.kicker_times > 0,
+            paid.kicker_times > 0,
+            name,
+            "kicker",
+        ),
+        lambda: _reject_keyword(opts.costs.entwined, paid.entwined, name, "entwine"),
+        lambda: _reject_keyword(opts.costs.overloaded, paid.overloaded, name, "overload"),
+        lambda: _reject_keyword(
+            bool(opts.modifiers.targeting.bestow_target_uid),
             paid.bestow,
             name,
             "bestow",
         ),
-        lambda: bestow_host_error(zones, player_idx, opts.modifiers.bestow_target_uid),
-        lambda: _reject_keyword(opts.cast_for_miracle, paid.miracle, name, "miracle"),
+        lambda: bestow_host_error(
+            zones,
+            player_idx,
+            opts.modifiers.targeting.bestow_target_uid,
+        ),
+        lambda: _reject_keyword(opts.alternate.cast_for_miracle, paid.miracle, name, "miracle"),
         lambda: (
             f"{name} cannot use freerunning"
-            if opts.cast_for_freerunning and not paid.freerunning
+            if opts.alternate.cast_for_freerunning and not paid.freerunning
             else None
         ),
         lambda: _reject_keyword(
-            opts.replicate_times > 0,
+            opts.costs.replicate_times > 0,
             paid.replicate_times > 0,
             name,
             "replicate",
         ),
-        lambda: _reject_keyword(opts.paid_buyback, paid.buyback, name, "buyback"),
-        lambda: _reject_keyword(opts.cast_for_emerge, paid.emerge, name, "emerge"),
-        lambda: _reject_keyword(opts.cast_for_evoke, paid.evoke, name, "evoke"),
+        lambda: _reject_keyword(opts.costs.paid_buyback, paid.buyback, name, "buyback"),
+        lambda: _reject_keyword(opts.alternate.cast_for_emerge, paid.emerge, name, "emerge"),
+        lambda: _reject_keyword(opts.alternate.cast_for_evoke, paid.evoke, name, "evoke"),
         lambda: emerge_sacrifice_error(
             zones,
             player_idx,
             card_info,
-            opts.cast_for_emerge,
-            list(opts.modifiers.emerge_sacrifice_ids),
+            opts.alternate.cast_for_emerge,
+            list(opts.modifiers.targeting.emerge_sacrifice_ids),
         ),
-        lambda: _reject_keyword(opts.cast_for_mutate, paid.mutate, name, "mutate"),
+        lambda: _reject_keyword(opts.alternate.cast_for_mutate, paid.mutate, name, "mutate"),
         lambda: mutate_host_error(
             zones,
             player_idx,
             card_info,
-            opts.modifiers.mutate_target_uid,
+            opts.modifiers.targeting.mutate_target_uid,
         ),
-        lambda: spree_selection_error(card_info, list(opts.modifiers.spree_mode_indices)),
+        lambda: spree_selection_error(
+            card_info,
+            list(opts.modifiers.targeting.spree_mode_indices),
+        ),
     ])
     if err:
         return None, err
 
     emerge_sacrifice_id = normalize_emerge_sacrifice_id(
         card_info,
-        opts.cast_for_emerge,
-        list(opts.modifiers.emerge_sacrifice_ids),
+        opts.alternate.cast_for_emerge,
+        list(opts.modifiers.targeting.emerge_sacrifice_ids),
     )
     cast_target_uid = (
-        opts.modifiers.mutate_target_uid
-        or opts.modifiers.bestow_target_uid
+        opts.modifiers.targeting.mutate_target_uid
+        or opts.modifiers.targeting.bestow_target_uid
         or target_uid_str
     )
     return PaidAnnounceCast(

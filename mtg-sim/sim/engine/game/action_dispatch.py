@@ -5,7 +5,14 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from engine.game.helpers import CastAnnounceOptions, CastModifierIds
+from engine.game.cast_context import (
+    CastAnnounceOptions,
+    CastManaReductionIds,
+    CastModifierIds,
+    CastTargetingIds,
+    HandAlternateCastChoices,
+    HandCastCostChoices,
+)
 
 if TYPE_CHECKING:
     from engine.game.interactive import InteractiveGame
@@ -17,25 +24,33 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
     improvise_ids = tuple(int(uid) for uid in req.improviseArtifactIds)
     emerge_ids = tuple(int(uid) for uid in req.emergeSacrificeIds)
     return CastAnnounceOptions(
-        kicker_times=req.kickerTimes,
-        entwined=req.entwined,
-        overloaded=req.overloaded,
-        cast_for_miracle=req.castForMiracle,
-        replicate_times=req.replicateTimes,
-        paid_buyback=req.paidBuyback,
-        cast_for_emerge=req.castForEmerge,
-        cast_for_evoke=req.castForEvoke,
-        cast_for_mutate=req.castForMutate,
-        cast_for_freerunning=req.castForFreerunning,
+        costs=HandCastCostChoices(
+            kicker_times=req.kickerTimes,
+            entwined=req.entwined,
+            overloaded=req.overloaded,
+            replicate_times=req.replicateTimes,
+            paid_buyback=req.paidBuyback,
+        ),
+        alternate=HandAlternateCastChoices(
+            cast_for_miracle=req.castForMiracle,
+            cast_for_emerge=req.castForEmerge,
+            cast_for_evoke=req.castForEvoke,
+            cast_for_mutate=req.castForMutate,
+            cast_for_freerunning=req.castForFreerunning,
+        ),
         modifiers=CastModifierIds(
-            bestow_target_uid=req.bestowTargetUid,
-            mutate_target_uid=req.mutateTargetUid,
-            emerge_sacrifice_ids=emerge_ids,
-            spree_mode_indices=tuple(req.spreeModeIndices),
-            convoke_creature_ids=convoke_ids,
-            delve_graveyard_indices=tuple(req.delveGraveyardIndices),
-            improvise_artifact_ids=improvise_ids,
-            sneak_land_hand_indices=tuple(req.sneakLandHandIndices),
+            targeting=CastTargetingIds(
+                bestow_target_uid=req.bestowTargetUid,
+                mutate_target_uid=req.mutateTargetUid,
+                emerge_sacrifice_ids=emerge_ids,
+                spree_mode_indices=tuple(req.spreeModeIndices),
+            ),
+            reductions=CastManaReductionIds(
+                convoke_creature_ids=convoke_ids,
+                delve_graveyard_indices=tuple(req.delveGraveyardIndices),
+                improvise_artifact_ids=improvise_ids,
+                sneak_land_hand_indices=tuple(req.sneakLandHandIndices),
+            ),
         ),
     )
 
@@ -72,6 +87,10 @@ def _dispatch_hand_actions(game: InteractiveGame, req) -> dict | None:
         "cycle": lambda: game.action_cycle(req.handIdx),
         "channel": lambda: game.action_channel(req.handIdx, req.targetPlayer),
         "bloodrush": lambda: game.action_bloodrush(
+            req.handIdx,
+            req.targetUid,
+        ),
+        "ninjutsu": lambda: game.action_ninjutsu(
             req.handIdx,
             req.targetUid,
         ),

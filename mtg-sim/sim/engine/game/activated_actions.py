@@ -9,12 +9,13 @@ from engine.abilities.activated.bloodrush import (
     bloodrush_mana_needed,
     can_bloodrush,
 )
+from engine.abilities.keywords.other.ninjutsu import (
+    apply_ninjutsu,
+    can_ninjutsu,
+    ninjutsu_mana_needed,
+)
 from engine.abilities.activated import ActivationSpeed
 from engine.abilities.activated._cost_keyword import INSTANT_SPEED_PHASES
-from engine.abilities.keywords.other.afflict import apply_afflict_on_attack
-from engine.abilities.keywords.other.annihilator import apply_annihilator_on_attack
-from engine.abilities.keywords.other.exalted import apply_exalted_on_attack
-from engine.abilities.keywords.other.mentor import apply_mentor_on_attack
 from engine.abilities.keywords.other.blitz import sacrifice_blitz_creatures
 from engine.abilities.keywords.other.dash import return_dash_creatures_to_hand
 from engine.core.game_object import CardObject, Permanent
@@ -141,6 +142,36 @@ class ActivatedActionsMixin(GameRuntimeMixin):
         self._log("player", "bloodrush", detail)
         return self.to_client()
 
+    def action_ninjutsu(
+        self,
+        hand_idx: int,
+        attacker_uid: str | None,
+    ) -> dict:
+        """Ninjutsu from hand during combat."""
+        card, card_info, err = load_hand_card_for_action(self, hand_idx)
+        if err is not None:
+            return err
+        assert card is not None and card_info is not None
+        if not can_ninjutsu(card_info, self.phase, self.state.stack.is_empty):
+            return {**self.to_client(), "error": "Cannot ninjutsu now"}
+        mana_needed = ninjutsu_mana_needed(card_info)
+        if not self._tap_lands_for_mana(0, mana_needed):
+            return {
+                **self.to_client(),
+                "error": f"Need {mana_needed} mana for ninjutsu",
+            }
+        detail = apply_ninjutsu(
+            self.state,
+            self.state.zones,
+            0,
+            hand_idx,
+            attacker_uid,
+        )
+        if detail is None:
+            return {**self.to_client(), "error": "Ninjutsu failed"}
+        self._log("player", "ninjutsu", detail)
+        return self.to_client()
+
     def action_channel(
         self,
         hand_idx: int,
@@ -248,35 +279,6 @@ class ActivatedActionsMixin(GameRuntimeMixin):
     def _return_dash_creatures_to_hand(self, player_idx: int) -> list[str]:
         """Return dashed creatures to hand at end of turn."""
         return return_dash_creatures_to_hand(self.state, player_idx)
-
-    def _apply_attack_keywords(self, attacker_ids: list[str]) -> None:
-        """Apply annihilator, afflict, mentor, exalted, and similar on-attack keywords."""
-        solo = len(attacker_ids) == 1
-        for attacker_id in attacker_ids:
-            perm = self._find_permanent(attacker_id)
-            if perm is None:
-                continue
-            for apply_fn, tag in (
-                (apply_annihilator_on_attack, 'annihilator'),
-                (apply_afflict_on_attack, 'afflict'),
-            ):
-                detail = apply_fn(self.state, perm)
-                if detail:
-                    self._log('rules', tag, detail)
-            exalted_detail = apply_exalted_on_attack(
-                self.state,
-                perm,
-                solo_attack=solo,
-            )
-            if exalted_detail:
-                self._log('rules', 'exalted', exalted_detail)
-            mentor_detail = apply_mentor_on_attack(
-                self.state,
-                perm,
-                attacker_ids,
-            )
-            if mentor_detail:
-                self._log('rules', 'mentor', mentor_detail)
 
     def _sacrifice_blitz_at_turn_end(self, player_idx: int) -> None:
         """Sacrifice blitzed creatures at end of turn."""

@@ -85,8 +85,15 @@ class GameRuntimeMixin:
         """Serialise a player's hand for the existing client contract."""
         available = self._available_mana(player_idx)
         hand = self._zones(player_idx).hand
+        stack_empty = self.state.stack.is_empty
         return [
-            card_to_client(idx, require_card_info(card), available)
+            card_to_client(
+                idx,
+                require_card_info(card),
+                available,
+                phase=self.phase,
+                stack_is_empty=stack_empty,
+            )
             for idx, card in enumerate(hand)
             if isinstance(card, CardObject) and card.card_info is not None
         ]

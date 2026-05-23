@@ -692,7 +692,7 @@ const GAME_COUNT_OPTIONS = [50, 200] as const;
 /** Single expandable game log panel */
 const GameLogPanel: React.FC<{ log: GameLog; index: number }> = ({ log, index }) => {
   const [open, setOpen] = useState(false);
-  const label = `Game ${index + 1}: ${log.onThePlay ? 'on the play' : 'on the draw'} — ${log.winner === 0 ? '✓ WIN' : '✗ LOSS'} on turn ${log.finalTurn}`;
+  const label = `Game ${index + 1}: ${log.onThePlay ? 'on the play' : 'on the draw'} - ${log.winner === 0 ? 'WIN' : 'LOSS'} on turn ${log.finalTurn}`;
   const labelColor = log.winner === 0 ? '#27ae60' : '#c0392b';
 
   return (
@@ -708,7 +708,7 @@ const GameLogPanel: React.FC<{ log: GameLog; index: number }> = ({ log, index })
         }}
       >
         <span>{label}</span>
-        <span>{open ? '▲' : '▼'}</span>
+        <span>{open ? '^' : 'v'}</span>
       </button>
 
       {open && (
@@ -736,7 +736,7 @@ const GameLogPanel: React.FC<{ log: GameLog; index: number }> = ({ log, index })
             <div style={{ marginTop: 6, display: 'grid', gridTemplateColumns: '80px 1fr', gap: '2px 12px', alignItems: 'start' }}>
               {log.turns.map((ev, i) => {
                 const isPlayer = ev.player === 0;
-                const lifeStr = `${ev.lifeTotals[0]}↔${ev.lifeTotals[1]}`;
+                const lifeStr = `${ev.lifeTotals[0]} vs ${ev.lifeTotals[1]}`;
                 return (
                   <React.Fragment key={i}>
                     <div style={{ color: isPlayer ? '#2c5f8a' : '#8a2c2c', fontWeight: 500, paddingTop: 2, whiteSpace: 'nowrap' }}>
@@ -752,11 +752,11 @@ const GameLogPanel: React.FC<{ log: GameLog; index: number }> = ({ log, index })
                       )}
                       {ev.damageDealt > 0 && (
                         <span style={{ color: '#b03030', marginLeft: 4 }}>
-                          ⚔ {ev.damageDealt} dmg
+                          {ev.damageDealt} dmg
                         </span>
                       )}
                       <span style={{ color: '#999', marginLeft: 8, fontSize: '0.78rem' }}>
-                        ♥ {lifeStr} | hand {ev.handSize} | board {ev.creaturesInPlay} ({ev.boardPower}⚔)
+                        life {lifeStr} | hand {ev.handSize} | board {ev.creaturesInPlay} (power {ev.boardPower})
                       </span>
                     </div>
                   </React.Fragment>
@@ -841,7 +841,7 @@ const DeckSimulate: React.FC<DeckSimulateProps> = ({ deckNid, format, deckTitle 
             rel="noreferrer"
             style={{ display: 'inline-block', padding: '0.4rem 1rem', background: '#1a3a1a', color: '#2ecc71', border: '1px solid #2ecc71', borderRadius: 4, fontWeight: 600, fontSize: '0.88rem', textDecoration: 'none' }}
           >
-            🃏 Play vs {selectedArchetype}
+            Play vs {selectedArchetype}
           </a>
         )}
       </div>
@@ -1187,7 +1187,7 @@ const DeckSuggestions: React.FC<{ deckNid: number }> = ({ deckNid }) => {
                   <td style={{ padding: '0.5rem 0.5rem', color: '#888', width: 30 }}>{i + 1}</td>
                   <td style={{ padding: '0.5rem 0.5rem', fontWeight: 500 }}>
                     {s.card.name}
-                    {hasImage && <span style={{ marginLeft: 6, color: '#aaa', fontSize: '0.78rem' }}>🖼</span>}
+                    {hasImage && <span style={{ marginLeft: 6, color: '#aaa', fontSize: '0.78rem' }}>(img)</span>}
                   </td>
                   <td style={{ padding: '0.5rem 0.5rem', color: '#444' }}>{s.reason}</td>
                   <td style={{ padding: '0.5rem 0.5rem', textAlign: 'right', color: '#666' }}>

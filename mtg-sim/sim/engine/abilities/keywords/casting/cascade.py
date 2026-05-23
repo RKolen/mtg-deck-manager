@@ -8,7 +8,7 @@ from deck_registry import CardInfo
 from engine.abilities.keywords.registry import has_registered_keyword
 from engine.cards.oracle_parse import spell_category
 from engine.core.game_object import CardObject, SpellOnStack, SpellStackCopyFlags, Target, ZoneCard
-from engine.game.helpers import SpellCastContext, spell_on_stack_from_context
+from engine.game.cast_context import SpellCastContext, spell_on_stack_from_context
 
 
 @dataclass(frozen=True)

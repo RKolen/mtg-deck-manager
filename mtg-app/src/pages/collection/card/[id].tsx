@@ -65,7 +65,7 @@ const CollectionCardPage: React.FC<Props> = ({ params }) => {
   return (
     <main style={{ padding: '1.5rem', maxWidth: 700 }}>
       <p style={{ margin: '0 0 1rem' }}>
-        <Link to="/collection">← Collection</Link>
+        <Link to="/collection">Back to collection</Link>
       </p>
 
       <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>

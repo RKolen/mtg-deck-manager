@@ -59,12 +59,11 @@ const LifeBar: React.FC<{ label: string; life: number; mana?: number; handCount?
   <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '0.4rem 0.75rem', background: '#222', color: '#eee', borderRadius: 4 }}>
     <span style={{ fontWeight: 700, fontSize: '0.85rem', minWidth: 90 }}>{label}</span>
     <span style={{ fontSize: '1.4rem', fontWeight: 800, color: life <= 5 ? '#e74c3c' : '#2ecc71', minWidth: 40 }}>{life}</span>
-    <span style={{ color: '#aaa', fontSize: '0.8rem' }}>♥</span>
     {mana !== undefined && (
-      <span style={{ color: '#f1c40f', fontSize: '0.8rem' }}>⬡ {mana} mana</span>
+      <span style={{ color: '#f1c40f', fontSize: '0.8rem' }}>{mana} mana</span>
     )}
     {handCount !== undefined && (
-      <span style={{ color: '#bbb', fontSize: '0.8rem' }}>🃏 {handCount} cards</span>
+      <span style={{ color: '#bbb', fontSize: '0.8rem' }}>{handCount} in hand</span>
     )}
   </div>
 );
@@ -94,8 +93,8 @@ const CardChip: React.FC<{
   >
     <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{card.name}</div>
     <div style={{ color: '#aaa', fontSize: '0.72rem' }}>
-      {card.isLand ? 'Land' : `${card.type} · ${card.cmc}◆`}
-      {card.isCreature && ` · ${card.power}/${card.toughness}`}
+      {card.isLand ? 'Land' : `${card.type} - ${card.cmc} CMC`}
+      {card.isCreature && ` - ${card.power}/${card.toughness}`}
     </div>
   </div>
 );
@@ -129,7 +128,7 @@ const BoardCard: React.FC<{
     {perm.type === 'Creature' && (
       <div style={{ color: '#aaa', fontSize: '0.7rem' }}>{perm.power}/{perm.toughness}{perm.sick ? ' (sick)' : ''}</div>
     )}
-    {selected && <div style={{ color: '#f1c40f', fontSize: '0.7rem' }}>⚔ attacking</div>}
+    {selected && <div style={{ color: '#f1c40f', fontSize: '0.7rem' }}>attacking</div>}
   </div>
 );
 
@@ -151,6 +150,8 @@ const PlayPage: React.FC = () => {
   const [selectedHandIdx, setSelectedHandIdx] = useState<number | null>(null);
   const [targetMode, setTargetMode] = useState<'none' | 'self' | 'opp'>('none');
   const [waitingTarget, setWaitingTarget] = useState(false);
+  const [castForEvoke, setCastForEvoke] = useState(false);
+  const [pendingAlt, setPendingAlt] = useState<'bloodrush' | 'ninjutsu' | null>(null);
 
   const logRef = useRef<HTMLDivElement>(null);
 
@@ -179,6 +180,8 @@ const PlayPage: React.FC = () => {
     setSelectedHandIdx(null);
     setTargetMode('none');
     setWaitingTarget(false);
+    setCastForEvoke(false);
+    setPendingAlt(null);
     try {
       const next = await gameAction(gs.gameId, action, opts as Parameters<typeof gameAction>[2]);
       setGs(next);
@@ -196,6 +199,10 @@ const PlayPage: React.FC = () => {
   const isMulligan = phase === 'mulligan';
   const canPlayLand = gs?.availableActions.includes('play_land') && !gs.playerLandPlayed;
   const canCast = gs?.availableActions.includes('cast_spell');
+  const canCycle = gs?.availableActions.includes('cycle');
+  const canChannel = gs?.availableActions.includes('channel');
+  const canBloodrush = gs?.availableActions.includes('bloodrush');
+  const canNinjutsu = gs?.availableActions.includes('ninjutsu');
   const _canAttack = gs?.availableActions.includes('go_to_attack') || phase === 'attack'; void _canAttack;
   const inCombat = phase === 'attack';
 
@@ -211,35 +218,67 @@ const PlayPage: React.FC = () => {
     }
     if (!canCast) return;
     if (selectedHandIdx === idx) {
-      // Deselect
       setSelectedHandIdx(null);
       setTargetMode('none');
       setWaitingTarget(false);
+      setCastForEvoke(false);
+      setPendingAlt(null);
       return;
     }
     setSelectedHandIdx(idx);
-    // Determine if spell needs a target
+    setCastForEvoke(false);
+    setPendingAlt(null);
     if (['burn', 'pump', 'removal'].includes(card.category)) {
       setWaitingTarget(true);
       setTargetMode(card.category === 'pump' ? 'self' : 'opp');
     } else {
-      // No target needed — cast immediately
-      void act('cast', { handIdx: idx, targetPlayer: 1 });
+      void act('cast', { handIdx: idx, targetPlayer: 1, castForEvoke: false });
     }
+  }
+
+  function startBloodrush(idx: number) {
+    setSelectedHandIdx(idx);
+    setPendingAlt('bloodrush');
+    setWaitingTarget(true);
+    setTargetMode('self');
+  }
+
+  function startNinjutsu(idx: number) {
+    setSelectedHandIdx(idx);
+    setPendingAlt('ninjutsu');
+    setWaitingTarget(true);
+    setTargetMode('self');
+  }
+
+  function castSelected(opts: { targetUid?: string; targetPlayer?: number }) {
+    if (selectedHandIdx === null) return;
+    void act('cast', {
+      handIdx: selectedHandIdx,
+      targetUid: opts.targetUid,
+      targetPlayer: opts.targetPlayer ?? 1,
+      castForEvoke,
+    });
   }
 
   function handleTargetPermanent(perm: PermanentOnBoard, isOppBoard: boolean) {
     if (!waitingTarget || selectedHandIdx === null) return;
-    void act('cast', {
-      handIdx: selectedHandIdx,
+    if (pendingAlt === 'bloodrush' && !isOppBoard) {
+      void act('bloodrush', { handIdx: selectedHandIdx, targetUid: perm.uid });
+      return;
+    }
+    if (pendingAlt === 'ninjutsu' && !isOppBoard) {
+      void act('ninjutsu', { handIdx: selectedHandIdx, targetUid: perm.uid });
+      return;
+    }
+    castSelected({
       targetUid: perm.uid,
       targetPlayer: isOppBoard ? 1 : 0,
     });
   }
 
   function handleTargetOpponent() {
-    if (!waitingTarget || selectedHandIdx === null) return;
-    void act('cast', { handIdx: selectedHandIdx, targetPlayer: 1 });
+    if (!waitingTarget || selectedHandIdx === null || pendingAlt) return;
+    castSelected({ targetPlayer: 1 });
   }
 
   // ---- Render ----
@@ -249,7 +288,7 @@ const PlayPage: React.FC = () => {
       <main style={{ padding: '2rem', color: '#eee', background: '#111', minHeight: '100vh' }}>
         <h2>Missing parameters</h2>
         <p>Navigate here from the deck editor's Simulate tab.</p>
-        <Link to="/" style={{ color: '#4a90d9' }}>← Home</Link>
+        <Link to="/" style={{ color: '#4a90d9' }}>Back to home</Link>
       </main>
     );
   }
@@ -260,7 +299,7 @@ const PlayPage: React.FC = () => {
         <h2 style={{ color: '#e74c3c' }}>Error</h2>
         <pre style={{ color: '#aaa' }}>{error}</pre>
         <p style={{ color: '#888' }}>Make sure the sim service is running: <code>cd mtg-sim/sim && python main.py</code></p>
-        <Link to="/" style={{ color: '#4a90d9' }}>← Home</Link>
+        <Link to="/" style={{ color: '#4a90d9' }}>Back to home</Link>
       </main>
     );
   }
@@ -278,13 +317,13 @@ const PlayPage: React.FC = () => {
 
       {/* Header bar */}
       <div style={{ background: '#1a1a2e', padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: 16, borderBottom: '1px solid #333' }}>
-        <Link to={`/decks/${vsArch}`} style={{ color: '#aaa', fontSize: '0.85rem' }}>← Back</Link>
+        <Link to={`/decks/${vsArch}`} style={{ color: '#aaa', fontSize: '0.85rem' }}>Back</Link>
         <span style={{ fontWeight: 700, fontSize: '1rem' }}>You vs {vsArch}</span>
         <span style={{ color: '#f1c40f', fontSize: '0.9rem', fontWeight: 600 }}>
           T{gs.turn} — {PHASE_LABELS[phase] ?? phase}
         </span>
-        {loading && <span style={{ color: '#888', fontSize: '0.85rem' }}>⏳ processing…</span>}
-        {gs.error && <span style={{ color: '#e74c3c', fontSize: '0.85rem' }}>⚠ {gs.error}</span>}
+        {loading && <span style={{ color: '#888', fontSize: '0.85rem' }}>Processing...</span>}
+        {gs.error && <span style={{ color: '#e74c3c', fontSize: '0.85rem' }}>Error: {gs.error}</span>}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
           {isDone && (
             <button type="button"
@@ -309,7 +348,7 @@ const PlayPage: React.FC = () => {
           {gs.opponentHandCount > 0 && (
             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
               {Array.from({ length: gs.opponentHandCount }).map((_, i) => (
-                <div key={i} style={{ width: 48, height: 64, background: '#2a2a4a', border: '1px solid #444', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#444', fontSize: '1.2rem' }}>🂠</div>
+                <div key={i} style={{ width: 48, height: 64, background: '#2a2a4a', border: '1px solid #444', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666', fontSize: '0.7rem' }}>Card</div>
               ))}
             </div>
           )}
@@ -332,7 +371,7 @@ const PlayPage: React.FC = () => {
                 onClick={handleTargetOpponent}
                 style={{ alignSelf: 'center', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: 4, padding: '0.3rem 0.6rem', cursor: 'pointer', fontSize: '0.8rem' }}
               >
-                ⚡ Hit opponent directly
+                Hit opponent directly
               </button>
             )}
           </div>
@@ -350,7 +389,11 @@ const PlayPage: React.FC = () => {
           </span>
           {selectedCard && waitingTarget && (
             <span style={{ marginLeft: 'auto', color: '#f1c40f', fontWeight: 600, fontSize: '0.85rem' }}>
-              {targetMode === 'opp' ? '⚡ Click a target on the opponent side' : '💚 Click one of your creatures'}
+              {pendingAlt === 'bloodrush' && 'Bloodrush: click your creature to pump'}
+              {pendingAlt === 'ninjutsu' && 'Ninjutsu: click your attacker to replace'}
+              {!pendingAlt && (targetMode === 'opp'
+                ? 'Click a target on the opponent side'
+                : 'Click one of your creatures')}
             </span>
           )}
           {selectedCard && !waitingTarget && (
@@ -391,7 +434,7 @@ const PlayPage: React.FC = () => {
                 Keep hand ({gs.playerHand.length} cards)
               </button>
               <button type="button" onClick={() => void act('mulligan')} disabled={gs.playerHand.length <= 4} style={btnStyle('#e67e22')}>
-                Mulligan → {gs.playerHand.length - 1}
+                Mulligan to {gs.playerHand.length - 1}
               </button>
             </>}
 
@@ -404,17 +447,17 @@ const PlayPage: React.FC = () => {
             {phase === 'main1' && <>
               {!waitingTarget && (
                 <button type="button" onClick={() => void act('go_to_attack')} style={btnStyle('#e67e22')}>
-                  ⚔ Go to combat
+                  Go to combat
                 </button>
               )}
               <button type="button" onClick={() => void act('end_turn')} style={btnStyle('#555')}>
-                End turn →
+                End turn
               </button>
             </>}
 
             {inCombat && <>
               <button type="button" onClick={() => void act('confirm_attack')} style={btnStyle('#e74c3c')} disabled={gs.pendingAttackers.length === 0}>
-                ⚔ Attack ({gs.pendingAttackers.length} creatures)
+                Attack ({gs.pendingAttackers.length} creatures)
               </button>
               <button type="button" onClick={() => void act('skip_attack')} style={btnStyle('#555')}>
                 Skip combat
@@ -423,12 +466,75 @@ const PlayPage: React.FC = () => {
 
             {phase === 'main2' && (
               <button type="button" onClick={() => void act('end_turn')} style={btnStyle('#555')}>
-                End turn →
+                End turn
               </button>
             )}
 
+            {selectedCard && !isMulligan && (
+              <>
+                {selectedCard.hasEvoke && canCast && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', color: '#ddd' }}>
+                    <input
+                      type="checkbox"
+                      checked={castForEvoke}
+                      disabled={!selectedCard.evokeAffordable}
+                      onChange={e => setCastForEvoke(e.target.checked)}
+                    />
+                    Cast for Evoke
+                  </label>
+                )}
+                {selectedCard.canBloodrush && canBloodrush && (
+                  <button
+                    type="button"
+                    disabled={!selectedCard.bloodrushAffordable}
+                    onClick={() => startBloodrush(selectedHandIdx!)}
+                    style={btnStyle('#9b59b6')}
+                  >
+                    Bloodrush
+                  </button>
+                )}
+                {selectedCard.canNinjutsu && canNinjutsu && (
+                  <button
+                    type="button"
+                    disabled={!selectedCard.ninjutsuAffordable}
+                    onClick={() => startNinjutsu(selectedHandIdx!)}
+                    style={btnStyle('#8e44ad')}
+                  >
+                    Ninjutsu
+                  </button>
+                )}
+                {selectedCard.canCycle && canCycle && (
+                  <button
+                    type="button"
+                    onClick={() => void act('cycle', { handIdx: selectedHandIdx! })}
+                    style={btnStyle('#7f8c8d')}
+                  >
+                    Cycle
+                  </button>
+                )}
+                {selectedCard.canChannel && canChannel && (
+                  <button
+                    type="button"
+                    onClick={() => void act('channel', { handIdx: selectedHandIdx!, targetPlayer: 1 })}
+                    style={btnStyle('#16a085')}
+                  >
+                    Channel
+                  </button>
+                )}
+              </>
+            )}
             {waitingTarget && (
-              <button type="button" onClick={() => { setWaitingTarget(false); setSelectedHandIdx(null); setTargetMode('none'); }} style={btnStyle('#555')}>
+              <button
+                type="button"
+                onClick={() => {
+                  setWaitingTarget(false);
+                  setSelectedHandIdx(null);
+                  setTargetMode('none');
+                  setPendingAlt(null);
+                  setCastForEvoke(false);
+                }}
+                style={btnStyle('#555')}
+              >
                 Cancel
               </button>
             )}
@@ -442,7 +548,7 @@ const PlayPage: React.FC = () => {
         {isDone && (
           <div style={{ padding: '1rem', background: gs.winner === 0 ? '#1a3a1a' : '#3a1a1a', borderRadius: 6, textAlign: 'center' }}>
             <h2 style={{ color: gs.winner === 0 ? '#2ecc71' : '#e74c3c', margin: '0 0 0.5rem' }}>
-              {gs.winner === 0 ? '🏆 You Win!' : '💀 You Lose'}
+              {gs.winner === 0 ? 'You win!' : 'You lose'}
             </h2>
             <p style={{ color: '#aaa', margin: 0 }}>Game ended on turn {gs.turn}</p>
           </div>

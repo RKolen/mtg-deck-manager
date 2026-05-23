@@ -2,90 +2,55 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-
 from deck_registry import CardInfo
+from engine.abilities.activated.bloodrush import (
+    bloodrush_mana_needed,
+    can_bloodrush,
+    has_bloodrush,
+)
+from engine.abilities.activated.card_keyword_abilities import can_channel, can_cycle
 from engine.abilities.keywords import has_flash
-from engine.cards.oracle_parse import TokenBlueprint, is_affordable, spell_category
+from engine.abilities.keywords.casting.evoke import evoke_mana_needed, has_evoke
+from engine.abilities.keywords.other.ninjutsu import (
+    can_ninjutsu,
+    has_ninjutsu,
+    ninjutsu_mana_needed,
+)
+from engine.cards.oracle_parse import is_affordable, spell_category
 from engine.core.game_object import (
     ActivatedAbilityOnStack,
     CardObject,
-    Effect,
-    GameObject,
     Permanent,
-    SpellAlternateCast,
-    SpellCastPayment,
-    SpellOnStack,
-    SpellStackCopyFlags,
-    TokenObject,
     TriggeredAbilityOnStack,
 )
 from engine.core.game_object import Target
 from engine.core.game_state import GameState
+from engine.game.cast_context import (
+    CastAnnounceOptions,
+    CastModifierIds,
+    SpellCastContext,
+    spell_on_stack_from_context,
+)
 
-
-@dataclass(frozen=True)
-class CastModifierIds:
-    """Target and payment helper ids for announcing a cast."""
-
-    bestow_target_uid: str | None = None
-    mutate_target_uid: str | None = None
-    emerge_sacrifice_ids: tuple[int, ...] = ()
-    spree_mode_indices: tuple[int, ...] = ()
-    convoke_creature_ids: tuple[int, ...] = ()
-    delve_graveyard_indices: tuple[int, ...] = ()
-    improvise_artifact_ids: tuple[int, ...] = ()
-    sneak_land_hand_indices: tuple[int, ...] = ()
-
-
-@dataclass(frozen=True)
-class CastAnnounceOptions:
-    """Optional costs when announcing a cast from hand."""
-
-    kicker_times: int = 0
-    entwined: bool = False
-    overloaded: bool = False
-    cast_for_miracle: bool = False
-    replicate_times: int = 0
-    paid_buyback: bool = False
-    cast_for_emerge: bool = False
-    cast_for_evoke: bool = False
-    cast_for_mutate: bool = False
-    cast_for_freerunning: bool = False
-    modifiers: CastModifierIds = field(default_factory=CastModifierIds)
-
-
-@dataclass(frozen=True)
-class SpellCastContext:
-    """Options when placing a spell on the stack."""
-
-    from_graveyard: bool = False
-    from_exile: bool = False
-    alternate: SpellAlternateCast = field(default_factory=SpellAlternateCast)
-    payment: SpellCastPayment = field(default_factory=SpellCastPayment)
-    replicate_times: int = 0
-    spree_mode_indices: tuple[int, ...] = ()
-
-
-def spell_on_stack_from_context(
-    controller_idx: int,
-    card: CardObject,
-    targets: list[Target],
-    context: SpellCastContext,
-    *,
-    copy_flags: SpellStackCopyFlags | None = None,
-) -> SpellOnStack:
-    """Build a SpellOnStack from announce/stack placement context."""
-    return SpellOnStack(
-        controller_idx=controller_idx,
-        owner_idx=card.owner_idx,
-        source=card,
-        targets=targets,
-        modes=list(context.spree_mode_indices),
-        alternate=context.alternate,
-        payment=context.payment,
-        copies=copy_flags or SpellStackCopyFlags(),
-    )
+__all__ = [
+    "CastAnnounceOptions",
+    "CastModifierIds",
+    "SpellCastContext",
+    "card_names",
+    "card_to_client",
+    "expand_deck",
+    "has_instant_timing",
+    "is_land",
+    "last_creature",
+    "payment_requirements",
+    "perm_names",
+    "require_card_info",
+    "resolve_ability_effect",
+    "spell_on_stack_from_context",
+    "target_player",
+    "target_uid",
+    "targets_from_request",
+]
 
 
 def expand_deck(cards: list[CardInfo], player_idx: int) -> list[CardObject]:
@@ -103,8 +68,21 @@ def expand_deck(cards: list[CardInfo], player_idx: int) -> list[CardObject]:
     return result
 
 
-def card_to_client(idx: int, card: CardInfo, available_mana: int) -> dict:
+def card_to_client(
+    idx: int,
+    card: CardInfo,
+    available_mana: int,
+    *,
+    phase: str = "main1",
+    stack_is_empty: bool = True,
+) -> dict:
     """Serialise one hand card using the existing client shape."""
+    affordable = is_affordable(card, available_mana)
+    has_evoke_kw = has_evoke(card)
+    evoke_mana = evoke_mana_needed(card)[0] if has_evoke_kw else 0
+    bloodrush = has_bloodrush(card)
+    bloodrush_ok = bloodrush and can_bloodrush(card, phase, stack_is_empty)
+    bloodrush_mana = bloodrush_mana_needed(card) if bloodrush else 0
     return {
         "idx": idx,
         "name": card.name,
@@ -116,7 +94,20 @@ def card_to_client(idx: int, card: CardInfo, available_mana: int) -> dict:
         "category": spell_category(card),
         "isLand": card.is_land,
         "isCreature": card.is_creature,
-        "affordable": is_affordable(card, available_mana),
+        "affordable": affordable,
+        "hasEvoke": has_evoke_kw,
+        "evokeAffordable": has_evoke_kw and available_mana >= evoke_mana,
+        "canBloodrush": bloodrush_ok,
+        "bloodrushAffordable": bloodrush_ok and available_mana >= bloodrush_mana,
+        "canCycle": can_cycle(card, phase, stack_is_empty),
+        "canChannel": can_channel(card, phase, stack_is_empty),
+        "canNinjutsu": can_ninjutsu(card, phase, stack_is_empty),
+        "ninjutsuAffordable": (
+            can_ninjutsu(card, phase, stack_is_empty)
+            and available_mana >= ninjutsu_mana_needed(card)
+        )
+        if has_ninjutsu(card)
+        else False,
     }
 
 
@@ -189,37 +180,6 @@ def resolve_ability_effect(
         return "Resolved ability"
     detail = obj.effect.resolve(game, obj)
     return detail or "Resolved ability"
-
-
-class CreateTokenEffect(Effect):
-    """Effect that creates a token from a parsed token blueprint."""
-
-    def __init__(self, blueprint: TokenBlueprint) -> None:
-        self.blueprint = blueprint
-
-    def resolve(self, game: GameState, source: GameObject) -> str:
-        """Create the token controlled by the source permanent's controller."""
-        if not isinstance(source, TriggeredAbilityOnStack):
-            return ""
-        source_permanent = game.zones.find_permanent(source.source_permanent_id)
-        if source_permanent is None:
-            return ""
-        token = TokenObject(
-            controller_idx=source_permanent.controller_idx,
-            owner_idx=source_permanent.controller_idx,
-            name=self.blueprint.name,
-            type_line=self.blueprint.type_line,
-            colors=self.blueprint.colors,
-            power=self.blueprint.power,
-            toughness=self.blueprint.toughness,
-            oracle_text=self.blueprint.oracle_text,
-        )
-        game.zones.enter_battlefield(token, source_permanent.controller_idx, "heroic")
-        return f"{source_permanent.name} created {self.blueprint.name}"
-
-    def describe(self) -> str:
-        """Return a short description for logs and debugging."""
-        return f"Create {self.blueprint.name}"
 
 
 def last_creature(permanents: list[Permanent]) -> Permanent | None:

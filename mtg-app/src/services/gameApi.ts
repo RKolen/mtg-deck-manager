@@ -25,6 +25,14 @@ export interface CardInHand {
   isLand: boolean;
   isCreature: boolean;
   affordable: boolean;
+  hasEvoke?: boolean;
+  evokeAffordable?: boolean;
+  canBloodrush?: boolean;
+  bloodrushAffordable?: boolean;
+  canCycle?: boolean;
+  canChannel?: boolean;
+  canNinjutsu?: boolean;
+  ninjutsuAffordable?: boolean;
 }
 
 export interface PermanentOnBoard {
@@ -74,6 +82,16 @@ export interface GameState {
   error?: string;
 }
 
+export interface GameActionOpts {
+  handIdx?: number;
+  targetUid?: string;
+  targetPlayer?: number;
+  permanentUid?: string;
+  castForEvoke?: boolean;
+  castForEmerge?: boolean;
+  kickerTimes?: number;
+}
+
 // ---------------------------------------------------------------------------
 // API calls
 // ---------------------------------------------------------------------------
@@ -93,15 +111,18 @@ export async function startGame(
 export async function gameAction(
   gameId: string,
   action: string,
-  opts: {
-    handIdx?: number;
-    targetUid?: string;
-    targetPlayer?: number;
-    permanentUid?: string;
-  } = {},
+  opts: GameActionOpts = {},
 ): Promise<GameState> {
   const r = await client.post<GameState>('/game/action', {
-    gameId, action, ...opts,
+    gameId,
+    action,
+    handIdx: opts.handIdx,
+    targetUid: opts.targetUid,
+    targetPlayer: opts.targetPlayer,
+    permanentUid: opts.permanentUid,
+    castForEvoke: opts.castForEvoke ?? false,
+    castForEmerge: opts.castForEmerge ?? false,
+    kickerTimes: opts.kickerTimes ?? 0,
   });
   return r.data;
 }

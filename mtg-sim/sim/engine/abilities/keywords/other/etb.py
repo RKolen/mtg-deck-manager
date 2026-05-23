@@ -11,6 +11,7 @@ from engine.abilities.keywords.other.bloodthirst import apply_bloodthirst_etb
 from engine.abilities.keywords.other.dash import apply_dash_etb
 from engine.abilities.keywords.other.devour import apply_devour_etb
 from engine.abilities.keywords.other.embalm import apply_embalm_etb
+from engine.abilities.keywords.other.encore import apply_encore_etb
 from engine.abilities.keywords.other.evoke import apply_evoke_on_etb
 from engine.abilities.keywords.other.fabricate import apply_fabricate_etb
 from engine.abilities.keywords.other.living_weapon import (
@@ -65,6 +66,10 @@ def apply_etb_other_abilities(game: GameState, permanent: Permanent) -> list[str
     riot_detail = apply_riot_etb(permanent)
     if riot_detail:
         parts.append(riot_detail)
+
+    encore_detail = apply_encore_etb(permanent)
+    if encore_detail:
+        parts.append(encore_detail)
 
     embalm_detail = apply_embalm_etb(zones, permanent)
     if embalm_detail:

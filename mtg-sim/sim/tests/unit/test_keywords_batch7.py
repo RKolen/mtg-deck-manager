@@ -11,7 +11,7 @@ from engine.abilities.keywords.casting.evoke import (
     normalize_evoke_cast,
 )
 from engine.abilities.keywords.other.etb import apply_etb_other_abilities
-from engine.game.helpers import CastAnnounceOptions
+from engine.game.cast_context import CastAnnounceOptions, HandAlternateCastChoices
 from engine.game.cast_announce_validate import validate_announce_cast
 from tests.conftest import add_to_hand, fresh_game, make_creature, place_on_battlefield
 
@@ -50,7 +50,7 @@ def test_validate_cast_for_evoke():
         game.zones,
         0,
         card_info,
-        CastAnnounceOptions(cast_for_evoke=True),
+        CastAnnounceOptions(alternate=HandAlternateCastChoices(cast_for_evoke=True)),
         False,
         None,
     )

@@ -36,6 +36,14 @@ from engine.abilities.keywords.ability_words.conditions import (
     is_vivid_spell_cast,
     is_void_spell_cast,
     is_fathomless_descent_spell_cast,
+    is_disappear_spell_cast,
+    is_infusion_spell_cast,
+    is_kinfall_creature_enters,
+    is_landship_spell_cast,
+    is_opus_spell_cast,
+    is_join_forces_spell_cast,
+    is_tempting_offer_spell_cast,
+    is_heros_reward_spell_cast,
     is_fateful_hour_spell_cast,
     is_grandeur_upkeep,
     is_lieutenant_etb,
@@ -69,7 +77,7 @@ from engine.abilities.keywords.ability_words.effects import (
 )
 from engine.cards.oracle_parse import parse_token_blueprint
 from engine.core.game_object import Permanent
-from engine.game.helpers import CreateTokenEffect
+from engine.abilities.keywords.ability_words.create_token_effect import CreateTokenEffect
 from engine.rules.triggers import (
     TriggerCondition,
     TriggerKey,
@@ -159,6 +167,14 @@ _WIRED: dict[str, _AbilityWordWire] = {
         TriggerKey.SPELL_CAST,
         is_fathomless_descent_spell_cast,
     ),
+    'Disappear': _AbilityWordWire(TriggerKey.SPELL_CAST, is_disappear_spell_cast),
+    'Infusion': _AbilityWordWire(TriggerKey.SPELL_CAST, is_infusion_spell_cast),
+    'Kinfall': _AbilityWordWire(TriggerKey.ENTERS_BATTLEFIELD, is_kinfall_creature_enters),
+    'Landship': _AbilityWordWire(TriggerKey.SPELL_CAST, is_landship_spell_cast),
+    'Opus': _AbilityWordWire(TriggerKey.SPELL_CAST, is_opus_spell_cast),
+    'Join forces': _AbilityWordWire(TriggerKey.SPELL_CAST, is_join_forces_spell_cast),
+    'Tempting offer': _AbilityWordWire(TriggerKey.SPELL_CAST, is_tempting_offer_spell_cast),
+    "Hero's Reward": _AbilityWordWire(TriggerKey.SPELL_CAST, is_heros_reward_spell_cast),
 }
 
 

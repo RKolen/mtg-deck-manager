@@ -874,6 +874,124 @@ def is_void_spell_cast(
     )
 
 
+def is_disappear_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Disappear: you cast a spell after an opponent was dealt damage this turn."""
+    opponent = 1 - definition.controller_idx
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and game.players[opponent].was_dealt_damage_this_turn
+    )
+
+
+def is_infusion_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Infusion: you cast a spell while you control an artifact."""
+    if not (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+    ):
+        return False
+    return any(
+        perm.controller_idx == definition.controller_idx
+        and 'Artifact' in perm.type_line
+        for perm in game.zones.battlefield
+    )
+
+
+def is_kinfall_creature_enters(
+    event: TriggerEvent,
+    _game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Kinfall: a creature with power 4 or greater entered under your control."""
+    return (
+        isinstance(event, ZoneMoveEvent)
+        and event.to_zone == Zone.BATTLEFIELD
+        and isinstance(event.obj, Permanent)
+        and 'Creature' in event.obj.type_line
+        and event.player_idx == definition.controller_idx
+        and effective_power(event.obj) >= 4
+    )
+
+
+def is_landship_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Landship: you cast a spell while you control an Island."""
+    if not (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+    ):
+        return False
+    return any(
+        perm.controller_idx == definition.controller_idx
+        and 'Island' in perm.type_line
+        for perm in game.zones.battlefield
+    )
+
+
+def is_opus_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Opus: you cast a spell while you have five or more cards in hand."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and len(game.zones.player_zones[definition.controller_idx].hand) >= 5
+    )
+
+
+def is_join_forces_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Join forces: you cast a spell (simplified; multiplayer not modeled)."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and _creature_count(game, definition.controller_idx) >= 2
+    )
+
+
+def is_tempting_offer_spell_cast(
+    event: TriggerEvent,
+    _game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Tempting offer: you cast a spell with mana value 6 or greater."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and event.cmc >= 6
+    )
+
+
+def is_heros_reward_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Hero's Reward: you cast a spell after a creature died this turn."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and game.creature_died_this_turn
+    )
+
+
 def is_fathomless_descent_spell_cast(
     event: TriggerEvent,
     game: GameState,

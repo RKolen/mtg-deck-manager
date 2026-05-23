@@ -14,7 +14,14 @@ from engine.core.game_object import CardObject, Permanent
 from engine.core.game_state import GameState, PlayerInfo
 from engine.core.turn_structure import TurnRunner
 from engine.core.zones import ZoneManager
-from engine.game.helpers import CastAnnounceOptions, CastModifierIds
+from engine.game.cast_context import (
+    CastAnnounceOptions,
+    CastManaReductionIds,
+    CastModifierIds,
+    CastTargetingIds,
+    HandAlternateCastChoices,
+    HandCastCostChoices,
+)
 from engine.rules.combat import resolve_combat_damage
 from engine.rules.stack import Stack
 
@@ -41,14 +48,18 @@ def _as_tuple(values: tuple[int, ...] | list[int]) -> tuple[int, ...]:
 
 def _modifier_ids_from_kw(modifier_kw: dict[str, Any]) -> CastModifierIds:
     return CastModifierIds(
-        bestow_target_uid=modifier_kw.get("bestow_target_uid"),
-        mutate_target_uid=modifier_kw.get("mutate_target_uid"),
-        emerge_sacrifice_ids=_as_tuple(modifier_kw.get("emerge_sacrifice_ids", ())),
-        spree_mode_indices=_as_tuple(modifier_kw.get("spree_mode_indices", ())),
-        convoke_creature_ids=_as_tuple(modifier_kw.get("convoke_creature_ids", ())),
-        delve_graveyard_indices=_as_tuple(modifier_kw.get("delve_graveyard_indices", ())),
-        improvise_artifact_ids=_as_tuple(modifier_kw.get("improvise_artifact_ids", ())),
-        sneak_land_hand_indices=_as_tuple(modifier_kw.get("sneak_land_hand_indices", ())),
+        targeting=CastTargetingIds(
+            bestow_target_uid=modifier_kw.get("bestow_target_uid"),
+            mutate_target_uid=modifier_kw.get("mutate_target_uid"),
+            emerge_sacrifice_ids=_as_tuple(modifier_kw.get("emerge_sacrifice_ids", ())),
+            spree_mode_indices=_as_tuple(modifier_kw.get("spree_mode_indices", ())),
+        ),
+        reductions=CastManaReductionIds(
+            convoke_creature_ids=_as_tuple(modifier_kw.get("convoke_creature_ids", ())),
+            delve_graveyard_indices=_as_tuple(modifier_kw.get("delve_graveyard_indices", ())),
+            improvise_artifact_ids=_as_tuple(modifier_kw.get("improvise_artifact_ids", ())),
+            sneak_land_hand_indices=_as_tuple(modifier_kw.get("sneak_land_hand_indices", ())),
+        ),
     )
 
 
@@ -57,15 +68,20 @@ def cast_announce_options(**kwargs: Any) -> CastAnnounceOptions:
     flat = dict(kwargs)
     modifier_kw = {key: flat.pop(key) for key in list(flat) if key in _MODIFIER_KW_KEYS}
     return CastAnnounceOptions(
-        kicker_times=int(flat.get("kicker_times", 0)),
-        entwined=bool(flat.get("entwined", False)),
-        overloaded=bool(flat.get("overloaded", False)),
-        cast_for_miracle=bool(flat.get("cast_for_miracle", False)),
-        replicate_times=int(flat.get("replicate_times", 0)),
-        paid_buyback=bool(flat.get("paid_buyback", False)),
-        cast_for_emerge=bool(flat.get("cast_for_emerge", False)),
-        cast_for_mutate=bool(flat.get("cast_for_mutate", False)),
-        cast_for_freerunning=bool(flat.get("cast_for_freerunning", False)),
+        costs=HandCastCostChoices(
+            kicker_times=int(flat.get("kicker_times", 0)),
+            entwined=bool(flat.get("entwined", False)),
+            overloaded=bool(flat.get("overloaded", False)),
+            replicate_times=int(flat.get("replicate_times", 0)),
+            paid_buyback=bool(flat.get("paid_buyback", False)),
+        ),
+        alternate=HandAlternateCastChoices(
+            cast_for_miracle=bool(flat.get("cast_for_miracle", False)),
+            cast_for_emerge=bool(flat.get("cast_for_emerge", False)),
+            cast_for_evoke=bool(flat.get("cast_for_evoke", False)),
+            cast_for_mutate=bool(flat.get("cast_for_mutate", False)),
+            cast_for_freerunning=bool(flat.get("cast_for_freerunning", False)),
+        ),
         modifiers=_modifier_ids_from_kw(modifier_kw),
     )
 

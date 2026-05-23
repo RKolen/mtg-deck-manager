@@ -65,9 +65,6 @@ mtg-sim/**/.venv/
 mtg-sim/**/model.joblib
 mtg-sim/**/__pycache__/
 mtg-sim/**/*.pyc
-mtg-sim/**/pyrightconfig.json
-pyrightconfig.json
-
 # ============================================================
 # OS & editor
 # ============================================================

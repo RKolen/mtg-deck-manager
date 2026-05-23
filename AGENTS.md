@@ -16,8 +16,10 @@ full architecture and phase breakdown.
 
 ### 1. NO Emojis - NEVER
 
-Never use emojis in any `.php`, `.twig`, `.yml`, or `.md` files in this
-directory. This is a hard requirement shared with the rest of the project.
+Never use emojis in any source or markup files in this directory (including
+`.php`, `.twig`, `.yml`, `.md`, `.ts`, `.tsx`, and `.py`). Emojis can break
+encoding, tooling, and copy-paste in some environments. Use plain text labels
+instead.
 
 ### 2. DDEV Is Always Required
 
@@ -181,11 +183,29 @@ No issue is acceptable even if score is 10/10.
 Never dismiss any warning as "informational only". If pylint reports it, fix it.
 Duplicate code goes in in a shared file as a shared fixture helper.
 
-#### 11.1 Pylance also needs to be happy
+#### 11.1 Pyright / Pylance (strict) required
 
-VsCode Pylance must also be happy with the code.
+Static types are enforced with **Pyright** (same engine as Pylance). Config:
+`mtg-sim/sim/pyrightconfig.json`.
 
-For 11 never use the excuse these are pre existing issues, they must be fixed.
+Install dev tools and run checks from the repo root:
+
+```bash
+chmod +x mtg-sim/check.sh
+./mtg-sim/check.sh
+```
+
+Or manually:
+
+```bash
+mtg-sim/.venv/bin/pip install -r mtg-sim/sim/requirements-dev.txt
+mtg-sim/.venv/bin/pyright mtg-sim/sim
+```
+
+Pyright must report **0 errors**. Cursor/VS Code should use
+`mtg-sim/.venv` and strict analysis (see `.vscode/settings.json`).
+
+For section 11, never dismiss type or pylint findings as pre-existing; fix them.
 
 ### 12. No Hardcoded Configuration Values
 

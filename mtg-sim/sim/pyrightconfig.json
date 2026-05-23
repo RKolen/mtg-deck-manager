@@ -1,0 +1,17 @@
+{
+  "include": ["."],
+  "exclude": [
+    "**/__pycache__",
+    "**/.venv",
+    "**/node_modules"
+  ],
+  "extraPaths": ["."],
+  "pythonVersion": "3.11",
+  "typeCheckingMode": "strict",
+  "reportMissingImports": true,
+  "reportMissingModuleSource": true,
+  "reportAttributeAccessIssue": true,
+  "reportGeneralTypeIssues": true,
+  "reportOptionalMemberAccess": true,
+  "reportPrivateUsage": true
+}
