@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from engine.core.game_object import CardObject, Permanent, effective_power
+from engine.core.game_object import (
+    CardObject,
+    Permanent,
+    effective_power,
+    effective_toughness,
+)
 from engine.core.zones import Zone, ZoneMoveEvent
 from engine.rules.triggers import (
     AttackTriggerEvent,
@@ -15,7 +20,7 @@ from engine.rules.triggers import (
     TriggerDefinition,
     TriggerEvent,
 )
-from engine.core.turn_structure import Step
+from engine.core.turn_structure import Step, is_main_phase
 
 if TYPE_CHECKING:
     from engine.core.game_state import GameState
@@ -385,6 +390,59 @@ def is_strive_spell_cast(
         and event.controller_idx == definition.controller_idx
         and len(event.targets) >= 2
     )
+
+
+def is_addendum_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Addendum: you cast a spell during your main phase."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and is_main_phase(game.turn.current_step)
+    )
+
+
+def is_celebration_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Celebration: you cast a spell after two+ permanents entered this turn."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and game.players[definition.controller_idx].permanents_entered_this_turn >= 2
+    )
+
+
+def is_pack_tactics_attack(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Pack tactics: this creature attacks with a bigger ally."""
+    if not isinstance(event, AttackTriggerEvent):
+        return False
+    if event.attacker_id != definition.source_permanent_id:
+        return False
+    source = game.zones.find_permanent(definition.source_permanent_id)
+    if source is None:
+        return False
+    source_power = effective_power(source)
+    source_toughness = effective_toughness(source)
+    for perm in game.zones.battlefield:
+        if perm.controller_idx != definition.controller_idx:
+            continue
+        if perm.obj_id == source.obj_id or 'Creature' not in perm.type_line:
+            continue
+        if effective_power(perm) > source_power:
+            return True
+        if effective_toughness(perm) > source_toughness:
+            return True
+    return False
 
 
 def is_parley_at_beginning_of_combat(

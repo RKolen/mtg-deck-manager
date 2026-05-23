@@ -32,7 +32,7 @@ def test_living_weapon_creates_germ_and_attaches():
         0,
         game.zones,
     )
-    details = apply_etb_other_abilities(game.zones, sword)
+    details = apply_etb_other_abilities(game, sword)
     assert details
     assert sword.attached_to is not None
     host = game.zones.find_permanent(sword.attached_to)

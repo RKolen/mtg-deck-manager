@@ -20,6 +20,8 @@ from engine.core.turn_structure import TurnRunner
 from engine.core.turn_structure import Step
 from engine.core.zones import Zone, ZoneManager, ZoneMoveEvent
 from engine.abilities.keywords import enters_ready, has_persist, has_undying
+from engine.abilities.keywords.other.extort import apply_extort_on_spell_cast
+from engine.abilities.keywords.other.modular import apply_modular_on_die
 from engine.rules.state_based import check_sbas
 from engine.rules.stack import Stack
 from engine.rules.triggers import AttackTriggerEvent, BlockTriggerEvent
@@ -42,6 +44,7 @@ class PlayerInfo:
     combat_damage_dealt_this_turn: bool = False
     was_dealt_damage_this_turn: bool = False
     revolt_this_turn: bool = False
+    permanents_entered_this_turn: int = 0
     has_lost: bool = False
 
 
@@ -119,9 +122,18 @@ class GameState:
         return False
 
     def _note_zone_move_flags(self, event: ZoneMoveEvent) -> None:
-        """Track Morbid, Revolt, and similar ability-word state for this turn."""
+        """Track Morbid, Revolt, Celebration, and similar ability-word state."""
+        if isinstance(event.obj, Permanent) and event.to_zone == Zone.BATTLEFIELD:
+            self.players[event.player_idx].permanents_entered_this_turn += 1
         if not isinstance(event.obj, Permanent):
             return
+        if (
+            event.from_zone == Zone.BATTLEFIELD
+            and event.to_zone == Zone.GRAVEYARD
+        ):
+            modular_detail = apply_modular_on_die(self, event.obj)
+            if modular_detail:
+                self.log_event('rules', 'modular', modular_detail)
         if event.from_zone == Zone.BATTLEFIELD:
             self.players[event.obj.controller_idx].revolt_this_turn = True
             if (
@@ -186,6 +198,9 @@ class GameState:
             spell_cast_event(spell, targets),
             self,
         )
+        extort_detail = apply_extort_on_spell_cast(self, spell.controller_idx)
+        if extort_detail:
+            self.log_event('rules', 'extort', extort_detail)
 
     def mark_player_was_dealt_damage(self, player_idx: int) -> None:
         """Record that a player was dealt damage this turn (Raid and similar)."""

@@ -487,6 +487,7 @@ class InteractiveGame(ActivatedActionsMixin, SpellStackMixin):  # pylint: disabl
         player.combat_damage_dealt_this_turn = False
         player.was_dealt_damage_this_turn = False
         player.revolt_this_turn = False
+        player.permanents_entered_this_turn = 0
         self.state.creature_died_this_turn = False
         self._fire_step_triggers(Step.UPKEEP)
         self._tick_suspend_upkeep(player_idx)

@@ -17,8 +17,11 @@ from engine.abilities.keywords.ability_words.conditions import (
     is_flurry_spell_cast,
     is_formidable_spell_cast,
     is_hellbent_spell_cast,
+    is_addendum_spell_cast,
+    is_celebration_spell_cast,
     is_coven_spell_cast,
     is_morbid_spell_cast,
+    is_pack_tactics_attack,
     is_parley_at_beginning_of_combat,
     is_raid_at_beginning_of_combat,
     is_strive_spell_cast,
@@ -94,6 +97,9 @@ _WIRED: dict[str, _AbilityWordWire] = {
     'Coven': _AbilityWordWire(TriggerKey.SPELL_CAST, is_coven_spell_cast),
     'Strive': _AbilityWordWire(TriggerKey.SPELL_CAST, is_strive_spell_cast),
     'Parley': _AbilityWordWire(TriggerKey.BEGINNING_OF_COMBAT, is_parley_at_beginning_of_combat),
+    'Addendum': _AbilityWordWire(TriggerKey.SPELL_CAST, is_addendum_spell_cast),
+    'Celebration': _AbilityWordWire(TriggerKey.SPELL_CAST, is_celebration_spell_cast),
+    'Pack tactics': _AbilityWordWire(TriggerKey.ATTACKS, is_pack_tactics_attack),
 }
 
 

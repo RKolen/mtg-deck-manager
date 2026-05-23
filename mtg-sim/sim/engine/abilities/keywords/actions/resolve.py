@@ -53,15 +53,25 @@ from engine.abilities.keywords.actions.library import (
     surveil_count,
 )
 from engine.abilities.keywords.actions.specialty import (
+    adapt_creature,
     behold_draw_if_clause,
     behold_top_card,
     detain_creature,
     exert_creature,
     forage_cost,
+    goad_creature,
+    has_adapt,
     has_behold,
     has_detain,
     has_exert,
     has_forage,
+    has_goad,
+    has_learn,
+    has_monstrosity,
+    has_reveal,
+    learn_draw,
+    monstrosity_creature,
+    reveal_top_card,
 )
 from engine.abilities.keywords.actions.targets import find_creature_by_uid
 from engine.abilities.keywords.actions.tokens import (
@@ -427,6 +437,36 @@ def _apply_detain(ctx: ActionContext) -> str | None:
     return detain_creature(ctx.zones, ctx.target_creature_uid)
 
 
+def _apply_learn(ctx: ActionContext) -> str | None:
+    if not has_learn(ctx.oracle_text):
+        return None
+    return learn_draw(ctx.zones, ctx.controller_idx)
+
+
+def _apply_goad(ctx: ActionContext) -> str | None:
+    if not has_goad(ctx.oracle_text):
+        return None
+    return goad_creature(ctx.zones, ctx.target_creature_uid)
+
+
+def _apply_adapt(ctx: ActionContext) -> str | None:
+    if not has_adapt(ctx.oracle_text):
+        return None
+    return adapt_creature(ctx.zones, ctx.target_creature_uid, ctx.oracle_text)
+
+
+def _apply_reveal(ctx: ActionContext) -> str | None:
+    if not has_reveal(ctx.oracle_text):
+        return None
+    return reveal_top_card(ctx.zones, ctx.controller_idx)
+
+
+def _apply_monstrosity(ctx: ActionContext) -> str | None:
+    if not has_monstrosity(ctx.oracle_text):
+        return None
+    return monstrosity_creature(ctx.zones, ctx.target_creature_uid, ctx.oracle_text)
+
+
 def _apply_exile(ctx: ActionContext) -> str | None:
     if not has_registered_keyword(ctx.oracle_text, 'Exile'):
         return None
@@ -472,6 +512,11 @@ _HANDLERS: dict[str, Callable[[ActionContext], str | None]] = {
     'Exert': _apply_exert,
     'Forage': _apply_forage,
     'Detain': _apply_detain,
+    'Learn': _apply_learn,
+    'Goad': _apply_goad,
+    'Adapt': _apply_adapt,
+    'Reveal': _apply_reveal,
+    'Monstrosity': _apply_monstrosity,
 }
 
 
