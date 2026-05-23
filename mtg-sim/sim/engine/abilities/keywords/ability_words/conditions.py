@@ -705,3 +705,69 @@ def is_eminence_spell_cast(
         isinstance(event, SpellCastTriggerEvent)
         and event.controller_idx == definition.controller_idx
     )
+
+
+def _permanent_cards_in_graveyard(game: GameState, player_idx: int) -> int:
+    count = 0
+    for card in game.zones.player_zones[player_idx].graveyard:
+        if not isinstance(card, CardObject) or card.card_info is None:
+            continue
+        type_line = card.card_info.type_line
+        if card.card_info.is_creature:
+            continue
+        if any(label in type_line for label in ('Artifact', 'Enchantment', 'Land', 'Planeswalker')):
+            count += 1
+    return count
+
+
+def is_descend_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Descend: you cast a spell with four or more permanent cards in your graveyard."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and _permanent_cards_in_graveyard(game, definition.controller_idx) >= 4
+    )
+
+
+def is_corrupted_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Corrupted: you cast a spell while an opponent has three or more poison counters."""
+    opponent = 1 - definition.controller_idx
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and game.players[opponent].poison >= 3
+    )
+
+
+def is_survival_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Survival: you cast a spell after a creature died this turn."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and game.creature_died_this_turn
+    )
+
+
+def is_start_your_engines_spell_cast(
+    event: TriggerEvent,
+    game: GameState,
+    definition: TriggerDefinition,
+) -> bool:
+    """Start your engines!: you cast a spell on turn four or later."""
+    return (
+        isinstance(event, SpellCastTriggerEvent)
+        and event.controller_idx == definition.controller_idx
+        and game.turn.context.turn_number >= 4
+    )

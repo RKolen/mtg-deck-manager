@@ -98,6 +98,19 @@ from engine.abilities.keywords.actions.specialty import (
     prepared_creature,
     set_in_motion,
     time_travel,
+    has_plot_action,
+    plot_keyword_action,
+    has_planeswalk,
+    planeswalk_creature,
+    has_exchange,
+    exchange_library_tops,
+    has_convert,
+    has_roll_attractions,
+    roll_attractions,
+    has_earthbend,
+    has_airbend,
+    has_waterbend,
+    bend_creature,
     has_detain,
     has_double,
     has_meld,
@@ -686,6 +699,54 @@ def _apply_time_travel(ctx: ActionContext) -> str | None:
     return time_travel(ctx.zones, ctx.target_creature_uid)
 
 
+def _apply_plot_action(ctx: ActionContext) -> str | None:
+    if not has_plot_action(ctx.oracle_text):
+        return None
+    return plot_keyword_action()
+
+
+def _apply_planeswalk(ctx: ActionContext) -> str | None:
+    if not has_planeswalk(ctx.oracle_text):
+        return None
+    return planeswalk_creature(ctx.zones, ctx.target_creature_uid)
+
+
+def _apply_exchange(ctx: ActionContext) -> str | None:
+    if not has_exchange(ctx.oracle_text):
+        return None
+    return exchange_library_tops(ctx.zones, ctx.controller_idx)
+
+
+def _apply_convert(ctx: ActionContext) -> str | None:
+    if not has_convert(ctx.oracle_text):
+        return None
+    return transform_creature(ctx.zones, ctx.target_creature_uid)
+
+
+def _apply_roll_attractions(ctx: ActionContext) -> str | None:
+    if not has_roll_attractions(ctx.oracle_text) or ctx.game is None:
+        return None
+    return roll_attractions(ctx.game, ctx.controller_idx)
+
+
+def _apply_earthbend(ctx: ActionContext) -> str | None:
+    if not has_earthbend(ctx.oracle_text):
+        return None
+    return bend_creature(ctx.zones, ctx.target_creature_uid, 'earthbend')
+
+
+def _apply_airbend(ctx: ActionContext) -> str | None:
+    if not has_airbend(ctx.oracle_text):
+        return None
+    return bend_creature(ctx.zones, ctx.target_creature_uid, 'airbend')
+
+
+def _apply_waterbend(ctx: ActionContext) -> str | None:
+    if not has_waterbend(ctx.oracle_text):
+        return None
+    return bend_creature(ctx.zones, ctx.target_creature_uid, 'waterbend')
+
+
 def _apply_exile(ctx: ActionContext) -> str | None:
     if not has_registered_keyword(ctx.oracle_text, 'Exile'):
         return None
@@ -762,6 +823,14 @@ _HANDLERS: dict[str, Callable[[ActionContext], str | None]] = {
     'Cast': _apply_cast_action,
     'Prepared': _apply_prepared,
     'Time Travel': _apply_time_travel,
+    'Plot': _apply_plot_action,
+    'Planeswalk': _apply_planeswalk,
+    'Exchange': _apply_exchange,
+    'Convert': _apply_convert,
+    'Roll to Visit Your Attractions': _apply_roll_attractions,
+    'Earthbend': _apply_earthbend,
+    'Airbend': _apply_airbend,
+    'Waterbend': _apply_waterbend,
 }
 
 

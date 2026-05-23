@@ -25,6 +25,10 @@ from engine.abilities.keywords.ability_words.conditions import (
     is_chroma_spell_cast,
     is_eerie_spell_cast,
     is_eminence_spell_cast,
+    is_descend_spell_cast,
+    is_corrupted_spell_cast,
+    is_survival_spell_cast,
+    is_start_your_engines_spell_cast,
     is_fateful_hour_spell_cast,
     is_grandeur_upkeep,
     is_lieutenant_etb,
@@ -130,6 +134,13 @@ _WIRED: dict[str, _AbilityWordWire] = {
     'Grandeur': _AbilityWordWire(TriggerKey.BEGINNING_OF_UPKEEP, is_grandeur_upkeep),
     'Underdog': _AbilityWordWire(TriggerKey.ATTACKS, is_underdog_attack),
     'Eminence': _AbilityWordWire(TriggerKey.SPELL_CAST, is_eminence_spell_cast),
+    'Descend': _AbilityWordWire(TriggerKey.SPELL_CAST, is_descend_spell_cast),
+    'Corrupted': _AbilityWordWire(TriggerKey.SPELL_CAST, is_corrupted_spell_cast),
+    'Survival': _AbilityWordWire(TriggerKey.SPELL_CAST, is_survival_spell_cast),
+    'Start your engines!': _AbilityWordWire(
+        TriggerKey.SPELL_CAST,
+        is_start_your_engines_spell_cast,
+    ),
 }
 
 

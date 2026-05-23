@@ -615,3 +615,95 @@ def time_travel(zones: ZoneManager, target_uid: str | None) -> str | None:
         return None
     target.counters['lore'] = int(target.counters.get('lore', 0)) + 1
     return f"time traveled {target.name}"
+
+
+def has_plot_action(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Plot as a keyword action (not the plot mechanic)."""
+    if not oracle_text:
+        return False
+    return has_keyword_action(oracle_text, 'Plot') and 'plot' in oracle_text.lower()
+
+
+def plot_keyword_action() -> str:
+    """Plot action: log plotting (simplified; setup uses casting.plot)."""
+    return 'plotted (keyword action)'
+
+
+def has_planeswalk(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Planeswalk as a keyword action."""
+    return has_keyword_action(oracle_text, 'Planeswalk')
+
+
+def planeswalk_creature(zones: ZoneManager, target_uid: str | None) -> str | None:
+    """Planeswalk: add a loyalty counter on a planeswalker permanent."""
+    if target_uid is None:
+        return None
+    try:
+        perm = zones.find_permanent(int(target_uid))
+    except ValueError:
+        return None
+    if perm is None or 'Planeswalker' not in perm.type_line:
+        return None
+    perm.counters['loyalty'] = int(perm.counters.get('loyalty', 0)) + 1
+    return f"planeswalked {perm.name}"
+
+
+def has_exchange(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Exchange as a keyword action."""
+    return has_keyword_action(oracle_text, 'Exchange')
+
+
+def exchange_library_tops(zones: ZoneManager, controller_idx: int) -> str:
+    """Exchange: swap the top card of each player's library."""
+    del controller_idx
+    libs = [zones.player_zones[0].library, zones.player_zones[1].library]
+    if not libs[0] or not libs[1]:
+        return 'exchanged (empty library)'
+    libs[0][0], libs[1][0] = libs[1][0], libs[0][0]
+    return 'exchanged top of libraries'
+
+
+def has_convert(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Convert as a keyword action."""
+    return has_keyword_action(oracle_text, 'Convert')
+
+
+def has_roll_attractions(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Roll to Visit Your Attractions."""
+    return has_keyword_action(oracle_text, 'Roll to Visit Your Attractions')
+
+
+def roll_attractions(game: GameState, controller_idx: int) -> str:
+    """Roll to Visit Your Attractions: advance attractions counter."""
+    game.players[controller_idx].attractions += 1
+    count = game.players[controller_idx].attractions
+    return f"rolled attractions (visit #{count})"
+
+
+def has_earthbend(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Earthbend as a keyword action."""
+    return has_keyword_action(oracle_text, 'Earthbend')
+
+
+def has_airbend(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Airbend as a keyword action."""
+    return has_keyword_action(oracle_text, 'Airbend')
+
+
+def has_waterbend(oracle_text: str | None) -> bool:
+    """Return True when oracle uses Waterbend as a keyword action."""
+    return has_keyword_action(oracle_text, 'Waterbend')
+
+
+def bend_creature(
+    zones: ZoneManager,
+    target_uid: str | None,
+    bend_name: str,
+) -> str | None:
+    """Put a bending counter on a creature."""
+    target = find_creature_by_uid(zones, target_uid)
+    if target is None:
+        return None
+    key = bend_name.lower()
+    target.counters[key] = int(target.counters.get(key, 0)) + 1
+    return f"{key} on {target.name}"

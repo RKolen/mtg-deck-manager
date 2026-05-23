@@ -354,6 +354,45 @@ def test_fateful_hour_triggers_at_low_life():
     assert trigger.source_permanent_id == source.obj_id
 
 
+def test_descend_triggers_with_four_permanents_in_graveyard():
+    """Descend fires with four or more permanent cards in the graveyard."""
+    game = fresh_game()
+    source = place_on_battlefield(
+        make_creature("Diver", 2, 2, oracle="Descend — Draw a card."),
+        0,
+        game.zones,
+    )
+    register_permanent_ability_words(source, game.trigger_registry)
+    for idx in range(4):
+        game.zones.player_zones[0].graveyard.append(
+            CardObject(
+                controller_idx=0,
+                owner_idx=0,
+                card_info=make_artifact(f"Rock {idx}"),
+            ),
+        )
+    spell = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant("Bolt"))
+    game.fire_spell_cast_triggers(spell)
+    trigger = _top_trigger(game)
+    assert trigger.source_permanent_id == source.obj_id
+
+
+def test_survival_triggers_after_creature_dies():
+    """Survival fires after a creature died this turn."""
+    game = fresh_game()
+    game.creature_died_this_turn = True
+    source = place_on_battlefield(
+        make_creature("Survivor", 2, 2, oracle="Survival — Draw a card."),
+        0,
+        game.zones,
+    )
+    register_permanent_ability_words(source, game.trigger_registry)
+    spell = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant("Bolt"))
+    game.fire_spell_cast_triggers(spell)
+    trigger = _top_trigger(game)
+    assert trigger.source_permanent_id == source.obj_id
+
+
 def test_underdog_triggers_when_outnumbered():
     """Underdog fires when attacking with fewer creatures than an opponent."""
     game = fresh_game()

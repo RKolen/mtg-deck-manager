@@ -18,6 +18,7 @@ from engine.abilities.keywords.other.living_weapon import (
     has_living_weapon,
 )
 from engine.abilities.keywords.other.modular import apply_modular_etb
+from engine.abilities.keywords.other.riot import apply_riot_etb
 from engine.core.game_object import Permanent
 
 if TYPE_CHECKING:
@@ -60,6 +61,10 @@ def apply_etb_other_abilities(game: GameState, permanent: Permanent) -> list[str
     backup_detail = apply_backup_etb(permanent, zones.battlefield)
     if backup_detail:
         parts.append(backup_detail)
+
+    riot_detail = apply_riot_etb(permanent)
+    if riot_detail:
+        parts.append(riot_detail)
 
     embalm_detail = apply_embalm_etb(zones, permanent)
     if embalm_detail:
