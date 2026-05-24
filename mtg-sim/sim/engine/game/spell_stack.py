@@ -6,6 +6,11 @@ from dataclasses import dataclass
 
 from deck_registry import CardInfo
 from engine.abilities.keywords.casting.casualty import sacrifice_for_casualty
+from engine.abilities.keywords.casting.disturb import (
+    can_cast_via_disturb,
+    disturb_mana_needed,
+    has_disturb,
+)
 from engine.abilities.keywords.casting import (
     aftermath_mana_needed,
     sacrifice_for_emerge,
@@ -491,6 +496,52 @@ class SpellStackMixin(GameRuntimeMixin):
             ),
         )
         self._log("player", "flashback", f"{card_info.name} on stack")
+        self.state.fire_spell_cast_triggers(card, tuple(targets))
+        if auto_resolve:
+            self._auto_pass_stack()
+        return self.to_client()
+
+    def _announce_disturb_cast(
+        self,
+        graveyard_idx: int,
+        target_uid_str: str | None,
+        target_player_idx: int | None,
+        auto_resolve: bool,
+    ) -> dict:
+        """Pay disturb cost and cast a creature from the graveyard."""
+        card = self._zones(0).graveyard[graveyard_idx]
+        if not isinstance(card, CardObject):
+            return {**self.to_client(), "error": "Invalid card"}
+        card_info = require_card_info(card)
+        if not has_disturb(card_info):
+            return {**self.to_client(), "error": f"{card_info.name} does not have disturb"}
+        if not can_cast_via_disturb(
+            card_info,
+            self.phase,
+            self.state.stack.is_empty,
+        ):
+            return {**self.to_client(), "error": "Cannot cast disturb now"}
+        mana_needed = disturb_mana_needed(card_info)
+        if not self._tap_lands_for_mana(0, mana_needed):
+            return {
+                **self.to_client(),
+                "error": (
+                    f"Not enough mana ({self._available_mana(0)} available, "
+                    f"need {mana_needed})"
+                ),
+            }
+        self.state.players[0].spells_cast_this_turn += 1
+        targets = self._put_spell_on_stack(
+            player_idx=0,
+            card=card,
+            target_uid_str=target_uid_str,
+            target_player_idx=target_player_idx,
+            context=SpellCastContext(
+                alternate=SpellAlternateCast(disturb=True),
+                from_graveyard=True,
+            ),
+        )
+        self._log("player", "disturb", f"{card_info.name} on stack (disturb)")
         self.state.fire_spell_cast_triggers(card, tuple(targets))
         if auto_resolve:
             self._auto_pass_stack()
@@ -1056,6 +1107,8 @@ class SpellStackMixin(GameRuntimeMixin):
             permanent.counters["+1/+1"] = permanent.counters.get("+1/+1", 0) + counters
         if spell.payment.evoke:
             mark_evoked_cast(permanent)
+        if spell.alternate.disturb:
+            permanent.counters['disturbed'] = 1
         self._register_permanent_triggers(permanent)
         detail = f"Cast creature {card_info.name}"
         if counters:

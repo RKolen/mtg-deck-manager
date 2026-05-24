@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING
 
 from deck_registry import CardInfo
 from engine.abilities.activated._cost_keyword import (
@@ -14,10 +13,8 @@ from engine.abilities.activated._cost_keyword import (
 from engine.abilities.activated._cost_keyword import timing_allows_hand_activation
 from engine.abilities.keywords._core import has_keyword
 from engine.core.game_object import CardObject, Permanent, TokenObject
-
-if TYPE_CHECKING:
-    from engine.core.game_state import GameState
-    from engine.core.zones import ZoneManager
+from engine.core.game_state import GameState
+from engine.core.zones import Zone, ZoneManager
 
 _ENCORE_RE = re.compile(
     r'encore\s*((?:\{[^}]+\})+)',
@@ -123,3 +120,16 @@ def apply_encore_from_graveyard(
     if not tokens:
         return f"encore {card_info.name} (exiled, no opponents)"
     return f"encore {card_info.name} ({len(tokens)} token copy/copies)"
+
+
+def sacrifice_encore_tokens(game: GameState, player_idx: int) -> list[str]:
+    """Sacrifice encore tokens at the beginning of the next end step."""
+    details: list[str] = []
+    for perm in list(game.zones.battlefield):
+        if perm.controller_idx != player_idx:
+            continue
+        if not perm.counters.pop('encore_sacrifice', 0):
+            continue
+        game.zones.leave_battlefield(perm, Zone.GRAVEYARD, 'encore', game)
+        details.append(f"{perm.name} sacrificed (encore)")
+    return details

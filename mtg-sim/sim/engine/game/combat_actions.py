@@ -5,6 +5,7 @@ from __future__ import annotations
 from engine.abilities.keywords.other.afflict import apply_afflict_on_attack
 from engine.abilities.keywords.other.boast import mark_attacked_this_turn
 from engine.abilities.keywords.other.enlist import apply_enlist_on_attack
+from engine.abilities.keywords.other.mobilize import apply_mobilize_on_attack
 from engine.abilities.keywords.other.myriad import apply_myriad_on_attack
 from engine.abilities.keywords.other.annihilator import apply_annihilator_on_attack
 from engine.abilities.keywords.other.exalted import apply_exalted_on_attack
@@ -151,6 +152,9 @@ class CombatActionsMixin(ActivatedActionsMixin):
                 self._log('rules', 'enlist', enlist_detail)
                 if 'draw' in enlist_detail:
                     self._draw_cards(perm.controller_idx, 1)
+            mobilize_detail = apply_mobilize_on_attack(self.state, perm)
+            if mobilize_detail:
+                self._log('rules', 'mobilize', mobilize_detail)
 
     def _start_opponent_attack(self) -> None:
         """Declare opponent attackers or finish the opponent turn."""

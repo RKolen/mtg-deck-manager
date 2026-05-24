@@ -6,6 +6,9 @@ from dataclasses import dataclass
 
 from engine.abilities import keywords
 from engine.abilities.keywords.handlers import apply_combat_damage_to_creature
+from engine.abilities.keywords.other.bushido import (
+    apply_bushido_when_engaged,
+)
 from engine.abilities.keywords.other.dethrone import apply_dethrone_on_combat_damage_to_player
 from engine.abilities.keywords.other.renown import apply_renown_on_combat_damage_to_player
 from engine.core.game_object import Permanent, effective_power
@@ -175,6 +178,10 @@ def _assign_combat_damage(
         return
     if not first_strike_step:
         context.result.blocked_attackers += 1
+    if is_blocked:
+        apply_bushido_when_engaged(attacker)
+        for blocker in blockers:
+            apply_bushido_when_engaged(blocker)
     if attacker_deals:
         damage = power(attacker)
         player_damage = _assign_attacker_damage(context, attacker, blockers, damage)

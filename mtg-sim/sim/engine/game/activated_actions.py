@@ -24,6 +24,17 @@ from engine.abilities.keywords.other.encore import (
     apply_encore_from_graveyard,
     can_encore,
     encore_mana_needed,
+    sacrifice_encore_tokens,
+)
+from engine.abilities.keywords.other.eternalize import (
+    apply_eternalize_from_graveyard,
+    can_eternalize,
+    eternalize_mana_needed,
+)
+from engine.abilities.keywords.other.outlast import (
+    apply_outlast,
+    can_outlast,
+    outlast_mana_needed,
 )
 from engine.abilities.keywords.other.ninjutsu import (
     apply_ninjutsu,
@@ -253,6 +264,44 @@ class ActivatedActionsMixin(GameRuntimeMixin):
         self._log("player", "encore", detail)
         return self.to_client()
 
+    def action_eternalize(self, graveyard_idx: int) -> dict:
+        """Activate eternalize from the graveyard."""
+        card, err = self._graveyard_card_checked(0, graveyard_idx)
+        if err is not None:
+            return err
+        assert card is not None
+        card_info = require_card_info(card)
+        if not can_eternalize(card_info, self.phase, self.state.stack.is_empty):
+            return {**self.to_client(), "error": "Cannot eternalize now"}
+        mana_needed = eternalize_mana_needed(card_info)
+        if not self._tap_lands_for_mana(0, mana_needed):
+            return {**self.to_client(), "error": f"Need {mana_needed} mana to eternalize"}
+        detail = apply_eternalize_from_graveyard(
+            self.state.zones,
+            0,
+            graveyard_idx,
+        )
+        if detail is None:
+            return {**self.to_client(), "error": "Eternalize failed"}
+        self._log("player", "eternalize", detail)
+        return self.to_client()
+
+    def action_outlast(self, permanent_uid: str) -> dict:
+        """Activate outlast on a creature."""
+        perm = self._find_permanent(permanent_uid)
+        if perm is None:
+            return self._client_error("Permanent not found")
+        if not can_outlast(perm, self.state, 0, self.phase):
+            return self._client_error("Cannot outlast now")
+        mana_needed = outlast_mana_needed(perm)
+        if mana_needed and not self._tap_lands_for_mana(0, mana_needed):
+            return self._client_error(f"Need {mana_needed} mana to outlast")
+        detail = apply_outlast(perm)
+        if detail is None:
+            return self._client_error("Outlast failed")
+        self._log("player", "outlast", detail)
+        return self.to_client()
+
     def action_channel(
         self,
         hand_idx: int,
@@ -370,3 +419,8 @@ class ActivatedActionsMixin(GameRuntimeMixin):
         """Sacrifice decayed creatures at end of turn."""
         for detail in sacrifice_decayed_creatures(self.state, player_idx):
             self._log('rules', 'decayed', detail)
+
+    def _sacrifice_encore_at_turn_end(self, player_idx: int) -> None:
+        """Sacrifice encore tokens at end of turn."""
+        for detail in sacrifice_encore_tokens(self.state, player_idx):
+            self._log('rules', 'encore', detail)

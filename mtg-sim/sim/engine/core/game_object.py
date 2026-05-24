@@ -228,6 +228,7 @@ class SpellAlternateCast:
     plot: bool = False
     madness: bool = False
     suspend: bool = False
+    disturb: bool = False
 
 
 @dataclass
@@ -277,7 +278,7 @@ def spell_is_ephemeral_copy(spell: SpellOnStack) -> bool:
 def spell_exiles_from_graveyard_cast(spell: SpellOnStack) -> bool:
     """Return True when a graveyard alt-cast spell exiles on leaving the stack."""
     alt = spell.alternate
-    return alt.flashback or alt.escape or alt.jump_start or alt.aftermath
+    return alt.flashback or alt.escape or alt.jump_start or alt.aftermath or alt.disturb
 
 
 def spell_returns_to_hand_on_resolve(spell: SpellOnStack) -> bool:

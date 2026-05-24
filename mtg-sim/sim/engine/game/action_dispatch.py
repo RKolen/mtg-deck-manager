@@ -99,6 +99,7 @@ def _dispatch_hand_actions(game: InteractiveGame, req) -> dict | None:
         ),
         "unearth": lambda: game.action_unearth(req.handIdx),
         "encore": lambda: game.action_encore(req.handIdx),
+        "eternalize": lambda: game.action_eternalize(req.handIdx),
         "foretell": lambda: game.action_foretell(req.handIdx),
         "plot": lambda: game.action_plot(req.handIdx),
     }
@@ -127,6 +128,7 @@ def _dispatch_permanent_actions(game: InteractiveGame, req) -> dict | None:
             req.handIdx or 0,
             host_uid=req.targetUid,
         ),
+        "outlast": lambda: game.action_outlast(uid),
         "boast": lambda: game.action_boast(uid),
         "craft": lambda: game.action_craft(
             uid,
@@ -142,6 +144,11 @@ def _dispatch_alt_cast(game: InteractiveGame, req) -> dict | None:
     if req.handIdx is None:
         return None
     alt_handlers: dict[str, Callable[[], dict]] = {
+        "cast_disturb": lambda: game.action_cast_disturb(
+            req.handIdx,
+            req.targetUid,
+            req.targetPlayer,
+        ),
         "cast_flashback": lambda: game.action_cast_flashback(
             req.handIdx,
             req.targetUid,

@@ -14,7 +14,11 @@ from dataclasses import dataclass, field
 from engine.abilities import activated
 from engine.abilities.activated.bloodrush import can_bloodrush
 from engine.abilities.keywords.other.boast import can_boast, clear_boast_turn_counters
+from engine.abilities.keywords.other.bushido import clear_bushido_combat_markers
+from engine.abilities.keywords.casting.disturb import can_cast_via_disturb
 from engine.abilities.keywords.other.encore import can_encore
+from engine.abilities.keywords.other.eternalize import can_eternalize
+from engine.abilities.keywords.other.outlast import can_outlast, clear_outlast_turn_marker
 from engine.abilities.keywords.other.ninjutsu import can_ninjutsu
 from engine.cards.oracle_parse import is_affordable, spell_category
 from engine.core.game_object import CardObject
@@ -136,6 +140,20 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
             target_player,
             auto_resolve=False,
             cast_options=cast_options,
+        )
+
+    def action_cast_disturb(
+        self,
+        graveyard_idx: int,
+        target_uid: str | None = None,
+        target_player: int | None = None,
+    ) -> dict:
+        """Cast a creature from the graveyard for its disturb cost."""
+        return self._announce_disturb_cast(
+            graveyard_idx,
+            target_uid,
+            target_player,
+            auto_resolve=True,
         )
 
     def action_cast_flashback(
@@ -262,6 +280,7 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
             self._log("rules", "dash", detail)
         self._sacrifice_blitz_at_turn_end(0)
         self._sacrifice_decayed_at_turn_end(0)
+        self._sacrifice_encore_at_turn_end(0)
         self._log("player", "end_turn", f"End of turn {self.turn}")
         self.phase = "opp_turn"
         self._opponent_main_phase()
@@ -349,10 +368,16 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
             actions.append("unearth")
         if self._graveyard_can_encore():
             actions.append("encore")
+        if self._graveyard_can_eternalize():
+            actions.append("eternalize")
+        if self._graveyard_can_disturb():
+            actions.append("cast_disturb")
         if self._battlefield_can_boast():
             actions.append("boast")
         if self._battlefield_can_activate():
             actions.append("activate")
+        if self._battlefield_can_outlast():
+            actions.append("outlast")
         if self.phase == "main1":
             actions.append("go_to_attack")
         actions.append("end_turn")
@@ -418,6 +443,32 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
             for c in self._zones(0).graveyard
         )
 
+    def _graveyard_can_eternalize(self) -> bool:
+        """Return True when a graveyard creature can be eternalized."""
+        if not self.state.stack.is_empty:
+            return False
+        return any(
+            isinstance(c, CardObject)
+            and can_eternalize(require_card_info(c), self.phase, True)
+            for c in self._zones(0).graveyard
+        )
+
+    def _graveyard_can_disturb(self) -> bool:
+        """Return True when a graveyard creature can be cast for disturb."""
+        if not self.state.stack.is_empty:
+            return False
+        return any(
+            isinstance(c, CardObject)
+            and can_cast_via_disturb(require_card_info(c), self.phase, True)
+            for c in self._zones(0).graveyard
+        )
+
+    def _battlefield_can_outlast(self) -> bool:
+        """Return True when a creature can activate outlast."""
+        if not self.state.stack.is_empty:
+            return False
+        return any(can_outlast(perm, self.state, 0, self.phase) for perm in self._permanents(0))
+
     def _battlefield_can_boast(self) -> bool:
         """Return True when an attacking creature can boast."""
         if not self.state.stack.is_empty:
@@ -464,6 +515,8 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
         self.state.turn.begin_turn(player_idx)
         for perm in self._permanents(player_idx):
             clear_boast_turn_counters(perm)
+            clear_bushido_combat_markers(perm)
+            clear_outlast_turn_marker(perm)
             perm.counters.pop('valiant_this_turn', None)
             if perm.counters.pop('exerted', 0) or perm.counters.pop('detained', 0):
                 continue
