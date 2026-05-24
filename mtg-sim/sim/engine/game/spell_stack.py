@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from deck_registry import CardInfo
+from engine.abilities.keywords.casting.casualty import sacrifice_for_casualty
 from engine.abilities.keywords.casting import (
     aftermath_mana_needed,
     sacrifice_for_emerge,
@@ -152,6 +153,8 @@ def _announce_cast_detail(
         detail = f"{detail} (buyback)"
     if mods.emerge:
         detail = f"{detail} (emerge, sacrificed {sacrificed_name})"
+    if mods.casualty:
+        detail = f"{detail} (casualty, sacrificed {sacrificed_name})"
     if mods.mutate:
         detail = f"{detail} (mutate)"
     if mods.spree_modes:
@@ -274,6 +277,13 @@ class SpellStackMixin(GameRuntimeMixin):
                 paid.emerge_sacrifice_id,
             )
             sacrificed_name = sacrificed.name
+        elif paid.casualty_sacrifice_id is not None:
+            sacrificed = sacrifice_for_casualty(
+                self.state.zones,
+                self.state,
+                paid.casualty_sacrifice_id,
+            )
+            sacrificed_name = sacrificed.name
         mods = paid.modifiers
         stack_context = SpellCastContext(
             payment=SpellCastPayment(
@@ -285,6 +295,7 @@ class SpellStackMixin(GameRuntimeMixin):
                 emerge=mods.emerge,
                 evoke=mods.evoke,
                 mutate=mods.mutate,
+                casualty=mods.casualty,
             ),
             replicate_times=mods.replicate_times,
             spree_mode_indices=mods.spree_modes,

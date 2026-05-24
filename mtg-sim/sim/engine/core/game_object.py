@@ -242,6 +242,7 @@ class SpellCastPayment:
     emerge: bool = False
     evoke: bool = False
     mutate: bool = False
+    casualty: bool = False
 
 
 @dataclass
@@ -251,6 +252,7 @@ class SpellStackCopyFlags:
     storm: bool = False
     replicate: bool = False
     cascade: bool = False
+    casualty: bool = False
 
 
 @dataclass
@@ -269,7 +271,7 @@ class SpellOnStack(GameObject):
 
 def spell_is_ephemeral_copy(spell: SpellOnStack) -> bool:
     """Return True when a stack copy should not move its source card to a zone."""
-    return spell.copies.storm or spell.copies.replicate
+    return spell.copies.storm or spell.copies.replicate or spell.copies.casualty
 
 
 def spell_exiles_from_graveyard_cast(spell: SpellOnStack) -> bool:

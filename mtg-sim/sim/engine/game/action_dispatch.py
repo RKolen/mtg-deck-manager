@@ -23,6 +23,7 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
     convoke_ids = tuple(int(uid) for uid in req.convokeCreatureIds)
     improvise_ids = tuple(int(uid) for uid in req.improviseArtifactIds)
     emerge_ids = tuple(int(uid) for uid in req.emergeSacrificeIds)
+    casualty_ids = tuple(int(uid) for uid in req.casualtySacrificeIds)
     return CastAnnounceOptions(
         costs=HandCastCostChoices(
             kicker_times=req.kickerTimes,
@@ -30,6 +31,7 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
             overloaded=req.overloaded,
             replicate_times=req.replicateTimes,
             paid_buyback=req.paidBuyback,
+            paid_casualty=req.paidCasualty,
         ),
         alternate=HandAlternateCastChoices(
             cast_for_miracle=req.castForMiracle,
@@ -43,6 +45,7 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
                 bestow_target_uid=req.bestowTargetUid,
                 mutate_target_uid=req.mutateTargetUid,
                 emerge_sacrifice_ids=emerge_ids,
+                casualty_sacrifice_ids=casualty_ids,
                 spree_mode_indices=tuple(req.spreeModeIndices),
             ),
             reductions=CastManaReductionIds(
@@ -95,6 +98,7 @@ def _dispatch_hand_actions(game: InteractiveGame, req) -> dict | None:
             req.targetUid,
         ),
         "unearth": lambda: game.action_unearth(req.handIdx),
+        "encore": lambda: game.action_encore(req.handIdx),
         "foretell": lambda: game.action_foretell(req.handIdx),
         "plot": lambda: game.action_plot(req.handIdx),
     }
@@ -123,6 +127,7 @@ def _dispatch_permanent_actions(game: InteractiveGame, req) -> dict | None:
             req.handIdx or 0,
             host_uid=req.targetUid,
         ),
+        "boast": lambda: game.action_boast(uid),
         "toggle_attacker": lambda: game.action_toggle_attacker(uid),
     }
     handler = handlers.get(req.action)

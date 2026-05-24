@@ -23,6 +23,7 @@ class HandCastCostChoices:
     overloaded: bool = False
     replicate_times: int = 0
     paid_buyback: bool = False
+    paid_casualty: bool = False
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,7 @@ class CastTargetingIds:
     bestow_target_uid: str | None = None
     mutate_target_uid: str | None = None
     emerge_sacrifice_ids: tuple[int, ...] = ()
+    casualty_sacrifice_ids: tuple[int, ...] = ()
     spree_mode_indices: tuple[int, ...] = ()
 
 

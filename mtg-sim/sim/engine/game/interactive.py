@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 
 from engine.abilities import activated
 from engine.abilities.activated.bloodrush import can_bloodrush
+from engine.abilities.keywords.other.boast import can_boast, clear_boast_turn_counters
+from engine.abilities.keywords.other.encore import can_encore
 from engine.abilities.keywords.other.ninjutsu import can_ninjutsu
 from engine.cards.oracle_parse import is_affordable, spell_category
 from engine.core.game_object import CardObject
@@ -289,6 +291,8 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
             actions.extend(["toggle_attacker", "confirm_attack", "skip_attack"])
             if self._hand_can_ninjutsu():
                 actions.append("ninjutsu")
+            if self._battlefield_can_boast():
+                actions.append("boast")
             if self._has_castable_instant():
                 actions.append("cast_spell")
         else:
@@ -342,6 +346,10 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
             actions.append("ninjutsu")
         if self._graveyard_can_unearth():
             actions.append("unearth")
+        if self._graveyard_can_encore():
+            actions.append("encore")
+        if self._battlefield_can_boast():
+            actions.append("boast")
         if self._battlefield_can_activate():
             actions.append("activate")
         if self.phase == "main1":
@@ -399,6 +407,31 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
             for c in self._zones(0).graveyard
         )
 
+    def _graveyard_can_encore(self) -> bool:
+        """Return True when a graveyard creature can be given encore."""
+        if not self.state.stack.is_empty:
+            return False
+        return any(
+            isinstance(c, CardObject)
+            and can_encore(require_card_info(c), self.phase, True)
+            for c in self._zones(0).graveyard
+        )
+
+    def _battlefield_can_boast(self) -> bool:
+        """Return True when an attacking creature can boast."""
+        if not self.state.stack.is_empty:
+            return False
+        if self.phase == "attack":
+            for uid in self.pending_attackers:
+                perm = self._find_permanent(uid)
+                if perm is not None and can_boast(perm, self.phase, is_attacking=True):
+                    return True
+            return False
+        return any(
+            can_boast(perm, self.phase)
+            for perm in self._permanents(0)
+        )
+
     def _battlefield_can_activate(self) -> bool:
         """Return True when a permanent has a legal non-mana activation."""
         speed = (
@@ -429,6 +462,7 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
         """Untap permanents and clear per-turn player state."""
         self.state.turn.begin_turn(player_idx)
         for perm in self._permanents(player_idx):
+            clear_boast_turn_counters(perm)
             perm.counters.pop('valiant_this_turn', None)
             if perm.counters.pop('exerted', 0) or perm.counters.pop('detained', 0):
                 continue

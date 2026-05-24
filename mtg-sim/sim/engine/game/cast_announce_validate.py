@@ -11,6 +11,11 @@ from engine.abilities.keywords.casting.bestow import (
     normalize_bestow,
 )
 from engine.abilities.keywords.casting.buyback import normalize_buyback
+from engine.abilities.keywords.casting.casualty import (
+    casualty_sacrifice_error,
+    normalize_casualty_sacrifice_id,
+    normalize_paid_casualty,
+)
 from engine.abilities.keywords.casting.emerge import (
     emerge_sacrifice_error,
     normalize_emerge_cast,
@@ -51,6 +56,7 @@ class PaidCastModifiers:
     emerge: bool
     evoke: bool
     mutate: bool
+    casualty: bool
     spree_modes: tuple[int, ...]
 
 
@@ -60,6 +66,7 @@ class PaidAnnounceCast:
 
     modifiers: PaidCastModifiers
     emerge_sacrifice_id: int | None
+    casualty_sacrifice_id: int | None
     cast_target_uid: str | None
 
 
@@ -121,6 +128,7 @@ def _normalized_paid_flags(
             card_info,
             list(opts.modifiers.targeting.spree_mode_indices),
         ),
+        casualty=normalize_paid_casualty(card_info, opts.costs.paid_casualty),
     )
 
 
@@ -189,6 +197,14 @@ def validate_announce_cast(
             card_info,
             list(opts.modifiers.targeting.spree_mode_indices),
         ),
+        lambda: _reject_keyword(opts.costs.paid_casualty, paid.casualty, name, "casualty"),
+        lambda: casualty_sacrifice_error(
+            zones,
+            player_idx,
+            card_info,
+            opts.costs.paid_casualty,
+            list(opts.modifiers.targeting.casualty_sacrifice_ids),
+        ),
     ])
     if err:
         return None, err
@@ -198,6 +214,11 @@ def validate_announce_cast(
         opts.alternate.cast_for_emerge,
         list(opts.modifiers.targeting.emerge_sacrifice_ids),
     )
+    casualty_sacrifice_id = normalize_casualty_sacrifice_id(
+        card_info,
+        opts.costs.paid_casualty,
+        list(opts.modifiers.targeting.casualty_sacrifice_ids),
+    )
     cast_target_uid = (
         opts.modifiers.targeting.mutate_target_uid
         or opts.modifiers.targeting.bestow_target_uid
@@ -206,5 +227,6 @@ def validate_announce_cast(
     return PaidAnnounceCast(
         modifiers=paid,
         emerge_sacrifice_id=emerge_sacrifice_id,
+        casualty_sacrifice_id=casualty_sacrifice_id,
         cast_target_uid=cast_target_uid,
     ), None

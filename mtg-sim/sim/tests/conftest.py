@@ -34,6 +34,7 @@ _MODIFIER_KW_KEYS = frozenset({
     "bestow_target_uid",
     "mutate_target_uid",
     "emerge_sacrifice_ids",
+    "casualty_sacrifice_ids",
     "spree_mode_indices",
     "convoke_creature_ids",
     "delve_graveyard_indices",
@@ -52,6 +53,7 @@ def _modifier_ids_from_kw(modifier_kw: dict[str, Any]) -> CastModifierIds:
             bestow_target_uid=modifier_kw.get("bestow_target_uid"),
             mutate_target_uid=modifier_kw.get("mutate_target_uid"),
             emerge_sacrifice_ids=_as_tuple(modifier_kw.get("emerge_sacrifice_ids", ())),
+            casualty_sacrifice_ids=_as_tuple(modifier_kw.get("casualty_sacrifice_ids", ())),
             spree_mode_indices=_as_tuple(modifier_kw.get("spree_mode_indices", ())),
         ),
         reductions=CastManaReductionIds(
@@ -74,6 +76,7 @@ def cast_announce_options(**kwargs: Any) -> CastAnnounceOptions:
             overloaded=bool(flat.get("overloaded", False)),
             replicate_times=int(flat.get("replicate_times", 0)),
             paid_buyback=bool(flat.get("paid_buyback", False)),
+            paid_casualty=bool(flat.get("paid_casualty", False)),
         ),
         alternate=HandAlternateCastChoices(
             cast_for_miracle=bool(flat.get("cast_for_miracle", False)),

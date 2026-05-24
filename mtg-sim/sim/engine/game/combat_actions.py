@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from engine.abilities.keywords.other.afflict import apply_afflict_on_attack
+from engine.abilities.keywords.other.boast import mark_attacked_this_turn
 from engine.abilities.keywords.other.myriad import apply_myriad_on_attack
 from engine.abilities.keywords.other.annihilator import apply_annihilator_on_attack
 from engine.abilities.keywords.other.exalted import apply_exalted_on_attack
@@ -45,6 +46,10 @@ class CombatActionsMixin(ActivatedActionsMixin):
         """Resolve the player's declared attackers as unblocked damage."""
         assert self.phase == "attack"
         self._fire_attack_triggers(self.pending_attackers)
+        for attacker_id in self.pending_attackers:
+            perm = self._find_permanent(attacker_id)
+            if perm is not None:
+                mark_attacked_this_turn(perm)
         result = resolve_combat_damage(
             self.state,
             attacking_player_idx=0,

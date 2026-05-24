@@ -189,9 +189,11 @@ class GameActionRequest(BaseModel):
     castForMiracle: bool = False
     replicateTimes: int = 0
     paidBuyback: bool = False
+    paidCasualty: bool = False
     castForEmerge: bool = False
     castForEvoke: bool = False
     emergeSacrificeIds: list[str] = []
+    casualtySacrificeIds: list[str] = []
     castForMutate: bool = False
     mutateTargetUid: str | None = None
     spreeModeIndices: list[int] = []

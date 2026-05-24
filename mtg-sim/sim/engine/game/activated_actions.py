@@ -9,6 +9,16 @@ from engine.abilities.activated.bloodrush import (
     bloodrush_mana_needed,
     can_bloodrush,
 )
+from engine.abilities.keywords.other.boast import (
+    apply_boast,
+    boast_mana_needed,
+    can_boast,
+)
+from engine.abilities.keywords.other.encore import (
+    apply_encore_from_graveyard,
+    can_encore,
+    encore_mana_needed,
+)
 from engine.abilities.keywords.other.ninjutsu import (
     apply_ninjutsu,
     can_ninjutsu,
@@ -170,6 +180,46 @@ class ActivatedActionsMixin(GameRuntimeMixin):
         if detail is None:
             return {**self.to_client(), "error": "Ninjutsu failed"}
         self._log("player", "ninjutsu", detail)
+        return self.to_client()
+
+    def action_boast(self, permanent_uid: str) -> dict:
+        """Activate boast on an attacking creature."""
+        perm = self._find_permanent(permanent_uid)
+        if perm is None:
+            return self._client_error("Permanent not found")
+        is_attacking = permanent_uid in self.pending_attackers
+        if not can_boast(perm, self.phase, is_attacking=is_attacking):
+            return self._client_error("Cannot boast now")
+        mana_needed = boast_mana_needed(perm)
+        if mana_needed and not self._tap_lands_for_mana(0, mana_needed):
+            return self._client_error(f"Need {mana_needed} mana to boast")
+        detail = apply_boast(perm, 0, self._draw_cards)
+        if detail is None:
+            return self._client_error("Boast failed")
+        self._log("player", "boast", detail)
+        return self.to_client()
+
+    def action_encore(self, graveyard_idx: int) -> dict:
+        """Activate encore from the graveyard."""
+        card, err = self._graveyard_card_checked(0, graveyard_idx)
+        if err is not None:
+            return err
+        assert card is not None
+        card_info = require_card_info(card)
+        if not can_encore(card_info, self.phase, self.state.stack.is_empty):
+            return {**self.to_client(), "error": "Cannot encore now"}
+        mana_needed = encore_mana_needed(card_info)
+        if not self._tap_lands_for_mana(0, mana_needed):
+            return {**self.to_client(), "error": f"Need {mana_needed} mana to encore"}
+        detail = apply_encore_from_graveyard(
+            self.state,
+            self.state.zones,
+            0,
+            graveyard_idx,
+        )
+        if detail is None:
+            return {**self.to_client(), "error": "Encore failed"}
+        self._log("player", "encore", detail)
         return self.to_client()
 
     def action_channel(

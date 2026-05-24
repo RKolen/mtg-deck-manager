@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from engine.abilities.keywords.casting.casualty import supports_casualty_copies
 from engine.abilities.keywords.casting.cascade import (
     cascade_targets,
     has_cascade,
@@ -37,6 +38,9 @@ def apply_post_cast_modifiers(
     replicates = _push_replicate_copies(game, player_idx, card, targets, context)
     if replicates:
         logs.append(f"{card_info.name} + {replicates} replicate copy/copies")
+    casualty = _push_casualty_copy(game, player_idx, card, targets, context)
+    if casualty:
+        logs.append(f"{card_info.name} + casualty copy")
     cascade_name = _push_cascade_cast(game, player_idx, card, targets)
     if cascade_name:
         logs.append(f"cascade cast {cascade_name}")
@@ -89,6 +93,28 @@ def _push_replicate_copies(
             copy_flags=flags,
         ))
     return times
+
+
+def _push_casualty_copy(
+    game: GameState,
+    player_idx: int,
+    card: CardObject,
+    targets: list[Target],
+    context: SpellCastContext,
+) -> bool:
+    """Put one casualty copy on the stack above the spell that created it."""
+    card_info = require_card_info(card)
+    if not context.payment.casualty or not supports_casualty_copies(card_info):
+        return False
+    flags = SpellStackCopyFlags(casualty=True)
+    game.stack.push(spell_on_stack_from_context(
+        player_idx,
+        card,
+        list(targets),
+        context,
+        copy_flags=flags,
+    ))
+    return True
 
 
 def _push_cascade_cast(
