@@ -65,6 +65,7 @@ class GameRuntimeMixin:
             "playerTotalMana": self._total_mana(0),
             "playerLandPlayed": self.state.players[0].land_played,
             "playerGraveyard": self._graveyard_names(0),
+            "playerGraveyardCards": self._graveyard_cards(0),
             "opponentHandCount": len(self._zones(1).hand),
             "opponentBattlefield": self._battlefield_to_client(1),
             "opponentLife": self.state.players[1].life,
@@ -105,11 +106,15 @@ class GameRuntimeMixin:
 
     def _graveyard_names(self, player_idx: int) -> list[str]:
         """Return the last few graveyard card names."""
-        names: list[str] = []
-        for card in self._zones(player_idx).graveyard[-5:]:
+        return [entry["name"] for entry in self._graveyard_cards(player_idx)[-5:]]
+
+    def _graveyard_cards(self, player_idx: int) -> list[dict]:
+        """Return graveyard cards with indices for client graveyard actions."""
+        cards: list[dict] = []
+        for idx, card in enumerate(self._zones(player_idx).graveyard):
             if isinstance(card, CardObject) and card.card_info is not None:
-                names.append(card.card_info.name)
-        return names
+                cards.append({"idx": idx, "name": card.card_info.name})
+        return cards
 
     def _has_castable_instant(self) -> bool:
         """Return whether the player can cast an instant in the current window."""

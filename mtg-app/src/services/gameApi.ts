@@ -35,6 +35,11 @@ export interface CardInHand {
   ninjutsuAffordable?: boolean;
 }
 
+export interface GraveyardCard {
+  idx: number;
+  name: string;
+}
+
 export interface PermanentOnBoard {
   uid: string;
   name: string;
@@ -69,6 +74,7 @@ export interface GameState {
   playerTotalMana: number;
   playerLandPlayed: boolean;
   playerGraveyard: string[];
+  playerGraveyardCards?: GraveyardCard[];
 
   opponentHandCount: number;
   opponentBattlefield: PermanentOnBoard[];
@@ -89,6 +95,10 @@ export interface GameActionOpts {
   permanentUid?: string;
   castForEvoke?: boolean;
   castForEmerge?: boolean;
+  castForMiracle?: boolean;
+  paidCasualty?: boolean;
+  casualtySacrificeIds?: string[];
+  craftArtifactIds?: string[];
   kickerTimes?: number;
 }
 
@@ -122,6 +132,10 @@ export async function gameAction(
     permanentUid: opts.permanentUid,
     castForEvoke: opts.castForEvoke ?? false,
     castForEmerge: opts.castForEmerge ?? false,
+    castForMiracle: opts.castForMiracle ?? false,
+    paidCasualty: opts.paidCasualty ?? false,
+    casualtySacrificeIds: opts.casualtySacrificeIds ?? [],
+    craftArtifactIds: opts.craftArtifactIds ?? [],
     kickerTimes: opts.kickerTimes ?? 0,
   });
   return r.data;

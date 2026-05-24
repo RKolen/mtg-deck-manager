@@ -27,6 +27,28 @@ function useQueryParam(name: string): string | null {
   return new URLSearchParams(window.location.search).get(name);
 }
 
+function oracleHas(oracle: string, keyword: string): boolean {
+  return oracle.toLowerCase().includes(keyword.toLowerCase());
+}
+
+type PendingAlt =
+  | 'bloodrush'
+  | 'ninjutsu'
+  | 'casualty'
+  | 'boast'
+  | 'outlast'
+  | 'craft_host'
+  | 'craft_artifacts'
+  | null;
+
+type PendingGyAction =
+  | 'encore'
+  | 'eternalize'
+  | 'unearth'
+  | 'cast_disturb'
+  | 'cast_flashback'
+  | null;
+
 const PHASE_LABELS: Record<string, string> = {
   mulligan: 'Mulligan',
   draw: 'Draw step',
@@ -151,7 +173,13 @@ const PlayPage: React.FC = () => {
   const [targetMode, setTargetMode] = useState<'none' | 'self' | 'opp'>('none');
   const [waitingTarget, setWaitingTarget] = useState(false);
   const [castForEvoke, setCastForEvoke] = useState(false);
-  const [pendingAlt, setPendingAlt] = useState<'bloodrush' | 'ninjutsu' | null>(null);
+  const [castForMiracle, setCastForMiracle] = useState(false);
+  const [paidCasualty, setPaidCasualty] = useState(false);
+  const [casualtySacrificeUid, setCasualtySacrificeUid] = useState<string | null>(null);
+  const [pendingAlt, setPendingAlt] = useState<PendingAlt>(null);
+  const [pendingGyAction, setPendingGyAction] = useState<PendingGyAction>(null);
+  const [craftHostUid, setCraftHostUid] = useState<string | null>(null);
+  const [craftArtifactIds, setCraftArtifactIds] = useState<string[]>([]);
 
   const logRef = useRef<HTMLDivElement>(null);
 
@@ -181,7 +209,13 @@ const PlayPage: React.FC = () => {
     setTargetMode('none');
     setWaitingTarget(false);
     setCastForEvoke(false);
+    setCastForMiracle(false);
+    setPaidCasualty(false);
+    setCasualtySacrificeUid(null);
     setPendingAlt(null);
+    setPendingGyAction(null);
+    setCraftHostUid(null);
+    setCraftArtifactIds([]);
     try {
       const next = await gameAction(gs.gameId, action, opts as Parameters<typeof gameAction>[2]);
       setGs(next);
@@ -203,6 +237,14 @@ const PlayPage: React.FC = () => {
   const canChannel = gs?.availableActions.includes('channel');
   const canBloodrush = gs?.availableActions.includes('bloodrush');
   const canNinjutsu = gs?.availableActions.includes('ninjutsu');
+  const canBoast = gs?.availableActions.includes('boast');
+  const canOutlast = gs?.availableActions.includes('outlast');
+  const canCraft = gs?.availableActions.includes('craft');
+  const canEncore = gs?.availableActions.includes('encore');
+  const canEternalize = gs?.availableActions.includes('eternalize');
+  const canUnearth = gs?.availableActions.includes('unearth');
+  const canDisturb = gs?.availableActions.includes('cast_disturb');
+  const canFlashback = gs?.availableActions.includes('cast_flashback');
   const _canAttack = gs?.availableActions.includes('go_to_attack') || phase === 'attack'; void _canAttack;
   const inCombat = phase === 'attack';
 
@@ -222,15 +264,29 @@ const PlayPage: React.FC = () => {
       setTargetMode('none');
       setWaitingTarget(false);
       setCastForEvoke(false);
+      setCastForMiracle(false);
+      setPaidCasualty(false);
+      setCasualtySacrificeUid(null);
       setPendingAlt(null);
+      setPendingGyAction(null);
       return;
     }
     setSelectedHandIdx(idx);
     setCastForEvoke(false);
+    setCastForMiracle(false);
+    setPaidCasualty(false);
+    setCasualtySacrificeUid(null);
     setPendingAlt(null);
+    setPendingGyAction(null);
     if (['burn', 'pump', 'removal'].includes(card.category)) {
       setWaitingTarget(true);
       setTargetMode(card.category === 'pump' ? 'self' : 'opp');
+    } else if (
+      oracleHas(card.oracle, 'Miracle')
+      || oracleHas(card.oracle, 'Casualty')
+      || card.hasEvoke
+    ) {
+      // Wait for Cast / options before sending to server
     } else {
       void act('cast', { handIdx: idx, targetPlayer: 1, castForEvoke: false });
     }
@@ -252,12 +308,78 @@ const PlayPage: React.FC = () => {
 
   function castSelected(opts: { targetUid?: string; targetPlayer?: number }) {
     if (selectedHandIdx === null) return;
+    if (paidCasualty && !casualtySacrificeUid) {
+      setPendingAlt('casualty');
+      setWaitingTarget(true);
+      setTargetMode('self');
+      return;
+    }
     void act('cast', {
       handIdx: selectedHandIdx,
       targetUid: opts.targetUid,
       targetPlayer: opts.targetPlayer ?? 1,
       castForEvoke,
+      castForMiracle,
+      paidCasualty,
+      casualtySacrificeIds: casualtySacrificeUid ? [casualtySacrificeUid] : [],
     });
+  }
+
+  function handlePlayerBoardClick(perm: PermanentOnBoard) {
+    if (pendingAlt === 'bloodrush') {
+      if (selectedHandIdx === null) return;
+      void act('bloodrush', { handIdx: selectedHandIdx, targetUid: perm.uid });
+      return;
+    }
+    if (pendingAlt === 'ninjutsu') {
+      if (selectedHandIdx === null) return;
+      void act('ninjutsu', { handIdx: selectedHandIdx, targetUid: perm.uid });
+      return;
+    }
+    if (pendingAlt === 'casualty') {
+      setCasualtySacrificeUid(perm.uid);
+      setPendingAlt(null);
+      setWaitingTarget(false);
+      setTargetMode('none');
+      return;
+    }
+    if (pendingAlt === 'boast') {
+      void act('boast', { permanentUid: perm.uid });
+      return;
+    }
+    if (pendingAlt === 'outlast') {
+      void act('outlast', { permanentUid: perm.uid });
+      return;
+    }
+    if (pendingAlt === 'craft_host') {
+      if (!oracleHas(perm.oracle, 'Craft')) return;
+      setCraftHostUid(perm.uid);
+      setCraftArtifactIds([]);
+      setPendingAlt('craft_artifacts');
+      return;
+    }
+    if (pendingAlt === 'craft_artifacts') {
+      if (!perm.type.includes('Artifact')) return;
+      setCraftArtifactIds(prev =>
+        prev.includes(perm.uid) ? prev.filter(id => id !== perm.uid) : [...prev, perm.uid],
+      );
+      return;
+    }
+    if (waitingTarget && targetMode === 'self') {
+      handleTargetPermanent(perm, false);
+    } else if (inCombat && perm.canAttack) {
+      void act('toggle_attacker', { permanentUid: perm.uid });
+    }
+  }
+
+  function confirmCraft() {
+    if (!craftHostUid || craftArtifactIds.length === 0) return;
+    void act('craft', { permanentUid: craftHostUid, craftArtifactIds });
+  }
+
+  function handleGraveyardClick(idx: number) {
+    if (!pendingGyAction) return;
+    void act(pendingGyAction, { handIdx: idx, targetPlayer: 1 });
   }
 
   function handleTargetPermanent(perm: PermanentOnBoard, isOppBoard: boolean) {
@@ -270,10 +392,31 @@ const PlayPage: React.FC = () => {
       void act('ninjutsu', { handIdx: selectedHandIdx, targetUid: perm.uid });
       return;
     }
+    if (pendingAlt === 'casualty' && !isOppBoard) {
+      setCasualtySacrificeUid(perm.uid);
+      setPendingAlt(null);
+      setWaitingTarget(false);
+      setTargetMode('none');
+      return;
+    }
     castSelected({
       targetUid: perm.uid,
       targetPlayer: isOppBoard ? 1 : 0,
     });
+  }
+
+  function resetPendingUi() {
+    setSelectedHandIdx(null);
+    setTargetMode('none');
+    setWaitingTarget(false);
+    setCastForEvoke(false);
+    setCastForMiracle(false);
+    setPaidCasualty(false);
+    setCasualtySacrificeUid(null);
+    setPendingAlt(null);
+    setPendingGyAction(null);
+    setCraftHostUid(null);
+    setCraftArtifactIds([]);
   }
 
   function handleTargetOpponent() {
@@ -387,13 +530,27 @@ const PlayPage: React.FC = () => {
           <span style={{ color: '#666', fontSize: '0.78rem' }}>
             Your GY: {gs.playerGraveyard.slice(-3).join(', ') || '—'}
           </span>
-          {selectedCard && waitingTarget && (
+          {(pendingAlt || pendingGyAction) && (
             <span style={{ marginLeft: 'auto', color: '#f1c40f', fontWeight: 600, fontSize: '0.85rem' }}>
               {pendingAlt === 'bloodrush' && 'Bloodrush: click your creature to pump'}
               {pendingAlt === 'ninjutsu' && 'Ninjutsu: click your attacker to replace'}
-              {!pendingAlt && (targetMode === 'opp'
+              {pendingAlt === 'casualty' && 'Casualty: click a creature to sacrifice'}
+              {pendingAlt === 'boast' && 'Boast: click an attacking creature'}
+              {pendingAlt === 'outlast' && 'Outlast: click a creature with outlast'}
+              {pendingAlt === 'craft_host' && 'Craft: click the permanent to craft'}
+              {pendingAlt === 'craft_artifacts' && 'Craft: click artifacts to exile, then confirm'}
+              {pendingGyAction === 'encore' && 'Encore: click a creature in your graveyard'}
+              {pendingGyAction === 'eternalize' && 'Eternalize: click a creature in your graveyard'}
+              {pendingGyAction === 'unearth' && 'Unearth: click a card in your graveyard'}
+              {pendingGyAction === 'cast_disturb' && 'Disturb: click a creature in your graveyard'}
+              {pendingGyAction === 'cast_flashback' && 'Flashback: click a card in your graveyard'}
+            </span>
+          )}
+          {selectedCard && waitingTarget && !pendingAlt && !pendingGyAction && (
+            <span style={{ marginLeft: 'auto', color: '#f1c40f', fontWeight: 600, fontSize: '0.85rem' }}>
+              {targetMode === 'opp'
                 ? 'Click a target on the opponent side'
-                : 'Click one of your creatures')}
+                : 'Click one of your creatures'}
             </span>
           )}
           {selectedCard && !waitingTarget && (
@@ -411,17 +568,35 @@ const PlayPage: React.FC = () => {
             <BoardCard
               key={p.uid}
               perm={p}
-              selected={gs.pendingAttackers.includes(p.uid)}
+              selected={
+                gs.pendingAttackers.includes(p.uid)
+                || craftArtifactIds.includes(p.uid)
+                || craftHostUid === p.uid
+              }
               onClick={
-                inCombat && p.canAttack
-                  ? () => void act('toggle_attacker', { permanentUid: p.uid })
-                  : waitingTarget && targetMode === 'self'
-                  ? () => handleTargetPermanent(p, false)
+                pendingAlt || (waitingTarget && targetMode === 'self') || (inCombat && p.canAttack)
+                  ? () => handlePlayerBoardClick(p)
                   : undefined
               }
             />
           ))}
         </div>
+
+        {(gs.playerGraveyardCards?.length ?? 0) > 0 && pendingGyAction && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ color: '#888', fontSize: '0.78rem' }}>Graveyard:</span>
+            {gs.playerGraveyardCards!.map(card => (
+              <button
+                key={card.idx}
+                type="button"
+                onClick={() => handleGraveyardClick(card.idx)}
+                style={btnStyle('#34495e')}
+              >
+                [{card.idx}] {card.name}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Player life + mana */}
         <LifeBar label="You" life={gs.playerLife} mana={gs.playerMana} />
@@ -483,6 +658,40 @@ const PlayPage: React.FC = () => {
                     Cast for Evoke
                   </label>
                 )}
+                {canCast && oracleHas(selectedCard.oracle, 'Miracle') && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', color: '#ddd' }}>
+                    <input
+                      type="checkbox"
+                      checked={castForMiracle}
+                      onChange={e => setCastForMiracle(e.target.checked)}
+                    />
+                    Cast for Miracle
+                  </label>
+                )}
+                {canCast && oracleHas(selectedCard.oracle, 'Casualty') && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', color: '#ddd' }}>
+                    <input
+                      type="checkbox"
+                      checked={paidCasualty}
+                      onChange={e => {
+                        setPaidCasualty(e.target.checked);
+                        if (!e.target.checked) setCasualtySacrificeUid(null);
+                      }}
+                    />
+                    Pay Casualty
+                    {casualtySacrificeUid && ' (sacrifice selected)'}
+                  </label>
+                )}
+                {canCast && !waitingTarget && !selectedCard.isLand && (
+                  <button
+                    type="button"
+                    disabled={!selectedCard.affordable}
+                    onClick={() => castSelected({ targetPlayer: 1 })}
+                    style={btnStyle('#2980b9')}
+                  >
+                    Cast {selectedCard.name}
+                  </button>
+                )}
                 {selectedCard.canBloodrush && canBloodrush && (
                   <button
                     type="button"
@@ -523,16 +732,67 @@ const PlayPage: React.FC = () => {
                 )}
               </>
             )}
-            {waitingTarget && (
+
+            {!selectedCard && !waitingTarget && !pendingAlt && !pendingGyAction && (
+              <>
+                {canBoast && (
+                  <button type="button" onClick={() => setPendingAlt('boast')} style={btnStyle('#d35400')}>
+                    Boast
+                  </button>
+                )}
+                {canOutlast && (
+                  <button type="button" onClick={() => setPendingAlt('outlast')} style={btnStyle('#e67e22')}>
+                    Outlast
+                  </button>
+                )}
+                {canCraft && (
+                  <button type="button" onClick={() => setPendingAlt('craft_host')} style={btnStyle('#1abc9c')}>
+                    Craft
+                  </button>
+                )}
+                {canEncore && (
+                  <button type="button" onClick={() => setPendingGyAction('encore')} style={btnStyle('#8e44ad')}>
+                    Encore
+                  </button>
+                )}
+                {canEternalize && (
+                  <button type="button" onClick={() => setPendingGyAction('eternalize')} style={btnStyle('#6c3483')}>
+                    Eternalize
+                  </button>
+                )}
+                {canUnearth && (
+                  <button type="button" onClick={() => setPendingGyAction('unearth')} style={btnStyle('#566573')}>
+                    Unearth
+                  </button>
+                )}
+                {canDisturb && (
+                  <button type="button" onClick={() => setPendingGyAction('cast_disturb')} style={btnStyle('#5dade2')}>
+                    Disturb
+                  </button>
+                )}
+                {canFlashback && (
+                  <button type="button" onClick={() => setPendingGyAction('cast_flashback')} style={btnStyle('#2874a6')}>
+                    Flashback
+                  </button>
+                )}
+              </>
+            )}
+
+            {pendingAlt === 'craft_artifacts' && (
               <button
                 type="button"
-                onClick={() => {
-                  setWaitingTarget(false);
-                  setSelectedHandIdx(null);
-                  setTargetMode('none');
-                  setPendingAlt(null);
-                  setCastForEvoke(false);
-                }}
+                disabled={!craftHostUid || craftArtifactIds.length === 0}
+                onClick={confirmCraft}
+                style={btnStyle('#16a085')}
+              >
+                Confirm craft ({craftArtifactIds.length} artifacts)
+              </button>
+            )}
+
+            {(waitingTarget || pendingAlt || pendingGyAction) && (
+              <button
+                type="button"
+                onClick={resetPendingUi}
                 style={btnStyle('#555')}
               >
                 Cancel

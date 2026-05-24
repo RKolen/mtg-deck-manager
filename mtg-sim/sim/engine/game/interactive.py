@@ -15,7 +15,9 @@ from engine.abilities import activated
 from engine.abilities.activated.bloodrush import can_bloodrush
 from engine.abilities.keywords.other.boast import can_boast, clear_boast_turn_counters
 from engine.abilities.keywords.other.bushido import clear_bushido_combat_markers
+from engine.abilities.keywords.other.craft import has_craft
 from engine.abilities.keywords.casting.disturb import can_cast_via_disturb
+from engine.abilities.keywords.casting.flashback import can_cast_via_flashback
 from engine.abilities.keywords.other.encore import can_encore
 from engine.abilities.keywords.other.eternalize import can_eternalize
 from engine.abilities.keywords.other.outlast import can_outlast, clear_outlast_turn_marker
@@ -372,6 +374,10 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
             actions.append("eternalize")
         if self._graveyard_can_disturb():
             actions.append("cast_disturb")
+        if self._graveyard_can_flashback():
+            actions.append("cast_flashback")
+        if self._battlefield_can_craft():
+            actions.append("craft")
         if self._battlefield_can_boast():
             actions.append("boast")
         if self._battlefield_can_activate():
@@ -462,6 +468,22 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
             and can_cast_via_disturb(require_card_info(c), self.phase, True)
             for c in self._zones(0).graveyard
         )
+
+    def _graveyard_can_flashback(self) -> bool:
+        """Return True when a graveyard card can be cast for flashback."""
+        if not self.state.stack.is_empty:
+            return False
+        return any(
+            isinstance(c, CardObject)
+            and can_cast_via_flashback(require_card_info(c), self.phase, True)
+            for c in self._zones(0).graveyard
+        )
+
+    def _battlefield_can_craft(self) -> bool:
+        """Return True when a permanent with craft is on the battlefield."""
+        if not self.state.stack.is_empty:
+            return False
+        return any(has_craft(perm) for perm in self._permanents(0))
 
     def _battlefield_can_outlast(self) -> bool:
         """Return True when a creature can activate outlast."""
