@@ -93,6 +93,7 @@ class GameRuntimeMixin:
                 available,
                 phase=self.phase,
                 stack_is_empty=stack_empty,
+                affinity_context=(self.state.zones, player_idx),
             )
             for idx, card in enumerate(hand)
             if isinstance(card, CardObject) and card.card_info is not None

@@ -209,6 +209,8 @@ class SpellStackMixin(GameRuntimeMixin):
                     cast_for_freerunning=paid.modifiers.freerunning,
                     freerunning_available=self.state.players[0].combat_damage_dealt_this_turn,
                 ),
+                zones=self.state.zones,
+                controller_idx=0,
             ),
         )
         return self._place_validated_hand_cast(

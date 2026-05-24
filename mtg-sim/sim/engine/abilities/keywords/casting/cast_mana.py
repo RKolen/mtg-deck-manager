@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from deck_registry import CardInfo
 from engine.abilities.keywords.casting.bestow import (
@@ -38,6 +39,10 @@ from engine.abilities.keywords.casting.overload import (
 from engine.abilities.keywords.casting.buyback import buyback_extra_mana
 from engine.abilities.keywords.casting.replicate import replicate_extra_mana
 from engine.abilities.keywords.casting.spree import spree_extra_mana
+from engine.abilities.keywords.other.affinity import affinity_reduction
+
+if TYPE_CHECKING:
+    from engine.core.zones import ZoneManager
 
 
 @dataclass(frozen=True)
@@ -72,6 +77,8 @@ class AnnounceCastManaOptions:
 
     modifiers: CastManaModifiers = field(default_factory=CastManaModifiers)
     timing: CastManaTiming = field(default_factory=CastManaTiming)
+    zones: ZoneManager | None = None
+    controller_idx: int = 0
 
 
 def _payment_requirements(card: CardInfo) -> tuple[int, int]:
@@ -120,4 +127,9 @@ def resolve_announce_cast_mana(
     mana_needed += replicate_extra_mana(card, mods.replicate_times)
     mana_needed += buyback_extra_mana(card, mods.paid_buyback)
     mana_needed += spree_extra_mana(card, mods.spree_mode_indices)
+    if opts.zones is not None:
+        mana_needed = max(
+            0,
+            mana_needed - affinity_reduction(card, opts.zones, opts.controller_idx),
+        )
     return mana_needed, life_cost

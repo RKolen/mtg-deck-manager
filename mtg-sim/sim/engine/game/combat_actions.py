@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from engine.abilities.keywords.other.afflict import apply_afflict_on_attack
+from engine.abilities.keywords.other.myriad import apply_myriad_on_attack
 from engine.abilities.keywords.other.annihilator import apply_annihilator_on_attack
 from engine.abilities.keywords.other.exalted import apply_exalted_on_attack
 from engine.abilities.keywords.other.mentor import apply_mentor_on_attack
@@ -43,7 +44,6 @@ class CombatActionsMixin(ActivatedActionsMixin):
     def action_confirm_attack(self) -> dict:
         """Resolve the player's declared attackers as unblocked damage."""
         assert self.phase == "attack"
-        self._apply_attack_keywords(self.pending_attackers)
         self._fire_attack_triggers(self.pending_attackers)
         result = resolve_combat_damage(
             self.state,
@@ -96,8 +96,13 @@ class CombatActionsMixin(ActivatedActionsMixin):
         self._finish_opponent_turn()
         return self.to_client()
 
-    def _apply_attack_keywords(self, attacker_ids: list[str]) -> None:
-        """Apply annihilator, afflict, mentor, exalted, and similar on-attack keywords."""
+    def _apply_attack_keywords(
+        self,
+        attacker_ids: list[str],
+        *,
+        defending_player_idx: int,
+    ) -> None:
+        """Apply annihilator, afflict, mentor, exalted, myriad, and similar on-attack keywords."""
         solo = len(attacker_ids) == 1
         for attacker_id in attacker_ids:
             perm = self._find_permanent(attacker_id)
@@ -124,6 +129,13 @@ class CombatActionsMixin(ActivatedActionsMixin):
             )
             if mentor_detail:
                 self._log('rules', 'mentor', mentor_detail)
+            myriad_detail = apply_myriad_on_attack(
+                self.state,
+                perm,
+                defending_player_idx=defending_player_idx,
+            )
+            if myriad_detail:
+                self._log('rules', 'myriad', myriad_detail)
 
     def _start_opponent_attack(self) -> None:
         """Declare opponent attackers or finish the opponent turn."""
@@ -134,7 +146,7 @@ class CombatActionsMixin(ActivatedActionsMixin):
         tap_attackers(attackers)
         self.pending_opp_attackers = [str(p.obj_id) for p in attackers]
         self._log("opponent", "attack_declared", f"Attacks with {perm_names(attackers)}")
-        self._apply_attack_keywords(self.pending_opp_attackers)
+        self._apply_attack_keywords(self.pending_opp_attackers, defending_player_idx=0)
         self._fire_attack_triggers(self.pending_opp_attackers)
         self.phase = "declare_blockers"
 
@@ -176,7 +188,11 @@ class CombatActionsMixin(ActivatedActionsMixin):
                 attackers[0].controller_idx,
                 len(attackers),
             )
-        self._apply_attack_keywords(attacker_ids)
+            defending_player_idx = 1 - attackers[0].controller_idx
+            self._apply_attack_keywords(
+                attacker_ids,
+                defending_player_idx=defending_player_idx,
+            )
         for attacker in attackers:
             self.state.fire_attack_triggers(attacker)
         self._auto_pass_stack()

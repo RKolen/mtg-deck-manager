@@ -25,6 +25,7 @@ from engine.core.game_object import (
 )
 from engine.core.game_object import Target
 from engine.core.game_state import GameState
+from engine.core.zones import ZoneManager
 from engine.game.cast_context import (
     CastAnnounceOptions,
     CastModifierIds,
@@ -75,9 +76,17 @@ def card_to_client(
     *,
     phase: str = "main1",
     stack_is_empty: bool = True,
+    affinity_context: tuple[ZoneManager, int] | None = None,
 ) -> dict:
     """Serialise one hand card using the existing client shape."""
-    affordable = is_affordable(card, available_mana)
+    zones = affinity_context[0] if affinity_context is not None else None
+    controller_idx = affinity_context[1] if affinity_context is not None else 0
+    affordable = is_affordable(
+        card,
+        available_mana,
+        zones=zones,
+        controller_idx=controller_idx,
+    )
     has_evoke_kw = has_evoke(card)
     evoke_mana = evoke_mana_needed(card)[0] if has_evoke_kw else 0
     bloodrush = has_bloodrush(card)
