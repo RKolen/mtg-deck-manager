@@ -261,6 +261,7 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
         for detail in self._return_dash_creatures_to_hand(0):
             self._log("rules", "dash", detail)
         self._sacrifice_blitz_at_turn_end(0)
+        self._sacrifice_decayed_at_turn_end(0)
         self._log("player", "end_turn", f"End of turn {self.turn}")
         self.phase = "opp_turn"
         self._opponent_main_phase()

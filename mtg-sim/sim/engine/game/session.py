@@ -6,9 +6,10 @@ import random
 import uuid
 
 from deck_registry import CardInfo
-from engine.core.game_state import GameState, PlayerInfo
+from engine.core.game_state import GameState, LogEntry, PlayerInfo
 from engine.core.turn_structure import TurnRunner
 from engine.core.zones import ZoneManager
+from engine.abilities.keywords.other.companion import validate_companion_deck
 from engine.game.helpers import expand_deck
 from engine.game.interactive import InteractiveGame
 from engine.rules.stack import Stack
@@ -24,6 +25,7 @@ def create_game(
     on_the_play: bool = True,
 ) -> InteractiveGame:
     """Create and register a new interactive game session."""
+    companion_err = validate_companion_deck(player_cards)
     zones = ZoneManager()
     zones.player_zones[0].library.extend(expand_deck(player_cards, 0))
     zones.player_zones[1].library.extend(expand_deck(opponent_cards, 1))
@@ -40,6 +42,15 @@ def create_game(
     )
     game = InteractiveGame(state=state, on_the_play=on_the_play)
     game.deal_opening_hands()
+    if companion_err:
+        state.log.append(
+            LogEntry(
+                turn=state.turn.context.turn_number,
+                actor='system',
+                action='companion',
+                detail=companion_err,
+            )
+        )
     _sessions[state.game_id] = game
     return game
 

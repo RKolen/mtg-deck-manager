@@ -128,6 +128,10 @@ def _dispatch_permanent_actions(game: InteractiveGame, req) -> dict | None:
             host_uid=req.targetUid,
         ),
         "boast": lambda: game.action_boast(uid),
+        "craft": lambda: game.action_craft(
+            uid,
+            [str(aid) for aid in (req.craftArtifactIds or [])],
+        ),
         "toggle_attacker": lambda: game.action_toggle_attacker(uid),
     }
     handler = handlers.get(req.action)

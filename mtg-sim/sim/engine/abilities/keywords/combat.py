@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from engine.abilities.keywords._core import has_keyword, is_artifact_creature, is_creature
+from engine.abilities.keywords.other.decayed import blocks_attack
 from engine.abilities.keywords.other.prowl import prowl_unblockable
 from engine.abilities.keywords.registry import detect_keywords
 
@@ -36,6 +37,7 @@ def can_attack(perm: Permanent) -> bool:
         and not perm.tapped
         and not perm.sick
         and not has_keyword(perm, 'Defender')
+        and not blocks_attack(perm)
     )
 
 

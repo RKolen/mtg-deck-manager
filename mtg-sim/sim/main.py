@@ -190,6 +190,7 @@ class GameActionRequest(BaseModel):
     replicateTimes: int = 0
     paidBuyback: bool = False
     paidCasualty: bool = False
+    craftArtifactIds: list[str] = []
     castForEmerge: bool = False
     castForEvoke: bool = False
     emergeSacrificeIds: list[str] = []

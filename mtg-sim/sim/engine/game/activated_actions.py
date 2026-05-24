@@ -9,6 +9,12 @@ from engine.abilities.activated.bloodrush import (
     bloodrush_mana_needed,
     can_bloodrush,
 )
+from engine.abilities.keywords.other.craft import (
+    apply_craft,
+    craft_artifact_error,
+    craft_mana_needed,
+    has_craft,
+)
 from engine.abilities.keywords.other.boast import (
     apply_boast,
     boast_mana_needed,
@@ -27,6 +33,7 @@ from engine.abilities.keywords.other.ninjutsu import (
 from engine.abilities.activated import ActivationSpeed
 from engine.abilities.activated._cost_keyword import INSTANT_SPEED_PHASES
 from engine.abilities.keywords.other.blitz import sacrifice_blitz_creatures
+from engine.abilities.keywords.other.decayed import sacrifice_decayed_creatures
 from engine.abilities.keywords.other.dash import return_dash_creatures_to_hand
 from engine.core.game_object import CardObject, Permanent
 from engine.core.zones import Zone
@@ -199,6 +206,30 @@ class ActivatedActionsMixin(GameRuntimeMixin):
         self._log("player", "boast", detail)
         return self.to_client()
 
+    def action_craft(
+        self,
+        permanent_uid: str,
+        artifact_uids: list[str],
+    ) -> dict:
+        """Activate craft by exiling artifacts you control."""
+        perm = self._find_permanent(permanent_uid)
+        if perm is None:
+            return self._client_error("Permanent not found")
+        if not has_craft(perm):
+            return self._client_error("Permanent does not have craft")
+        artifact_ids = [int(uid) for uid in artifact_uids]
+        err = craft_artifact_error(self.state, perm, 0, artifact_ids)
+        if err:
+            return self._client_error(err)
+        mana_needed = craft_mana_needed(perm)
+        if mana_needed and not self._tap_lands_for_mana(0, mana_needed):
+            return self._client_error(f"Need {mana_needed} mana to craft")
+        detail = apply_craft(self.state, perm, artifact_ids)
+        if detail is None:
+            return self._client_error("Craft failed")
+        self._log("player", "craft", detail)
+        return self.to_client()
+
     def action_encore(self, graveyard_idx: int) -> dict:
         """Activate encore from the graveyard."""
         card, err = self._graveyard_card_checked(0, graveyard_idx)
@@ -334,3 +365,8 @@ class ActivatedActionsMixin(GameRuntimeMixin):
         """Sacrifice blitzed creatures at end of turn."""
         for detail in sacrifice_blitz_creatures(self.state, player_idx):
             self._log('rules', 'blitz', detail)
+
+    def _sacrifice_decayed_at_turn_end(self, player_idx: int) -> None:
+        """Sacrifice decayed creatures at end of turn."""
+        for detail in sacrifice_decayed_creatures(self.state, player_idx):
+            self._log('rules', 'decayed', detail)

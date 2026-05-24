@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from engine.abilities import keywords
 from engine.abilities.keywords.handlers import apply_combat_damage_to_creature
+from engine.abilities.keywords.other.dethrone import apply_dethrone_on_combat_damage_to_player
 from engine.abilities.keywords.other.renown import apply_renown_on_combat_damage_to_player
 from engine.core.game_object import Permanent, effective_power
 from engine.core.game_state import GameState
@@ -159,6 +160,12 @@ def _assign_combat_damage(
                 damaged_player_idx=context.defending_player_idx,
             )
             apply_renown_on_combat_damage_to_player(attacker, damage)
+            apply_dethrone_on_combat_damage_to_player(
+                context.game,
+                attacker,
+                damage,
+                context.defending_player_idx,
+            )
             _apply_lifelink(
                 context.game,
                 context.attacking_player_idx,
@@ -178,6 +185,12 @@ def _assign_combat_damage(
             damaged_player_idx=context.defending_player_idx,
         )
         apply_renown_on_combat_damage_to_player(attacker, player_damage)
+        apply_dethrone_on_combat_damage_to_player(
+            context.game,
+            attacker,
+            player_damage,
+            context.defending_player_idx,
+        )
         _apply_lifelink(context.game, context.attacking_player_idx, attacker, damage)
     for blocker in blockers:
         if _deals_in_step(blocker, first_strike_step):
