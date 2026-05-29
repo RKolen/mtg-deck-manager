@@ -32,6 +32,11 @@ from engine.abilities.keywords.casting.spectacle import (
     spectacle_available,
 )
 from engine.abilities.keywords.casting.blitz import normalize_blitz_cast
+from engine.abilities.keywords.casting.cleave import normalize_cleave_cast
+from engine.abilities.keywords.casting.conspire import (
+    conspire_error,
+    normalize_paid_conspire,
+)
 from engine.abilities.keywords.casting.dash import normalize_dash_cast
 from engine.abilities.keywords.other.disguise import normalize_disguise_cast
 from engine.abilities.keywords.other.morph import normalize_morph_cast
@@ -73,6 +78,8 @@ class PaidCastModifiers:
     disguise: bool
     dash: bool
     blitz: bool
+    cleave: bool
+    conspire: bool
 
 
 @dataclass(frozen=True)
@@ -155,6 +162,8 @@ def _normalized_paid_flags(
         disguise=normalize_disguise_cast(card_info, opts.alternate.cast_for_disguise),
         dash=normalize_dash_cast(card_info, opts.alternate.cast_for_dash),
         blitz=normalize_blitz_cast(card_info, opts.alternate.cast_for_blitz),
+        cleave=normalize_cleave_cast(card_info, opts.alternate.cast_for_cleave),
+        conspire=normalize_paid_conspire(card_info, opts.costs.paid_conspire),
     )
 
 
@@ -209,6 +218,14 @@ def validate_announce_cast(
         lambda: _reject_keyword(opts.alternate.cast_for_disguise, paid.disguise, name, "disguise"),
         lambda: _reject_keyword(opts.alternate.cast_for_dash, paid.dash, name, "dash"),
         lambda: _reject_keyword(opts.alternate.cast_for_blitz, paid.blitz, name, "blitz"),
+        lambda: _reject_keyword(opts.alternate.cast_for_cleave, paid.cleave, name, "cleave"),
+        lambda: _reject_keyword(opts.costs.paid_conspire, paid.conspire, name, "conspire"),
+        lambda: conspire_error(
+            card_info,
+            opts.costs.paid_conspire,
+            zones,
+            player_idx,
+        ),
         lambda: (
             f"{name} cannot use freerunning"
             if opts.alternate.cast_for_freerunning and not paid.freerunning

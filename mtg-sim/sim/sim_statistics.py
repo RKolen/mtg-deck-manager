@@ -220,7 +220,7 @@ def compute_statistics(
             "games": 0, "wins": 0, "losses": 0, "winRate": 0.0,
             "onThePlay": {"wins": 0, "games": 0, "winRate": 0.0},
             "onTheDraw": {"wins": 0, "games": 0, "winRate": 0.0},
-            "avgTurnWin": 0, "avgTurnLoss": 0,
+            "avgTurnWin": None, "avgTurnLoss": None,
             "topKillers": [], "keyMoments": [],
             "gameLogs": [], "lifeProgression": [],
             "turnBreakdown": [], "mulliganStats": {},
@@ -230,8 +230,8 @@ def compute_statistics(
     losses = total - wins
     on_play = [r for i, r in enumerate(results) if i % 2 == 0]
     on_draw = [r for i, r in enumerate(results) if i % 2 == 1]
-    win_turns = [r.turns for r in results if r.winner == 0]
-    loss_turns = [r.turns for r in results if r.winner == 1]
+    win_turns = [r.turns for r in results if r.winner == 0 and r.turns is not None]
+    loss_turns = [r.turns for r in results if r.winner == 1 and r.turns is not None]
     losing_games = [r for r in results if r.winner == 1]
 
     # Mulligan stats
@@ -261,8 +261,8 @@ def compute_statistics(
         "winRate": round(wins / total, 4),
         "onThePlay": _half_stats(on_play),
         "onTheDraw": _half_stats(on_draw),
-        "avgTurnWin": round(sum(win_turns) / len(win_turns), 1) if win_turns else 0,
-        "avgTurnLoss": round(sum(loss_turns) / len(loss_turns), 1) if loss_turns else 0,
+        "avgTurnWin": round(sum(win_turns) / len(win_turns), 1) if win_turns else None,
+        "avgTurnLoss": round(sum(loss_turns) / len(loss_turns), 1) if loss_turns else None,
         "topKillers": _top_killers(losing_games, losses),
         "mulliganStats": mulligan_stats,
         "avgMulliganCount": round(sum(player_mulls) / total, 2),

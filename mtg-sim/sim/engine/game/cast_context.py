@@ -25,6 +25,7 @@ class HandCastCostChoices:
     replicate_times: int = 0
     paid_buyback: bool = False
     paid_casualty: bool = False
+    paid_conspire: bool = False
 
 
 @dataclass(frozen=True)
@@ -37,6 +38,7 @@ class HandAlternateCastChoices:
     cast_for_mutate: bool = False
     cast_for_freerunning: bool = False
     cast_for_spectacle: bool = False
+    cast_for_cleave: bool = False
     face: FaceAlternateCastFlags = field(default_factory=FaceAlternateCastFlags)
 
     @property
@@ -80,6 +82,7 @@ class CastManaReductionIds:
     delve_graveyard_indices: tuple[int, ...] = ()
     improvise_artifact_ids: tuple[int, ...] = ()
     sneak_land_hand_indices: tuple[int, ...] = ()
+    assist_mana: int = 0
 
 
 @dataclass(frozen=True)

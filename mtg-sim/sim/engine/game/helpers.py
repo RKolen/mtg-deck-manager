@@ -20,6 +20,9 @@ from engine.abilities.keywords.casting.madness import (
 from engine.abilities.keywords.casting.plot import can_plot_setup, is_plottable_sorcery
 from engine.abilities.keywords.casting.suspend import can_suspend, suspend_mana_needed
 from engine.abilities.keywords import has_flash
+from engine.abilities.keywords.casting.assist import has_assist
+from engine.abilities.keywords.casting.cleave import has_cleave
+from engine.abilities.keywords.casting.conspire import has_conspire
 from engine.abilities.keywords.casting.convoke import has_convoke
 from engine.abilities.keywords.casting.delve import has_delve
 from engine.abilities.keywords.casting.emerge import has_emerge
@@ -165,6 +168,9 @@ def card_to_client(
         "hasEvoke": has_evoke_kw,
         "evokeAffordable": has_evoke_kw and available_mana >= evoke_mana,
         "hasConvoke": has_convoke(card),
+        "hasAssist": has_assist(card),
+        "hasCleave": has_cleave(card),
+        "hasConspire": has_conspire(card),
         "hasDelve": has_delve(card),
         "hasImprovise": has_improvise(card),
         "hasEmerge": has_emerge(card),

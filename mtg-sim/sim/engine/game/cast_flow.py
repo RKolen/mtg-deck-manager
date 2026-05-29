@@ -119,7 +119,9 @@ def cast_timing_for_announce(
         freerunning_available=state.players[controller_idx].combat_damage_dealt_this_turn,
         cast_for_spectacle=paid.modifiers.spectacle,
         spectacle_available=spectacle_available(state, controller_idx),
+        cast_for_cleave=paid.modifiers.cleave,
         cast_for_morph=paid.modifiers.morph,
+        paid_conspire=paid.modifiers.conspire,
     )
 
 

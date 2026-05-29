@@ -41,6 +41,7 @@ _MODIFIER_KW_KEYS = frozenset({
     "delve_graveyard_indices",
     "improvise_artifact_ids",
     "sneak_land_hand_indices",
+    "assist_mana",
 })
 
 
@@ -62,6 +63,7 @@ def _modifier_ids_from_kw(modifier_kw: dict[str, Any]) -> CastModifierIds:
             delve_graveyard_indices=_as_tuple(modifier_kw.get("delve_graveyard_indices", ())),
             improvise_artifact_ids=_as_tuple(modifier_kw.get("improvise_artifact_ids", ())),
             sneak_land_hand_indices=_as_tuple(modifier_kw.get("sneak_land_hand_indices", ())),
+            assist_mana=int(modifier_kw.get("assist_mana", 0)),
         ),
     )
 
@@ -78,6 +80,7 @@ def cast_announce_options(**kwargs: Any) -> CastAnnounceOptions:
             replicate_times=int(flat.get("replicate_times", 0)),
             paid_buyback=bool(flat.get("paid_buyback", False)),
             paid_casualty=bool(flat.get("paid_casualty", False)),
+            paid_conspire=bool(flat.get("paid_conspire", False)),
         ),
         alternate=HandAlternateCastChoices(
             cast_for_miracle=bool(flat.get("cast_for_miracle", False)),
@@ -86,6 +89,7 @@ def cast_announce_options(**kwargs: Any) -> CastAnnounceOptions:
             cast_for_mutate=bool(flat.get("cast_for_mutate", False)),
             cast_for_freerunning=bool(flat.get("cast_for_freerunning", False)),
             cast_for_spectacle=bool(flat.get("cast_for_spectacle", False)),
+            cast_for_cleave=bool(flat.get("cast_for_cleave", False)),
             face=FaceAlternateCastFlags(
                 cast_for_morph=bool(flat.get("cast_for_morph", False)),
                 cast_for_disguise=bool(flat.get("cast_for_disguise", False)),

@@ -85,7 +85,7 @@ class SimResult:
     """Outcome of a single simulated game — passed to sim_statistics."""
 
     winner: int
-    turns: int
+    turns: Optional[int]
     player_life: int
     opponent_life: int
     key_cards_on_loss: list[str] = field(default_factory=list)
@@ -146,7 +146,7 @@ def _parse_forge_output(stdout: str, player_name: str) -> list[SimResult]:
             winner = 0 if player_name in winner_name else 1
         results.append(SimResult(
             winner=winner,
-            turns=0,
+            turns=None,
             player_life=0,
             opponent_life=0,
             on_the_play=on_the_play,

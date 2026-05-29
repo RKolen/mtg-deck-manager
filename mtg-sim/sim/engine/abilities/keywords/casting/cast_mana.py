@@ -40,6 +40,11 @@ from engine.abilities.keywords.casting.blitz import (
     blitz_mana_needed,
     normalize_blitz_cast,
 )
+from engine.abilities.keywords.casting.cleave import (
+    cleave_mana_needed,
+    normalize_cleave_cast,
+)
+from engine.abilities.keywords.casting.conspire import conspire_extra_mana
 from engine.abilities.keywords.casting.dash import (
     dash_mana_needed,
     normalize_dash_cast,
@@ -93,7 +98,9 @@ class CastManaTiming:
     freerunning_available: bool = False
     cast_for_spectacle: bool = False
     spectacle_available: bool = False
+    cast_for_cleave: bool = False
     cast_for_morph: bool = False
+    paid_conspire: bool = False
 
 
 @dataclass(frozen=True)
@@ -129,6 +136,8 @@ def resolve_announce_cast_mana(
         available=timing.spectacle_available,
     ):
         mana_needed, life_cost = spectacle_mana_needed(card)
+    elif normalize_cleave_cast(card, timing.cast_for_cleave):
+        mana_needed, life_cost = cleave_mana_needed(card)
     elif normalize_morph_cast(card, mods.face.cast_for_morph):
         mana_needed, life_cost = morph_face_down_mana_needed()
     elif normalize_disguise_cast(card, mods.face.cast_for_disguise):
@@ -166,6 +175,7 @@ def resolve_announce_cast_mana(
     mana_needed += replicate_extra_mana(card, mods.replicate_times)
     mana_needed += buyback_extra_mana(card, mods.paid_buyback)
     mana_needed += spree_extra_mana(card, mods.spree_mode_indices)
+    mana_needed += conspire_extra_mana(card, timing.paid_conspire)
     if opts.zones is not None:
         mana_needed = max(
             0,

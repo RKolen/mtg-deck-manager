@@ -89,8 +89,8 @@ export interface SimulationResult {
   winRate: number;
   onThePlay: HalfStats;
   onTheDraw: HalfStats;
-  avgTurnWin: number;
-  avgTurnLoss: number;
+  avgTurnWin: number | null;
+  avgTurnLoss: number | null;
   topKillers: TopKiller[];
   keyMoments: string[];
   mulliganStats: MulliganStats;

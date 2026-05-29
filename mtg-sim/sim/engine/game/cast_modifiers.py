@@ -11,6 +11,8 @@ from engine.abilities.keywords.casting.cascade import (
     return_cascade_bottom,
     spell_mana_value,
 )
+from engine.abilities.keywords.casting.cleave import supports_cleave_copies
+from engine.abilities.keywords.casting.conspire import supports_conspire_copies
 from engine.abilities.keywords.casting.replicate import supports_replicate_copies
 from engine.abilities.keywords.casting.storm import storm_copy_count, supports_storm_copies
 from engine.core.game_object import CardObject, SpellStackCopyFlags, Target
@@ -41,6 +43,10 @@ def apply_post_cast_modifiers(
     casualty = _push_casualty_copy(game, player_idx, card, targets, context)
     if casualty:
         logs.append(f"{card_info.name} + casualty copy")
+    if _push_cleave_copy(game, player_idx, card, targets, context):
+        logs.append(f"{card_info.name} + cleave copy")
+    if _push_conspire_copy(game, player_idx, card, targets, context):
+        logs.append(f"{card_info.name} + conspire copy")
     cascade_name = _push_cascade_cast(game, player_idx, card, targets)
     if cascade_name:
         logs.append(f"cascade cast {cascade_name}")
@@ -93,6 +99,50 @@ def _push_replicate_copies(
             copy_flags=flags,
         ))
     return times
+
+
+def _push_cleave_copy(
+    game: GameState,
+    player_idx: int,
+    card: CardObject,
+    targets: list[Target],
+    context: SpellCastContext,
+) -> bool:
+    """Put one cleave copy on the stack above the spell that created it."""
+    card_info = require_card_info(card)
+    if not context.payment.cleave or not supports_cleave_copies(card_info):
+        return False
+    flags = SpellStackCopyFlags(cleave=True)
+    game.stack.push(spell_on_stack_from_context(
+        player_idx,
+        card,
+        list(targets),
+        context,
+        copy_flags=flags,
+    ))
+    return True
+
+
+def _push_conspire_copy(
+    game: GameState,
+    player_idx: int,
+    card: CardObject,
+    targets: list[Target],
+    context: SpellCastContext,
+) -> bool:
+    """Put one conspire copy on the stack above the spell that created it."""
+    card_info = require_card_info(card)
+    if not context.payment.conspire or not supports_conspire_copies(card_info):
+        return False
+    flags = SpellStackCopyFlags(conspire=True)
+    game.stack.push(spell_on_stack_from_context(
+        player_idx,
+        card,
+        list(targets),
+        context,
+        copy_flags=flags,
+    ))
+    return True
 
 
 def _push_casualty_copy(

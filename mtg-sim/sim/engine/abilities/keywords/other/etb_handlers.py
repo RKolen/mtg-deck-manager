@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from engine.abilities.keywords.other.ascend import update_ascend_status
+from engine.abilities.keywords.other.augment import apply_augment_etb
 from engine.abilities.keywords.other.backup import apply_backup_etb
 from engine.abilities.keywords.other.blitz import apply_blitz_etb
 from engine.abilities.keywords.other.bloodthirst import apply_bloodthirst_etb
@@ -62,6 +63,10 @@ def _backup_detail(game: GameState, permanent: Permanent) -> str | None:
     return apply_backup_etb(permanent, game.zones.battlefield)
 
 
+def _augment_detail(game: GameState, permanent: Permanent) -> str | None:
+    return apply_augment_etb(game.zones, permanent, game.zones.battlefield)
+
+
 def _riot_detail(_game: GameState, permanent: Permanent) -> str | None:
     return apply_riot_etb(permanent)
 
@@ -95,6 +100,7 @@ ETB_DETAIL_PRODUCERS: tuple[EtbDetailFn, ...] = (
     _dash_detail,
     _blitz_detail,
     _backup_detail,
+    _augment_detail,
     _riot_detail,
     _encore_detail,
     _ascend_detail,

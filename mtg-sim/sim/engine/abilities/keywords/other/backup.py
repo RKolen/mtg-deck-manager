@@ -6,6 +6,7 @@ import re
 
 from engine.abilities.keywords._core import has_keyword
 from engine.abilities.keywords.actions.counters import put_plus_counters
+from engine.abilities.keywords.other.host_creature import find_host_creature
 from engine.core.game_object import Permanent
 
 _BACKUP_RE = re.compile(r'backup\s+(\w+|\d+)', re.IGNORECASE)
@@ -30,16 +31,7 @@ def apply_backup_etb(permanent: Permanent, battlefield: list[Permanent]) -> str 
     if not has_backup(permanent):
         return None
     amount = backup_amount(permanent.oracle_text)
-    target = next(
-        (
-            perm
-            for perm in battlefield
-            if perm.controller_idx == permanent.controller_idx
-            and perm.obj_id != permanent.obj_id
-            and 'Creature' in perm.type_line
-        ),
-        None,
-    )
+    target = find_host_creature(permanent, battlefield)
     if target is None:
         return None
     put_plus_counters(target, amount)

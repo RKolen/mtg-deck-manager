@@ -898,11 +898,11 @@ const DeckSimulate: React.FC<DeckSimulateProps> = ({ deckNid, format, deckTitle 
                 </div>
               ))}
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{result.avgTurnWin}</div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{result.avgTurnWin ?? '—'}</div>
                 <div style={{ fontSize: '0.8rem', color: '#666' }}>Avg win turn</div>
               </div>
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{result.avgTurnLoss}</div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{result.avgTurnLoss ?? '—'}</div>
                 <div style={{ fontSize: '0.8rem', color: '#666' }}>Avg loss turn</div>
               </div>
             </div>

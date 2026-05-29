@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from deck_registry import CardInfo
+from engine.game.cast_context import CastManaReductionIds
 from engine.abilities.keywords.casting.convoke import resolve_convoke_for_cast
 from engine.abilities.keywords.casting.delve import resolve_delve_for_cast
 from engine.abilities.keywords.casting.improvise import resolve_improvise_for_cast
+from engine.abilities.keywords.casting.assist import resolve_assist_for_cast
 from engine.abilities.keywords.casting.sneak import SneakCastInput, resolve_sneak_for_cast
 from engine.core.zones import ZoneManager
 
@@ -21,6 +23,7 @@ class CastAdjustmentResult:
     delve_cards_exiled: int = 0
     improvise_artifact_ids: tuple[int, ...] = ()
     sneak_lands_exiled: int = 0
+    assist_mana_applied: int = 0
     error: str | None = None
 
 
@@ -28,10 +31,7 @@ class CastAdjustmentResult:
 class CastAdjustmentInput:
     """Optional cost reductions submitted with a cast announcement."""
 
-    convoke_creature_ids: tuple[int, ...] = ()
-    delve_graveyard_indices: tuple[int, ...] = ()
-    improvise_artifact_ids: tuple[int, ...] = ()
-    sneak_land_hand_indices: tuple[int, ...] = ()
+    reductions: CastManaReductionIds = field(default_factory=CastManaReductionIds)
     spell_hand_idx: int = -1
 
 
@@ -43,10 +43,11 @@ def resolve_cast_adjustments(
     player_idx: int,
 ) -> CastAdjustmentResult:
     """Apply delve, convoke, and improvise in order; return land mana still owed."""
+    reductions = options.reductions
     mana, delve_count, err = resolve_delve_for_cast(
         card,
         mana_needed,
-        list(options.delve_graveyard_indices),
+        list(reductions.delve_graveyard_indices),
         zones,
         player_idx,
     )
@@ -56,7 +57,7 @@ def resolve_cast_adjustments(
     mana, convoke_ids, err = resolve_convoke_for_cast(
         card,
         mana,
-        list(options.convoke_creature_ids),
+        list(reductions.convoke_creature_ids),
         zones,
         player_idx,
     )
@@ -66,7 +67,7 @@ def resolve_cast_adjustments(
     mana, improvise_ids, err = resolve_improvise_for_cast(
         card,
         mana,
-        list(options.improvise_artifact_ids),
+        list(reductions.improvise_artifact_ids),
         zones,
         player_idx,
     )
@@ -85,7 +86,7 @@ def resolve_cast_adjustments(
         player_idx,
         SneakCastInput(
             options.spell_hand_idx,
-            options.sneak_land_hand_indices,
+            reductions.sneak_land_hand_indices,
         ),
     )
     if err is not None:
@@ -97,10 +98,26 @@ def resolve_cast_adjustments(
             error=err,
         )
 
+    mana, assist_applied, err = resolve_assist_for_cast(
+        card,
+        mana,
+        reductions.assist_mana,
+    )
+    if err is not None:
+        return CastAdjustmentResult(
+            mana_needed,
+            convoke_creature_ids=tuple(convoke_ids),
+            delve_cards_exiled=delve_count,
+            improvise_artifact_ids=tuple(improvise_ids),
+            sneak_lands_exiled=sneak_count,
+            error=err,
+        )
+
     return CastAdjustmentResult(
         mana,
         convoke_creature_ids=tuple(convoke_ids),
         delve_cards_exiled=delve_count,
         improvise_artifact_ids=tuple(improvise_ids),
         sneak_lands_exiled=sneak_count,
+        assist_mana_applied=assist_applied,
     )

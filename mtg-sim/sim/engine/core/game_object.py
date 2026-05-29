@@ -250,6 +250,8 @@ class SpellCastPayment:
     disguise_face_down: bool = False
     dash: bool = False
     blitz: bool = False
+    cleave: bool = False
+    conspire: bool = False
 
 
 @dataclass
@@ -260,6 +262,8 @@ class SpellStackCopyFlags:
     replicate: bool = False
     cascade: bool = False
     casualty: bool = False
+    cleave: bool = False
+    conspire: bool = False
 
 
 @dataclass
@@ -278,7 +282,13 @@ class SpellOnStack(GameObject):
 
 def spell_is_ephemeral_copy(spell: SpellOnStack) -> bool:
     """Return True when a stack copy should not move its source card to a zone."""
-    return spell.copies.storm or spell.copies.replicate or spell.copies.casualty
+    return (
+        spell.copies.storm
+        or spell.copies.replicate
+        or spell.copies.casualty
+        or spell.copies.cleave
+        or spell.copies.conspire
+    )
 
 
 def spell_exiles_from_graveyard_cast(spell: SpellOnStack) -> bool:

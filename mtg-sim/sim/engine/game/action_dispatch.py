@@ -34,6 +34,7 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
             replicate_times=req.replicateTimes,
             paid_buyback=req.paidBuyback,
             paid_casualty=req.paidCasualty,
+            paid_conspire=req.paidConspire,
         ),
         alternate=HandAlternateCastChoices(
             cast_for_miracle=req.castForMiracle,
@@ -63,6 +64,7 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
                 delve_graveyard_indices=tuple(req.delveGraveyardIndices),
                 improvise_artifact_ids=improvise_ids,
                 sneak_land_hand_indices=tuple(req.sneakLandHandIndices),
+                assist_mana=req.assistMana,
             ),
         ),
     )

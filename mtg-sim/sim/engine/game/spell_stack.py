@@ -27,6 +27,7 @@ from engine.game.cast_announce_validate import (
     PaidAnnounceCast,
     validate_announce_cast,
 )
+from engine.game.cast_detail import announce_cast_detail_suffix
 from engine.game.cast_flow import AnnounceCastCompletion, announce_mana_options
 from engine.core.game_object import (
     CardObject,
@@ -59,43 +60,7 @@ def _announce_cast_detail(
     sacrificed_name: str,
 ) -> str:
     """Build a log detail string for an announced cast."""
-    mods = paid.modifiers
-    detail = f"{card_name} on stack"
-    if mods.miracle:
-        detail = f"{detail} (miracle)"
-    if mods.spectacle:
-        detail = f"{detail} (spectacle)"
-    if mods.morph:
-        detail = f"{detail} (morph)"
-    if mods.disguise:
-        detail = f"{detail} (disguise)"
-    if mods.dash:
-        detail = f"{detail} (dash)"
-    if mods.blitz:
-        detail = f"{detail} (blitz)"
-    if mods.freerunning:
-        detail = f"{detail} (freerunning)"
-    if mods.replicate_times:
-        detail = f"{detail} (replicate x{mods.replicate_times})"
-    if mods.overloaded:
-        detail = f"{detail} (overloaded)"
-    if mods.bestow:
-        detail = f"{detail} (bestow)"
-    if mods.entwined:
-        detail = f"{detail} (entwined)"
-    if mods.kicker_times:
-        detail = f"{detail} (kicked x{mods.kicker_times})"
-    if mods.buyback:
-        detail = f"{detail} (buyback)"
-    if mods.emerge:
-        detail = f"{detail} (emerge, sacrificed {sacrificed_name})"
-    if mods.casualty:
-        detail = f"{detail} (casualty, sacrificed {sacrificed_name})"
-    if mods.mutate:
-        detail = f"{detail} (mutate)"
-    if mods.spree_modes:
-        detail = f"{detail} (spree modes {list(mods.spree_modes)})"
-    return detail
+    return f"{card_name} on stack{announce_cast_detail_suffix(paid.modifiers, sacrificed_name)}"
 
 
 class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
@@ -161,10 +126,7 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
             card_info,
             mana_needed,
             CastAdjustmentInput(
-                convoke_creature_ids=opts.modifiers.reductions.convoke_creature_ids,
-                delve_graveyard_indices=opts.modifiers.reductions.delve_graveyard_indices,
-                improvise_artifact_ids=opts.modifiers.reductions.improvise_artifact_ids,
-                sneak_land_hand_indices=opts.modifiers.reductions.sneak_land_hand_indices,
+                reductions=opts.modifiers.reductions,
                 spell_hand_idx=hand_idx,
             ),
             self.state.zones,
@@ -209,6 +171,8 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
                 disguise_face_down=mods.disguise,
                 dash=mods.dash,
                 blitz=mods.blitz,
+                cleave=mods.cleave,
+                conspire=mods.conspire,
             ),
             replicate_times=mods.replicate_times,
             spree_mode_indices=mods.spree_modes,
@@ -235,6 +199,8 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
             )
         if adjustments.sneak_lands_exiled:
             cast_detail = f"{cast_detail} (sneak x{adjustments.sneak_lands_exiled})"
+        if adjustments.assist_mana_applied:
+            cast_detail = f"{cast_detail} (assist x{adjustments.assist_mana_applied})"
         self._log("player", "cast", cast_detail)
         self.state.fire_spell_cast_triggers(card, tuple(targets))
         for word_detail in apply_spell_hosted_ability_words(self.state, card_info, 0):
