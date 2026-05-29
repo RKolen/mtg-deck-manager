@@ -20,6 +20,8 @@ from engine.abilities.keywords.casting.disturb import can_cast_via_disturb
 from engine.abilities.keywords.casting.escape import can_cast_via_escape, escape_exiles_required
 from engine.abilities.keywords.casting.flashback import can_cast_via_flashback
 from engine.abilities.keywords.casting.harmonize import can_cast_via_harmonize
+from engine.abilities.keywords.casting.embalm import can_embalm
+from engine.abilities.keywords.other.disguise import can_turn_up_disguise
 from engine.abilities.keywords.other.morph import can_turn_up_morph
 from engine.abilities.keywords.casting.foretell import (
     can_cast_foretold,
@@ -416,6 +418,8 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
             actions.append("bloodrush")
         if self._hand_can_ninjutsu():
             actions.append("ninjutsu")
+        if self._hand_can_embalm():
+            actions.append("embalm")
         self._append_delayed_cast_setup_actions(actions)
         self._append_graveyard_cast_actions(actions)
         if self._battlefield_can_craft():
@@ -510,6 +514,16 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
         return any(
             isinstance(c, CardObject)
             and can_ninjutsu(require_card_info(c), self.phase, True)
+            for c in self._zones(0).hand
+        )
+
+    def _hand_can_embalm(self) -> bool:
+        """Return True when a hand creature can activate embalm."""
+        if not self.state.stack.is_empty:
+            return False
+        return any(
+            isinstance(c, CardObject)
+            and can_embalm(require_card_info(c), self.phase, True)
             for c in self._zones(0).hand
         )
 
@@ -725,10 +739,14 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
         return any(can_outlast(perm, self.state, 0, self.phase) for perm in self._permanents(0))
 
     def _battlefield_can_turn_up_morph(self) -> bool:
-        """Return True when a face-down morph creature can turn face up."""
+        """Return True when a face-down morph or disguise creature can turn face up."""
         if not self.state.stack.is_empty:
             return False
-        return any(can_turn_up_morph(perm, self.state, 0, self.phase) for perm in self._permanents(0))
+        return any(
+            can_turn_up_morph(perm, self.state, 0, self.phase)
+            or can_turn_up_disguise(perm, self.state, 0, self.phase)
+            for perm in self._permanents(0)
+        )
 
     def _battlefield_can_boast(self) -> bool:
         """Return True when an attacking creature can boast."""

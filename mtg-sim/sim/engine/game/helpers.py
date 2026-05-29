@@ -25,7 +25,13 @@ from engine.abilities.keywords.casting.delve import has_delve
 from engine.abilities.keywords.casting.emerge import has_emerge
 from engine.abilities.keywords.casting.evoke import evoke_mana_needed, has_evoke
 from engine.abilities.keywords.casting.improvise import has_improvise
+from engine.abilities.keywords.casting.blitz import has_blitz
+from engine.abilities.keywords.casting.dash import has_dash
+from engine.abilities.keywords.casting.embalm import has_embalm
+from engine.abilities.keywords.casting.freerunning import has_freerunning
+from engine.abilities.keywords.casting.sneak import has_sneak
 from engine.abilities.keywords.casting.spectacle import has_spectacle, spectacle_available
+from engine.abilities.keywords.other.disguise import has_disguise
 from engine.abilities.keywords.other.morph import has_morph
 from engine.abilities.keywords.other.ninjutsu import (
     can_ninjutsu,
@@ -169,6 +175,18 @@ def card_to_client(
             else False
         ),
         "hasMorph": has_morph(card) and card.is_creature,
+        "hasDisguise": has_disguise(card) and card.is_creature,
+        "hasSneak": has_sneak(card),
+        "hasDash": has_dash(card),
+        "hasBlitz": has_blitz(card),
+        "hasEmbalm": has_embalm(card),
+        "hasFreerunning": has_freerunning(card),
+        "freerunningAvailable": (
+            ctx.game is not None
+            and ctx.controller_idx == 0
+            and ctx.game.players[0].combat_damage_dealt_this_turn
+            and has_freerunning(card)
+        ),
         "canBloodrush": bloodrush_ok,
         "bloodrushAffordable": bloodrush_ok and available_mana >= bloodrush_mana,
         "canCycle": can_cycle(card, ctx.phase, ctx.stack_is_empty),

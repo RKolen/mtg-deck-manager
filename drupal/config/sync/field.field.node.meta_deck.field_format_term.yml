@@ -1,0 +1,24 @@
+uuid: 7b5efc90-c521-4ac6-bb70-4397633e0682
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_format_term
+    - node.type.meta_deck
+    - taxonomy.vocabulary.mtg_format
+id: node.meta_deck.field_format_term
+field_name: field_format_term
+entity_type: node
+bundle: meta_deck
+label: Format
+description: ''
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings:
+  handler: 'default:taxonomy_term'
+  handler_settings:
+    target_bundles:
+      mtg_format: mtg_format
+field_type: entity_reference

@@ -3,7 +3,9 @@ Interactive game package (Phase B).
 
 Split from the former monolithic game.py:
   interactive.py  — player actions, combat flow, opponent AI
-  spell_stack.py  — casting, storm copies, spell resolution
+  spell_stack.py  — hand casting, suspend, stack placement
+  spell_stack_placement.py — stack placement (storm/cascade)
+  spell_stack_graveyard.py / spell_stack_resolve.py — alternate casts and resolution
   runtime.py      — zones, mana, logging, client serialisation
   helpers.py      — shared pure helpers
   session.py      — create_game / session store

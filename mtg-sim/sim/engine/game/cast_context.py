@@ -12,6 +12,7 @@ from engine.core.game_object import (
     SpellStackCopyFlags,
     Target,
 )
+from engine.game.face_alternate_cast import FaceAlternateCastFlags
 
 
 @dataclass(frozen=True)
@@ -36,7 +37,27 @@ class HandAlternateCastChoices:
     cast_for_mutate: bool = False
     cast_for_freerunning: bool = False
     cast_for_spectacle: bool = False
-    cast_for_morph: bool = False
+    face: FaceAlternateCastFlags = field(default_factory=FaceAlternateCastFlags)
+
+    @property
+    def cast_for_morph(self) -> bool:
+        """Whether this cast uses morph (face-down)."""
+        return self.face.cast_for_morph
+
+    @property
+    def cast_for_disguise(self) -> bool:
+        """Whether this cast uses disguise (face-down)."""
+        return self.face.cast_for_disguise
+
+    @property
+    def cast_for_dash(self) -> bool:
+        """Whether this cast uses dash."""
+        return self.face.cast_for_dash
+
+    @property
+    def cast_for_blitz(self) -> bool:
+        """Whether this cast uses blitz."""
+        return self.face.cast_for_blitz
 
 
 @dataclass(frozen=True)

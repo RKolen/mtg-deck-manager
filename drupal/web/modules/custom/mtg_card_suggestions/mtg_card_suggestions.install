@@ -7,6 +7,7 @@ declare(strict_types=1);
  * Install, update, and uninstall functions for the MTG Card Suggestions module.
  */
 
+use Drupal\Core\Entity\Entity\EntityFormDisplay;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\node\Entity\NodeType;
@@ -291,4 +292,100 @@ function mtg_card_suggestions_update_10003(array &$sandbox): string {
   return $created !== []
     ? 'Created: ' . implode(', ', $created)
     : 'mtg_format vocabulary and terms already exist.';
+}
+
+/**
+ * Adds field_format_term (taxonomy reference) to deck and meta_deck nodes.
+ *
+ * Migrates all existing field_format string values to taxonomy term references
+ * using the mtg_format vocabulary seeded in update_10003. The legacy
+ * field_format string field is left in place but will no longer be written to.
+ */
+function mtg_card_suggestions_update_10004(array &$sandbox): string {
+  $created = [];
+
+  // ------------------------------------------------------------------
+  // Field storage: entity_reference to taxonomy_term.
+  // ------------------------------------------------------------------
+  if (!FieldStorageConfig::loadByName('node', 'field_format_term')) {
+    FieldStorageConfig::create([
+      'field_name'  => 'field_format_term',
+      'entity_type' => 'node',
+      'type'        => 'entity_reference',
+      'cardinality' => 1,
+      'settings'    => ['target_type' => 'taxonomy_term'],
+    ])->save();
+    $created[] = 'field_format_term storage';
+  }
+
+  // ------------------------------------------------------------------
+  // Attach to deck and meta_deck bundles.
+  // ------------------------------------------------------------------
+  foreach (['deck', 'meta_deck'] as $bundle) {
+    if (!FieldConfig::loadByName('node', $bundle, 'field_format_term')) {
+      FieldConfig::create([
+        'field_name'  => 'field_format_term',
+        'entity_type' => 'node',
+        'bundle'      => $bundle,
+        'label'       => 'Format',
+        'required'    => FALSE,
+        'settings'    => [
+          'handler'          => 'default:taxonomy_term',
+          'handler_settings' => [
+            'target_bundles' => ['mtg_format' => 'mtg_format'],
+          ],
+        ],
+      ])->save();
+      $created[] = 'field_format_term on ' . $bundle;
+    }
+
+    // Add to default form display so editors can see it.
+    $formDisplay = EntityFormDisplay::load('node.' . $bundle . '.default');
+    if ($formDisplay !== NULL && !isset($formDisplay->get('content')['field_format_term'])) {
+      $formDisplay->setComponent('field_format_term', [
+        'type'   => 'options_select',
+        'weight' => 5,
+      ])->save();
+      $created[] = 'form display for ' . $bundle;
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Migrate existing string values to taxonomy term references.
+  // ------------------------------------------------------------------
+  $termStorage = \Drupal::entityTypeManager()->getStorage('taxonomy_term');
+  $nodeStorage = \Drupal::entityTypeManager()->getStorage('node');
+
+  // Build a name → term ID lookup from the mtg_format vocabulary.
+  $termMap = [];
+  foreach ($termStorage->loadByProperties(['vid' => 'mtg_format']) as $term) {
+    $termMap[$term->getName()] = (int) $term->id();
+  }
+
+  $nids = $nodeStorage->getQuery()
+    ->condition('type', ['deck', 'meta_deck'], 'IN')
+    ->accessCheck(FALSE)
+    ->execute();
+
+  $migrated = 0;
+  $skipped  = 0;
+
+  foreach (array_chunk($nids, 50) as $chunk) {
+    foreach ($nodeStorage->loadMultiple($chunk) as $node) {
+      $formatName = $node->get('field_format')->value;
+      if (!is_string($formatName) || $formatName === '' || !isset($termMap[$formatName])) {
+        $skipped++;
+        continue;
+      }
+      $node->set('field_format_term', ['target_id' => $termMap[$formatName]]);
+      $node->setNewRevision(FALSE);
+      $node->save();
+      $migrated++;
+    }
+  }
+
+  $summary = "Migrated {$migrated} nodes to field_format_term; {$skipped} skipped (no matching term).";
+  return $created !== []
+    ? implode(', ', $created) . '. ' . $summary
+    : $summary;
 }

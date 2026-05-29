@@ -5,6 +5,7 @@ dependencies:
   config:
     - field.field.node.deck.field_deck_cards
     - field.field.node.deck.field_format
+    - field.field.node.deck.field_format_term
     - field.field.node.deck.field_notes
     - node.type.deck
   module:
@@ -92,6 +93,12 @@ content:
     settings:
       size: 60
       placeholder: ''
+    third_party_settings: {  }
+  field_format_term:
+    type: options_select
+    weight: 5
+    region: content
+    settings: {  }
     third_party_settings: {  }
   field_notes:
     type: text_textarea

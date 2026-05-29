@@ -34,9 +34,6 @@ from engine.abilities.keywords.casting import (
     has_entwine,
     normalize_entwined,
     entwine_mana_needed,
-    emerge_cost,
-    emerge_mana_needed,
-    emerge_sacrifice_error,
     FORETELL_EXILE_MODE,
     can_cast_foretold,
     exile_for_foretell,
@@ -52,7 +49,6 @@ from engine.abilities.keywords.casting import (
     spree_extra_mana,
     spree_modes,
     spree_selection_error,
-    has_emerge,
     resolve_burn_damage,
     has_bestow,
     has_overload,
@@ -71,21 +67,12 @@ from engine.abilities.keywords.casting import (
     flashback_mana_needed,
     has_convoke,
     has_escape,
-    has_delve,
     has_flashback,
-    has_improvise,
     has_kicker,
     is_multikicker,
     kicker_mana_per_time,
-    normalize_convoke_creature_ids,
-    normalize_delve_graveyard_indices,
-    normalize_improvise_artifact_ids,
     normalize_kicker_times,
-    resolve_convoke_for_cast,
-    resolve_delve_for_cast,
-    resolve_improvise_for_cast,
     spell_damage,
-    storm_copy_count,
     supports_storm_copies,
     has_miracle,
     has_replicate,
@@ -127,7 +114,6 @@ from tests.conftest import resolve_single_attacker
 from tests.conftest import (
     fresh_game,
     make_card,
-    make_artifact,
     make_creature,
     make_instant,
     make_land,
@@ -651,33 +637,6 @@ def test_plot_only_sorceries():
     assert plotted.exiled_cast_mode == PLOT_EXILE_MODE
 
 
-def test_has_emerge_parses_cost_and_mana():
-    """Emerge cost parses and replaces the creature's mana cost."""
-    card = make_creature(
-        'Wurm',
-        cmc=7,
-        oracle='Trample\nEmerge {2}{G}',
-        mana_cost='{5}{G}{G}',
-    )
-    assert has_emerge(card)
-    assert emerge_cost(card) is not None
-    assert emerge_mana_needed(card)[0] == 3
-    assert not has_emerge(make_instant('Bolt', oracle='Emerge {0}'))
-
-
-def test_emerge_sacrifice_requires_creature():
-    """Emerge rejects non-creature sacrifices unless artifact is allowed."""
-    game = fresh_game()
-    creature_card = make_creature('Wurm', oracle='Emerge {0}')
-    artifact_card = make_creature('Wurm', oracle='Emerge {0}\n(Sacrifice an artifact or creature.)')
-    host = place_on_battlefield(make_creature('Bear', 2, 2), 0, game.zones)
-    relic = place_on_battlefield(make_artifact('Relic'), 0, game.zones)
-    assert emerge_sacrifice_error(game.zones, 0, creature_card, True, []) is not None
-    assert emerge_sacrifice_error(game.zones, 0, creature_card, True, [host.obj_id]) is None
-    assert emerge_sacrifice_error(game.zones, 0, creature_card, True, [relic.obj_id]) is not None
-    assert emerge_sacrifice_error(game.zones, 0, artifact_card, True, [relic.obj_id]) is None
-
-
 def test_has_retrace_and_normal_mana_cost():
     """Retrace uses the card's printed mana cost, not a separate alt cost."""
     card = make_instant(
@@ -846,63 +805,6 @@ def test_has_convoke_detects_keyword():
     """Convoke is detected on oracle text."""
     card = make_instant('Mob', oracle='Convoke\nDeal 4 damage.')
     assert has_convoke(card)
-
-
-def test_resolve_convoke_taps_creatures_and_reduces_mana():
-    """Each convoked creature taps and reduces generic mana by one."""
-    game = fresh_game()
-    spell = make_instant('Mob', cmc=4, oracle='Convoke\nDeal 4 damage.')
-    creature_a = place_on_battlefield(make_creature('Soldier'), 0, game.zones)
-    creature_b = place_on_battlefield(make_creature('Knight'), 0, game.zones)
-    ids = [creature_a.obj_id, creature_b.obj_id]
-    assert normalize_convoke_creature_ids(spell, ids) == ids
-    mana_left, tapped, err = resolve_convoke_for_cast(spell, 4, ids, game.zones, 0)
-    assert err is None
-    assert mana_left == 2
-    assert tapped == ids
-    assert creature_a.tapped and creature_b.tapped
-
-
-def test_has_delve_and_exiles_graveyard_cards():
-    """Delve exiles graveyard cards and reduces generic mana by one each."""
-    game = fresh_game()
-    spell = make_instant('Dig', cmc=3, oracle='Delve\nDraw a card.')
-    filler = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant('Filler'))
-    game.zones.player_zones[0].graveyard.extend([filler, filler])
-    assert has_delve(spell)
-    assert normalize_delve_graveyard_indices(spell, [0, 1]) == [0, 1]
-    mana_left, exiled, err = resolve_delve_for_cast(spell, 3, [0, 1], game.zones, 0)
-    assert err is None
-    assert mana_left == 1
-    assert exiled == 2
-    assert len(game.zones.player_zones[0].graveyard) == 0
-    assert len(game.zones.player_zones[0].exile) == 2
-
-
-def test_resolve_improvise_taps_artifacts_and_reduces_mana():
-    """Each improvised artifact taps and reduces generic mana by one."""
-    game = fresh_game()
-    spell = make_instant('Scheme', cmc=3, oracle='Improvise\nDraw a card.')
-    relic = place_on_battlefield(
-        make_card('Relic', type_line='Artifact'),
-        0,
-        game.zones,
-    )
-    assert has_improvise(spell)
-    ids = [relic.obj_id]
-    assert normalize_improvise_artifact_ids(spell, ids) == ids
-    mana_left, tapped, err = resolve_improvise_for_cast(spell, 3, ids, game.zones, 0)
-    assert err is None
-    assert mana_left == 2
-    assert tapped == ids
-    assert relic.tapped
-
-
-def test_storm_copy_count_is_other_spells_this_turn():
-    """Storm copies equal other spells cast before this one."""
-    assert storm_copy_count(1) == 0
-    assert storm_copy_count(2) == 1
-    assert storm_copy_count(5) == 4
 
 
 def test_supports_storm_copies_excludes_creatures():

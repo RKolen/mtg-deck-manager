@@ -247,6 +247,9 @@ class SpellCastPayment:
     mutate: bool = False
     casualty: bool = False
     morph_face_down: bool = False
+    disguise_face_down: bool = False
+    dash: bool = False
+    blitz: bool = False
 
 
 @dataclass

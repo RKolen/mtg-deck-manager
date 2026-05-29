@@ -11,8 +11,9 @@ if [[ ! -x "${VENV}/bin/python" ]]; then
   exit 1
 fi
 
+cd "${ROOT}"
 "${VENV}/bin/pip" install -q -r "${SIM}/requirements-dev.txt"
 echo "==> pyright (strict, engine only)"
 "${VENV}/bin/pyright" "${SIM}"
-echo "==> pylint"
-"${VENV}/bin/pylint" "${SIM}"
+echo "==> pylint (sim + classifier)"
+"${VENV}/bin/pylint" --rcfile=.pylintrc sim/ classifier/classifier.py classifier/main.py

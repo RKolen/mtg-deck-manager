@@ -14,7 +14,11 @@ from engine.core.game_object import (
     spell_is_ephemeral_copy,
     spell_returns_to_hand_on_resolve,
 )
-from engine.game._hand_card import graveyard_card_or_error, hand_card_or_error
+from engine.game._hand_card import (
+    exile_card_or_error,
+    graveyard_card_or_error,
+    hand_card_or_error,
+)
 from engine.game.helpers import (
     HandCastContext,
     card_to_client,
@@ -230,6 +234,21 @@ class GameRuntimeMixin:
         if err:
             return None, self._client_error(err)
         return card, None
+
+    def _exile_card_checked(
+        self,
+        player_idx: int,
+        exile_idx: int,
+    ) -> tuple[CardObject | None, CardInfo | None, dict | None]:
+        """Return (card, card_info, error_dict); error_dict is set when lookup fails."""
+        card, card_info, err = exile_card_or_error(
+            self.state.zones,
+            player_idx,
+            exile_idx,
+        )
+        if err:
+            return None, None, self._client_error(err)
+        return card, card_info, None
 
     def _load_hand_card(
         self,

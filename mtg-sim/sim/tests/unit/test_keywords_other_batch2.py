@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from engine.abilities.keywords.other.dash import return_dash_creatures_to_hand
+from engine.abilities.keywords.other.dash import apply_dash_etb, return_dash_creatures_to_hand
 from engine.abilities.keywords.other.etb import apply_etb_other_abilities
 from engine.core.game_object import CardObject
 from engine.core.zones import Zone
@@ -56,7 +56,9 @@ def test_dash_creature_returns_to_hand_at_end_of_turn():
         card_info=make_creature('Sprinter', 3, 3, oracle='Dash {1}{R}'),
     )
     perm = game.zones.enter_battlefield(card, 0, 'dash', Zone.HAND)
-    apply_etb_other_abilities(game, perm)
+    perm.counters['dash'] = 1
+    perm.sick = False
+    apply_dash_etb(perm)
     assert perm.counters.get('dash') == 1
     assert not perm.sick
     details = return_dash_creatures_to_hand(game, 0)

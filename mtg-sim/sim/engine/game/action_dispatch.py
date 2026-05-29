@@ -13,6 +13,7 @@ from engine.game.cast_context import (
     HandAlternateCastChoices,
     HandCastCostChoices,
 )
+from engine.game.face_alternate_cast import FaceAlternateCastFlags
 
 if TYPE_CHECKING:
     from engine.game.interactive import InteractiveGame
@@ -41,7 +42,12 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
             cast_for_mutate=req.castForMutate,
             cast_for_freerunning=req.castForFreerunning,
             cast_for_spectacle=req.castForSpectacle,
-            cast_for_morph=req.castForMorph,
+            face=FaceAlternateCastFlags(
+                cast_for_morph=req.castForMorph,
+                cast_for_disguise=req.castForDisguise,
+                cast_for_dash=req.castForDash,
+                cast_for_blitz=req.castForBlitz,
+            ),
         ),
         modifiers=CastModifierIds(
             targeting=CastTargetingIds(
@@ -108,6 +114,7 @@ def _dispatch_hand_actions(game: InteractiveGame, req) -> dict | None:
         "eternalize": lambda: game.action_eternalize(req.handIdx),
         "foretell": lambda: game.action_foretell(req.handIdx),
         "plot": lambda: game.action_plot(req.handIdx),
+        "embalm": lambda: game.action_embalm(req.handIdx),
     }
     handler = handlers.get(req.action)
     if handler is None or req.handIdx is None:

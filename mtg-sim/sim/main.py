@@ -202,6 +202,9 @@ class GameActionRequest(BaseModel):
     castForFreerunning: bool = False
     castForSpectacle: bool = False
     castForMorph: bool = False
+    castForDisguise: bool = False
+    castForDash: bool = False
+    castForBlitz: bool = False
     harmonizeCreatureIds: list[str] = []
     convokeCreatureIds: list[str] = []
     delveGraveyardIndices: list[int] = []

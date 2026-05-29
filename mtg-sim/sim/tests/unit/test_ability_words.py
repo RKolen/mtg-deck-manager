@@ -8,9 +8,15 @@ from engine.abilities.keywords.ability_words.effects import (
     AbilityWordEffect,
     ProwessEffect,
 )
-from engine.core.game_object import CardObject, Target, TriggeredAbilityOnStack
+from engine.core.game_object import CardObject, Target
 from engine.core.turn_structure import Step
-from engine.core.zones import Zone, ZoneMoveEvent
+from engine.core.zones import Zone
+from tests.ability_word_test_helpers import (
+    assert_spell_cast_triggers_host,
+    fire_source_etb,
+    fresh_game_with_spell_cast_host,
+    top_trigger,
+)
 from tests.conftest import (
     fresh_game,
     make_artifact,
@@ -20,12 +26,6 @@ from tests.conftest import (
     make_land,
     place_on_battlefield,
 )
-
-
-def _top_trigger(game):
-    trigger = game.stack.top
-    assert isinstance(trigger, TriggeredAbilityOnStack)
-    return trigger
 
 
 def test_clause_after_ability_word_parses_landfall_line():
@@ -45,7 +45,7 @@ def test_landfall_triggers_when_controller_plays_land():
     register_permanent_ability_words(source, game.trigger_registry)
     land = CardObject(controller_idx=0, owner_idx=0, card_info=make_land())
     game.zones.enter_battlefield(land, 0, "test", Zone.HAND)
-    trigger = _top_trigger(game)
+    trigger = top_trigger(game)
     assert trigger.source_permanent_id == source.obj_id
 
 
@@ -60,7 +60,7 @@ def test_landfall_effect_gains_life_on_resolve():
     register_permanent_ability_words(source, game.trigger_registry)
     land = CardObject(controller_idx=0, owner_idx=0, card_info=make_land())
     game.zones.enter_battlefield(land, 0, "test", Zone.HAND)
-    trigger = _top_trigger(game)
+    trigger = top_trigger(game)
     assert isinstance(trigger.effect, AbilityWordEffect)
     trigger.effect.resolve(game, trigger)
     assert game.players[0].life == 22
@@ -100,23 +100,17 @@ def test_raid_triggers_at_beginning_of_combat_after_opponent_damaged():
     register_permanent_ability_words(source, game.trigger_registry)
     game.mark_player_was_dealt_damage(1)
     game.fire_step_triggers(Step.BEGIN_COMBAT)
-    trigger = _top_trigger(game)
+    trigger = top_trigger(game)
     assert trigger.source_permanent_id == source.obj_id
 
 
 def test_magecraft_triggers_on_instant_cast():
     """Magecraft fires when you cast an instant or sorcery."""
-    game = fresh_game()
-    source = place_on_battlefield(
-        make_creature("Veyran", 2, 2, oracle="Magecraft — Draw a card."),
-        0,
-        game.zones,
+    game, source = fresh_game_with_spell_cast_host(
+        "Magecraft — Draw a card.",
+        name="Veyran",
     )
-    register_permanent_ability_words(source, game.trigger_registry)
-    spell = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant("Bolt"))
-    game.fire_spell_cast_triggers(spell)
-    trigger = _top_trigger(game)
-    assert trigger.source_permanent_id == source.obj_id
+    assert_spell_cast_triggers_host(game, source)
 
 
 def test_battalion_triggers_when_attacking_with_three_creatures():
@@ -129,22 +123,8 @@ def test_battalion_triggers_when_attacking_with_three_creatures():
     )
     register_permanent_ability_words(source, game.trigger_registry)
     game.fire_mass_attack_triggers(0, 3)
-    trigger = _top_trigger(game)
+    trigger = top_trigger(game)
     assert trigger.source_permanent_id == source.obj_id
-
-
-def _fire_source_etb(game, source) -> None:
-    """Re-emit an ETB event after registering triggers (test helper)."""
-    game.trigger_registry.put_triggers_on_stack(
-        ZoneMoveEvent(
-            obj=source,
-            from_zone=Zone.HAND,
-            to_zone=Zone.BATTLEFIELD,
-            cause='test_etb',
-            player_idx=source.controller_idx,
-        ),
-        game,
-    )
 
 
 def test_metalcraft_triggers_on_etb_with_three_artifacts():
@@ -159,8 +139,8 @@ def test_metalcraft_triggers_on_etb_with_three_artifacts():
     )
     source = game.zones.enter_battlefield(card, 0, "test", Zone.HAND)
     register_permanent_ability_words(source, game.trigger_registry)
-    _fire_source_etb(game, source)
-    trigger = _top_trigger(game)
+    fire_source_etb(game, source)
+    trigger = top_trigger(game)
     assert trigger.source_permanent_id == source.obj_id
 
 
@@ -184,8 +164,8 @@ def test_delirium_triggers_on_etb_with_four_graveyard_types():
     )
     source = game.zones.enter_battlefield(card, 0, "test", Zone.HAND)
     register_permanent_ability_words(source, game.trigger_registry)
-    _fire_source_etb(game, source)
-    trigger = _top_trigger(game)
+    fire_source_etb(game, source)
+    trigger = top_trigger(game)
     assert trigger.source_permanent_id == source.obj_id
 
 
@@ -203,7 +183,7 @@ def test_morbid_triggers_on_spell_after_creature_dies():
     assert game.creature_died_this_turn
     spell = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant("Bolt"))
     game.fire_spell_cast_triggers(spell)
-    trigger = _top_trigger(game)
+    trigger = top_trigger(game)
     assert trigger.source_permanent_id == source.obj_id
 
 
@@ -219,7 +199,7 @@ def test_ferocious_triggers_when_casting_with_power_four_creature():
     register_permanent_ability_words(source, game.trigger_registry)
     spell = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant("Growth"))
     game.fire_spell_cast_triggers(spell)
-    trigger = _top_trigger(game)
+    trigger = top_trigger(game)
     assert trigger.source_permanent_id == source.obj_id
 
 
@@ -236,8 +216,8 @@ def test_revolt_triggers_on_etb_after_permanent_left():
     )
     source = game.zones.enter_battlefield(card, 0, 'test', Zone.HAND)
     register_permanent_ability_words(source, game.trigger_registry)
-    _fire_source_etb(game, source)
-    trigger = _top_trigger(game)
+    fire_source_etb(game, source)
+    trigger = top_trigger(game)
     assert trigger.source_permanent_id == source.obj_id
 
 
@@ -252,7 +232,7 @@ def test_rally_triggers_when_creature_enters():
     register_permanent_ability_words(source, game.trigger_registry)
     ally = CardObject(controller_idx=0, owner_idx=0, card_info=make_creature("Ally", 1, 1))
     game.zones.enter_battlefield(ally, 0, "test", Zone.HAND)
-    trigger = _top_trigger(game)
+    trigger = top_trigger(game)
     assert trigger.source_permanent_id == source.obj_id
 
 
@@ -268,7 +248,7 @@ def test_hellbent_triggers_with_empty_hand():
     game.zones.player_zones[0].hand.clear()
     spell = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant("Bolt"))
     game.fire_spell_cast_triggers(spell)
-    trigger = _top_trigger(game)
+    trigger = top_trigger(game)
     assert trigger.source_permanent_id == source.obj_id
 
 
@@ -283,7 +263,7 @@ def test_inspired_triggers_when_source_attacks():
     )
     register_permanent_ability_words(source, game.trigger_registry)
     game.fire_attack_triggers(source)
-    trigger = _top_trigger(game)
+    trigger = top_trigger(game)
     assert trigger.source_permanent_id == source.obj_id
 
 
@@ -300,7 +280,7 @@ def test_coven_triggers_with_three_distinct_powers():
         place_on_battlefield(make_creature(f"P{power}", power, 1), 0, game.zones)
     spell = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant("Bolt"))
     game.fire_spell_cast_triggers(spell)
-    trigger = _top_trigger(game)
+    trigger = top_trigger(game)
     assert trigger.source_permanent_id == source.obj_id
 
 
@@ -318,7 +298,7 @@ def test_strive_triggers_with_multiple_targets():
         spell,
         (Target(obj_id=1), Target(obj_id=2)),
     )
-    trigger = _top_trigger(game)
+    trigger = top_trigger(game)
     assert trigger.source_permanent_id == source.obj_id
 
 
@@ -333,7 +313,7 @@ def test_prowess_puts_counter_when_trigger_resolves():
     register_permanent_ability_words(source, game.trigger_registry)
     spell = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant("Growth"))
     game.fire_spell_cast_triggers(spell)
-    trigger = _top_trigger(game)
+    trigger = top_trigger(game)
     assert isinstance(trigger.effect, ProwessEffect)
     trigger.effect.resolve(game, trigger)
     assert source.counters.get("+1/+1") == 1
@@ -350,7 +330,7 @@ def test_fateful_hour_triggers_at_low_life():
     register_permanent_ability_words(source, game.trigger_registry)
     spell = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant("Bolt"))
     game.fire_spell_cast_triggers(spell)
-    trigger = _top_trigger(game)
+    trigger = top_trigger(game)
     assert trigger.source_permanent_id == source.obj_id
 
 
@@ -373,7 +353,7 @@ def test_descend_triggers_with_four_permanents_in_graveyard():
         )
     spell = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant("Bolt"))
     game.fire_spell_cast_triggers(spell)
-    trigger = _top_trigger(game)
+    trigger = top_trigger(game)
     assert trigger.source_permanent_id == source.obj_id
 
 
@@ -389,7 +369,7 @@ def test_survival_triggers_after_creature_dies():
     register_permanent_ability_words(source, game.trigger_registry)
     spell = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant("Bolt"))
     game.fire_spell_cast_triggers(spell)
-    trigger = _top_trigger(game)
+    trigger = top_trigger(game)
     assert trigger.source_permanent_id == source.obj_id
 
 
@@ -406,5 +386,5 @@ def test_underdog_triggers_when_outnumbered():
     place_on_battlefield(make_creature("Bigger", 5, 5), 1, game.zones)
     register_permanent_ability_words(source, game.trigger_registry)
     game.fire_attack_triggers(source)
-    trigger = _top_trigger(game)
+    trigger = top_trigger(game)
     assert trigger.source_permanent_id == source.obj_id

@@ -61,7 +61,14 @@ type PendingGyAction =
 
 type PendingExileAction = 'cast_foretell' | 'cast_plot' | null;
 
-type PendingCastModifier = 'convoke' | 'delve' | 'improvise' | 'emerge' | 'harmonize' | null;
+type PendingCastModifier =
+  | 'convoke'
+  | 'delve'
+  | 'improvise'
+  | 'emerge'
+  | 'harmonize'
+  | 'sneak'
+  | null;
 
 type PendingBoardAction = 'turn_up_morph' | null;
 
@@ -192,6 +199,11 @@ const PlayPage: React.FC = () => {
   const [castForEmerge, setCastForEmerge] = useState(false);
   const [castForSpectacle, setCastForSpectacle] = useState(false);
   const [castForMorph, setCastForMorph] = useState(false);
+  const [castForDisguise, setCastForDisguise] = useState(false);
+  const [castForDash, setCastForDash] = useState(false);
+  const [castForBlitz, setCastForBlitz] = useState(false);
+  const [castForFreerunning, setCastForFreerunning] = useState(false);
+  const [sneakLandHandIndices, setSneakLandHandIndices] = useState<number[]>([]);
   const [castForMiracle, setCastForMiracle] = useState(false);
   const [pendingBoardAction, setPendingBoardAction] = useState<PendingBoardAction>(null);
   const [harmonizeCreatureIds, setHarmonizeCreatureIds] = useState<string[]>([]);
@@ -241,6 +253,11 @@ const PlayPage: React.FC = () => {
     setCastForEmerge(false);
     setCastForSpectacle(false);
     setCastForMorph(false);
+    setCastForDisguise(false);
+    setCastForDash(false);
+    setCastForBlitz(false);
+    setCastForFreerunning(false);
+    setSneakLandHandIndices([]);
     setCastForMiracle(false);
     setPendingBoardAction(null);
     setHarmonizeCreatureIds([]);
@@ -301,6 +318,7 @@ const PlayPage: React.FC = () => {
   const canAftermath = gs?.availableActions.includes('cast_aftermath');
   const canHarmonize = gs?.availableActions.includes('cast_harmonize');
   const canTurnUpMorph = gs?.availableActions.includes('turn_up_morph');
+  const canEmbalm = gs?.availableActions.includes('embalm');
   const _canAttack = gs?.availableActions.includes('go_to_attack') || phase === 'attack'; void _canAttack;
   const inCombat = phase === 'attack';
 
@@ -309,6 +327,12 @@ const PlayPage: React.FC = () => {
   // ---- Handlers ----
 
   function handleHandClick(card: CardInHand, idx: number) {
+    if (pendingCastModifier === 'sneak' && selectedHandIdx !== null && card.isLand && idx !== selectedHandIdx) {
+      setSneakLandHandIndices(prev =>
+        prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx],
+      );
+      return;
+    }
     if (pendingAlt === 'jump_discard' && gyCastIdx !== null) {
       void act('cast_jump_start', {
         handIdx: gyCastIdx,
@@ -360,6 +384,11 @@ const PlayPage: React.FC = () => {
     setCastForEmerge(false);
     setCastForSpectacle(false);
     setCastForMorph(false);
+    setCastForDisguise(false);
+    setCastForDash(false);
+    setCastForBlitz(false);
+    setCastForFreerunning(false);
+    setSneakLandHandIndices([]);
     setCastForMiracle(false);
     setPendingBoardAction(null);
     setHarmonizeCreatureIds([]);
@@ -386,6 +415,11 @@ const PlayPage: React.FC = () => {
       || card.hasEmerge
       || card.hasSpectacle
       || card.hasMorph
+      || card.hasDisguise
+      || card.hasSneak
+      || card.hasDash
+      || card.hasBlitz
+      || card.hasFreerunning
     ) {
       // Wait for Cast / options before sending to server
     } else {
@@ -427,6 +461,11 @@ const PlayPage: React.FC = () => {
       castForEmerge,
       castForSpectacle,
       castForMorph,
+      castForDisguise,
+      castForDash,
+      castForBlitz,
+      castForFreerunning,
+      sneakLandHandIndices,
       castForMiracle,
       paidCasualty,
       casualtySacrificeIds: casualtySacrificeUid ? [casualtySacrificeUid] : [],
@@ -612,6 +651,11 @@ const PlayPage: React.FC = () => {
     setCastForEmerge(false);
     setCastForSpectacle(false);
     setCastForMorph(false);
+    setCastForDisguise(false);
+    setCastForDash(false);
+    setCastForBlitz(false);
+    setCastForFreerunning(false);
+    setSneakLandHandIndices([]);
     setCastForMiracle(false);
     setPendingBoardAction(null);
     setHarmonizeCreatureIds([]);
@@ -773,7 +817,8 @@ const PlayPage: React.FC = () => {
               {pendingCastModifier === 'improvise' && 'Improvise: click untapped artifacts to help pay'}
               {pendingCastModifier === 'emerge' && 'Emerge: click a permanent to sacrifice'}
               {pendingCastModifier === 'harmonize' && 'Harmonize: click a creature to tap for cost reduction'}
-              {pendingBoardAction === 'turn_up_morph' && 'Morph: click a face-down creature to turn face up'}
+              {pendingCastModifier === 'sneak' && 'Sneak: click lands in hand to exile for mana'}
+              {pendingBoardAction === 'turn_up_morph' && 'Morph/Disguise: click a face-down creature to turn face up'}
             </span>
           )}
           {selectedCard && waitingTarget && !pendingAlt && !pendingGyAction && (
@@ -964,10 +1009,67 @@ const PlayPage: React.FC = () => {
                     <input
                       type="checkbox"
                       checked={castForMorph}
-                      onChange={e => setCastForMorph(e.target.checked)}
+                      onChange={e => {
+                        setCastForMorph(e.target.checked);
+                        if (e.target.checked) {
+                          setCastForDisguise(false);
+                        }
+                      }}
                     />
                     Cast face down (Morph)
                   </label>
+                )}
+                {canCast && selectedCard.hasDisguise && selectedCard.isCreature && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', color: '#ddd' }}>
+                    <input
+                      type="checkbox"
+                      checked={castForDisguise}
+                      onChange={e => {
+                        setCastForDisguise(e.target.checked);
+                        if (e.target.checked) setCastForMorph(false);
+                      }}
+                    />
+                    Cast face down (Disguise)
+                  </label>
+                )}
+                {canCast && selectedCard.hasDash && selectedCard.isCreature && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', color: '#ddd' }}>
+                    <input
+                      type="checkbox"
+                      checked={castForDash}
+                      onChange={e => setCastForDash(e.target.checked)}
+                    />
+                    Cast for Dash
+                  </label>
+                )}
+                {canCast && selectedCard.hasBlitz && selectedCard.isCreature && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', color: '#ddd' }}>
+                    <input
+                      type="checkbox"
+                      checked={castForBlitz}
+                      onChange={e => setCastForBlitz(e.target.checked)}
+                    />
+                    Cast for Blitz
+                  </label>
+                )}
+                {canCast && selectedCard.hasFreerunning && selectedCard.freerunningAvailable && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', color: '#ddd' }}>
+                    <input
+                      type="checkbox"
+                      checked={castForFreerunning}
+                      onChange={e => setCastForFreerunning(e.target.checked)}
+                    />
+                    Cast for Freerunning
+                  </label>
+                )}
+                {canCast && selectedCard.hasSneak && (
+                  <button
+                    type="button"
+                    onClick={() => toggleCastModifier('sneak')}
+                    style={btnStyle(pendingCastModifier === 'sneak' ? '#1f618d' : '#566573')}
+                  >
+                    Sneak ({sneakLandHandIndices.length} lands)
+                  </button>
                 )}
                 {canCast && selectedCard.hasEmerge && (
                   <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', color: '#ddd' }}>
@@ -1056,6 +1158,15 @@ const PlayPage: React.FC = () => {
                     style={btnStyle('#7f8c8d')}
                   >
                     Cycle
+                  </button>
+                )}
+                {selectedCard.hasEmbalm && canEmbalm && selectedHandIdx !== null && (
+                  <button
+                    type="button"
+                    onClick={() => void act('embalm', { handIdx: selectedHandIdx })}
+                    style={btnStyle('#7f8c8d')}
+                  >
+                    Embalm
                   </button>
                 )}
                 {selectedCard.canChannel && canChannel && (
@@ -1260,7 +1371,7 @@ const PlayPage: React.FC = () => {
                 <CardChip
                   key={`${card.name}-${idx}`}
                   card={card}
-                  selected={selectedHandIdx === idx}
+                  selected={selectedHandIdx === idx || sneakLandHandIndices.includes(idx)}
                   dimmed={!isMulligan && !isSelectable}
                   onClick={!isMulligan && isSelectable ? () => handleHandClick(card, idx) : undefined}
                 />

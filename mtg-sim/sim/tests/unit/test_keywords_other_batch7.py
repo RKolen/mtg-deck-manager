@@ -14,9 +14,15 @@ from engine.abilities.keywords.other.renown import (
 from engine.core.game_state import GameState, PlayerInfo
 from engine.core.turn_structure import TurnRunner
 from engine.core.zones import ZoneManager
-from engine.rules.combat import resolve_combat_damage
 from engine.rules.stack import Stack
-from tests.conftest import fresh_game, make_artifact, make_card, make_creature, place_on_battlefield
+from tests.conftest import (
+    fresh_game,
+    make_artifact,
+    make_card,
+    make_creature,
+    place_on_battlefield,
+    resolve_player_attacks,
+)
 
 _AFFINITY_ORACLE = (
     'Affinity for artifacts (This spell costs {1} less to cast for each '
@@ -71,13 +77,7 @@ def test_renown_via_combat_damage():
         game.zones,
         sick=False,
     )
-    resolve_combat_damage(
-        game,
-        attacking_player_idx=0,
-        defending_player_idx=1,
-        attacker_ids=[str(attacker.obj_id)],
-        blocker_assignments={},
-    )
+    resolve_player_attacks(game, attacker)
     assert is_renowned(attacker)
     assert attacker.counters.get('+1/+1') == 1
 

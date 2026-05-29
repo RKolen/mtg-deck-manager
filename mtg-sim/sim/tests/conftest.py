@@ -13,7 +13,7 @@ from engine.abilities.keywords import enters_ready
 from engine.core.game_object import CardObject, Permanent
 from engine.core.game_state import GameState, PlayerInfo
 from engine.core.turn_structure import TurnRunner
-from engine.core.zones import ZoneManager
+from engine.core.zones import Zone, ZoneManager
 from engine.game.cast_context import (
     CastAnnounceOptions,
     CastManaReductionIds,
@@ -22,6 +22,7 @@ from engine.game.cast_context import (
     HandAlternateCastChoices,
     HandCastCostChoices,
 )
+from engine.game.face_alternate_cast import FaceAlternateCastFlags
 from engine.rules.combat import resolve_combat_damage
 from engine.rules.stack import Stack
 
@@ -84,6 +85,13 @@ def cast_announce_options(**kwargs: Any) -> CastAnnounceOptions:
             cast_for_evoke=bool(flat.get("cast_for_evoke", False)),
             cast_for_mutate=bool(flat.get("cast_for_mutate", False)),
             cast_for_freerunning=bool(flat.get("cast_for_freerunning", False)),
+            cast_for_spectacle=bool(flat.get("cast_for_spectacle", False)),
+            face=FaceAlternateCastFlags(
+                cast_for_morph=bool(flat.get("cast_for_morph", False)),
+                cast_for_disguise=bool(flat.get("cast_for_disguise", False)),
+                cast_for_dash=bool(flat.get("cast_for_dash", False)),
+                cast_for_blitz=bool(flat.get("cast_for_blitz", False)),
+            ),
         ),
         modifiers=_modifier_ids_from_kw(modifier_kw),
     )
@@ -105,6 +113,34 @@ def resolve_single_attacker(
         attacker_ids=[str(attacker.obj_id)],
         blocker_assignments=blocker_assignments or {},
     )
+
+
+def resolve_player_attacks(
+    game: GameState,
+    attacker: Permanent,
+    *,
+    blocker_assignments: dict[str, str] | None = None,
+):
+    """Player 0 attacks player 1 with a single attacker."""
+    return resolve_single_attacker(
+        game,
+        attacker,
+        attacking_player_idx=0,
+        defending_player_idx=1,
+        blocker_assignments=blocker_assignments,
+    )
+
+
+def put_lands_on_battlefield(game: Any, count: int, player_idx: int = 0) -> None:
+    """Put untapped lands onto the battlefield for integration-style tests."""
+    zones = game.state.zones if hasattr(game, 'state') else game.zones
+    for _ in range(count):
+        land = CardObject(
+            controller_idx=player_idx,
+            owner_idx=player_idx,
+            card_info=make_land(),
+        )
+        zones.enter_battlefield(land, player_idx, 'test_setup', Zone.HAND)
 
 
 # ---------------------------------------------------------------------------

@@ -24,18 +24,17 @@ from engine.abilities.keywords.casting.improvise import (
     resolve_improvise_for_cast,
 )
 from engine.core.game_object import CardObject
-from engine.core.zones import Zone
 from engine.game import create_game
 from engine.game.helpers import card_to_client
 from tests.conftest import (
     cast_announce_options,
+    fresh_game,
     make_artifact,
     make_creature,
     make_deck,
     make_instant,
-    make_land,
     place_on_battlefield,
-    fresh_game,
+    put_lands_on_battlefield,
 )
 
 
@@ -154,9 +153,7 @@ def test_game_convoke_cast_taps_creatures_to_pay_mana():
     )
     game = create_game(make_deck(lands=20), make_deck(lands=20))
     game.action_keep()
-    for _ in range(2):
-        land = CardObject(controller_idx=0, owner_idx=0, card_info=make_land())
-        game.state.zones.enter_battlefield(land, 0, 'test_setup', Zone.HAND)
+    put_lands_on_battlefield(game, 2)
     soldier = place_on_battlefield(make_creature('Soldier', 1, 1), 0, game.state.zones)
     knight = place_on_battlefield(make_creature('Knight', 1, 1), 0, game.state.zones)
     game.state.zones.player_zones[0].hand = [

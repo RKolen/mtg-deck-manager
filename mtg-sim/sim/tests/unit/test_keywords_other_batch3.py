@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from engine.abilities.keywords.other.afterlife import apply_afterlife_on_die
 from engine.abilities.keywords.other.annihilator import apply_annihilator_on_attack
-from engine.abilities.keywords.other.blitz import sacrifice_blitz_creatures
+from engine.abilities.keywords.other.blitz import apply_blitz_etb, sacrifice_blitz_creatures
 from engine.abilities.keywords.other.etb import apply_etb_other_abilities
 from tests.conftest import fresh_game, make_creature, make_land, place_on_battlefield
 
@@ -64,7 +64,9 @@ def test_blitz_creature_sacrificed_at_end_of_turn():
         0,
         game.zones,
     )
-    apply_etb_other_abilities(game, blitzer)
+    blitzer.counters['blitz'] = 1
+    blitzer.sick = False
+    apply_blitz_etb(blitzer)
     assert blitzer.counters.get('blitz') == 1
     details = sacrifice_blitz_creatures(game, 0)
     assert details

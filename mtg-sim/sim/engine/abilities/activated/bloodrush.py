@@ -13,9 +13,9 @@ from engine.abilities.activated._cost_keyword import (
 from engine.abilities.keywords.ability_words.detect import has_ability_word
 from engine.abilities.keywords.actions.counters import put_power_bonus
 from engine.abilities.keywords.actions.targets import find_creature_by_uid
-from engine.core.game_object import CardObject
 from engine.core.mana import ManaCost
 from engine.core.zones import ZoneManager
+from engine.core.zone_card_lookup import hand_card_with_info
 
 _BLOODRUSH_COST_RE = re.compile(
     r'bloodrush\s*[—–-]\s*((?:\{[^}]+\})+)',
@@ -66,19 +66,17 @@ def apply_bloodrush(
     target_creature_uid: str | None,
 ) -> str | None:
     """Discard the bloodrush card and grant +X/+0 to a target creature."""
-    hand = zones.player_zones[player_idx].hand
-    if hand_idx < 0 or hand_idx >= len(hand):
+    loaded = hand_card_with_info(zones, player_idx, hand_idx)
+    if loaded is None:
         return None
-    card = hand[hand_idx]
-    if not isinstance(card, CardObject) or card.card_info is None:
-        return None
-    if not has_bloodrush(card.card_info):
+    _card, card_info = loaded
+    if not has_bloodrush(card_info):
         return None
     target = find_creature_by_uid(zones, target_creature_uid)
     if target is None:
         return None
-    power = bloodrush_power(card.card_info)
+    power = bloodrush_power(card_info)
     discard_from_hand(zones, player_idx, hand_idx)
     put_power_bonus(target, power)
-    name = card.card_info.name
+    name = card_info.name
     return f"bloodrush {name}: +{power}/+0 on {target.name}"

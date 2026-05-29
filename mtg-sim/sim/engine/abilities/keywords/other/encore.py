@@ -12,9 +12,10 @@ from engine.abilities.activated._cost_keyword import (
 )
 from engine.abilities.activated._cost_keyword import timing_allows_hand_activation
 from engine.abilities.keywords._core import has_keyword
-from engine.core.game_object import CardObject, Permanent, TokenObject
+from engine.core.game_object import Permanent, TokenObject
 from engine.core.game_state import GameState
 from engine.core.zones import Zone, ZoneManager
+from engine.core.zone_card_lookup import graveyard_card_with_info
 
 _ENCORE_RE = re.compile(
     r'encore\s*((?:\{[^}]+\})+)',
@@ -106,13 +107,10 @@ def apply_encore_from_graveyard(
     graveyard_idx: int,
 ) -> str | None:
     """Exile a creature from graveyard and create encore token copies."""
-    graveyard = zones.player_zones[player_idx].graveyard
-    if graveyard_idx < 0 or graveyard_idx >= len(graveyard):
+    loaded = graveyard_card_with_info(zones, player_idx, graveyard_idx)
+    if loaded is None:
         return None
-    card = graveyard[graveyard_idx]
-    if not isinstance(card, CardObject) or card.card_info is None:
-        return None
-    card_info = card.card_info
+    card, card_info = loaded
     if not has_encore_card(card_info):
         return None
     zones.exile_from_graveyard(card, player_idx)

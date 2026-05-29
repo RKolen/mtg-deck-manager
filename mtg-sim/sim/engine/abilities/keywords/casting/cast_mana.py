@@ -36,6 +36,18 @@ from engine.abilities.keywords.casting.spectacle import (
     normalize_spectacle_cast,
     spectacle_mana_needed,
 )
+from engine.abilities.keywords.casting.blitz import (
+    blitz_mana_needed,
+    normalize_blitz_cast,
+)
+from engine.abilities.keywords.casting.dash import (
+    dash_mana_needed,
+    normalize_dash_cast,
+)
+from engine.abilities.keywords.other.disguise import (
+    disguise_face_down_mana_needed,
+    normalize_disguise_cast,
+)
 from engine.abilities.keywords.other.morph import (
     morph_face_down_mana_needed,
     normalize_morph_cast,
@@ -48,6 +60,7 @@ from engine.abilities.keywords.casting.buyback import buyback_extra_mana
 from engine.abilities.keywords.casting.replicate import replicate_extra_mana
 from engine.abilities.keywords.casting.spree import spree_extra_mana
 from engine.abilities.keywords.other.affinity import affinity_reduction
+from engine.game.face_alternate_cast import FaceAlternateCastFlags
 
 if TYPE_CHECKING:
     from engine.core.zones import ZoneManager
@@ -68,7 +81,7 @@ class CastManaModifiers:
     cast_for_mutate: bool = False
     mutate_target_uid: str | None = None
     spree_mode_indices: tuple[int, ...] = ()
-    cast_for_morph: bool = False
+    face: FaceAlternateCastFlags = field(default_factory=FaceAlternateCastFlags)
 
 
 @dataclass(frozen=True)
@@ -116,8 +129,14 @@ def resolve_announce_cast_mana(
         available=timing.spectacle_available,
     ):
         mana_needed, life_cost = spectacle_mana_needed(card)
-    elif normalize_morph_cast(card, mods.cast_for_morph):
+    elif normalize_morph_cast(card, mods.face.cast_for_morph):
         mana_needed, life_cost = morph_face_down_mana_needed()
+    elif normalize_disguise_cast(card, mods.face.cast_for_disguise):
+        mana_needed, life_cost = disguise_face_down_mana_needed()
+    elif normalize_dash_cast(card, mods.face.cast_for_dash):
+        mana_needed, life_cost = dash_mana_needed(card)
+    elif normalize_blitz_cast(card, mods.face.cast_for_blitz):
+        mana_needed, life_cost = blitz_mana_needed(card)
     elif normalize_freerunning_cast(
         card,
         timing.cast_for_freerunning,

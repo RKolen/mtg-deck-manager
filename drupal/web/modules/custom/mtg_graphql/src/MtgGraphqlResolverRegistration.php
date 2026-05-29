@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Drupal\mtg_graphql;
 
+use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\Core\Entity\Query\QueryInterface;
+use Drupal\Core\Field\Plugin\Field\FieldType\EntityReferenceItem;
 use Drupal\graphql\GraphQL\ResolverBuilder;
 use Drupal\graphql\GraphQL\ResolverRegistryInterface;
-
 use Drupal\node\NodeInterface;
 
 /**
@@ -173,11 +175,11 @@ final class MtgGraphqlResolverRegistration {
             continue;
           }
           $ref = $cc->get('field_card')->first();
-          if (!$ref instanceof \Drupal\Core\Field\Plugin\Field\FieldType\EntityReferenceItem || !$ref->entity) {
+          if (!$ref instanceof EntityReferenceItem || !$ref->entity) {
             continue;
           }
           $card = $ref->entity;
-          if (!$card instanceof \Drupal\Core\Entity\FieldableEntityInterface) {
+          if (!$card instanceof FieldableEntityInterface) {
             continue;
           }
           $price  = (float) ($card->get('field_price_usd')->value ?? 0);
@@ -196,12 +198,15 @@ final class MtgGraphqlResolverRegistration {
     $registry->addFieldResolver('Mutation', 'createDeck',
       $builder->callback(function ($value, array $args): NodeInterface {
         $storage = \Drupal::entityTypeManager()->getStorage('node');
+        $formatTerm = \Drupal::entityTypeManager()
+          ->getStorage('taxonomy_term')
+          ->loadByProperties(['vid' => 'mtg_format', 'name' => $args['format']]);
         $node = $storage->create([
-          'type'         => 'deck',
-          'title'        => $args['title'],
-          'field_format' => $args['format'],
-          'field_notes'  => $args['notes'] ?? NULL,
-          'status'       => 1,
+          'type'              => 'deck',
+          'title'             => $args['title'],
+          'field_format_term' => ['target_id' => (int) reset($formatTerm)->id()],
+          'field_notes'       => $args['notes'] ?? NULL,
+          'status'            => 1,
         ]);
         $node->save();
         return $node;
@@ -218,7 +223,10 @@ final class MtgGraphqlResolverRegistration {
           $node->setTitle($args['title']);
         }
         if (isset($args['format'])) {
-          $node->set('field_format', $args['format']);
+          $formatTerm = \Drupal::entityTypeManager()
+            ->getStorage('taxonomy_term')
+            ->loadByProperties(['vid' => 'mtg_format', 'name' => $args['format']]);
+          $node->set('field_format_term', ['target_id' => (int) reset($formatTerm)->id()]);
         }
         if (array_key_exists('notes', $args)) {
           $node->set('field_notes', $args['notes']);
@@ -371,7 +379,10 @@ final class MtgGraphqlResolverRegistration {
     $registry->addFieldResolver('Deck', 'id', $builder->callback(fn($n) => $n->uuid()));
     $registry->addFieldResolver('Deck', 'nid', $builder->callback(fn($n) => (int) $n->id()));
     $registry->addFieldResolver('Deck', 'title', $builder->callback(fn($n) => $n->getTitle()));
-    $registry->addFieldResolver('Deck', 'format', $builder->callback(fn($n) => $n->get('field_format')->value ?? ''));
+    $registry->addFieldResolver('Deck', 'format', $builder->callback(function ($n): string {
+      $ref = $n->get('field_format_term')->first();
+      return $ref && $ref->entity ? $ref->entity->getName() : '';
+    }));
     $registry->addFieldResolver('Deck', 'notes', $builder->callback(fn($n) => $n->get('field_notes')->value));
   }
 
@@ -462,7 +473,7 @@ final class MtgGraphqlResolverRegistration {
         $ids = \Drupal::entityQuery('node')
           ->condition('type', 'meta_deck')
           ->condition('status', 1)
-          ->condition('field_format', $format)
+          ->condition('field_format_term.entity:taxonomy_term.name', $format)
           ->accessCheck(FALSE)
           ->sort('field_meta_share', 'DESC')
           ->execute();
@@ -477,7 +488,10 @@ final class MtgGraphqlResolverRegistration {
       $builder->callback(fn($n) => $n->getTitle())
     );
     $registry->addFieldResolver('MetaDeck', 'format',
-      $builder->callback(fn($n) => $n->get('field_format')->value ?? '')
+      $builder->callback(function ($n): string {
+        $ref = $n->get('field_format_term')->first();
+        return $ref && $ref->entity ? $ref->entity->getName() : '';
+      })
     );
     $registry->addFieldResolver('MetaDeck', 'metaShare',
       $builder->callback(function ($n): ?float {
@@ -571,7 +585,7 @@ final class MtgGraphqlResolverRegistration {
 
     $result = [];
     foreach ($deck->get('field_deck_cards') as $item) {
-      if ($item instanceof \Drupal\Core\Field\Plugin\Field\FieldType\EntityReferenceItem && $item->entity) {
+      if ($item instanceof EntityReferenceItem && $item->entity) {
         $result[] = $item->entity;
       }
     }
@@ -581,7 +595,7 @@ final class MtgGraphqlResolverRegistration {
   /**
    * Applies optional card filter arguments to an entity query.
    */
-  private static function applyCardFilters(\Drupal\Core\Entity\Query\QueryInterface $query, array $args): void {
+  private static function applyCardFilters(QueryInterface $query, array $args): void {
     if (!empty($args['name'])) {
       $query->condition('title', '%' . $args['name'] . '%', 'LIKE');
     }

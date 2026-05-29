@@ -14,6 +14,7 @@ from engine.abilities.keywords.actions.tokens import create_creature_token_from_
 from engine.abilities.keywords.registry import has_registered_keyword
 from engine.cards.oracle_parse import TokenBlueprint, parse_damage, parse_token_blueprint
 from engine.core.game_object import CardObject
+from engine.core.library_reveal import resolve_top_card_contest
 from engine.core.zones import Zone
 
 if TYPE_CHECKING:
@@ -234,30 +235,7 @@ def incubate(zones: ZoneManager, controller_idx: int, oracle_text: str) -> str:
 
 def clash(zones: ZoneManager) -> str:
     """Each player reveals their top card; highest mana value wins a draw."""
-    scores: list[tuple[int, int, str]] = []
-    for pidx in (0, 1):
-        library = zones.player_zones[pidx].library
-        if not library:
-            scores.append((pidx, -1, ''))
-            continue
-        top = library[-1]
-        if isinstance(top, CardObject) and top.card_info is not None:
-            mv = int(top.card_info.cmc)
-            name = top.card_info.name
-        else:
-            mv = 0
-            name = 'card'
-        scores.append((pidx, mv, name))
-    winner_idx, best_mv, winner_card = max(scores, key=lambda item: item[1])
-    if best_mv < 0:
-        return 'clash (no libraries)'
-    drawn = zones.draw(winner_idx)
-    draw_name = (
-        drawn.card_info.name
-        if drawn is not None and isinstance(drawn, CardObject) and drawn.card_info
-        else 'nothing'
-    )
-    return f"clash: P{winner_idx + 1} won with {winner_card} (MV {best_mv}), drew {draw_name}"
+    return resolve_top_card_contest(zones, prefix='clash')
 
 
 def collect_evidence(zones: ZoneManager, controller_idx: int) -> str | None:

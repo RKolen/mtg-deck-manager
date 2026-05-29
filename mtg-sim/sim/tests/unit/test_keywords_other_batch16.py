@@ -8,6 +8,7 @@ from engine.abilities.keywords.casting.cast_mana import (
     CastManaTiming,
     resolve_announce_cast_mana,
 )
+from engine.game.face_alternate_cast import FaceAlternateCastFlags
 from engine.abilities.keywords.casting.harmonize import (
     harmonize_cost,
     harmonize_mana_needed,
@@ -36,17 +37,16 @@ from engine.core.game_object import (
     SpellOnStack,
     spell_exiles_from_graveyard_cast,
 )
-from engine.core.zones import Zone
 from engine.game import create_game
 from engine.game.helpers import HandCastContext, card_to_client
 from tests.conftest import (
+    fresh_game,
     make_artifact,
     make_creature,
     make_deck,
     make_instant,
-    make_land,
     place_on_battlefield,
-    fresh_game,
+    put_lands_on_battlefield,
 )
 
 
@@ -153,7 +153,9 @@ def test_spectacle_and_morph_announce_mana():
     morph_mana, _ = resolve_announce_cast_mana(
         morph_card,
         AnnounceCastManaOptions(
-            modifiers=CastManaModifiers(cast_for_morph=True),
+            modifiers=CastManaModifiers(
+                face=FaceAlternateCastFlags(cast_for_morph=True),
+            ),
         ),
     )
     assert spec_mana == spectacle_mana_needed(spec_card)[0]
@@ -169,9 +171,7 @@ def test_game_harmonize_and_turn_up_morph():
     )
     game = create_game(make_deck(lands=20), make_deck(lands=20))
     game.action_keep()
-    for _ in range(3):
-        land = CardObject(controller_idx=0, owner_idx=0, card_info=make_land())
-        game.state.zones.enter_battlefield(land, 0, 'test_setup', Zone.HAND)
+    put_lands_on_battlefield(game, 3)
     gy_card = CardObject(controller_idx=0, owner_idx=0, card_info=song)
     game.state.zones.player_zones[0].graveyard.append(gy_card)
     cast = game.action_cast_harmonize(0)
@@ -188,9 +188,7 @@ def test_game_harmonize_and_turn_up_morph():
     face_down = place_on_battlefield(shifter_info, 0, game.state.zones)
     face_down.face_down = True
     assert can_turn_up_morph(face_down, game.state, 0, 'main1')
-    for _ in range(5):
-        land = CardObject(controller_idx=0, owner_idx=0, card_info=make_land())
-        game.state.zones.enter_battlefield(land, 0, 'test_setup', Zone.HAND)
+    put_lands_on_battlefield(game, 5)
     turn_up = game.action_turn_up_morph(str(face_down.obj_id))
     assert 'error' not in turn_up
     assert not face_down.face_down

@@ -6,6 +6,7 @@ import re
 
 from deck_registry import CardInfo
 from engine.abilities.keywords.actions.counters import put_plus_counters
+from engine.abilities.keywords.other.face_down_turn import can_turn_up_face_down_keyword
 from engine.abilities.keywords.registry import has_registered_keyword
 from engine.core.game_object import Permanent
 from engine.core.game_state import GameState
@@ -76,13 +77,9 @@ def can_turn_up_morph(
     phase: str,
 ) -> bool:
     """Return True when a face-down morph creature may be turned face up."""
-    if perm.controller_idx != controller_idx or not perm.face_down:
-        return False
-    if perm.card_info is None or not has_morph(perm.card_info):
-        return False
-    if not game.stack.is_empty:
-        return False
-    return phase in ('main1', 'main2')
+    return can_turn_up_face_down_keyword(
+        perm, game, controller_idx, phase, has_morph,
+    )
 
 
 def apply_turn_up_morph(perm: Permanent) -> str | None:

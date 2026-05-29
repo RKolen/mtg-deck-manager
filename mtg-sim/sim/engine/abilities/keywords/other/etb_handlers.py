@@ -11,7 +11,6 @@ from engine.abilities.keywords.other.bloodthirst import apply_bloodthirst_etb
 from engine.abilities.keywords.other.dash import apply_dash_etb
 from engine.abilities.keywords.other.decayed import apply_decayed_etb
 from engine.abilities.keywords.other.devour import apply_devour_etb
-from engine.abilities.keywords.other.embalm import apply_embalm_etb
 from engine.abilities.keywords.other.encore import apply_encore_etb
 from engine.abilities.keywords.other.evoke import apply_evoke_on_etb
 from engine.abilities.keywords.other.fabricate import apply_fabricate_etb
@@ -71,10 +70,6 @@ def _encore_detail(_game: GameState, permanent: Permanent) -> str | None:
     return apply_encore_etb(permanent)
 
 
-def _embalm_detail(game: GameState, permanent: Permanent) -> str | None:
-    return apply_embalm_etb(game.zones, permanent)
-
-
 def _ascend_detail(game: GameState, permanent: Permanent) -> str | None:
     return update_ascend_status(game, permanent.controller_idx)
 
@@ -102,7 +97,6 @@ ETB_DETAIL_PRODUCERS: tuple[EtbDetailFn, ...] = (
     _backup_detail,
     _riot_detail,
     _encore_detail,
-    _embalm_detail,
     _ascend_detail,
     _evoke_detail,
     _offspring_detail,

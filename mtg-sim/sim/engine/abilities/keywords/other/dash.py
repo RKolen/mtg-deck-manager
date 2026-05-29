@@ -16,11 +16,10 @@ def has_dash(perm: Permanent) -> bool:
 
 
 def apply_dash_etb(permanent: Permanent) -> str | None:
-    """Mark a dashed creature for haste and end-of-turn return."""
-    if not has_keyword(permanent, 'Dash'):
+    """Confirm dash haste when the creature was cast for dash."""
+    if not permanent.counters.get('dash'):
         return None
     permanent.sick = False
-    permanent.counters['dash'] = 1
     return f"{permanent.name} dashed (haste)"
 
 

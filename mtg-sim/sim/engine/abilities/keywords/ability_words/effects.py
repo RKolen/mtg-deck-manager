@@ -11,6 +11,7 @@ from engine.cards.oracle_parse import (
     parse_token_blueprint,
 )
 from engine.core.game_object import CardObject
+from engine.core.library_reveal import resolve_top_card_contest
 from engine.abilities.keywords._token_factory import enter_token_from_blueprint
 from engine.abilities.keywords.ability_words.clause import clause_after_ability_word
 from engine.abilities.keywords.actions.counters import put_plus_counters
@@ -165,30 +166,7 @@ class ParleyEffect(Effect):
         permanent = _permanent_from_stack_source(game, source)
         if permanent is None:
             return ''
-        scores: list[tuple[int, int, str]] = []
-        for pidx in (0, 1):
-            library = game.zones.player_zones[pidx].library
-            if not library:
-                scores.append((pidx, -1, ''))
-                continue
-            top = library[-1]
-            if isinstance(top, CardObject) and top.card_info is not None:
-                mv = int(top.card_info.cmc)
-                name = top.card_info.name
-            else:
-                mv = 0
-                name = 'card'
-            scores.append((pidx, mv, name))
-        winner_idx, best_mv, winner_card = max(scores, key=lambda item: item[1])
-        if best_mv < 0:
-            return 'parley (no libraries)'
-        drawn = game.zones.draw(winner_idx)
-        draw_name = (
-            drawn.card_info.name
-            if drawn is not None and isinstance(drawn, CardObject) and drawn.card_info
-            else 'nothing'
-        )
-        return f"parley: P{winner_idx + 1} won with {winner_card} (MV {best_mv}), drew {draw_name}"
+        return resolve_top_card_contest(game.zones, prefix='parley')
 
     def describe(self) -> str:
         """Return a short description for logs."""

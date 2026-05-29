@@ -18,11 +18,10 @@ def has_blitz(perm: Permanent) -> bool:
 
 
 def apply_blitz_etb(permanent: Permanent) -> str | None:
-    """Mark a blitz creature for haste and end-of-turn sacrifice."""
-    if not has_keyword(permanent, 'Blitz'):
+    """Confirm blitz haste when the creature was cast for blitz."""
+    if not permanent.counters.get('blitz'):
         return None
     permanent.sick = False
-    permanent.counters['blitz'] = 1
     return f"{permanent.name} blitzed (haste)"
 
 

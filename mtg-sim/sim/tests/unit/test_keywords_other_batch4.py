@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from engine.abilities.keywords.casting.embalm import create_embalm_token_in_exile
 from engine.abilities.keywords.handlers import apply_combat_damage_to_creature
 from engine.abilities.keywords.other.afflict import apply_afflict_on_attack
-from engine.abilities.keywords.other.etb import apply_etb_other_abilities
 from tests.conftest import fresh_game, make_creature, place_on_battlefield
 
 
@@ -37,11 +37,7 @@ def test_absorb_reduces_combat_damage():
 def test_embalm_puts_token_in_exile():
     """Embalm creates a token in exile."""
     game = fresh_game()
-    source = place_on_battlefield(
-        make_creature('Honored', 4, 4, oracle='Embalm {3}{W}'),
-        0,
-        game.zones,
-    )
-    details = apply_etb_other_abilities(game, source)
-    assert any('embalmed' in detail for detail in details)
+    honored = make_creature('Honored', 4, 4, oracle='Embalm {3}{W}')
+    detail = create_embalm_token_in_exile(game.zones, 0, honored)
+    assert 'embalmed' in detail
     assert len(game.zones.player_zones[0].exile) == 1

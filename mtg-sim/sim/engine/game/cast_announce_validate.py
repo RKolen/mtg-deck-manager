@@ -31,6 +31,9 @@ from engine.abilities.keywords.casting.spectacle import (
     normalize_spectacle_cast,
     spectacle_available,
 )
+from engine.abilities.keywords.casting.blitz import normalize_blitz_cast
+from engine.abilities.keywords.casting.dash import normalize_dash_cast
+from engine.abilities.keywords.other.disguise import normalize_disguise_cast
 from engine.abilities.keywords.other.morph import normalize_morph_cast
 from engine.abilities.keywords.casting.mutate import (
     mutate_host_error,
@@ -67,6 +70,9 @@ class PaidCastModifiers:
     spree_modes: tuple[int, ...]
     spectacle: bool
     morph: bool
+    disguise: bool
+    dash: bool
+    blitz: bool
 
 
 @dataclass(frozen=True)
@@ -146,6 +152,9 @@ def _normalized_paid_flags(
             available=spectacle_available(game, player_idx),
         ),
         morph=normalize_morph_cast(card_info, opts.alternate.cast_for_morph),
+        disguise=normalize_disguise_cast(card_info, opts.alternate.cast_for_disguise),
+        dash=normalize_dash_cast(card_info, opts.alternate.cast_for_dash),
+        blitz=normalize_blitz_cast(card_info, opts.alternate.cast_for_blitz),
     )
 
 
@@ -197,6 +206,9 @@ def validate_announce_cast(
             else None
         ),
         lambda: _reject_keyword(opts.alternate.cast_for_morph, paid.morph, name, "morph"),
+        lambda: _reject_keyword(opts.alternate.cast_for_disguise, paid.disguise, name, "disguise"),
+        lambda: _reject_keyword(opts.alternate.cast_for_dash, paid.dash, name, "dash"),
+        lambda: _reject_keyword(opts.alternate.cast_for_blitz, paid.blitz, name, "blitz"),
         lambda: (
             f"{name} cannot use freerunning"
             if opts.alternate.cast_for_freerunning and not paid.freerunning

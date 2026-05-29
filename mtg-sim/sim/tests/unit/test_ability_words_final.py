@@ -7,11 +7,16 @@ from engine.abilities.keywords.ability_words import register_permanent_ability_w
 from engine.abilities.keywords.ability_words.spell_words import apply_spell_hosted_ability_words
 from engine.core.game_object import (
     CardObject,
-    TriggeredAbilityOnStack,
     effective_power,
     effective_toughness,
 )
-from engine.core.zones import Zone, ZoneMoveEvent
+from engine.core.zones import Zone
+from tests.ability_word_test_helpers import (
+    assert_source_etb_trigger,
+    fire_test_instant_cast,
+    fresh_game_with_spell_cast_host,
+    top_trigger,
+)
 from tests.conftest import (
     fresh_game,
     make_card,
@@ -19,26 +24,6 @@ from tests.conftest import (
     make_instant,
     place_on_battlefield,
 )
-
-
-def _fire_source_etb(game, source) -> None:
-    """Re-emit an ETB event after registering triggers (test helper)."""
-    game.trigger_registry.put_triggers_on_stack(
-        ZoneMoveEvent(
-            obj=source,
-            from_zone=Zone.HAND,
-            to_zone=Zone.BATTLEFIELD,
-            cause='test_etb',
-            player_idx=source.controller_idx,
-        ),
-        game,
-    )
-
-
-def _top_trigger(game):
-    trigger = game.stack.top
-    assert isinstance(trigger, TriggeredAbilityOnStack)
-    return trigger
 
 
 def test_imprint_triggers_on_etb():
@@ -51,9 +36,7 @@ def test_imprint_triggers_on_etb():
     )
     source = game.zones.enter_battlefield(card, 0, "test", Zone.HAND)
     register_permanent_ability_words(source, game.trigger_registry)
-    _fire_source_etb(game, source)
-    trigger = _top_trigger(game)
-    assert trigger.source_permanent_id == source.obj_id
+    assert_source_etb_trigger(game, source)
 
 
 def test_repartee_triggers_when_opponent_attacks():
@@ -72,21 +55,17 @@ def test_repartee_triggers_when_opponent_attacks():
         sick=False,
     )
     game.fire_attack_triggers(attacker)
-    trigger = _top_trigger(game)
+    trigger = top_trigger(game)
     assert trigger.source_permanent_id == source.obj_id
 
 
 def test_will_of_planeswalkers_requires_planeswalker():
     """Will of the Planeswalkers only fires while you control a planeswalker."""
-    game = fresh_game()
-    source = place_on_battlefield(
-        make_creature("Vote Host", 1, 1, oracle="Will of the Planeswalkers — Draw a card."),
-        0,
-        game.zones,
+    game, source = fresh_game_with_spell_cast_host(
+        "Will of the Planeswalkers — Draw a card.",
+        name="Vote Host",
     )
-    register_permanent_ability_words(source, game.trigger_registry)
-    spell = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant("Bolt"))
-    game.fire_spell_cast_triggers(spell)
+    spell = fire_test_instant_cast(game)
     assert game.stack.is_empty
 
     place_on_battlefield(
@@ -95,7 +74,7 @@ def test_will_of_planeswalkers_requires_planeswalker():
         game.zones,
     )
     game.fire_spell_cast_triggers(spell)
-    trigger = _top_trigger(game)
+    trigger = top_trigger(game)
     assert trigger.source_permanent_id == source.obj_id
 
 

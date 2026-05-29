@@ -8,7 +8,8 @@ from engine.abilities.keywords._core import has_keyword
 from engine.abilities.keywords.actions.counters import put_plus_counters
 from engine.abilities.keywords.ability_words.effects import _permanent_from_stack_source
 from engine.core.game_object import Effect, GameObject, Permanent, effective_power
-from engine.core.zones import Zone, ZoneMoveEvent
+from engine.core.zones import ZoneMoveEvent
+from engine.rules.trigger_predicates import is_controller_creature_enters_battlefield
 from engine.rules.triggers import TriggerDefinition, TriggerEvent
 
 if TYPE_CHECKING:
@@ -26,14 +27,13 @@ def is_evolve_creature_enters(
     definition: TriggerDefinition,
 ) -> bool:
     """Evolve: a creature entered with power greater than this permanent's power."""
-    if not (
-        isinstance(event, ZoneMoveEvent)
-        and event.to_zone == Zone.BATTLEFIELD
-        and isinstance(event.obj, Permanent)
-        and 'Creature' in event.obj.type_line
-        and event.player_idx == definition.controller_idx
-        and event.obj.obj_id != definition.source_permanent_id
+    if not is_controller_creature_enters_battlefield(
+        event,
+        definition,
+        exclude_source_id=definition.source_permanent_id,
     ):
+        return False
+    if not isinstance(event, ZoneMoveEvent) or not isinstance(event.obj, Permanent):
         return False
     source = game.zones.find_permanent(definition.source_permanent_id)
     if source is None:

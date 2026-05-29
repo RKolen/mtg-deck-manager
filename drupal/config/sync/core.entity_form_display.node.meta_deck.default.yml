@@ -8,6 +8,7 @@ dependencies:
     - field.field.node.meta_deck.field_cards_json
     - field.field.node.meta_deck.field_fetched_at
     - field.field.node.meta_deck.field_format
+    - field.field.node.meta_deck.field_format_term
     - field.field.node.meta_deck.field_key_cards
     - field.field.node.meta_deck.field_meta_share
     - field.field.node.meta_deck.field_sideboard_guide
@@ -64,6 +65,12 @@ content:
     settings:
       size: 60
       placeholder: ''
+    third_party_settings: {  }
+  field_format_term:
+    type: options_select
+    weight: 5
+    region: content
+    settings: {  }
     third_party_settings: {  }
   field_key_cards:
     type: entity_reference_autocomplete

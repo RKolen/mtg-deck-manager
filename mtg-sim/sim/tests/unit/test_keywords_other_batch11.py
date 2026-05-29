@@ -18,8 +18,7 @@ from engine.abilities.keywords.other.eternalize import apply_eternalize_from_gra
 from engine.abilities.keywords.other.mobilize import apply_mobilize_on_attack
 from engine.abilities.keywords.other.outlast import apply_outlast, can_outlast
 from engine.core.game_object import CardObject
-from engine.rules.combat import resolve_combat_damage
-from tests.conftest import fresh_game, make_creature, place_on_battlefield
+from tests.conftest import fresh_game, make_creature, place_on_battlefield, resolve_player_attacks
 
 
 def test_bushido_puts_counters_when_engaged():
@@ -123,11 +122,9 @@ def test_bushido_in_blocked_combat():
         game.zones,
         sick=False,
     )
-    resolve_combat_damage(
+    resolve_player_attacks(
         game,
-        attacking_player_idx=0,
-        defending_player_idx=1,
-        attacker_ids=[str(attacker.obj_id)],
+        attacker,
         blocker_assignments={str(blocker.obj_id): str(attacker.obj_id)},
     )
     assert blocker.counters.get('+1/+1') == 1

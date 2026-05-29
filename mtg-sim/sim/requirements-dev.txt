@@ -1,3 +1,4 @@
 -r requirements.txt
+-r ../classifier/requirements.txt
 pylint>=3.3.0
 pyright>=1.1.380

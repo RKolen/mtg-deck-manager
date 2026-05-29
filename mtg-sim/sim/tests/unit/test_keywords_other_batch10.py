@@ -16,14 +16,13 @@ from engine.abilities.keywords.other.dethrone import (
     apply_dethrone_on_combat_damage_to_player,
 )
 from engine.abilities.keywords.other.enlist import apply_enlist_on_attack
-from engine.abilities.keywords.other.etb import apply_etb_other_abilities
 from engine.abilities.keywords.other.offspring import apply_offspring_etb
-from engine.rules.combat import resolve_combat_damage
 from tests.conftest import (
     fresh_game,
     make_artifact,
     make_creature,
     place_on_battlefield,
+    resolve_player_attacks,
 )
 
 _COMPANION_ORACLE = (
@@ -107,8 +106,9 @@ def test_decayed_cannot_attack_and_sacrifices_at_eot():
         game.zones,
         sick=False,
     )
-    details = apply_etb_other_abilities(game, zombie)
-    assert any('decayed' in detail for detail in details)
+    detail = apply_decayed_etb(zombie)
+    assert detail is not None
+    assert 'decayed' in detail.lower()
     assert not can_attack(zombie)
     sacrifice_decayed_creatures(game, 0)
     assert len(game.zones.battlefield) == 0
@@ -151,10 +151,4 @@ def test_dethrone_on_damage_to_leading_player():
         damaged_player_idx=1,
     )
     assert detail
-    resolve_combat_damage(
-        game,
-        attacking_player_idx=0,
-        defending_player_idx=1,
-        attacker_ids=[str(attacker.obj_id)],
-        blocker_assignments={},
-    )
+    resolve_player_attacks(game, attacker)

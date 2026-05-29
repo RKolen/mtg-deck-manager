@@ -31,6 +31,17 @@ from engine.abilities.keywords.other.eternalize import (
     can_eternalize,
     eternalize_mana_needed,
 )
+from engine.abilities.keywords.casting.embalm import (
+    can_embalm,
+    create_embalm_token_in_exile,
+    embalm_mana_needed,
+    has_embalm,
+)
+from engine.abilities.keywords.other.disguise import (
+    apply_turn_up_disguise,
+    can_turn_up_disguise,
+    disguise_turn_up_mana_needed,
+)
 from engine.abilities.keywords.other.morph import (
     apply_turn_up_morph,
     can_turn_up_morph,
@@ -308,22 +319,59 @@ class ActivatedActionsMixin(GameRuntimeMixin):
         return self.to_client()
 
     def action_turn_up_morph(self, permanent_uid: str) -> dict:
-        """Turn a face-down morph creature face up."""
+        """Turn a face-down morph or disguise creature face up."""
         perm = self._find_permanent(permanent_uid)
         if perm is None:
             return self._client_error("Permanent not found")
-        if not can_turn_up_morph(perm, self.state, 0, self.phase):
-            return self._client_error("Cannot turn face up now")
         card_info = perm.card_info
         if card_info is None:
-            return self._client_error("Not a morph creature")
-        mana_needed = morph_turn_up_mana_needed(card_info)
-        if mana_needed and not self._tap_lands_for_mana(0, mana_needed):
-            return self._client_error(f"Need {mana_needed} mana to turn face up")
-        detail = apply_turn_up_morph(perm)
+            return self._client_error("Not a creature card")
+        if can_turn_up_morph(perm, self.state, 0, self.phase):
+            mana_needed = morph_turn_up_mana_needed(card_info)
+            if mana_needed and not self._tap_lands_for_mana(0, mana_needed):
+                return self._client_error(f"Need {mana_needed} mana to turn face up")
+            detail = apply_turn_up_morph(perm)
+            action = "turn_up_morph"
+        elif can_turn_up_disguise(perm, self.state, 0, self.phase):
+            mana_needed = disguise_turn_up_mana_needed(card_info)
+            if mana_needed and not self._tap_lands_for_mana(0, mana_needed):
+                return self._client_error(f"Need {mana_needed} mana to turn face up")
+            detail = apply_turn_up_disguise(perm)
+            action = "turn_up_disguise"
+        else:
+            return self._client_error("Cannot turn face up now")
         if detail is None:
             return self._client_error("Turn face up failed")
-        self._log("player", "turn_up_morph", detail)
+        self._log("player", action, detail)
+        return self.to_client()
+
+    def action_embalm(self, hand_idx: int) -> dict:
+        """Activate embalm from hand: pay cost, exile the card, create a token in exile."""
+        card, card_info, err = load_hand_card_for_action(self, hand_idx)
+        if err is not None:
+            return err
+        assert card is not None and card_info is not None
+        if not can_embalm(card_info, self.phase, self.state.stack.is_empty):
+            return self._client_error("Cannot embalm now")
+        if not has_embalm(card_info):
+            return self._client_error(f"{card_info.name} does not have embalm")
+        mana_needed, life_cost = embalm_mana_needed(card_info)
+        if not self._tap_lands_for_mana(0, mana_needed):
+            return self._client_error(f"Need {mana_needed} mana to embalm")
+        if life_cost:
+            self.state.players[0].life -= life_cost
+        hand = self.state.zones.player_zones[0].hand
+        if hand_idx < 0 or hand_idx >= len(hand) or hand[hand_idx] is not card:
+            return self._client_error("Invalid hand index")
+        hand.pop(hand_idx)
+        self.state.zones.player_zones[0].exile.append(card)
+        detail = create_embalm_token_in_exile(
+            self.state.zones,
+            0,
+            card_info,
+            source_obj_id=card.obj_id,
+        )
+        self._log("player", "embalm", detail)
         return self.to_client()
 
     def action_channel(

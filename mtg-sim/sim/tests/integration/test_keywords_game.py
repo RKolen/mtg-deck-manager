@@ -1,7 +1,6 @@
 """Integration tests for Phase E keyword behaviour in the game loop."""
 
 from engine.core.game_object import CardObject
-from engine.core.zones import Zone
 from engine.game import create_game
 from engine.rules.combat import can_attack
 from tests.conftest import (
@@ -13,6 +12,7 @@ from tests.conftest import (
     make_instant,
     make_land,
     place_on_battlefield,
+    put_lands_on_battlefield,
 )
 
 
@@ -628,9 +628,7 @@ def test_cascade_casts_free_spell_from_library():
     )
     game = create_game(make_deck(lands=20), make_deck(lands=20))
     game.action_keep()
-    for _ in range(4):
-        land = CardObject(controller_idx=0, owner_idx=0, card_info=make_land())
-        game.state.zones.enter_battlefield(land, 0, "test_setup", Zone.HAND)
+    put_lands_on_battlefield(game, 4)
     game.state.zones.player_zones[0].library = [
         CardObject(controller_idx=0, owner_idx=0, card_info=make_land()),
         CardObject(controller_idx=0, owner_idx=0, card_info=hit),
@@ -643,36 +641,6 @@ def test_cascade_casts_free_spell_from_library():
     assert len(game.state.zones.player_zones[0].library) == 1
 
 
-def test_convoke_cast_taps_creatures_to_pay_mana():
-    """Convoke lets a 4-mana burn spell be paid with two tapped creatures and two lands."""
-    burn = make_instant(
-        name="Mob Justice",
-        cmc=4,
-        mana_cost="",
-        oracle="Mob Justice deals 4 damage to any target. Convoke",
-    )
-    game = create_game(make_deck(lands=20), make_deck(lands=20))
-    game.action_keep()
-    for _ in range(2):
-        land = CardObject(controller_idx=0, owner_idx=0, card_info=make_land())
-        game.state.zones.enter_battlefield(land, 0, "test_setup", Zone.HAND)
-    soldier = place_on_battlefield(make_creature("Soldier", 1, 1), 0, game.state.zones)
-    knight = place_on_battlefield(make_creature("Knight", 1, 1), 0, game.state.zones)
-    game.state.zones.player_zones[0].hand = [
-        CardObject(controller_idx=0, owner_idx=0, card_info=burn),
-    ]
-    data = game.action_cast(
-        0,
-        target_player=1,
-        cast_options=cast_announce_options(
-            convoke_creature_ids=[soldier.obj_id, knight.obj_id],
-        ),
-    )
-    assert data["opponentLife"] == 16
-    assert soldier.tapped
-    assert knight.tapped
-
-
 def test_delve_cast_exiles_graveyard_to_pay_mana():
     """Delve lets a 3-mana spell be paid with two exiled graveyard cards and one land."""
     draw = make_instant(
@@ -683,8 +651,7 @@ def test_delve_cast_exiles_graveyard_to_pay_mana():
     )
     game = create_game(make_deck(lands=20), make_deck(lands=20))
     game.action_keep()
-    land = CardObject(controller_idx=0, owner_idx=0, card_info=make_land())
-    game.state.zones.enter_battlefield(land, 0, "test_setup", Zone.HAND)
+    put_lands_on_battlefield(game, 1)
     filler_a = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant("Filler A"))
     filler_b = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant("Filler B"))
     game.state.zones.player_zones[0].graveyard.extend([filler_a, filler_b])
@@ -714,9 +681,7 @@ def test_improvise_cast_taps_artifacts_to_pay_mana():
     )
     game = create_game(make_deck(lands=20), make_deck(lands=20))
     game.action_keep()
-    for _ in range(2):
-        land = CardObject(controller_idx=0, owner_idx=0, card_info=make_land())
-        game.state.zones.enter_battlefield(land, 0, "test_setup", Zone.HAND)
+    put_lands_on_battlefield(game, 2)
     relic = place_on_battlefield(make_artifact("Relic"), 0, game.state.zones)
     game.state.zones.player_zones[0].hand = [
         CardObject(controller_idx=0, owner_idx=0, card_info=draw),

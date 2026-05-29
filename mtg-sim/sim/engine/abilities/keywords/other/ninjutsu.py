@@ -13,8 +13,8 @@ from engine.abilities.activated._cost_keyword import (
     timing_allows_hand_activation,
 )
 from engine.abilities.keywords.actions.targets import find_creature_by_uid
-from engine.core.game_object import CardObject
 from engine.core.zones import Zone, ZoneManager
+from engine.core.zone_card_lookup import hand_card_with_info
 
 if TYPE_CHECKING:
     from engine.core.game_state import GameState
@@ -55,19 +55,17 @@ def apply_ninjutsu(
     attacker_uid: str | None,
 ) -> str | None:
     """Return an unblocked attacker to hand and put the ninja onto the battlefield."""
-    hand = zones.player_zones[player_idx].hand
-    if hand_idx < 0 or hand_idx >= len(hand):
+    loaded = hand_card_with_info(zones, player_idx, hand_idx)
+    if loaded is None:
         return None
-    card = hand[hand_idx]
-    if not isinstance(card, CardObject) or card.card_info is None:
-        return None
-    if not has_ninjutsu(card.card_info):
+    card, card_info = loaded
+    if not has_ninjutsu(card_info):
         return None
     attacker = find_creature_by_uid(zones, attacker_uid)
     if attacker is None or attacker.controller_idx != player_idx:
         return None
     zones.leave_battlefield(attacker, Zone.HAND, 'ninjutsu', game)
-    hand.pop(hand_idx)
+    zones.player_zones[player_idx].hand.pop(hand_idx)
     ninja = zones.enter_battlefield(card, player_idx, 'ninjutsu', Zone.HAND)
     ninja.tapped = False
     ninja.sick = False

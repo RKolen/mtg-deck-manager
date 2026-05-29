@@ -245,7 +245,7 @@ final class MetaDeckScraperService {
    * @param string $archetypeName
    *   The archetype display name used as the node title.
    * @param string $formatName
-   *   The format display name stored in field_format.
+   *   The format display name used to look up the mtg_format taxonomy term.
    * @param float $metaShare
    *   The metagame share percentage for this archetype.
    * @param list<array{name: string, quantity: int, sideboard: bool}> $cards
@@ -267,10 +267,22 @@ final class MetaDeckScraperService {
     $fetchedAt = gmdate('Y-m-d\TH:i:s');
     $cardsJson = json_encode($cards, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
 
+    // Resolve the format name to a taxonomy term ID.
+    $terms = $this->entityTypeManager
+      ->getStorage('taxonomy_term')
+      ->loadByProperties(['vid' => 'mtg_format', 'name' => $formatName]);
+    $term = reset($terms);
+    if ($term === FALSE) {
+      throw new \InvalidArgumentException(
+        'Unknown format "' . $formatName . '". Add it to the mtg_format taxonomy.'
+      );
+    }
+    $termId = (int) $term->id();
+
     $existing = $storage->loadByProperties([
-      'type'         => 'meta_deck',
-      'title'        => $archetypeName,
-      'field_format' => $formatName,
+      'type'              => 'meta_deck',
+      'title'             => $archetypeName,
+      'field_format_term' => $termId,
     ]);
     $node = reset($existing);
 
@@ -295,14 +307,14 @@ final class MetaDeckScraperService {
     );
 
     $newNode = $storage->create([
-      'type'                => 'meta_deck',
-      'title'               => $archetypeName,
-      'status'              => 1,
-      'field_format'        => $formatName,
-      'field_meta_share'    => round($metaShare, 2),
-      'field_cards_json'    => $cardsJson,
+      'type'                 => 'meta_deck',
+      'title'                => $archetypeName,
+      'status'               => 1,
+      'field_format_term'    => ['target_id' => $termId],
+      'field_meta_share'     => round($metaShare, 2),
+      'field_cards_json'     => $cardsJson,
       'field_archetype_tags' => $tagItems,
-      'field_fetched_at'    => $fetchedAt,
+      'field_fetched_at'     => $fetchedAt,
     ]);
     $newNode->save();
     return 'created';

@@ -46,6 +46,13 @@ export interface CardInHand {
   hasSpectacle?: boolean;
   spectacleAvailable?: boolean;
   hasMorph?: boolean;
+  hasDisguise?: boolean;
+  hasSneak?: boolean;
+  hasDash?: boolean;
+  hasBlitz?: boolean;
+  hasEmbalm?: boolean;
+  hasFreerunning?: boolean;
+  freerunningAvailable?: boolean;
 }
 
 export interface GraveyardCard {
@@ -127,6 +134,11 @@ export interface GameActionOpts {
   harmonizeCreatureIds?: string[];
   castForSpectacle?: boolean;
   castForMorph?: boolean;
+  castForDisguise?: boolean;
+  castForDash?: boolean;
+  castForBlitz?: boolean;
+  castForFreerunning?: boolean;
+  sneakLandHandIndices?: number[];
   craftArtifactIds?: string[];
   kickerTimes?: number;
 }
@@ -172,6 +184,11 @@ export async function gameAction(
     harmonizeCreatureIds: opts.harmonizeCreatureIds ?? [],
     castForSpectacle: opts.castForSpectacle ?? false,
     castForMorph: opts.castForMorph ?? false,
+    castForDisguise: opts.castForDisguise ?? false,
+    castForDash: opts.castForDash ?? false,
+    castForBlitz: opts.castForBlitz ?? false,
+    castForFreerunning: opts.castForFreerunning ?? false,
+    sneakLandHandIndices: opts.sneakLandHandIndices ?? [],
     craftArtifactIds: opts.craftArtifactIds ?? [],
     kickerTimes: opts.kickerTimes ?? 0,
   });

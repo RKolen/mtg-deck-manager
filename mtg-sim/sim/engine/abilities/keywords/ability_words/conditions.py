@@ -21,6 +21,10 @@ from engine.rules.triggers import (
     TriggerEvent,
 )
 from engine.core.turn_structure import Step, is_main_phase
+from engine.rules.trigger_predicates import (
+    is_controller_creature_enters_battlefield,
+    is_source_enters_battlefield,
+)
 
 if TYPE_CHECKING:
     from engine.core.game_state import GameState
@@ -32,13 +36,7 @@ def is_controller_creature_enters(
     definition: TriggerDefinition,
 ) -> bool:
     """Rally: a creature entered the battlefield under your control."""
-    return (
-        isinstance(event, ZoneMoveEvent)
-        and event.to_zone == Zone.BATTLEFIELD
-        and isinstance(event.obj, Permanent)
-        and 'Creature' in event.obj.type_line
-        and event.player_idx == definition.controller_idx
-    )
+    return is_controller_creature_enters_battlefield(event, definition)
 
 
 def is_controller_land_enters(
@@ -120,12 +118,7 @@ def _is_source_enters_battlefield(
     definition: TriggerDefinition,
 ) -> bool:
     """Return True when this permanent entered the battlefield."""
-    return (
-        isinstance(event, ZoneMoveEvent)
-        and event.to_zone == Zone.BATTLEFIELD
-        and isinstance(event.obj, Permanent)
-        and event.obj.obj_id == definition.source_permanent_id
-    )
+    return is_source_enters_battlefield(event, definition)
 
 
 def _artifact_count(game: GameState, player_idx: int) -> int:
@@ -912,13 +905,10 @@ def is_kinfall_creature_enters(
     definition: TriggerDefinition,
 ) -> bool:
     """Kinfall: a creature with power 4 or greater entered under your control."""
-    return (
-        isinstance(event, ZoneMoveEvent)
-        and event.to_zone == Zone.BATTLEFIELD
-        and isinstance(event.obj, Permanent)
-        and 'Creature' in event.obj.type_line
-        and event.player_idx == definition.controller_idx
-        and effective_power(event.obj) >= 4
+    return is_controller_creature_enters_battlefield(
+        event,
+        definition,
+        min_power=4,
     )
 
 
