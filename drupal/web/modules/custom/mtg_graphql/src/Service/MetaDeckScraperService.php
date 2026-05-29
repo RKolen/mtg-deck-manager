@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\mtg_graphql\Service;
 
+use Drupal\Core\Cache\CacheBackendInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\GuzzleException;
@@ -29,6 +30,7 @@ final class MetaDeckScraperService {
   public function __construct(
     private readonly EntityTypeManagerInterface $entityTypeManager,
     private readonly ClientInterface $httpClient,
+    private readonly CacheBackendInterface $graphqlCache,
   ) {
     $env = getenv('MTGGOLDFISH_BASE_URL');
     if (!is_string($env) || $env === '') {
@@ -79,7 +81,15 @@ final class MetaDeckScraperService {
         usleep(1_000_000);
       }
       catch (GuzzleException $e) {
-        $result['skipped']++;
+        // We have meta-share from the metagame page, so still update existing
+        // nodes. New archetypes with no deck data are skipped entirely.
+        $action = $this->upsertNode($arch['name'], $formatName, $arch['share'], NULL, NULL);
+        if ($action === 'skipped') {
+          $result['skipped']++;
+        }
+        else {
+          $result['updated']++;
+        }
         continue;
       }
 
@@ -91,6 +101,11 @@ final class MetaDeckScraperService {
         $result['updated']++;
       }
     }
+
+    // Invalidate the GraphQL cache so the next query reflects updated nodes.
+    // Our callback()-based resolvers do not contribute cache tags, so Drupal
+    // cannot auto-invalidate them on node save.
+    $this->graphqlCache->invalidateAll();
 
     return $result;
   }
@@ -248,24 +263,23 @@ final class MetaDeckScraperService {
    *   The format display name used to look up the mtg_format taxonomy term.
    * @param float $metaShare
    *   The metagame share percentage for this archetype.
-   * @param list<array{name: string, quantity: int, sideboard: bool}> $cards
-   *   Parsed decklist entries.
-   * @param list<string> $tags
-   *   Strategy tags to store on the node.
+   * @param list<array{name: string, quantity: int, sideboard: bool}>|null $cards
+   *   Parsed decklist entries, or NULL when the deck page could not be fetched.
+   * @param list<string>|null $tags
+   *   Strategy tags, or NULL when the deck page could not be fetched.
    *
    * @return string
-   *   Either 'created' for new nodes or 'updated' for existing nodes.
+   *   'created', 'updated', or 'skipped' (new archetype with no deck data).
    */
   private function upsertNode(
     string $archetypeName,
     string $formatName,
     float $metaShare,
-    array $cards,
-    array $tags,
+    ?array $cards,
+    ?array $tags,
   ): string {
     $storage   = $this->entityTypeManager->getStorage('node');
     $fetchedAt = gmdate('Y-m-d\TH:i:s');
-    $cardsJson = json_encode($cards, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
 
     // Resolve the format name to a taxonomy term ID.
     $terms = $this->entityTypeManager
@@ -287,17 +301,27 @@ final class MetaDeckScraperService {
     $node = reset($existing);
 
     if ($node !== FALSE) {
-      // Update only the fields that change with a new scrape run.
-      $node->set('field_cards_json', $cardsJson);
+      // Always refresh meta-share and timestamp from the metagame page.
       $node->set('field_meta_share', round($metaShare, 2));
       $node->set('field_fetched_at', $fetchedAt);
-      $node->set('field_archetype_tags', array_map(
-        static fn(string $t): array => ['value' => $t],
-        $tags,
-      ));
+      // Cards and tags are only available when the deck page was fetched.
+      if ($cards !== NULL) {
+        $node->set('field_cards_json', json_encode($cards, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
+      }
+      if ($tags !== NULL) {
+        $node->set('field_archetype_tags', array_map(
+          static fn(string $t): array => ['value' => $t],
+          $tags,
+        ));
+      }
       $node->setNewRevision(FALSE);
       $node->save();
       return 'updated';
+    }
+
+    // No existing node and no deck data: cannot create a useful stub.
+    if ($cards === NULL || $tags === NULL) {
+      return 'skipped';
     }
 
     // Build tag items for the multi-value string field.
@@ -312,7 +336,7 @@ final class MetaDeckScraperService {
       'status'               => 1,
       'field_format_term'    => ['target_id' => $termId],
       'field_meta_share'     => round($metaShare, 2),
-      'field_cards_json'     => $cardsJson,
+      'field_cards_json'     => json_encode($cards, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
       'field_archetype_tags' => $tagItems,
       'field_fetched_at'     => $fetchedAt,
     ]);

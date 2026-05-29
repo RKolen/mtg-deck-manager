@@ -10,3 +10,4 @@ services:
     arguments:
       - '@entity_type.manager'
       - '@http_client'
+      - '@cache.graphql.results'
