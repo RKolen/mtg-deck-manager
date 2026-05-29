@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from engine.abilities.keywords.other.etb import apply_etb_other_abilities
 from engine.abilities.keywords.other.ninjutsu import apply_ninjutsu, has_ninjutsu
-from engine.game.helpers import card_to_client
+from engine.game.helpers import HandCastContext, card_to_client
 from tests.conftest import add_to_hand, fresh_game, make_creature, place_on_battlefield
 
 
@@ -24,7 +24,7 @@ def test_encore_marks_on_etb():
 def test_card_to_client_exposes_evoke_and_bloodrush():
     """Hand serialisation includes evoke and bloodrush flags."""
     card = make_creature('Drifter', 2, 2, oracle='Flying\nEvoke {2}{U}')
-    data = card_to_client(0, card, 10, phase='main1', stack_is_empty=True)
+    data = card_to_client(0, card, 10, HandCastContext())
     assert data['hasEvoke'] is True
     assert data['evokeAffordable'] is True
 
@@ -34,7 +34,7 @@ def test_card_to_client_exposes_evoke_and_bloodrush():
         4,
         oracle='Bloodrush — {R}, Discard Ghor: Target creature gets +4/+0.',
     )
-    rush_data = card_to_client(0, rush, 5, phase='main1', stack_is_empty=True)
+    rush_data = card_to_client(0, rush, 5, HandCastContext())
     assert rush_data['canBloodrush'] is True
 
 

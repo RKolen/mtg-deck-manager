@@ -19,6 +19,18 @@ from engine.abilities.keywords.other.craft import has_craft
 from engine.abilities.keywords.casting.disturb import can_cast_via_disturb
 from engine.abilities.keywords.casting.escape import can_cast_via_escape, escape_exiles_required
 from engine.abilities.keywords.casting.flashback import can_cast_via_flashback
+from engine.abilities.keywords.casting.foretell import (
+    can_cast_foretold,
+    can_foretell_setup,
+    has_foretell,
+)
+from engine.abilities.keywords.casting.madness import can_cast_via_madness
+from engine.abilities.keywords.casting.plot import (
+    can_cast_plotted,
+    can_plot_setup,
+    is_plottable_sorcery,
+)
+from engine.abilities.keywords.casting.suspend import can_suspend
 from engine.abilities.keywords.other.dredge import apply_dredge, can_dredge_instead_of_draw
 from engine.abilities.keywords.other.encore import can_encore
 from engine.abilities.keywords.other.eternalize import can_eternalize
@@ -382,6 +394,38 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
             actions.append("bloodrush")
         if self._hand_can_ninjutsu():
             actions.append("ninjutsu")
+        self._append_delayed_cast_setup_actions(actions)
+        self._append_graveyard_cast_actions(actions)
+        if self._battlefield_can_craft():
+            actions.append("craft")
+        if self._battlefield_can_boast():
+            actions.append("boast")
+        if self._battlefield_can_activate():
+            actions.append("activate")
+        if self._battlefield_can_outlast():
+            actions.append("outlast")
+        if self.phase == "main1":
+            actions.append("go_to_attack")
+        actions.append("end_turn")
+        return actions
+
+    def _append_delayed_cast_setup_actions(self, actions: list[str]) -> None:
+        """Append suspend, foretell, plot, madness, and exile cast actions."""
+        if self._hand_can_suspend():
+            actions.append("suspend")
+        if self._hand_can_foretell():
+            actions.append("foretell")
+        if self._hand_can_plot():
+            actions.append("plot")
+        if self._hand_can_madness():
+            actions.append("cast_madness")
+        if self._exile_can_foretell():
+            actions.append("cast_foretell")
+        if self._exile_can_plot():
+            actions.append("cast_plot")
+
+    def _append_graveyard_cast_actions(self, actions: list[str]) -> None:
+        """Append graveyard cast and activation actions for main phase."""
         if self._graveyard_can_unearth():
             actions.append("unearth")
         if self._graveyard_can_scavenge():
@@ -396,18 +440,6 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
             actions.append("cast_flashback")
         if self._graveyard_can_escape():
             actions.append("cast_escape")
-        if self._battlefield_can_craft():
-            actions.append("craft")
-        if self._battlefield_can_boast():
-            actions.append("boast")
-        if self._battlefield_can_activate():
-            actions.append("activate")
-        if self._battlefield_can_outlast():
-            actions.append("outlast")
-        if self.phase == "main1":
-            actions.append("go_to_attack")
-        actions.append("end_turn")
-        return actions
 
     def _hand_can_cycle(self) -> bool:
         """Return True when a hand card can activate cycling."""
@@ -448,6 +480,74 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
             and can_ninjutsu(require_card_info(c), self.phase, True)
             for c in self._zones(0).hand
         )
+
+    def _hand_can_suspend(self) -> bool:
+        """Return True when a hand card can be suspended."""
+        if not self.state.stack.is_empty:
+            return False
+        return any(
+            isinstance(c, CardObject)
+            and can_suspend(require_card_info(c), self.phase, True)
+            for c in self._zones(0).hand
+        )
+
+    def _hand_can_foretell(self) -> bool:
+        """Return True when a hand card can be foretold."""
+        if not self.state.stack.is_empty:
+            return False
+        return any(
+            isinstance(c, CardObject)
+            and has_foretell(require_card_info(c))
+            and can_foretell_setup(self.phase, True)
+            for c in self._zones(0).hand
+        )
+
+    def _hand_can_plot(self) -> bool:
+        """Return True when a hand sorcery can be plotted."""
+        if not self.state.stack.is_empty:
+            return False
+        return any(
+            isinstance(c, CardObject)
+            and is_plottable_sorcery(require_card_info(c))
+            and can_plot_setup(self.phase, True)
+            for c in self._zones(0).hand
+        )
+
+    def _hand_can_madness(self) -> bool:
+        """Return True when a hand card can be cast for madness."""
+        if not self.state.stack.is_empty:
+            return False
+        return any(
+            isinstance(c, CardObject)
+            and can_cast_via_madness(require_card_info(c), self.phase, True)
+            for c in self._zones(0).hand
+        )
+
+    def _exile_can_foretell(self) -> bool:
+        """Return True when a foretold card in exile can be cast."""
+        if not self.state.stack.is_empty:
+            return False
+        for card in self._zones(0).exile:
+            if not isinstance(card, CardObject) or card.card_info is None:
+                continue
+            if card.exiled_cast_mode != 'foretell':
+                continue
+            if can_cast_foretold(card.card_info, self.phase, True):
+                return True
+        return False
+
+    def _exile_can_plot(self) -> bool:
+        """Return True when a plotted card in exile can be cast."""
+        if not self.state.stack.is_empty:
+            return False
+        for card in self._zones(0).exile:
+            if not isinstance(card, CardObject) or card.card_info is None:
+                continue
+            if card.exiled_cast_mode != 'plot':
+                continue
+            if can_cast_plotted(card.card_info, self.phase, True):
+                return True
+        return False
 
     def _graveyard_can_unearth(self) -> bool:
         """Return True when a graveyard card can be unearthed."""

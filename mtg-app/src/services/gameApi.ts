@@ -33,11 +33,23 @@ export interface CardInHand {
   canChannel?: boolean;
   canNinjutsu?: boolean;
   ninjutsuAffordable?: boolean;
+  canSuspend?: boolean;
+  suspendAffordable?: boolean;
+  canForetell?: boolean;
+  canPlot?: boolean;
+  hasMadness?: boolean;
+  madnessAffordable?: boolean;
 }
 
 export interface GraveyardCard {
   idx: number;
   name: string;
+}
+
+export interface ExileCard {
+  idx: number;
+  name: string;
+  castMode?: string;
 }
 
 export interface PermanentOnBoard {
@@ -75,6 +87,7 @@ export interface GameState {
   playerLandPlayed: boolean;
   playerGraveyard: string[];
   playerGraveyardCards?: GraveyardCard[];
+  playerExileCards?: ExileCard[];
 
   opponentHandCount: number;
   opponentBattlefield: PermanentOnBoard[];

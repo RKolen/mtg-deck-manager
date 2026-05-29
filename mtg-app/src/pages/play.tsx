@@ -53,6 +53,8 @@ type PendingGyAction =
   | 'scavenge'
   | null;
 
+type PendingExileAction = 'cast_foretell' | 'cast_plot' | null;
+
 const PHASE_LABELS: Record<string, string> = {
   mulligan: 'Mulligan',
   draw: 'Draw step',
@@ -182,6 +184,7 @@ const PlayPage: React.FC = () => {
   const [casualtySacrificeUid, setCasualtySacrificeUid] = useState<string | null>(null);
   const [pendingAlt, setPendingAlt] = useState<PendingAlt>(null);
   const [pendingGyAction, setPendingGyAction] = useState<PendingGyAction>(null);
+  const [pendingExileAction, setPendingExileAction] = useState<PendingExileAction>(null);
   const [craftHostUid, setCraftHostUid] = useState<string | null>(null);
   const [craftArtifactIds, setCraftArtifactIds] = useState<string[]>([]);
   const [scavengeGyIdx, setScavengeGyIdx] = useState<number | null>(null);
@@ -219,6 +222,7 @@ const PlayPage: React.FC = () => {
     setCasualtySacrificeUid(null);
     setPendingAlt(null);
     setPendingGyAction(null);
+    setPendingExileAction(null);
     setCraftHostUid(null);
     setCraftArtifactIds([]);
     setScavengeGyIdx(null);
@@ -254,6 +258,12 @@ const PlayPage: React.FC = () => {
   const canEscape = gs?.availableActions.includes('cast_escape');
   const canScavenge = gs?.availableActions.includes('scavenge');
   const canDredge = gs?.availableActions.includes('dredge');
+  const canSuspend = gs?.availableActions.includes('suspend');
+  const canForetell = gs?.availableActions.includes('foretell');
+  const canPlot = gs?.availableActions.includes('plot');
+  const canCastMadness = gs?.availableActions.includes('cast_madness');
+  const canCastForetell = gs?.availableActions.includes('cast_foretell');
+  const canCastPlot = gs?.availableActions.includes('cast_plot');
   const _canAttack = gs?.availableActions.includes('go_to_attack') || phase === 'attack'; void _canAttack;
   const inCombat = phase === 'attack';
 
@@ -278,6 +288,7 @@ const PlayPage: React.FC = () => {
       setCasualtySacrificeUid(null);
       setPendingAlt(null);
       setPendingGyAction(null);
+    setPendingExileAction(null);
       return;
     }
     setSelectedHandIdx(idx);
@@ -287,6 +298,7 @@ const PlayPage: React.FC = () => {
     setCasualtySacrificeUid(null);
     setPendingAlt(null);
     setPendingGyAction(null);
+    setPendingExileAction(null);
     if (['burn', 'pump', 'removal'].includes(card.category)) {
       setWaitingTarget(true);
       setTargetMode(card.category === 'pump' ? 'self' : 'opp');
@@ -391,11 +403,17 @@ const PlayPage: React.FC = () => {
     void act('craft', { permanentUid: craftHostUid, craftArtifactIds });
   }
 
+  function handleExileClick(idx: number) {
+    if (!pendingExileAction) return;
+    void act(pendingExileAction, { handIdx: idx, targetPlayer: 1 });
+  }
+
   function handleGraveyardClick(idx: number) {
     if (!pendingGyAction) return;
     if (pendingGyAction === 'scavenge') {
       setScavengeGyIdx(idx);
       setPendingGyAction(null);
+    setPendingExileAction(null);
       setPendingAlt('scavenge_target');
       setWaitingTarget(true);
       setTargetMode('self');
@@ -437,6 +455,7 @@ const PlayPage: React.FC = () => {
     setCasualtySacrificeUid(null);
     setPendingAlt(null);
     setPendingGyAction(null);
+    setPendingExileAction(null);
     setCraftHostUid(null);
     setCraftArtifactIds([]);
     setScavengeGyIdx(null);
@@ -553,7 +572,7 @@ const PlayPage: React.FC = () => {
           <span style={{ color: '#666', fontSize: '0.78rem' }}>
             Your GY: {gs.playerGraveyard.slice(-3).join(', ') || '—'}
           </span>
-          {(pendingAlt || pendingGyAction) && (
+          {(pendingAlt || pendingGyAction || pendingExileAction) && (
             <span style={{ marginLeft: 'auto', color: '#f1c40f', fontWeight: 600, fontSize: '0.85rem' }}>
               {pendingAlt === 'bloodrush' && 'Bloodrush: click your creature to pump'}
               {pendingAlt === 'ninjutsu' && 'Ninjutsu: click your attacker to replace'}
@@ -571,6 +590,8 @@ const PlayPage: React.FC = () => {
               {pendingGyAction === 'cast_escape' && 'Escape: click a card in your graveyard'}
               {pendingGyAction === 'dredge' && 'Dredge: click a card with dredge in your graveyard'}
               {pendingGyAction === 'scavenge' && 'Scavenge: click a creature card in your graveyard'}
+              {pendingExileAction === 'cast_foretell' && 'Foretell cast: click a foretold card in exile'}
+              {pendingExileAction === 'cast_plot' && 'Plot cast: click a plotted card in exile'}
             </span>
           )}
           {selectedCard && waitingTarget && !pendingAlt && !pendingGyAction && (
@@ -608,6 +629,24 @@ const PlayPage: React.FC = () => {
             />
           ))}
         </div>
+
+        {(gs.playerExileCards?.length ?? 0) > 0 && pendingExileAction && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ color: '#888', fontSize: '0.78rem' }}>Exile:</span>
+            {gs.playerExileCards!
+              .filter(card => card.castMode === (pendingExileAction === 'cast_foretell' ? 'foretell' : 'plot'))
+              .map(card => (
+                <button
+                  key={card.idx}
+                  type="button"
+                  onClick={() => handleExileClick(card.idx)}
+                  style={btnStyle('#2c3e50')}
+                >
+                  [{card.idx}] {card.name}
+                </button>
+              ))}
+          </div>
+        )}
 
         {(gs.playerGraveyardCards?.length ?? 0) > 0 && pendingGyAction && (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -764,10 +803,48 @@ const PlayPage: React.FC = () => {
                     Channel
                   </button>
                 )}
+                {selectedCard.canSuspend && canSuspend && (
+                  <button
+                    type="button"
+                    disabled={!selectedCard.suspendAffordable}
+                    onClick={() => void act('suspend', { handIdx: selectedHandIdx! })}
+                    style={btnStyle('#5b2c6f')}
+                  >
+                    Suspend
+                  </button>
+                )}
+                {selectedCard.canForetell && canForetell && (
+                  <button
+                    type="button"
+                    onClick={() => void act('foretell', { handIdx: selectedHandIdx! })}
+                    style={btnStyle('#1f618d')}
+                  >
+                    Foretell
+                  </button>
+                )}
+                {selectedCard.canPlot && canPlot && (
+                  <button
+                    type="button"
+                    onClick={() => void act('plot', { handIdx: selectedHandIdx! })}
+                    style={btnStyle('#117a65')}
+                  >
+                    Plot
+                  </button>
+                )}
+                {selectedCard.hasMadness && canCastMadness && (
+                  <button
+                    type="button"
+                    disabled={!selectedCard.madnessAffordable}
+                    onClick={() => void act('cast_madness', { handIdx: selectedHandIdx!, targetPlayer: 1 })}
+                    style={btnStyle('#922b21')}
+                  >
+                    Cast for Madness
+                  </button>
+                )}
               </>
             )}
 
-            {!selectedCard && !waitingTarget && !pendingAlt && !pendingGyAction && (
+            {!selectedCard && !waitingTarget && !pendingAlt && !pendingGyAction && !pendingExileAction && (
               <>
                 {canBoast && (
                   <button type="button" onClick={() => setPendingAlt('boast')} style={btnStyle('#d35400')}>
@@ -819,6 +896,16 @@ const PlayPage: React.FC = () => {
                     Scavenge
                   </button>
                 )}
+                {canCastForetell && (
+                  <button type="button" onClick={() => setPendingExileAction('cast_foretell')} style={btnStyle('#1f618d')}>
+                    Cast Foretell
+                  </button>
+                )}
+                {canCastPlot && (
+                  <button type="button" onClick={() => setPendingExileAction('cast_plot')} style={btnStyle('#117a65')}>
+                    Cast Plot
+                  </button>
+                )}
               </>
             )}
 
@@ -833,7 +920,7 @@ const PlayPage: React.FC = () => {
               </button>
             )}
 
-            {(waitingTarget || pendingAlt || pendingGyAction) && (
+            {(waitingTarget || pendingAlt || pendingGyAction || pendingExileAction) && (
               <button
                 type="button"
                 onClick={resetPendingUi}

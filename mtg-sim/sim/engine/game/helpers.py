@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from deck_registry import CardInfo
 from engine.abilities.activated.bloodrush import (
     bloodrush_mana_needed,
@@ -9,6 +11,14 @@ from engine.abilities.activated.bloodrush import (
     has_bloodrush,
 )
 from engine.abilities.activated.card_keyword_abilities import can_channel, can_cycle
+from engine.abilities.keywords.casting.foretell import can_foretell_setup, has_foretell
+from engine.abilities.keywords.casting.madness import (
+    can_cast_via_madness,
+    has_madness,
+    madness_mana_needed,
+)
+from engine.abilities.keywords.casting.plot import can_plot_setup, is_plottable_sorcery
+from engine.abilities.keywords.casting.suspend import can_suspend, suspend_mana_needed
 from engine.abilities.keywords import has_flash
 from engine.abilities.keywords.casting.evoke import evoke_mana_needed, has_evoke
 from engine.abilities.keywords.other.ninjutsu import (
@@ -39,7 +49,7 @@ __all__ = [
     "SpellCastContext",
     "card_names",
     "card_to_client",
-    "expand_deck",
+    "HandCastContext",
     "has_instant_timing",
     "is_land",
     "last_creature",
@@ -52,6 +62,16 @@ __all__ = [
     "target_uid",
     "targets_from_request",
 ]
+
+
+@dataclass(frozen=True)
+class HandCastContext:
+    """Timing and affinity context for serialising a hand card."""
+
+    phase: str = 'main1'
+    stack_is_empty: bool = True
+    zones: ZoneManager | None = None
+    controller_idx: int = 0
 
 
 def expand_deck(cards: list[CardInfo], player_idx: int) -> list[CardObject]:
@@ -69,18 +89,37 @@ def expand_deck(cards: list[CardInfo], player_idx: int) -> list[CardObject]:
     return result
 
 
+def _hand_alt_activation_flags(
+    card: CardInfo,
+    phase: str,
+    stack_is_empty: bool,
+    available_mana: int,
+) -> dict[str, bool]:
+    """Return per-card suspend/foretell/plot/madness UI flags for hand cards."""
+    suspend_ok = can_suspend(card, phase, stack_is_empty)
+    foretell_ok = has_foretell(card) and can_foretell_setup(phase, stack_is_empty)
+    plot_ok = is_plottable_sorcery(card) and can_plot_setup(phase, stack_is_empty)
+    madness_ok = has_madness(card) and can_cast_via_madness(card, phase, stack_is_empty)
+    return {
+        "canSuspend": suspend_ok,
+        "suspendAffordable": suspend_ok and available_mana >= suspend_mana_needed(card)[0],
+        "canForetell": foretell_ok,
+        "canPlot": plot_ok,
+        "hasMadness": madness_ok,
+        "madnessAffordable": madness_ok and available_mana >= madness_mana_needed(card)[0],
+    }
+
+
 def card_to_client(
     idx: int,
     card: CardInfo,
     available_mana: int,
-    *,
-    phase: str = "main1",
-    stack_is_empty: bool = True,
-    affinity_context: tuple[ZoneManager, int] | None = None,
+    context: HandCastContext | None = None,
 ) -> dict:
     """Serialise one hand card using the existing client shape."""
-    zones = affinity_context[0] if affinity_context is not None else None
-    controller_idx = affinity_context[1] if affinity_context is not None else 0
+    ctx = context or HandCastContext()
+    zones = ctx.zones
+    controller_idx = ctx.controller_idx
     affordable = is_affordable(
         card,
         available_mana,
@@ -90,8 +129,14 @@ def card_to_client(
     has_evoke_kw = has_evoke(card)
     evoke_mana = evoke_mana_needed(card)[0] if has_evoke_kw else 0
     bloodrush = has_bloodrush(card)
-    bloodrush_ok = bloodrush and can_bloodrush(card, phase, stack_is_empty)
+    bloodrush_ok = bloodrush and can_bloodrush(card, ctx.phase, ctx.stack_is_empty)
     bloodrush_mana = bloodrush_mana_needed(card) if bloodrush else 0
+    alt_flags = _hand_alt_activation_flags(
+        card,
+        ctx.phase,
+        ctx.stack_is_empty,
+        available_mana,
+    )
     return {
         "idx": idx,
         "name": card.name,
@@ -108,15 +153,16 @@ def card_to_client(
         "evokeAffordable": has_evoke_kw and available_mana >= evoke_mana,
         "canBloodrush": bloodrush_ok,
         "bloodrushAffordable": bloodrush_ok and available_mana >= bloodrush_mana,
-        "canCycle": can_cycle(card, phase, stack_is_empty),
-        "canChannel": can_channel(card, phase, stack_is_empty),
-        "canNinjutsu": can_ninjutsu(card, phase, stack_is_empty),
+        "canCycle": can_cycle(card, ctx.phase, ctx.stack_is_empty),
+        "canChannel": can_channel(card, ctx.phase, ctx.stack_is_empty),
+        "canNinjutsu": can_ninjutsu(card, ctx.phase, ctx.stack_is_empty),
         "ninjutsuAffordable": (
-            can_ninjutsu(card, phase, stack_is_empty)
+            can_ninjutsu(card, ctx.phase, ctx.stack_is_empty)
             and available_mana >= ninjutsu_mana_needed(card)
         )
         if has_ninjutsu(card)
         else False,
+        **alt_flags,
     }
 
 

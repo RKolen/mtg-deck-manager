@@ -15,7 +15,13 @@ from engine.core.game_object import (
     spell_returns_to_hand_on_resolve,
 )
 from engine.game._hand_card import graveyard_card_or_error, hand_card_or_error
-from engine.game.helpers import card_to_client, has_instant_timing, is_land, require_card_info
+from engine.game.helpers import (
+    HandCastContext,
+    card_to_client,
+    has_instant_timing,
+    is_land,
+    require_card_info,
+)
 
 if TYPE_CHECKING:
     from engine.core.game_state import GameState
@@ -66,6 +72,7 @@ class GameRuntimeMixin:
             "playerLandPlayed": self.state.players[0].land_played,
             "playerGraveyard": self._graveyard_names(0),
             "playerGraveyardCards": self._graveyard_cards(0),
+            "playerExileCards": self._exile_cards(0),
             "opponentHandCount": len(self._zones(1).hand),
             "opponentBattlefield": self._battlefield_to_client(1),
             "opponentLife": self.state.players[1].life,
@@ -92,9 +99,12 @@ class GameRuntimeMixin:
                 idx,
                 require_card_info(card),
                 available,
-                phase=self.phase,
-                stack_is_empty=stack_empty,
-                affinity_context=(self.state.zones, player_idx),
+                HandCastContext(
+                    phase=self.phase,
+                    stack_is_empty=stack_empty,
+                    zones=self.state.zones,
+                    controller_idx=player_idx,
+                ),
             )
             for idx, card in enumerate(hand)
             if isinstance(card, CardObject) and card.card_info is not None
@@ -114,6 +124,17 @@ class GameRuntimeMixin:
         for idx, card in enumerate(self._zones(player_idx).graveyard):
             if isinstance(card, CardObject) and card.card_info is not None:
                 cards.append({"idx": idx, "name": card.card_info.name})
+        return cards
+
+    def _exile_cards(self, player_idx: int) -> list[dict]:
+        """Return exiled cards with indices for foretell/plot casts."""
+        cards: list[dict] = []
+        for idx, card in enumerate(self._zones(player_idx).exile):
+            if isinstance(card, CardObject) and card.card_info is not None:
+                entry: dict = {"idx": idx, "name": card.card_info.name}
+                if card.exiled_cast_mode:
+                    entry["castMode"] = card.exiled_cast_mode
+                cards.append(entry)
         return cards
 
     def _has_castable_instant(self) -> bool:
