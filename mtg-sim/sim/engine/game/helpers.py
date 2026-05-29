@@ -22,7 +22,10 @@ from engine.abilities.keywords.casting.suspend import can_suspend, suspend_mana_
 from engine.abilities.keywords import has_flash
 from engine.abilities.keywords.casting.assist import has_assist
 from engine.abilities.keywords.casting.cleave import has_cleave
-from engine.abilities.keywords.casting.conspire import has_conspire
+from engine.abilities.keywords.casting.conspire import (
+    conspire_color_match,
+    has_conspire,
+)
 from engine.abilities.keywords.casting.convoke import has_convoke
 from engine.abilities.keywords.casting.delve import has_delve
 from engine.abilities.keywords.casting.emerge import has_emerge
@@ -171,6 +174,11 @@ def card_to_client(
         "hasAssist": has_assist(card),
         "hasCleave": has_cleave(card),
         "hasConspire": has_conspire(card),
+        "conspireAvailable": (
+            conspire_color_match(card, ctx.game.zones, controller_idx)
+            if ctx.game is not None and has_conspire(card)
+            else False
+        ),
         "hasDelve": has_delve(card),
         "hasImprovise": has_improvise(card),
         "hasEmerge": has_emerge(card),

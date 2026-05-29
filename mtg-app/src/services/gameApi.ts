@@ -40,6 +40,10 @@ export interface CardInHand {
   hasMadness?: boolean;
   madnessAffordable?: boolean;
   hasConvoke?: boolean;
+  hasAssist?: boolean;
+  hasCleave?: boolean;
+  hasConspire?: boolean;
+  conspireAvailable?: boolean;
   hasDelve?: boolean;
   hasImprovise?: boolean;
   hasEmerge?: boolean;
@@ -138,6 +142,9 @@ export interface GameActionOpts {
   castForDash?: boolean;
   castForBlitz?: boolean;
   castForFreerunning?: boolean;
+  castForCleave?: boolean;
+  paidConspire?: boolean;
+  assistMana?: number;
   sneakLandHandIndices?: number[];
   craftArtifactIds?: string[];
   kickerTimes?: number;
@@ -188,6 +195,9 @@ export async function gameAction(
     castForDash: opts.castForDash ?? false,
     castForBlitz: opts.castForBlitz ?? false,
     castForFreerunning: opts.castForFreerunning ?? false,
+    castForCleave: opts.castForCleave ?? false,
+    paidConspire: opts.paidConspire ?? false,
+    assistMana: opts.assistMana ?? 0,
     sneakLandHandIndices: opts.sneakLandHandIndices ?? [],
     craftArtifactIds: opts.craftArtifactIds ?? [],
     kickerTimes: opts.kickerTimes ?? 0,

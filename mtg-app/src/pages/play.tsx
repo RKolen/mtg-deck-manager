@@ -203,6 +203,9 @@ const PlayPage: React.FC = () => {
   const [castForDash, setCastForDash] = useState(false);
   const [castForBlitz, setCastForBlitz] = useState(false);
   const [castForFreerunning, setCastForFreerunning] = useState(false);
+  const [castForCleave, setCastForCleave] = useState(false);
+  const [paidConspire, setPaidConspire] = useState(false);
+  const [assistMana, setAssistMana] = useState(0);
   const [sneakLandHandIndices, setSneakLandHandIndices] = useState<number[]>([]);
   const [castForMiracle, setCastForMiracle] = useState(false);
   const [pendingBoardAction, setPendingBoardAction] = useState<PendingBoardAction>(null);
@@ -257,6 +260,9 @@ const PlayPage: React.FC = () => {
     setCastForDash(false);
     setCastForBlitz(false);
     setCastForFreerunning(false);
+    setCastForCleave(false);
+    setPaidConspire(false);
+    setAssistMana(0);
     setSneakLandHandIndices([]);
     setCastForMiracle(false);
     setPendingBoardAction(null);
@@ -365,6 +371,9 @@ const PlayPage: React.FC = () => {
       setCastForSpectacle(false);
       setCastForMorph(false);
       setCastForMiracle(false);
+      setCastForCleave(false);
+      setPaidConspire(false);
+      setAssistMana(0);
       setPaidCasualty(false);
       setCasualtySacrificeUid(null);
       setPendingCastModifier(null);
@@ -388,6 +397,9 @@ const PlayPage: React.FC = () => {
     setCastForDash(false);
     setCastForBlitz(false);
     setCastForFreerunning(false);
+    setCastForCleave(false);
+    setPaidConspire(false);
+    setAssistMana(0);
     setSneakLandHandIndices([]);
     setCastForMiracle(false);
     setPendingBoardAction(null);
@@ -420,6 +432,9 @@ const PlayPage: React.FC = () => {
       || card.hasDash
       || card.hasBlitz
       || card.hasFreerunning
+      || card.hasCleave
+      || card.hasConspire
+      || card.hasAssist
     ) {
       // Wait for Cast / options before sending to server
     } else {
@@ -465,6 +480,9 @@ const PlayPage: React.FC = () => {
       castForDash,
       castForBlitz,
       castForFreerunning,
+      castForCleave,
+      paidConspire,
+      assistMana,
       sneakLandHandIndices,
       castForMiracle,
       paidCasualty,
@@ -655,6 +673,9 @@ const PlayPage: React.FC = () => {
     setCastForDash(false);
     setCastForBlitz(false);
     setCastForFreerunning(false);
+    setCastForCleave(false);
+    setPaidConspire(false);
+    setAssistMana(0);
     setSneakLandHandIndices([]);
     setCastForMiracle(false);
     setPendingBoardAction(null);
@@ -1083,6 +1104,42 @@ const PlayPage: React.FC = () => {
                     />
                     Cast for Emerge
                     {emergeSacrificeUid && ' (sacrifice selected)'}
+                  </label>
+                )}
+                {canCast && selectedCard.hasCleave && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', color: '#ddd' }}>
+                    <input
+                      type="checkbox"
+                      checked={castForCleave}
+                      onChange={e => setCastForCleave(e.target.checked)}
+                    />
+                    Cast for Cleave
+                  </label>
+                )}
+                {canCast && selectedCard.hasConspire && selectedCard.conspireAvailable && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', color: '#ddd' }}>
+                    <input
+                      type="checkbox"
+                      checked={paidConspire}
+                      onChange={e => setPaidConspire(e.target.checked)}
+                    />
+                    Pay Conspire (+2, copy on stack)
+                  </label>
+                )}
+                {canCast && selectedCard.hasAssist && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem', color: '#ddd' }}>
+                    Assist mana
+                    <input
+                      type="number"
+                      min={0}
+                      max={selectedCard.cmc}
+                      value={assistMana}
+                      onChange={e => {
+                        const next = Math.max(0, Math.min(selectedCard.cmc, Number(e.target.value) || 0));
+                        setAssistMana(next);
+                      }}
+                      style={{ width: 48, padding: '2px 4px' }}
+                    />
                   </label>
                 )}
                 {canCast && selectedCard.hasConvoke && (
