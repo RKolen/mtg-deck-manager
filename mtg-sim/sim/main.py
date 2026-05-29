@@ -32,21 +32,22 @@ import asyncio
 import logging
 import os
 import pathlib
-import sim_statistics
 
-# Load .env from the same directory as this file (if python-dotenv is installed).
+# Load .env before importing any local modules that read env vars at import time.
 try:
     from dotenv import load_dotenv
     load_dotenv(pathlib.Path(__file__).parent / ".env")
 except ImportError:
     pass
 
+import sim_statistics
+
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from deck_registry import fetch_meta_deck, fetch_player_deck
+from deck_registry import fetch_deck_title, fetch_meta_deck, fetch_player_deck
 from forge_adapter import ForgeAdapter
 from engine.game import InteractiveGame, create_game, get_game, remove_game
 from engine.game.action_dispatch import dispatch_game_action
@@ -118,6 +119,8 @@ async def simulate(req: SimulateRequest) -> dict:
             status_code=404, detail=f"Deck {req.playerDeckId} has no cards."
         )
 
+    deck_title = await asyncio.to_thread(fetch_deck_title, req.playerDeckId)
+
     try:
         opponent_deck = await asyncio.to_thread(fetch_meta_deck, req.opponentArchetype, req.format)
     except Exception as exc:
@@ -139,7 +142,7 @@ async def simulate(req: SimulateRequest) -> dict:
         player_deck,
         opponent_deck,
         req.games,
-        (f"Deck #{req.playerDeckId}", req.opponentArchetype),
+        (deck_title, req.opponentArchetype),
     )
 
     if not results:
@@ -151,10 +154,10 @@ async def simulate(req: SimulateRequest) -> dict:
     return await asyncio.to_thread(
         sim_statistics.compute_statistics,
         results,
-        f"Deck #{req.playerDeckId}",
+        deck_title,
         req.opponentArchetype,
         req.format,
-        not adapter.is_mock,
+        req.useLlm,
     )
 
 

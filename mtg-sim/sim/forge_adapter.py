@@ -27,6 +27,7 @@ import random
 import re
 import subprocess
 import uuid
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Optional
 
@@ -98,6 +99,239 @@ class SimResult:
     def player_won(self) -> bool:
         """True when the player (index 0) won this game."""
         return self.winner == 0
+
+
+# ---------------------------------------------------------------------------
+# Verbose output parser helpers
+# ---------------------------------------------------------------------------
+
+@dataclass
+class _GameState:
+    """Mutable per-game state used by _ForgeVerboseParser."""
+
+    turn_num: Optional[int] = None
+    win_cond: str = ""
+    game_turn: int = 0
+    half_player: int = -1
+    p_life: int = 20
+    o_life: int = 20
+    mulls: list[int] = field(default_factory=lambda: [0, 0])
+    plays: list[str] = field(default_factory=list)
+    dmg: int = 0
+    p_lands: int = 0
+    opp_dmg: Counter[str] = field(default_factory=Counter)
+    turn_events: list[TurnEvent] = field(default_factory=list)
+
+
+class _ForgeVerboseParser:
+    """Line-by-line parser for Forge verbose (no -q flag) stdout."""
+
+    _MULLIGAN = re.compile(r"Mulligan: (.+?) has kept a hand of (\d+) cards")
+    _TURN_START = re.compile(r"Turn: Turn (\d+) \((.+?)\)")
+    _LIFE = re.compile(r"Life: Life: (.+?) \d+ > (\d+)")
+    _CAST = re.compile(r"Add To Stack: (.+?) cast (.+)")
+    _LAND = re.compile(r"Land: (.+?) played (.+)")
+    _DAMAGE = re.compile(r"Damage: (.+?) deals (\d+) .+?damage to (.+?)\.")
+    _TURN_OUTCOME = re.compile(r"Game Outcome: Turn (\d+)", re.IGNORECASE)
+    _WIN_COND = re.compile(r"Game Outcome: .+ has won because (.+)", re.IGNORECASE)
+    _GAME_RESULT = re.compile(
+        r"Game Result: Game (\d+) ended.*?(?:(\S.*?) has won!|a Draw)",
+        re.IGNORECASE,
+    )
+
+    def __init__(self, player_name: str) -> None:
+        """Initialise parser with the short player deck name."""
+        self._player_name = player_name
+        self._p_forge = f"Ai(1)-{player_name}"
+        self._results: list[SimResult] = []
+        self._st = _GameState()
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _flush(self) -> None:
+        """Commit the current half-turn data to turn_events."""
+        if self._st.half_player < 0:
+            return
+        self._st.turn_events.append(TurnEvent(
+            turn=self._st.game_turn,
+            player=self._st.half_player,
+            mana_available=self._st.p_lands if self._st.half_player == 0 else 0,
+            plays=list(self._st.plays),
+            damage_dealt=self._st.dmg,
+            life_totals=[self._st.p_life, self._st.o_life],
+            hand_size=0,
+            creatures_in_play=0,
+            board_power=0,
+        ))
+
+    def _commit(self, game_num: int, winner_raw: Optional[str]) -> None:
+        """Finalise a game and append a SimResult."""
+        on_play = game_num % 2 == 1
+        if winner_raw is None:
+            winner = random.randint(0, 1)
+        else:
+            winner = 0 if self._player_name in winner_raw else 1
+        key_cards = (
+            [c for c, _ in self._st.opp_dmg.most_common(5)] if winner == 1 else []
+        )
+        log = GameLog(
+            game_index=game_num - 1,
+            on_the_play=on_play,
+            player_mulligan=self._st.mulls[0],
+            opponent_mulligan=self._st.mulls[1],
+            player_opening_hand=[],
+            turns=list(self._st.turn_events),
+            winner=winner,
+            final_turn=self._st.turn_num or self._st.game_turn,
+            player_final_life=self._st.p_life,
+            opponent_final_life=self._st.o_life,
+            win_condition=self._st.win_cond,
+        )
+        self._results.append(SimResult(
+            winner=winner,
+            turns=self._st.turn_num,
+            player_life=self._st.p_life,
+            opponent_life=self._st.o_life,
+            key_cards_on_loss=key_cards,
+            on_the_play=on_play,
+            player_mulligan=self._st.mulls[0],
+            opponent_mulligan=self._st.mulls[1],
+            log=log,
+        ))
+        self._st = _GameState()
+
+    # ------------------------------------------------------------------
+    # Per-prefix handlers (return True when the line was consumed)
+    # ------------------------------------------------------------------
+
+    def _try_mulligan(self, s: str) -> bool:
+        """Handle Mulligan lines."""
+        m = self._MULLIGAN.match(s)
+        if not m:
+            return False
+        kept = int(m.group(2))
+        idx = 0 if self._p_forge in m.group(1) else 1
+        self._st.mulls[idx] = 7 - kept
+        return True
+
+    def _try_turn_start(self, s: str) -> bool:
+        """Handle Turn start lines."""
+        m = self._TURN_START.match(s)
+        if not m:
+            return False
+        self._flush()
+        self._st.game_turn = int(m.group(1))
+        self._st.half_player = 0 if self._p_forge in m.group(2) else 1
+        self._st.plays = []
+        self._st.dmg = 0
+        return True
+
+    def _try_life(self, s: str) -> bool:
+        """Handle Life change lines."""
+        m = self._LIFE.match(s)
+        if not m:
+            return False
+        new_life = int(m.group(2))
+        if self._p_forge in m.group(1):
+            self._st.p_life = new_life
+        else:
+            self._st.o_life = new_life
+        return True
+
+    def _try_cast(self, s: str) -> bool:
+        """Handle Add To Stack cast lines."""
+        m = self._CAST.match(s)
+        if not m:
+            return False
+        is_player = self._p_forge in m.group(1)
+        card = re.sub(r"\s+targeting .+$", "", m.group(2)).strip()
+        if is_player == (self._st.half_player == 0):
+            self._st.plays.append(card)
+        return True
+
+    def _try_land(self, s: str) -> bool:
+        """Handle Land played lines."""
+        m = self._LAND.match(s)
+        if not m:
+            return False
+        is_player = self._p_forge in m.group(1)
+        land = re.sub(r"\s*\(\d+\)\s*$", "", m.group(2)).strip()
+        if is_player:
+            self._st.p_lands += 1
+        if is_player == (self._st.half_player == 0):
+            self._st.plays.append(f"{land} [Land]")
+        return True
+
+    def _try_damage(self, s: str) -> bool:
+        """Handle Damage lines."""
+        m = self._DAMAGE.match(s)
+        if not m:
+            return False
+        source_raw = m.group(1)
+        amount = int(m.group(2))
+        target = m.group(3)
+        if self._p_forge in target:
+            card_name = re.sub(r"\s*\(\d+\)\s*$", "", source_raw).strip()
+            self._st.opp_dmg[card_name] += amount
+        elif self._st.half_player == 0 and self._p_forge not in target:
+            self._st.dmg += amount
+        return True
+
+    def _try_turn_outcome(self, s: str) -> bool:
+        """Handle Game Outcome turn lines."""
+        m = self._TURN_OUTCOME.match(s)
+        if not m:
+            return False
+        self._st.turn_num = int(m.group(1))
+        return True
+
+    def _try_win_cond(self, s: str) -> bool:
+        """Handle Game Outcome win-condition lines."""
+        m = self._WIN_COND.match(s)
+        if not m:
+            return False
+        self._st.win_cond = m.group(1)
+        return True
+
+    def _try_game_result(self, s: str) -> bool:
+        """Handle Game Result lines (end of game)."""
+        m = self._GAME_RESULT.search(s)
+        if not m:
+            return False
+        self._flush()
+        self._commit(int(m.group(1)), m.group(2))
+        return True
+
+    def feed(self, line: str) -> None:
+        """Process one line of Forge verbose output."""
+        s = line.strip()
+        for handler in (
+            self._try_mulligan,
+            self._try_turn_start,
+            self._try_life,
+            self._try_cast,
+            self._try_land,
+            self._try_damage,
+            self._try_turn_outcome,
+            self._try_win_cond,
+            self._try_game_result,
+        ):
+            if handler(s):
+                break
+
+    def results(self) -> list[SimResult]:
+        """Return all completed SimResult objects."""
+        return list(self._results)
+
+
+def _parse_forge_verbose_output(stdout: str, player_name: str) -> list[SimResult]:
+    """Parse Forge verbose stdout (no -q flag) into rich SimResult objects."""
+    parser = _ForgeVerboseParser(player_name)
+    for line in stdout.splitlines():
+        parser.feed(line)
+    return parser.results()
 
 
 # ---------------------------------------------------------------------------
@@ -195,20 +429,20 @@ def run_forge_batch(
     o_dck = _FORGE_DECK_DIR / f"{o_name}.dck"
 
     try:
-        _write_dck(player_cards, player_name, p_dck)
-        _write_dck(opponent_cards, opponent_name, o_dck)
+        _write_dck(player_cards, p_name, p_dck)
+        _write_dck(opponent_cards, o_name, o_dck)
 
-        # Forge's sim deckFromCommandLineParameter prepends DECK_CONSTRUCTED_DIR
-        # to the filename when the name ends with a 3-char extension.
+        logger.info(
+            "Running Forge: %s vs %s, %d games",
+            player_name, opponent_name, n_games,
+        )
         cmd = [
             FORGE_JAVA, "-jar", FORGE_JAR,
             "sim",
             "-d", f"{p_name}.dck", f"{o_name}.dck",
             "-n", str(n_games),
-            "-q",
             "-c", "60",
         ]
-        logger.info("Running Forge: %s", " ".join(cmd))
         try:
             proc = subprocess.run(
                 cmd,
@@ -228,7 +462,7 @@ def run_forge_batch(
         if proc.returncode != 0:
             logger.error("Forge exited %d: %s", proc.returncode, proc.stderr[:500])
 
-        results = _parse_forge_output(proc.stdout, player_name)
+        results = _parse_forge_verbose_output(proc.stdout, p_name)
         if not results:
             logger.warning(
                 "Forge produced no parseable results.\nstdout: %s", proc.stdout[:1000]

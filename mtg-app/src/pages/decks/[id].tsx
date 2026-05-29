@@ -787,6 +787,7 @@ const DeckSimulate: React.FC<DeckSimulateProps> = ({ deckNid, format, deckTitle 
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showLogId, setShowLogId] = useState<string | null>(null);
 
   const { data: metaDecks = [] } = useQuery({
     queryKey: ['metaDecks', format],
@@ -1056,11 +1057,10 @@ const DeckSimulate: React.FC<DeckSimulateProps> = ({ deckNid, format, deckTitle 
                     <td style={{ padding: '0.4rem 0.5rem' }}>
                       <button
                         type="button"
-                        onClick={() => void handleRun(h.opponent)}
-                        disabled={running}
-                        style={{ padding: '0.2rem 0.6rem', fontSize: '0.78rem', background: '#f0f0f0', border: '1px solid #ccc', borderRadius: 3, cursor: running ? 'default' : 'pointer' }}
+                        onClick={() => setShowLogId(showLogId === h.id ? null : h.id)}
+                        style={{ padding: '0.2rem 0.6rem', fontSize: '0.78rem', background: '#f0f0f0', border: '1px solid #ccc', borderRadius: 3, cursor: 'pointer' }}
                       >
-                        Simulate more
+                        {showLogId === h.id ? 'Hide log' : 'Sim log'}
                       </button>
                     </td>
                   </tr>
@@ -1068,6 +1068,28 @@ const DeckSimulate: React.FC<DeckSimulateProps> = ({ deckNid, format, deckTitle 
               })}
             </tbody>
           </table>
+          {showLogId !== null && (() => {
+            const entry = history.find(h => h.id === showLogId);
+            if (!entry) return null;
+            let formatted = entry.resultJson;
+            try { formatted = JSON.stringify(JSON.parse(entry.resultJson), null, 2); }
+            catch { /* leave as-is if malformed */ }
+            return (
+              <div style={{ marginTop: '0.75rem', background: '#1e1e1e', borderRadius: 4, padding: '1rem', position: 'relative' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <span style={{ color: '#ccc', fontSize: '0.85rem', fontWeight: 600 }}>Full sim log — {entry.opponent}</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowLogId(null)}
+                    style={{ background: 'none', border: 'none', color: '#aaa', fontSize: '1.1rem', cursor: 'pointer', lineHeight: 1 }}
+                  >
+                    x
+                  </button>
+                </div>
+                <pre style={{ margin: 0, color: '#d4d4d4', fontSize: '0.78rem', overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: '60vh', overflowY: 'auto' }}>{formatted}</pre>
+              </div>
+            );
+          })()}
         </section>
       )}
     </div>

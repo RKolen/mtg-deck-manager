@@ -190,6 +190,24 @@ def _enrich_by_name(names: list[str]) -> dict[str, dict]:
     return result
 
 
+def fetch_deck_title(deck_nid: int) -> str:
+    """Return the deck node title, or a fallback string if unavailable."""
+    if not DRUPAL_URL:
+        return f"Deck #{deck_nid}"
+    url = urljoin(DRUPAL_URL, f"/jsonapi/node/deck/{deck_nid}")
+    try:
+        resp = requests.get(
+            url,
+            params={"fields[node--deck]": "title"},
+            auth=_get_auth(),
+            timeout=10,
+        )
+        resp.raise_for_status()
+        return str(resp.json()["data"]["attributes"]["title"])
+    except (requests.RequestException, KeyError, TypeError, ValueError):
+        return f"Deck #{deck_nid}"
+
+
 def fetch_player_deck(deck_nid: int) -> list[CardInfo]:
     """
     Fetch card slots from a deck's field_deck_cards paragraphs via GraphQL.
