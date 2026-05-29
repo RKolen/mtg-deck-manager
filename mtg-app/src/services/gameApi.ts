@@ -39,6 +39,10 @@ export interface CardInHand {
   canPlot?: boolean;
   hasMadness?: boolean;
   madnessAffordable?: boolean;
+  hasConvoke?: boolean;
+  hasDelve?: boolean;
+  hasImprovise?: boolean;
+  hasEmerge?: boolean;
 }
 
 export interface GraveyardCard {
@@ -112,6 +116,10 @@ export interface GameActionOpts {
   castForMiracle?: boolean;
   paidCasualty?: boolean;
   casualtySacrificeIds?: string[];
+  convokeCreatureIds?: string[];
+  delveGraveyardIndices?: number[];
+  improviseArtifactIds?: string[];
+  emergeSacrificeIds?: string[];
   craftArtifactIds?: string[];
   kickerTimes?: number;
 }
@@ -150,6 +158,10 @@ export async function gameAction(
     castForMiracle: opts.castForMiracle ?? false,
     paidCasualty: opts.paidCasualty ?? false,
     casualtySacrificeIds: opts.casualtySacrificeIds ?? [],
+    convokeCreatureIds: opts.convokeCreatureIds ?? [],
+    delveGraveyardIndices: opts.delveGraveyardIndices ?? [],
+    improviseArtifactIds: opts.improviseArtifactIds ?? [],
+    emergeSacrificeIds: opts.emergeSacrificeIds ?? [],
     craftArtifactIds: opts.craftArtifactIds ?? [],
     kickerTimes: opts.kickerTimes ?? 0,
   });

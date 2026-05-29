@@ -60,6 +60,8 @@ type PendingGyAction =
 
 type PendingExileAction = 'cast_foretell' | 'cast_plot' | null;
 
+type PendingCastModifier = 'convoke' | 'delve' | 'improvise' | 'emerge' | null;
+
 const PHASE_LABELS: Record<string, string> = {
   mulligan: 'Mulligan',
   draw: 'Draw step',
@@ -184,7 +186,13 @@ const PlayPage: React.FC = () => {
   const [targetMode, setTargetMode] = useState<'none' | 'self' | 'opp'>('none');
   const [waitingTarget, setWaitingTarget] = useState(false);
   const [castForEvoke, setCastForEvoke] = useState(false);
+  const [castForEmerge, setCastForEmerge] = useState(false);
   const [castForMiracle, setCastForMiracle] = useState(false);
+  const [pendingCastModifier, setPendingCastModifier] = useState<PendingCastModifier>(null);
+  const [convokeCreatureIds, setConvokeCreatureIds] = useState<string[]>([]);
+  const [delveGraveyardIndices, setDelveGraveyardIndices] = useState<number[]>([]);
+  const [improviseArtifactIds, setImproviseArtifactIds] = useState<string[]>([]);
+  const [emergeSacrificeUid, setEmergeSacrificeUid] = useState<string | null>(null);
   const [paidCasualty, setPaidCasualty] = useState(false);
   const [casualtySacrificeUid, setCasualtySacrificeUid] = useState<string | null>(null);
   const [pendingAlt, setPendingAlt] = useState<PendingAlt>(null);
@@ -223,9 +231,15 @@ const PlayPage: React.FC = () => {
     setTargetMode('none');
     setWaitingTarget(false);
     setCastForEvoke(false);
+    setCastForEmerge(false);
     setCastForMiracle(false);
     setPaidCasualty(false);
     setCasualtySacrificeUid(null);
+    setPendingCastModifier(null);
+    setConvokeCreatureIds([]);
+    setDelveGraveyardIndices([]);
+    setImproviseArtifactIds([]);
+    setEmergeSacrificeUid(null);
     setPendingAlt(null);
     setPendingGyAction(null);
     setPendingExileAction(null);
@@ -310,9 +324,15 @@ const PlayPage: React.FC = () => {
       setTargetMode('none');
       setWaitingTarget(false);
       setCastForEvoke(false);
+      setCastForEmerge(false);
       setCastForMiracle(false);
       setPaidCasualty(false);
       setCasualtySacrificeUid(null);
+      setPendingCastModifier(null);
+      setConvokeCreatureIds([]);
+      setDelveGraveyardIndices([]);
+      setImproviseArtifactIds([]);
+      setEmergeSacrificeUid(null);
       setPendingAlt(null);
       setPendingGyAction(null);
     setPendingExileAction(null);
@@ -320,9 +340,15 @@ const PlayPage: React.FC = () => {
     }
     setSelectedHandIdx(idx);
     setCastForEvoke(false);
+    setCastForEmerge(false);
     setCastForMiracle(false);
     setPaidCasualty(false);
     setCasualtySacrificeUid(null);
+    setPendingCastModifier(null);
+    setConvokeCreatureIds([]);
+    setDelveGraveyardIndices([]);
+    setImproviseArtifactIds([]);
+    setEmergeSacrificeUid(null);
     setPendingAlt(null);
     setPendingGyAction(null);
     setPendingExileAction(null);
@@ -333,6 +359,10 @@ const PlayPage: React.FC = () => {
       oracleHas(card.oracle, 'Miracle')
       || oracleHas(card.oracle, 'Casualty')
       || card.hasEvoke
+      || card.hasConvoke
+      || card.hasDelve
+      || card.hasImprovise
+      || card.hasEmerge
     ) {
       // Wait for Cast / options before sending to server
     } else {
@@ -362,15 +392,35 @@ const PlayPage: React.FC = () => {
       setTargetMode('self');
       return;
     }
+    if (castForEmerge && !emergeSacrificeUid) {
+      setPendingCastModifier('emerge');
+      return;
+    }
     void act('cast', {
       handIdx: selectedHandIdx,
       targetUid: opts.targetUid,
       targetPlayer: opts.targetPlayer ?? 1,
       castForEvoke,
+      castForEmerge,
       castForMiracle,
       paidCasualty,
       casualtySacrificeIds: casualtySacrificeUid ? [casualtySacrificeUid] : [],
+      convokeCreatureIds,
+      delveGraveyardIndices,
+      improviseArtifactIds,
+      emergeSacrificeIds: emergeSacrificeUid ? [emergeSacrificeUid] : [],
     });
+  }
+
+  function toggleCastModifier(mode: Exclude<PendingCastModifier, null>) {
+    setPendingCastModifier(prev => (prev === mode ? null : mode));
+  }
+
+  function canSacrificeForEmerge(perm: PermanentOnBoard): boolean {
+    if (perm.type.includes('Creature')) return true;
+    if (!perm.type.includes('Artifact')) return false;
+    if (!selectedCard) return false;
+    return oracleHas(selectedCard.oracle, 'sacrifice an artifact or creature');
   }
 
   function handlePlayerBoardClick(perm: PermanentOnBoard) {
@@ -418,6 +468,26 @@ const PlayPage: React.FC = () => {
       void act('scavenge', { handIdx: scavengeGyIdx, targetUid: perm.uid });
       return;
     }
+    if (pendingCastModifier === 'convoke') {
+      if (!perm.type.includes('Creature') || perm.tapped) return;
+      setConvokeCreatureIds(prev =>
+        prev.includes(perm.uid) ? prev.filter(id => id !== perm.uid) : [...prev, perm.uid],
+      );
+      return;
+    }
+    if (pendingCastModifier === 'improvise') {
+      if (!perm.type.includes('Artifact') || perm.tapped) return;
+      setImproviseArtifactIds(prev =>
+        prev.includes(perm.uid) ? prev.filter(id => id !== perm.uid) : [...prev, perm.uid],
+      );
+      return;
+    }
+    if (pendingCastModifier === 'emerge') {
+      if (!canSacrificeForEmerge(perm)) return;
+      setEmergeSacrificeUid(perm.uid);
+      setPendingCastModifier(null);
+      return;
+    }
     if (waitingTarget && targetMode === 'self') {
       handleTargetPermanent(perm, false);
     } else if (inCombat && perm.canAttack) {
@@ -436,6 +506,12 @@ const PlayPage: React.FC = () => {
   }
 
   function handleGraveyardClick(idx: number) {
+    if (pendingCastModifier === 'delve') {
+      setDelveGraveyardIndices(prev =>
+        prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx],
+      );
+      return;
+    }
     if (!pendingGyAction) return;
     if (pendingGyAction === 'scavenge') {
       setScavengeGyIdx(idx);
@@ -488,9 +564,15 @@ const PlayPage: React.FC = () => {
     setTargetMode('none');
     setWaitingTarget(false);
     setCastForEvoke(false);
+    setCastForEmerge(false);
     setCastForMiracle(false);
     setPaidCasualty(false);
     setCasualtySacrificeUid(null);
+    setPendingCastModifier(null);
+    setConvokeCreatureIds([]);
+    setDelveGraveyardIndices([]);
+    setImproviseArtifactIds([]);
+    setEmergeSacrificeUid(null);
     setPendingAlt(null);
     setPendingGyAction(null);
     setPendingExileAction(null);
@@ -611,7 +693,7 @@ const PlayPage: React.FC = () => {
           <span style={{ color: '#666', fontSize: '0.78rem' }}>
             Your GY: {gs.playerGraveyard.slice(-3).join(', ') || '—'}
           </span>
-          {(pendingAlt || pendingGyAction || pendingExileAction) && (
+          {(pendingAlt || pendingGyAction || pendingExileAction || pendingCastModifier) && (
             <span style={{ marginLeft: 'auto', color: '#f1c40f', fontWeight: 600, fontSize: '0.85rem' }}>
               {pendingAlt === 'bloodrush' && 'Bloodrush: click your creature to pump'}
               {pendingAlt === 'ninjutsu' && 'Ninjutsu: click your attacker to replace'}
@@ -636,6 +718,10 @@ const PlayPage: React.FC = () => {
               {pendingGyAction === 'scavenge' && 'Scavenge: click a creature card in your graveyard'}
               {pendingExileAction === 'cast_foretell' && 'Foretell cast: click a foretold card in exile'}
               {pendingExileAction === 'cast_plot' && 'Plot cast: click a plotted card in exile'}
+              {pendingCastModifier === 'convoke' && 'Convoke: click untapped creatures to help pay'}
+              {pendingCastModifier === 'delve' && 'Delve: click graveyard cards to exile for mana'}
+              {pendingCastModifier === 'improvise' && 'Improvise: click untapped artifacts to help pay'}
+              {pendingCastModifier === 'emerge' && 'Emerge: click a permanent to sacrifice'}
             </span>
           )}
           {selectedCard && waitingTarget && !pendingAlt && !pendingGyAction && (
@@ -664,9 +750,15 @@ const PlayPage: React.FC = () => {
                 gs.pendingAttackers.includes(p.uid)
                 || craftArtifactIds.includes(p.uid)
                 || craftHostUid === p.uid
+                || convokeCreatureIds.includes(p.uid)
+                || improviseArtifactIds.includes(p.uid)
+                || emergeSacrificeUid === p.uid
               }
               onClick={
-                pendingAlt || (waitingTarget && targetMode === 'self') || (inCombat && p.canAttack)
+                pendingAlt
+                || pendingCastModifier
+                || (waitingTarget && targetMode === 'self')
+                || (inCombat && p.canAttack)
                   ? () => handlePlayerBoardClick(p)
                   : undefined
               }
@@ -692,19 +784,23 @@ const PlayPage: React.FC = () => {
           </div>
         )}
 
-        {(gs.playerGraveyardCards?.length ?? 0) > 0 && pendingGyAction && (
+        {(gs.playerGraveyardCards?.length ?? 0) > 0 && (pendingGyAction || pendingCastModifier === 'delve') && (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
             <span style={{ color: '#888', fontSize: '0.78rem' }}>Graveyard:</span>
-            {gs.playerGraveyardCards!.map(card => (
-              <button
-                key={card.idx}
-                type="button"
-                onClick={() => handleGraveyardClick(card.idx)}
-                style={btnStyle('#34495e')}
-              >
-                [{card.idx}] {card.name}
-              </button>
-            ))}
+            {gs.playerGraveyardCards!.map(card => {
+              const delveSelected = delveGraveyardIndices.includes(card.idx);
+              return (
+                <button
+                  key={card.idx}
+                  type="button"
+                  onClick={() => handleGraveyardClick(card.idx)}
+                  style={btnStyle(pendingCastModifier === 'delve' && delveSelected ? '#1a5276' : '#34495e')}
+                >
+                  [{card.idx}] {card.name}
+                  {pendingCastModifier === 'delve' && delveSelected ? ' (delve)' : ''}
+                </button>
+              );
+            })}
           </div>
         )}
 
@@ -798,6 +894,56 @@ const PlayPage: React.FC = () => {
                     Pay Casualty
                     {casualtySacrificeUid && ' (sacrifice selected)'}
                   </label>
+                )}
+                {canCast && selectedCard.hasEmerge && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', color: '#ddd' }}>
+                    <input
+                      type="checkbox"
+                      checked={castForEmerge}
+                      onChange={e => {
+                        setCastForEmerge(e.target.checked);
+                        if (!e.target.checked) setEmergeSacrificeUid(null);
+                      }}
+                    />
+                    Cast for Emerge
+                    {emergeSacrificeUid && ' (sacrifice selected)'}
+                  </label>
+                )}
+                {canCast && selectedCard.hasConvoke && (
+                  <button
+                    type="button"
+                    onClick={() => toggleCastModifier('convoke')}
+                    style={btnStyle(pendingCastModifier === 'convoke' ? '#1f618d' : '#2874a6')}
+                  >
+                    Convoke ({convokeCreatureIds.length})
+                  </button>
+                )}
+                {canCast && selectedCard.hasDelve && (
+                  <button
+                    type="button"
+                    onClick={() => toggleCastModifier('delve')}
+                    style={btnStyle(pendingCastModifier === 'delve' ? '#1f618d' : '#2874a6')}
+                  >
+                    Delve ({delveGraveyardIndices.length})
+                  </button>
+                )}
+                {canCast && selectedCard.hasImprovise && (
+                  <button
+                    type="button"
+                    onClick={() => toggleCastModifier('improvise')}
+                    style={btnStyle(pendingCastModifier === 'improvise' ? '#1f618d' : '#2874a6')}
+                  >
+                    Improvise ({improviseArtifactIds.length})
+                  </button>
+                )}
+                {canCast && castForEmerge && selectedCard.hasEmerge && !emergeSacrificeUid && (
+                  <button
+                    type="button"
+                    onClick={() => setPendingCastModifier('emerge')}
+                    style={btnStyle('#884ea0')}
+                  >
+                    Pick emerge sacrifice
+                  </button>
                 )}
                 {canCast && !waitingTarget && !selectedCard.isLand && (
                   <button
@@ -979,7 +1125,7 @@ const PlayPage: React.FC = () => {
               </button>
             )}
 
-            {(waitingTarget || pendingAlt || pendingGyAction || pendingExileAction) && (
+            {(waitingTarget || pendingAlt || pendingGyAction || pendingExileAction || pendingCastModifier) && (
               <button
                 type="button"
                 onClick={resetPendingUi}
