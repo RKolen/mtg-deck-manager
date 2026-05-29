@@ -1,0 +1,21 @@
+uuid: 63f76e0a-aee4-44f5-9181-62fbcbb1f7fb
+langcode: en
+status: true
+dependencies:
+  module:
+    - taxonomy
+id: taxonomy_term.field_goldfish_slug
+field_name: field_goldfish_slug
+entity_type: taxonomy_term
+type: string
+settings:
+  max_length: 64
+  case_sensitive: false
+  is_ascii: false
+module: core
+locked: false
+cardinality: 1
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

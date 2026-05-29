@@ -1,0 +1,11 @@
+uuid: 3bbad02f-a5fa-4560-9e32-2d88f830ddee
+langcode: en
+status: true
+dependencies:
+  config:
+    - taxonomy.vocabulary.mtg_format
+id: taxonomy_term.mtg_format
+target_entity_type_id: taxonomy_term
+target_bundle: mtg_format
+default_langcode: site_default
+language_alterable: false

@@ -79,6 +79,18 @@ type MetaDeck {
   cardsJson: String
 }
 
+type MtgFormat {
+  name: String!
+  slug: String!
+}
+
+type ScrapeMetaDecksResult {
+  format: String!
+  created: Int!
+  updated: Int!
+  skipped: Int!
+}
+
 type SimulationResult {
   id: ID!
   nid: Int!

@@ -6,17 +6,17 @@ _core:
   default_config_hash: MSRypGifipUzpZw471MaI9UmoG8KrNgpwnxXU3s5rNk
 name: graphql_compose_server
 label: 'GraphQL Compose - Server'
+endpoint: /graphql
+debug_flag: 0
 schema: graphql_compose
+caching: true
+batching: true
+disable_introspection: false
+query_depth: 0
+query_complexity: 0
 schema_configuration:
   graphql_compose:
     providers:
       mtg_graphql: mtg_graphql
       graphql_compose_edges: graphql_compose_edges
 persisted_queries_settings: {  }
-endpoint: /graphql
-debug_flag: 0
-caching: true
-batching: true
-disable_introspection: false
-query_depth: 0
-query_complexity: 0

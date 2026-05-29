@@ -25,6 +25,8 @@ extend type Query {
 
   metaDecks(format: String!): [MetaDeck!]!
 
+  formats: [MtgFormat!]!
+
   simulationHistory(deckNid: Int!, limit: Int): [SimulationResult!]!
 
   cardSearch(
@@ -68,4 +70,6 @@ extend type Mutation {
   deckCardUpdate(deckId: ID!, slotId: ID!, quantity: Int!): DeckCardSlot!
 
   deckCardRemove(deckId: ID!, slotId: ID!): Boolean!
+
+  scrapeMetaDecks(format: String!, limit: Int): ScrapeMetaDecksResult!
 }

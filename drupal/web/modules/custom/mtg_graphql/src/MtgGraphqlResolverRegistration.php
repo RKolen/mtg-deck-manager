@@ -4,14 +4,13 @@ declare(strict_types=1);
 
 namespace Drupal\mtg_graphql;
 
-
 use Drupal\graphql\GraphQL\ResolverBuilder;
 use Drupal\graphql\GraphQL\ResolverRegistryInterface;
 
 use Drupal\node\NodeInterface;
 
 /**
- * Registers MTG custom GraphQL fields (used by compose extension and legacy schema).
+ * Registers MTG custom GraphQL field resolvers.
  */
 final class MtgGraphqlResolverRegistration {
 
@@ -33,17 +32,18 @@ final class MtgGraphqlResolverRegistration {
     self::addSimulationResultResolvers($registry, $builder);
     self::addCardSearchResolvers($registry, $builder);
     self::addDeckCardSlotResolvers($registry, $builder);
+    self::addFormatResolvers($registry, $builder);
+    self::addScrapeMetaDecksResolver($registry, $builder);
   }
 
-  // ---------------------------------------------------------------------------
-  // Query resolvers
-  // ---------------------------------------------------------------------------
-
+  /**
+   * Registers all GraphQL query field resolvers.
+   */
   public static function addQueryResolvers(ResolverRegistryInterface $registry, ResolverBuilder $builder): void {
 
     $registry->addFieldResolver('Query', 'cards',
       $builder->callback(function ($value, array $args): array {
-        $page  = (int) ($args['page']  ?? 0);
+        $page = (int) ($args['page'] ?? 0);
         $limit = (int) ($args['limit'] ?? 50);
         $storage = \Drupal::entityTypeManager()->getStorage('node');
 
@@ -56,8 +56,8 @@ final class MtgGraphqlResolverRegistration {
 
         self::applyCardFilters($query, $args);
 
-        $ids    = $query->execute();
-        $nodes  = $storage->loadMultiple($ids);
+        $ids   = $query->execute();
+        $nodes = $storage->loadMultiple($ids);
 
         $countQuery = \Drupal::entityQuery('node')
           ->condition('type', 'mtg_card')
@@ -173,10 +173,14 @@ final class MtgGraphqlResolverRegistration {
             continue;
           }
           $ref = $cc->get('field_card')->first();
-          if (!$ref || !$ref->entity) {
+          if (!$ref instanceof \Drupal\Core\Field\Plugin\Field\FieldType\EntityReferenceItem || !$ref->entity) {
             continue;
           }
-          $price  = (float) ($ref->entity->get('field_price_usd')->value ?? 0);
+          $card = $ref->entity;
+          if (!$card instanceof \Drupal\Core\Entity\FieldableEntityInterface) {
+            continue;
+          }
+          $price  = (float) ($card->get('field_price_usd')->value ?? 0);
           $total += $price * $qty;
         }
         return round($total, 2);
@@ -184,10 +188,9 @@ final class MtgGraphqlResolverRegistration {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Mutation resolvers
-  // ---------------------------------------------------------------------------
-
+  /**
+   * Registers all GraphQL mutation field resolvers.
+   */
   public static function addMutationResolvers(ResolverRegistryInterface $registry, ResolverBuilder $builder): void {
 
     $registry->addFieldResolver('Mutation', 'createDeck',
@@ -299,10 +302,9 @@ final class MtgGraphqlResolverRegistration {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Type field resolvers
-  // ---------------------------------------------------------------------------
-
+  /**
+   * Registers field resolvers for the CardPage type.
+   */
   public static function addCardPageResolvers(ResolverRegistryInterface $registry, ResolverBuilder $builder): void {
     $registry->addFieldResolver('CardPage', 'cards',
       $builder->callback(fn($p) => $p['nodes'])
@@ -315,6 +317,9 @@ final class MtgGraphqlResolverRegistration {
     );
   }
 
+  /**
+   * Registers field resolvers for the MtgCard type.
+   */
   public static function addMtgCardResolvers(ResolverRegistryInterface $registry, ResolverBuilder $builder): void {
     $scalar = [
       'id'             => fn($n) => $n->uuid(),
@@ -330,7 +335,7 @@ final class MtgGraphqlResolverRegistration {
       'setCode'        => fn($n) => $n->get('field_set_code')->value,
       'setName'        => fn($n) => $n->get('field_set_name')->value,
       'rarity'         => fn($n) => $n->get('field_rarity')->value,
-      'collectorNumber'=> fn($n) => $n->get('field_collector_number')->value,
+      'collectorNumber' => fn($n) => $n->get('field_collector_number')->value,
       'power'          => fn($n) => $n->get('field_power')->value,
       'toughness'      => fn($n) => $n->get('field_toughness')->value,
       'loyalty'        => fn($n) => $n->get('field_loyalty')->value,
@@ -340,7 +345,13 @@ final class MtgGraphqlResolverRegistration {
       $registry->addFieldResolver('MtgCard', $field, $builder->callback($fn));
     }
 
-    foreach (['colors' => 'field_colors', 'colorIdentity' => 'field_color_identity', 'producedMana' => 'field_produced_mana', 'legalFormats' => 'field_legal_formats'] as $gql => $drupal) {
+    $multiValueFields = [
+      'colors'        => 'field_colors',
+      'colorIdentity' => 'field_color_identity',
+      'producedMana'  => 'field_produced_mana',
+      'legalFormats'  => 'field_legal_formats',
+    ];
+    foreach ($multiValueFields as $gql => $drupal) {
       $registry->addFieldResolver('MtgCard', $gql,
         $builder->callback(function ($node) use ($drupal): array {
           $out = [];
@@ -353,14 +364,20 @@ final class MtgGraphqlResolverRegistration {
     }
   }
 
+  /**
+   * Registers field resolvers for the Deck type.
+   */
   public static function addDeckResolvers(ResolverRegistryInterface $registry, ResolverBuilder $builder): void {
-    $registry->addFieldResolver('Deck', 'id',     $builder->callback(fn($n) => $n->uuid()));
-    $registry->addFieldResolver('Deck', 'nid',    $builder->callback(fn($n) => (int) $n->id()));
-    $registry->addFieldResolver('Deck', 'title',  $builder->callback(fn($n) => $n->getTitle()));
+    $registry->addFieldResolver('Deck', 'id', $builder->callback(fn($n) => $n->uuid()));
+    $registry->addFieldResolver('Deck', 'nid', $builder->callback(fn($n) => (int) $n->id()));
+    $registry->addFieldResolver('Deck', 'title', $builder->callback(fn($n) => $n->getTitle()));
     $registry->addFieldResolver('Deck', 'format', $builder->callback(fn($n) => $n->get('field_format')->value ?? ''));
-    $registry->addFieldResolver('Deck', 'notes',  $builder->callback(fn($n) => $n->get('field_notes')->value));
+    $registry->addFieldResolver('Deck', 'notes', $builder->callback(fn($n) => $n->get('field_notes')->value));
   }
 
+  /**
+   * Registers field resolvers for the DeckCard type.
+   */
   public static function addDeckCardResolvers(ResolverRegistryInterface $registry, ResolverBuilder $builder): void {
     $registry->addFieldResolver('DeckCard', 'id',
       $builder->callback(fn($p) => $p->uuid())
@@ -379,6 +396,9 @@ final class MtgGraphqlResolverRegistration {
     );
   }
 
+  /**
+   * Registers field resolvers for the CollectionCard type.
+   */
   public static function addCollectionCardResolvers(ResolverRegistryInterface $registry, ResolverBuilder $builder): void {
     $registry->addFieldResolver('CollectionCard', 'id',
       $builder->callback(fn($n) => $n->uuid())
@@ -397,6 +417,9 @@ final class MtgGraphqlResolverRegistration {
     );
   }
 
+  /**
+   * Registers field resolvers for the Page type and query.
+   */
   public static function addPageResolvers(ResolverRegistryInterface $registry, ResolverBuilder $builder): void {
     $registry->addFieldResolver('Query', 'pages',
       $builder->callback(function (): array {
@@ -428,10 +451,9 @@ final class MtgGraphqlResolverRegistration {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Meta deck resolvers
-  // ---------------------------------------------------------------------------
-
+  /**
+   * Registers field resolvers for the MetaDeck type and query.
+   */
   public static function addMetaDeckResolvers(ResolverRegistryInterface $registry, ResolverBuilder $builder): void {
     $registry->addFieldResolver('Query', 'metaDecks',
       $builder->callback(function ($value, array $args): array {
@@ -483,17 +505,16 @@ final class MtgGraphqlResolverRegistration {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Simulation result resolvers
-  // ---------------------------------------------------------------------------
-
+  /**
+   * Registers field resolvers for the SimulationResult type and query.
+   */
   public static function addSimulationResultResolvers(ResolverRegistryInterface $registry, ResolverBuilder $builder): void {
     $registry->addFieldResolver('Query', 'simulationHistory',
       $builder->callback(function ($value, array $args): array {
         $deckNid = (int) $args['deckNid'];
         $limit   = (int) ($args['limit'] ?? 20);
         $storage = \Drupal::entityTypeManager()->getStorage('node');
-        $ids = \Drupal::entityQuery('node')
+        $ids     = \Drupal::entityQuery('node')
           ->condition('type', 'simulation_result')
           ->condition('status', 1)
           ->condition('field_sim_player_deck_nid', $deckNid)
@@ -534,15 +555,11 @@ final class MtgGraphqlResolverRegistration {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Helpers
-  // ---------------------------------------------------------------------------
-
   /**
-   * Applies card filter args to an entity query (shared by cards + count query).
-   */
-  /**
-   * @return \Drupal\paragraphs\Entity\Paragraph[]
+   * Loads all deck card paragraph entities for a deck UUID.
+   *
+   * @return \Drupal\Core\Entity\EntityInterface[]
+   *   Array of paragraph entities representing deck card slots.
    */
   private static function loadDeckCards(string $deckUuid): array {
     $storage = \Drupal::entityTypeManager()->getStorage('node');
@@ -554,22 +571,25 @@ final class MtgGraphqlResolverRegistration {
 
     $result = [];
     foreach ($deck->get('field_deck_cards') as $item) {
-      if ($item->entity) {
+      if ($item instanceof \Drupal\Core\Field\Plugin\Field\FieldType\EntityReferenceItem && $item->entity) {
         $result[] = $item->entity;
       }
     }
     return $result;
   }
 
-  private static function applyCardFilters($query, array $args): void {
+  /**
+   * Applies optional card filter arguments to an entity query.
+   */
+  private static function applyCardFilters(\Drupal\Core\Entity\Query\QueryInterface $query, array $args): void {
     if (!empty($args['name'])) {
       $query->condition('title', '%' . $args['name'] . '%', 'LIKE');
     }
     if (!empty($args['type'])) {
       $query->condition('field_type_line', '%' . $args['type'] . '%', 'LIKE');
     }
-    if (isset($args['maxCmc']) && $args['maxCmc'] !== NULL) {
-      $query->condition('field_cmc', (float) $args['maxCmc'], '<=');
+    if (isset($args['maxCmc'])) {
+      $query->condition('field_cmc', (string) (float) $args['maxCmc'], '<=');
     }
     if (!empty($args['colors'])) {
       $query->condition('field_colors', $args['colors'], 'IN');
@@ -579,6 +599,9 @@ final class MtgGraphqlResolverRegistration {
     }
   }
 
+  /**
+   * Registers the card search query and result type resolvers.
+   */
   public static function addCardSearchResolvers(
     ResolverRegistryInterface $registry,
     ResolverBuilder $builder,
@@ -606,6 +629,9 @@ final class MtgGraphqlResolverRegistration {
     );
   }
 
+  /**
+   * Registers field resolvers for the DeckCardSlot type.
+   */
   public static function addDeckCardSlotResolvers(
     ResolverRegistryInterface $registry,
     ResolverBuilder $builder,
@@ -618,6 +644,61 @@ final class MtgGraphqlResolverRegistration {
     );
     $registry->addFieldResolver('DeckCardSlot', 'isSideboard',
       $builder->callback(fn(array $slot) => $slot['isSideboard'])
+    );
+  }
+
+  /**
+   * Registers field resolvers for MtgFormat and the formats query.
+   */
+  public static function addFormatResolvers(
+    ResolverRegistryInterface $registry,
+    ResolverBuilder $builder,
+  ): void {
+    $registry->addFieldResolver('Query', 'formats',
+      $builder->callback(function (): array {
+        $terms = \Drupal::entityTypeManager()
+          ->getStorage('taxonomy_term')
+          ->loadByProperties(['vid' => 'mtg_format']);
+        return array_values($terms);
+      })
+    );
+
+    $registry->addFieldResolver('MtgFormat', 'name',
+      $builder->callback(fn($term) => $term->getName())
+    );
+    $registry->addFieldResolver('MtgFormat', 'slug',
+      $builder->callback(fn($term) => $term->get('field_goldfish_slug')->value ?? '')
+    );
+  }
+
+  /**
+   * Registers the scrapeMetaDecks mutation resolver.
+   */
+  public static function addScrapeMetaDecksResolver(
+    ResolverRegistryInterface $registry,
+    ResolverBuilder $builder,
+  ): void {
+    $registry->addFieldResolver('Mutation', 'scrapeMetaDecks',
+      $builder->callback(function ($value, array $args): array {
+        $scraper = \Drupal::service('mtg_graphql.meta_deck_scraper');
+        return $scraper->scrape(
+          (string) $args['format'],
+          (int) ($args['limit'] ?? 20),
+        );
+      })
+    );
+
+    $registry->addFieldResolver('ScrapeMetaDecksResult', 'format',
+      $builder->callback(fn(array $r) => $r['format'])
+    );
+    $registry->addFieldResolver('ScrapeMetaDecksResult', 'created',
+      $builder->callback(fn(array $r) => $r['created'])
+    );
+    $registry->addFieldResolver('ScrapeMetaDecksResult', 'updated',
+      $builder->callback(fn(array $r) => $r['updated'])
+    );
+    $registry->addFieldResolver('ScrapeMetaDecksResult', 'skipped',
+      $builder->callback(fn(array $r) => $r['skipped'])
     );
   }
 

@@ -38,6 +38,7 @@ const IndexPage: React.FC = () => {
           <li><a href="/collection">Collection</a></li>
           <li><a href="/decks">Decks</a></li>
           <li><a href="/import">Import XLSX</a></li>
+          <li><a href="/meta-decks">Meta Decks</a></li>
         </ul>
       </nav>
     </main>

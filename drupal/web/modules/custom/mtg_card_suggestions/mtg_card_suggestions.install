@@ -10,6 +10,8 @@ declare(strict_types=1);
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\node\Entity\NodeType;
+use Drupal\taxonomy\Entity\Term;
+use Drupal\taxonomy\Entity\Vocabulary;
 
 /**
  * Creates the meta_deck content type and its fields.
@@ -204,4 +206,89 @@ function mtg_card_suggestions_update_10002(array &$sandbox): string {
   return $created !== []
     ? 'Created simulation_result fields: ' . implode(', ', $created)
     : 'simulation_result fields already exist.';
+}
+
+/**
+ * Creates the mtg_format taxonomy vocabulary, its goldfish-slug field, and
+ * seeds the canonical format terms used by the meta-deck scraper.
+ *
+ * Run via: ddev drush updb -y
+ *
+ * Each term stores a field_goldfish_slug that maps the display name (e.g.
+ * "Pioneer") to the MTGGoldfish metagame slug (e.g. "pioneer"). The scraper
+ * reads these terms to build the correct URL and stores the term name in
+ * field_format on meta_deck nodes.
+ */
+function mtg_card_suggestions_update_10003(array &$sandbox): string {
+  $created = [];
+
+  // ------------------------------------------------------------------
+  // Vocabulary
+  // ------------------------------------------------------------------
+  if (!Vocabulary::load('mtg_format')) {
+    Vocabulary::create([
+      'vid'         => 'mtg_format',
+      'name'        => 'MTG Format',
+      'description' => 'Canonical MTG competitive formats used by the meta-deck scraper.',
+    ])->save();
+    $created[] = 'vocabulary mtg_format';
+  }
+
+  // ------------------------------------------------------------------
+  // field_goldfish_slug on taxonomy_term (shared across all vocabs).
+  // ------------------------------------------------------------------
+  if (!FieldStorageConfig::loadByName('taxonomy_term', 'field_goldfish_slug')) {
+    FieldStorageConfig::create([
+      'field_name'  => 'field_goldfish_slug',
+      'entity_type' => 'taxonomy_term',
+      'type'        => 'string',
+      'cardinality' => 1,
+      'settings'    => ['max_length' => 64],
+    ])->save();
+  }
+  if (!FieldConfig::loadByName('taxonomy_term', 'mtg_format', 'field_goldfish_slug')) {
+    FieldConfig::create([
+      'field_name'  => 'field_goldfish_slug',
+      'entity_type' => 'taxonomy_term',
+      'bundle'      => 'mtg_format',
+      'label'       => 'MTGGoldfish Slug',
+      'required'    => TRUE,
+    ])->save();
+    $created[] = 'field_goldfish_slug on mtg_format';
+  }
+
+  // ------------------------------------------------------------------
+  // Seed terms — only create if they do not already exist.
+  // ------------------------------------------------------------------
+  $formats = [
+    'Modern'      => 'modern',
+    'Pioneer'     => 'pioneer',
+    'Legacy'      => 'legacy',
+    'Pauper'      => 'pauper',
+    'Standard'    => 'standard',
+    'Vintage'     => 'vintage',
+    'Commander'   => 'commander',
+  ];
+
+  $storage = \Drupal::entityTypeManager()->getStorage('taxonomy_term');
+
+  foreach ($formats as $name => $slug) {
+    $existing = $storage->loadByProperties([
+      'vid'  => 'mtg_format',
+      'name' => $name,
+    ]);
+    if ($existing !== []) {
+      continue;
+    }
+    Term::create([
+      'vid'                 => 'mtg_format',
+      'name'                => $name,
+      'field_goldfish_slug' => $slug,
+    ])->save();
+    $created[] = 'term ' . $name;
+  }
+
+  return $created !== []
+    ? 'Created: ' . implode(', ', $created)
+    : 'mtg_format vocabulary and terms already exist.';
 }
