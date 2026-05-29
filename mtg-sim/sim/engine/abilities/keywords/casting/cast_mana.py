@@ -32,6 +32,14 @@ from engine.abilities.keywords.casting.miracle import (
     miracle_mana_needed,
     normalize_miracle_cast,
 )
+from engine.abilities.keywords.casting.spectacle import (
+    normalize_spectacle_cast,
+    spectacle_mana_needed,
+)
+from engine.abilities.keywords.other.morph import (
+    morph_face_down_mana_needed,
+    normalize_morph_cast,
+)
 from engine.abilities.keywords.casting.overload import (
     normalize_overloaded,
     overload_mana_needed,
@@ -60,6 +68,7 @@ class CastManaModifiers:
     cast_for_mutate: bool = False
     mutate_target_uid: str | None = None
     spree_mode_indices: tuple[int, ...] = ()
+    cast_for_morph: bool = False
 
 
 @dataclass(frozen=True)
@@ -69,6 +78,9 @@ class CastManaTiming:
     cast_for_miracle: bool = False
     cast_for_freerunning: bool = False
     freerunning_available: bool = False
+    cast_for_spectacle: bool = False
+    spectacle_available: bool = False
+    cast_for_morph: bool = False
 
 
 @dataclass(frozen=True)
@@ -98,6 +110,14 @@ def resolve_announce_cast_mana(
     timing = opts.timing
     if normalize_miracle_cast(card, timing.cast_for_miracle):
         mana_needed, life_cost = miracle_mana_needed(card)
+    elif normalize_spectacle_cast(
+        card,
+        timing.cast_for_spectacle,
+        available=timing.spectacle_available,
+    ):
+        mana_needed, life_cost = spectacle_mana_needed(card)
+    elif normalize_morph_cast(card, mods.cast_for_morph):
+        mana_needed, life_cost = morph_face_down_mana_needed()
     elif normalize_freerunning_cast(
         card,
         timing.cast_for_freerunning,

@@ -104,6 +104,7 @@ class GameRuntimeMixin:
                     stack_is_empty=stack_empty,
                     zones=self.state.zones,
                     controller_idx=player_idx,
+                    game=self.state,
                 ),
             )
             for idx, card in enumerate(hand)

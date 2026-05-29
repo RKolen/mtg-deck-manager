@@ -31,6 +31,11 @@ from engine.abilities.keywords.other.eternalize import (
     can_eternalize,
     eternalize_mana_needed,
 )
+from engine.abilities.keywords.other.morph import (
+    apply_turn_up_morph,
+    can_turn_up_morph,
+    morph_turn_up_mana_needed,
+)
 from engine.abilities.keywords.other.outlast import (
     apply_outlast,
     can_outlast,
@@ -300,6 +305,25 @@ class ActivatedActionsMixin(GameRuntimeMixin):
         if detail is None:
             return self._client_error("Outlast failed")
         self._log("player", "outlast", detail)
+        return self.to_client()
+
+    def action_turn_up_morph(self, permanent_uid: str) -> dict:
+        """Turn a face-down morph creature face up."""
+        perm = self._find_permanent(permanent_uid)
+        if perm is None:
+            return self._client_error("Permanent not found")
+        if not can_turn_up_morph(perm, self.state, 0, self.phase):
+            return self._client_error("Cannot turn face up now")
+        card_info = perm.card_info
+        if card_info is None:
+            return self._client_error("Not a morph creature")
+        mana_needed = morph_turn_up_mana_needed(card_info)
+        if mana_needed and not self._tap_lands_for_mana(0, mana_needed):
+            return self._client_error(f"Need {mana_needed} mana to turn face up")
+        detail = apply_turn_up_morph(perm)
+        if detail is None:
+            return self._client_error("Turn face up failed")
+        self._log("player", "turn_up_morph", detail)
         return self.to_client()
 
     def action_channel(

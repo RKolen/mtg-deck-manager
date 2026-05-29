@@ -26,6 +26,12 @@ from engine.abilities.keywords.casting.entwine import normalize_entwined
 from engine.abilities.keywords.casting.freerunning import normalize_freerunning_cast
 from engine.abilities.keywords.casting.kicker import normalize_kicker_times
 from engine.abilities.keywords.casting.miracle import normalize_miracle_cast
+from engine.abilities.keywords.casting.spectacle import (
+    has_spectacle,
+    normalize_spectacle_cast,
+    spectacle_available,
+)
+from engine.abilities.keywords.other.morph import normalize_morph_cast
 from engine.abilities.keywords.casting.mutate import (
     mutate_host_error,
     normalize_mutate_cast,
@@ -37,6 +43,7 @@ from engine.abilities.keywords.casting.spree import (
     spree_selection_error,
 )
 from engine.core.game_object import CardObject
+from engine.core.game_state import GameState
 from engine.core.zones import ZoneManager
 from engine.game.helpers import CastAnnounceOptions
 
@@ -58,6 +65,8 @@ class PaidCastModifiers:
     mutate: bool
     casualty: bool
     spree_modes: tuple[int, ...]
+    spectacle: bool
+    morph: bool
 
 
 @dataclass(frozen=True)
@@ -103,6 +112,8 @@ def _normalized_paid_flags(
     card_info: CardInfo,
     opts: CastAnnounceOptions,
     combat_damage_dealt: bool,
+    game: GameState,
+    player_idx: int,
 ) -> PaidCastModifiers:
     return PaidCastModifiers(
         kicker_times=normalize_kicker_times(card_info, opts.costs.kicker_times),
@@ -129,6 +140,12 @@ def _normalized_paid_flags(
             list(opts.modifiers.targeting.spree_mode_indices),
         ),
         casualty=normalize_paid_casualty(card_info, opts.costs.paid_casualty),
+        spectacle=normalize_spectacle_cast(
+            card_info,
+            opts.alternate.cast_for_spectacle,
+            available=spectacle_available(game, player_idx),
+        ),
+        morph=normalize_morph_cast(card_info, opts.alternate.cast_for_morph),
     )
 
 
@@ -139,10 +156,11 @@ def validate_announce_cast(
     opts: CastAnnounceOptions,
     combat_damage_dealt: bool,
     target_uid_str: str | None,
+    game: GameState,
 ) -> tuple[PaidAnnounceCast | None, str | None]:
     """Return paid cast options, or (None, error_message) when invalid."""
     name = card_info.name
-    paid = _normalized_paid_flags(card_info, opts, combat_damage_dealt)
+    paid = _normalized_paid_flags(card_info, opts, combat_damage_dealt, game, player_idx)
 
     err = _first_error([
         lambda: _reject_keyword(
@@ -165,6 +183,20 @@ def validate_announce_cast(
             opts.modifiers.targeting.bestow_target_uid,
         ),
         lambda: _reject_keyword(opts.alternate.cast_for_miracle, paid.miracle, name, "miracle"),
+        lambda: _reject_keyword(
+            opts.alternate.cast_for_spectacle,
+            paid.spectacle,
+            name,
+            "spectacle",
+        ),
+        lambda: (
+            "Spectacle requires an opponent to have lost life this turn"
+            if opts.alternate.cast_for_spectacle
+            and has_spectacle(card_info)
+            and not spectacle_available(game, player_idx)
+            else None
+        ),
+        lambda: _reject_keyword(opts.alternate.cast_for_morph, paid.morph, name, "morph"),
         lambda: (
             f"{name} cannot use freerunning"
             if opts.alternate.cast_for_freerunning and not paid.freerunning

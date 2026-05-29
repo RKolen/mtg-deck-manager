@@ -25,6 +25,8 @@ from engine.abilities.keywords.casting.delve import has_delve
 from engine.abilities.keywords.casting.emerge import has_emerge
 from engine.abilities.keywords.casting.evoke import evoke_mana_needed, has_evoke
 from engine.abilities.keywords.casting.improvise import has_improvise
+from engine.abilities.keywords.casting.spectacle import has_spectacle, spectacle_available
+from engine.abilities.keywords.other.morph import has_morph
 from engine.abilities.keywords.other.ninjutsu import (
     can_ninjutsu,
     has_ninjutsu,
@@ -76,6 +78,7 @@ class HandCastContext:
     stack_is_empty: bool = True
     zones: ZoneManager | None = None
     controller_idx: int = 0
+    game: GameState | None = None
 
 
 def expand_deck(cards: list[CardInfo], player_idx: int) -> list[CardObject]:
@@ -119,7 +122,7 @@ def card_to_client(
     card: CardInfo,
     available_mana: int,
     context: HandCastContext | None = None,
-) -> dict:
+) -> dict[str, object]:
     """Serialise one hand card using the existing client shape."""
     ctx = context or HandCastContext()
     zones = ctx.zones
@@ -141,7 +144,7 @@ def card_to_client(
         ctx.stack_is_empty,
         available_mana,
     )
-    return {
+    payload: dict[str, object] = {
         "idx": idx,
         "name": card.name,
         "cmc": card.cmc,
@@ -159,6 +162,13 @@ def card_to_client(
         "hasDelve": has_delve(card),
         "hasImprovise": has_improvise(card),
         "hasEmerge": has_emerge(card),
+        "hasSpectacle": has_spectacle(card),
+        "spectacleAvailable": (
+            spectacle_available(ctx.game, controller_idx)
+            if ctx.game is not None and has_spectacle(card)
+            else False
+        ),
+        "hasMorph": has_morph(card) and card.is_creature,
         "canBloodrush": bloodrush_ok,
         "bloodrushAffordable": bloodrush_ok and available_mana >= bloodrush_mana,
         "canCycle": can_cycle(card, ctx.phase, ctx.stack_is_empty),
@@ -172,6 +182,7 @@ def card_to_client(
         else False,
         **alt_flags,
     }
+    return payload
 
 
 def payment_requirements(card: CardInfo) -> tuple[int, int]:

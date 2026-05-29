@@ -200,6 +200,9 @@ class GameActionRequest(BaseModel):
     spreeModeIndices: list[int] = []
     sneakLandHandIndices: list[int] = []
     castForFreerunning: bool = False
+    castForSpectacle: bool = False
+    castForMorph: bool = False
+    harmonizeCreatureIds: list[str] = []
     convokeCreatureIds: list[str] = []
     delveGraveyardIndices: list[int] = []
     improviseArtifactIds: list[str] = []

@@ -54,13 +54,16 @@ type PendingGyAction =
   | 'cast_jump_start'
   | 'cast_retrace'
   | 'cast_aftermath'
+  | 'cast_harmonize'
   | 'dredge'
   | 'scavenge'
   | null;
 
 type PendingExileAction = 'cast_foretell' | 'cast_plot' | null;
 
-type PendingCastModifier = 'convoke' | 'delve' | 'improvise' | 'emerge' | null;
+type PendingCastModifier = 'convoke' | 'delve' | 'improvise' | 'emerge' | 'harmonize' | null;
+
+type PendingBoardAction = 'turn_up_morph' | null;
 
 const PHASE_LABELS: Record<string, string> = {
   mulligan: 'Mulligan',
@@ -187,7 +190,11 @@ const PlayPage: React.FC = () => {
   const [waitingTarget, setWaitingTarget] = useState(false);
   const [castForEvoke, setCastForEvoke] = useState(false);
   const [castForEmerge, setCastForEmerge] = useState(false);
+  const [castForSpectacle, setCastForSpectacle] = useState(false);
+  const [castForMorph, setCastForMorph] = useState(false);
   const [castForMiracle, setCastForMiracle] = useState(false);
+  const [pendingBoardAction, setPendingBoardAction] = useState<PendingBoardAction>(null);
+  const [harmonizeCreatureIds, setHarmonizeCreatureIds] = useState<string[]>([]);
   const [pendingCastModifier, setPendingCastModifier] = useState<PendingCastModifier>(null);
   const [convokeCreatureIds, setConvokeCreatureIds] = useState<string[]>([]);
   const [delveGraveyardIndices, setDelveGraveyardIndices] = useState<number[]>([]);
@@ -232,7 +239,11 @@ const PlayPage: React.FC = () => {
     setWaitingTarget(false);
     setCastForEvoke(false);
     setCastForEmerge(false);
+    setCastForSpectacle(false);
+    setCastForMorph(false);
     setCastForMiracle(false);
+    setPendingBoardAction(null);
+    setHarmonizeCreatureIds([]);
     setPaidCasualty(false);
     setCasualtySacrificeUid(null);
     setPendingCastModifier(null);
@@ -288,6 +299,8 @@ const PlayPage: React.FC = () => {
   const canJumpStart = gs?.availableActions.includes('cast_jump_start');
   const canRetrace = gs?.availableActions.includes('cast_retrace');
   const canAftermath = gs?.availableActions.includes('cast_aftermath');
+  const canHarmonize = gs?.availableActions.includes('cast_harmonize');
+  const canTurnUpMorph = gs?.availableActions.includes('turn_up_morph');
   const _canAttack = gs?.availableActions.includes('go_to_attack') || phase === 'attack'; void _canAttack;
   const inCombat = phase === 'attack';
 
@@ -325,6 +338,8 @@ const PlayPage: React.FC = () => {
       setWaitingTarget(false);
       setCastForEvoke(false);
       setCastForEmerge(false);
+      setCastForSpectacle(false);
+      setCastForMorph(false);
       setCastForMiracle(false);
       setPaidCasualty(false);
       setCasualtySacrificeUid(null);
@@ -333,6 +348,8 @@ const PlayPage: React.FC = () => {
       setDelveGraveyardIndices([]);
       setImproviseArtifactIds([]);
       setEmergeSacrificeUid(null);
+      setHarmonizeCreatureIds([]);
+      setPendingBoardAction(null);
       setPendingAlt(null);
       setPendingGyAction(null);
     setPendingExileAction(null);
@@ -341,7 +358,11 @@ const PlayPage: React.FC = () => {
     setSelectedHandIdx(idx);
     setCastForEvoke(false);
     setCastForEmerge(false);
+    setCastForSpectacle(false);
+    setCastForMorph(false);
     setCastForMiracle(false);
+    setPendingBoardAction(null);
+    setHarmonizeCreatureIds([]);
     setPaidCasualty(false);
     setCasualtySacrificeUid(null);
     setPendingCastModifier(null);
@@ -363,6 +384,8 @@ const PlayPage: React.FC = () => {
       || card.hasDelve
       || card.hasImprovise
       || card.hasEmerge
+      || card.hasSpectacle
+      || card.hasMorph
     ) {
       // Wait for Cast / options before sending to server
     } else {
@@ -402,6 +425,8 @@ const PlayPage: React.FC = () => {
       targetPlayer: opts.targetPlayer ?? 1,
       castForEvoke,
       castForEmerge,
+      castForSpectacle,
+      castForMorph,
       castForMiracle,
       paidCasualty,
       casualtySacrificeIds: casualtySacrificeUid ? [casualtySacrificeUid] : [],
@@ -488,6 +513,18 @@ const PlayPage: React.FC = () => {
       setPendingCastModifier(null);
       return;
     }
+    if (pendingCastModifier === 'harmonize') {
+      if (!perm.type.includes('Creature') || perm.tapped) return;
+      setHarmonizeCreatureIds(prev =>
+        prev.includes(perm.uid) ? [] : [perm.uid],
+      );
+      return;
+    }
+    if (pendingBoardAction === 'turn_up_morph') {
+      if (!perm.faceDown) return;
+      void act('turn_up_morph', { permanentUid: perm.uid });
+      return;
+    }
     if (waitingTarget && targetMode === 'self') {
       handleTargetPermanent(perm, false);
     } else if (inCombat && perm.canAttack) {
@@ -533,6 +570,14 @@ const PlayPage: React.FC = () => {
       setPendingAlt('retrace_discard');
       return;
     }
+    if (pendingGyAction === 'cast_harmonize') {
+      void act('cast_harmonize', {
+        handIdx: idx,
+        targetPlayer: 1,
+        harmonizeCreatureIds,
+      });
+      return;
+    }
     void act(pendingGyAction, { handIdx: idx, targetPlayer: 1 });
   }
 
@@ -565,7 +610,11 @@ const PlayPage: React.FC = () => {
     setWaitingTarget(false);
     setCastForEvoke(false);
     setCastForEmerge(false);
+    setCastForSpectacle(false);
+    setCastForMorph(false);
     setCastForMiracle(false);
+    setPendingBoardAction(null);
+    setHarmonizeCreatureIds([]);
     setPaidCasualty(false);
     setCasualtySacrificeUid(null);
     setPendingCastModifier(null);
@@ -714,6 +763,7 @@ const PlayPage: React.FC = () => {
               {pendingGyAction === 'cast_jump_start' && 'Jump-start: click a card in your graveyard'}
               {pendingGyAction === 'cast_retrace' && 'Retrace: click a card in your graveyard'}
               {pendingGyAction === 'cast_aftermath' && 'Aftermath: click a card in your graveyard'}
+              {pendingGyAction === 'cast_harmonize' && 'Harmonize: click a card in your graveyard'}
               {pendingGyAction === 'dredge' && 'Dredge: click a card with dredge in your graveyard'}
               {pendingGyAction === 'scavenge' && 'Scavenge: click a creature card in your graveyard'}
               {pendingExileAction === 'cast_foretell' && 'Foretell cast: click a foretold card in exile'}
@@ -722,6 +772,8 @@ const PlayPage: React.FC = () => {
               {pendingCastModifier === 'delve' && 'Delve: click graveyard cards to exile for mana'}
               {pendingCastModifier === 'improvise' && 'Improvise: click untapped artifacts to help pay'}
               {pendingCastModifier === 'emerge' && 'Emerge: click a permanent to sacrifice'}
+              {pendingCastModifier === 'harmonize' && 'Harmonize: click a creature to tap for cost reduction'}
+              {pendingBoardAction === 'turn_up_morph' && 'Morph: click a face-down creature to turn face up'}
             </span>
           )}
           {selectedCard && waitingTarget && !pendingAlt && !pendingGyAction && (
@@ -753,10 +805,12 @@ const PlayPage: React.FC = () => {
                 || convokeCreatureIds.includes(p.uid)
                 || improviseArtifactIds.includes(p.uid)
                 || emergeSacrificeUid === p.uid
+                || harmonizeCreatureIds.includes(p.uid)
               }
               onClick={
                 pendingAlt
                 || pendingCastModifier
+                || pendingBoardAction
                 || (waitingTarget && targetMode === 'self')
                 || (inCombat && p.canAttack)
                   ? () => handlePlayerBoardClick(p)
@@ -893,6 +947,26 @@ const PlayPage: React.FC = () => {
                     />
                     Pay Casualty
                     {casualtySacrificeUid && ' (sacrifice selected)'}
+                  </label>
+                )}
+                {canCast && selectedCard.hasSpectacle && selectedCard.spectacleAvailable && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', color: '#ddd' }}>
+                    <input
+                      type="checkbox"
+                      checked={castForSpectacle}
+                      onChange={e => setCastForSpectacle(e.target.checked)}
+                    />
+                    Cast for Spectacle
+                  </label>
+                )}
+                {canCast && selectedCard.hasMorph && selectedCard.isCreature && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', color: '#ddd' }}>
+                    <input
+                      type="checkbox"
+                      checked={castForMorph}
+                      onChange={e => setCastForMorph(e.target.checked)}
+                    />
+                    Cast face down (Morph)
                   </label>
                 )}
                 {canCast && selectedCard.hasEmerge && (
@@ -1101,6 +1175,16 @@ const PlayPage: React.FC = () => {
                     Aftermath
                   </button>
                 )}
+                {canHarmonize && (
+                  <button type="button" onClick={() => setPendingGyAction('cast_harmonize')} style={btnStyle('#5d6d7e')}>
+                    Harmonize
+                  </button>
+                )}
+                {canTurnUpMorph && (
+                  <button type="button" onClick={() => setPendingBoardAction('turn_up_morph')} style={btnStyle('#6e2c00')}>
+                    Turn face up (Morph)
+                  </button>
+                )}
                 {canCastForetell && (
                   <button type="button" onClick={() => setPendingExileAction('cast_foretell')} style={btnStyle('#1f618d')}>
                     Cast Foretell
@@ -1114,6 +1198,16 @@ const PlayPage: React.FC = () => {
               </>
             )}
 
+            {pendingGyAction === 'cast_harmonize' && (
+              <button
+                type="button"
+                onClick={() => toggleCastModifier('harmonize')}
+                style={btnStyle(pendingCastModifier === 'harmonize' ? '#1f618d' : '#566573')}
+              >
+                Tap creature for harmonize ({harmonizeCreatureIds.length})
+              </button>
+            )}
+
             {pendingAlt === 'craft_artifacts' && (
               <button
                 type="button"
@@ -1125,7 +1219,7 @@ const PlayPage: React.FC = () => {
               </button>
             )}
 
-            {(waitingTarget || pendingAlt || pendingGyAction || pendingExileAction || pendingCastModifier) && (
+            {(waitingTarget || pendingAlt || pendingGyAction || pendingExileAction || pendingCastModifier || pendingBoardAction) && (
               <button
                 type="button"
                 onClick={resetPendingUi}

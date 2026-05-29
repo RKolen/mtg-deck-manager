@@ -206,6 +206,7 @@ class Permanent(GameObject):
             "power": power,
             "toughness": toughness,
             "tapped": self.tapped,
+            "faceDown": self.face_down,
             "sick": self.sick,
             "canAttack": _can_attack(self),
             "oracle": self.oracle_text,
@@ -229,6 +230,7 @@ class SpellAlternateCast:
     madness: bool = False
     suspend: bool = False
     disturb: bool = False
+    harmonize: bool = False
 
 
 @dataclass
@@ -244,6 +246,7 @@ class SpellCastPayment:
     evoke: bool = False
     mutate: bool = False
     casualty: bool = False
+    morph_face_down: bool = False
 
 
 @dataclass
@@ -278,7 +281,14 @@ def spell_is_ephemeral_copy(spell: SpellOnStack) -> bool:
 def spell_exiles_from_graveyard_cast(spell: SpellOnStack) -> bool:
     """Return True when a graveyard alt-cast spell exiles on leaving the stack."""
     alt = spell.alternate
-    return alt.flashback or alt.escape or alt.jump_start or alt.aftermath or alt.disturb
+    return (
+        alt.flashback
+        or alt.escape
+        or alt.jump_start
+        or alt.aftermath
+        or alt.disturb
+        or alt.harmonize
+    )
 
 
 def spell_returns_to_hand_on_resolve(spell: SpellOnStack) -> bool:

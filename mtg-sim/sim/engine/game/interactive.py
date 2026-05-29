@@ -19,6 +19,8 @@ from engine.abilities.keywords.other.craft import has_craft
 from engine.abilities.keywords.casting.disturb import can_cast_via_disturb
 from engine.abilities.keywords.casting.escape import can_cast_via_escape, escape_exiles_required
 from engine.abilities.keywords.casting.flashback import can_cast_via_flashback
+from engine.abilities.keywords.casting.harmonize import can_cast_via_harmonize
+from engine.abilities.keywords.other.morph import can_turn_up_morph
 from engine.abilities.keywords.casting.foretell import (
     can_cast_foretold,
     can_foretell_setup,
@@ -199,6 +201,23 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
             target_uid,
             target_player,
             auto_resolve=True,
+        )
+
+    def action_cast_harmonize(
+        self,
+        graveyard_idx: int,
+        target_uid: str | None = None,
+        target_player: int | None = None,
+        harmonize_creature_ids: list[str] | None = None,
+    ) -> dict:
+        """Cast a card from the graveyard for its harmonize cost."""
+        ids = [int(uid) for uid in (harmonize_creature_ids or [])]
+        return self._announce_harmonize_cast(
+            graveyard_idx,
+            target_uid,
+            target_player,
+            auto_resolve=True,
+            harmonize_creature_ids=ids,
         )
 
     def action_cast_escape(
@@ -407,6 +426,8 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
             actions.append("activate")
         if self._battlefield_can_outlast():
             actions.append("outlast")
+        if self._battlefield_can_turn_up_morph():
+            actions.append("turn_up_morph")
         if self.phase == "main1":
             actions.append("go_to_attack")
         actions.append("end_turn")
@@ -449,6 +470,8 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
             actions.append("cast_retrace")
         if self._graveyard_can_aftermath():
             actions.append("cast_aftermath")
+        if self._graveyard_can_harmonize():
+            actions.append("cast_harmonize")
 
     def _hand_can_cycle(self) -> bool:
         """Return True when a hand card can activate cycling."""
@@ -608,6 +631,16 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
             for c in self._zones(0).graveyard
         )
 
+    def _graveyard_can_harmonize(self) -> bool:
+        """Return True when a graveyard card can be cast for harmonize."""
+        if not self.state.stack.is_empty:
+            return False
+        return any(
+            isinstance(c, CardObject)
+            and can_cast_via_harmonize(require_card_info(c), self.phase, True)
+            for c in self._zones(0).graveyard
+        )
+
     def _graveyard_can_escape(self) -> bool:
         """Return True when a graveyard card can be cast for escape."""
         if not self.state.stack.is_empty:
@@ -690,6 +723,12 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
         if not self.state.stack.is_empty:
             return False
         return any(can_outlast(perm, self.state, 0, self.phase) for perm in self._permanents(0))
+
+    def _battlefield_can_turn_up_morph(self) -> bool:
+        """Return True when a face-down morph creature can turn face up."""
+        if not self.state.stack.is_empty:
+            return False
+        return any(can_turn_up_morph(perm, self.state, 0, self.phase) for perm in self._permanents(0))
 
     def _battlefield_can_boast(self) -> bool:
         """Return True when an attacking creature can boast."""

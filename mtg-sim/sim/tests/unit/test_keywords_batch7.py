@@ -53,6 +53,7 @@ def test_validate_cast_for_evoke():
         CastAnnounceOptions(alternate=HandAlternateCastChoices(cast_for_evoke=True)),
         False,
         None,
+        game,
     )
     assert err is None
     assert paid is not None

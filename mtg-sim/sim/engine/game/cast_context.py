@@ -35,6 +35,8 @@ class HandAlternateCastChoices:
     cast_for_evoke: bool = False
     cast_for_mutate: bool = False
     cast_for_freerunning: bool = False
+    cast_for_spectacle: bool = False
+    cast_for_morph: bool = False
 
 
 @dataclass(frozen=True)
@@ -46,6 +48,7 @@ class CastTargetingIds:
     emerge_sacrifice_ids: tuple[int, ...] = ()
     casualty_sacrifice_ids: tuple[int, ...] = ()
     spree_mode_indices: tuple[int, ...] = ()
+    harmonize_creature_ids: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)

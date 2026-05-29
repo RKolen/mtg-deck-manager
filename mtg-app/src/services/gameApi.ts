@@ -43,6 +43,9 @@ export interface CardInHand {
   hasDelve?: boolean;
   hasImprovise?: boolean;
   hasEmerge?: boolean;
+  hasSpectacle?: boolean;
+  spectacleAvailable?: boolean;
+  hasMorph?: boolean;
 }
 
 export interface GraveyardCard {
@@ -64,6 +67,7 @@ export interface PermanentOnBoard {
   power: number;
   toughness: number;
   tapped: boolean;
+  faceDown?: boolean;
   sick: boolean;
   canAttack: boolean;
   oracle: string;
@@ -120,6 +124,9 @@ export interface GameActionOpts {
   delveGraveyardIndices?: number[];
   improviseArtifactIds?: string[];
   emergeSacrificeIds?: string[];
+  harmonizeCreatureIds?: string[];
+  castForSpectacle?: boolean;
+  castForMorph?: boolean;
   craftArtifactIds?: string[];
   kickerTimes?: number;
 }
@@ -162,6 +169,9 @@ export async function gameAction(
     delveGraveyardIndices: opts.delveGraveyardIndices ?? [],
     improviseArtifactIds: opts.improviseArtifactIds ?? [],
     emergeSacrificeIds: opts.emergeSacrificeIds ?? [],
+    harmonizeCreatureIds: opts.harmonizeCreatureIds ?? [],
+    castForSpectacle: opts.castForSpectacle ?? false,
+    castForMorph: opts.castForMorph ?? false,
     craftArtifactIds: opts.craftArtifactIds ?? [],
     kickerTimes: opts.kickerTimes ?? 0,
   });

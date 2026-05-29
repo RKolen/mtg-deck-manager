@@ -24,6 +24,7 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
     improvise_ids = tuple(int(uid) for uid in req.improviseArtifactIds)
     emerge_ids = tuple(int(uid) for uid in req.emergeSacrificeIds)
     casualty_ids = tuple(int(uid) for uid in req.casualtySacrificeIds)
+    harmonize_ids = tuple(int(uid) for uid in req.harmonizeCreatureIds)
     return CastAnnounceOptions(
         costs=HandCastCostChoices(
             kicker_times=req.kickerTimes,
@@ -39,6 +40,8 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
             cast_for_evoke=req.castForEvoke,
             cast_for_mutate=req.castForMutate,
             cast_for_freerunning=req.castForFreerunning,
+            cast_for_spectacle=req.castForSpectacle,
+            cast_for_morph=req.castForMorph,
         ),
         modifiers=CastModifierIds(
             targeting=CastTargetingIds(
@@ -47,6 +50,7 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
                 emerge_sacrifice_ids=emerge_ids,
                 casualty_sacrifice_ids=casualty_ids,
                 spree_mode_indices=tuple(req.spreeModeIndices),
+                harmonize_creature_ids=harmonize_ids,
             ),
             reductions=CastManaReductionIds(
                 convoke_creature_ids=convoke_ids,
@@ -131,6 +135,7 @@ def _dispatch_permanent_actions(game: InteractiveGame, req) -> dict | None:
             host_uid=req.targetUid,
         ),
         "outlast": lambda: game.action_outlast(uid),
+        "turn_up_morph": lambda: game.action_turn_up_morph(uid),
         "boast": lambda: game.action_boast(uid),
         "craft": lambda: game.action_craft(
             uid,
@@ -188,6 +193,12 @@ def _dispatch_alt_cast(game: InteractiveGame, req) -> dict | None:
             req.handIdx,
             req.targetUid,
             req.targetPlayer,
+        ),
+        "cast_harmonize": lambda: game.action_cast_harmonize(
+            req.handIdx,
+            req.targetUid,
+            req.targetPlayer,
+            harmonize_creature_ids=req.harmonizeCreatureIds,
         ),
     }
     handler = alt_handlers.get(req.action)

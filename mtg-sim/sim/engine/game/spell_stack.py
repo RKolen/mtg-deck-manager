@@ -11,6 +11,13 @@ from engine.abilities.keywords.casting.disturb import (
     disturb_mana_needed,
     has_disturb,
 )
+from engine.abilities.keywords.casting.harmonize import (
+    can_cast_via_harmonize,
+    has_harmonize,
+    normalize_harmonize_creature_id,
+    resolve_harmonize_mana,
+)
+from engine.abilities.keywords.casting.spectacle import spectacle_available
 from engine.abilities.keywords.casting import (
     aftermath_mana_needed,
     sacrifice_for_emerge,
@@ -143,6 +150,10 @@ def _announce_cast_detail(
     detail = f"{card_name} on stack"
     if mods.miracle:
         detail = f"{detail} (miracle)"
+    if mods.spectacle:
+        detail = f"{detail} (spectacle)"
+    if mods.morph:
+        detail = f"{detail} (morph)"
     if mods.freerunning:
         detail = f"{detail} (freerunning)"
     if mods.replicate_times:
@@ -193,6 +204,7 @@ class SpellStackMixin(GameRuntimeMixin):
             opts,
             self.state.players[0].combat_damage_dealt_this_turn,
             target_uid_str,
+            self.state,
         )
         if val_err:
             return {**self.to_client(), "error": val_err}
@@ -212,11 +224,14 @@ class SpellStackMixin(GameRuntimeMixin):
                     cast_for_mutate=paid.modifiers.mutate,
                     mutate_target_uid=opts.modifiers.targeting.mutate_target_uid,
                     spree_mode_indices=paid.modifiers.spree_modes,
+                    cast_for_morph=paid.modifiers.morph,
                 ),
                 timing=CastManaTiming(
                     cast_for_miracle=paid.modifiers.miracle,
                     cast_for_freerunning=paid.modifiers.freerunning,
                     freerunning_available=self.state.players[0].combat_damage_dealt_this_turn,
+                    cast_for_spectacle=paid.modifiers.spectacle,
+                    spectacle_available=spectacle_available(self.state, 0),
                 ),
                 zones=self.state.zones,
                 controller_idx=0,
@@ -302,6 +317,7 @@ class SpellStackMixin(GameRuntimeMixin):
                 evoke=mods.evoke,
                 mutate=mods.mutate,
                 casualty=mods.casualty,
+                morph_face_down=mods.morph,
             ),
             replicate_times=mods.replicate_times,
             spree_mode_indices=mods.spree_modes,
@@ -497,6 +513,67 @@ class SpellStackMixin(GameRuntimeMixin):
             ),
         )
         self._log("player", "flashback", f"{card_info.name} on stack")
+        self.state.fire_spell_cast_triggers(card, tuple(targets))
+        if auto_resolve:
+            self._auto_pass_stack()
+        return self.to_client()
+
+    def _announce_harmonize_cast(
+        self,
+        graveyard_idx: int,
+        target_uid_str: str | None,
+        target_player_idx: int | None,
+        auto_resolve: bool,
+        harmonize_creature_ids: list[int] | None = None,
+    ) -> dict:
+        """Pay harmonize cost and cast a card from the graveyard."""
+        card = self._zones(0).graveyard[graveyard_idx]
+        if not isinstance(card, CardObject):
+            return {**self.to_client(), "error": "Invalid card"}
+        card_info = require_card_info(card)
+        if not has_harmonize(card_info):
+            return {**self.to_client(), "error": f"{card_info.name} does not have harmonize"}
+        if not can_cast_via_harmonize(
+            card_info,
+            self.phase,
+            self.state.stack.is_empty,
+        ):
+            return {**self.to_client(), "error": "Cannot cast harmonize now"}
+        creature_id = normalize_harmonize_creature_id(
+            card_info,
+            list(harmonize_creature_ids or []),
+        )
+        mana_needed, life_cost, tap_err = resolve_harmonize_mana(
+            card_info,
+            self.state.zones,
+            0,
+            creature_id,
+        )
+        if tap_err:
+            return {**self.to_client(), "error": tap_err}
+        if not self._tap_lands_for_mana(0, mana_needed):
+            return {
+                **self.to_client(),
+                "error": (
+                    f"Not enough mana ({self._available_mana(0)} available, "
+                    f"need {mana_needed})"
+                ),
+            }
+        if life_cost:
+            self.state.players[0].life -= life_cost
+        self.state.players[0].spells_cast_this_turn += 1
+        targets = self._put_spell_on_stack(
+            player_idx=0,
+            card=card,
+            target_uid_str=target_uid_str,
+            target_player_idx=target_player_idx,
+            context=SpellCastContext(
+                alternate=SpellAlternateCast(harmonize=True),
+                from_graveyard=True,
+            ),
+        )
+        tap_note = " (creature tapped for cost reduction)" if creature_id else ""
+        self._log("player", "harmonize", f"{card_info.name} on stack{tap_note}")
         self.state.fire_spell_cast_triggers(card, tuple(targets))
         if auto_resolve:
             self._auto_pass_stack()
@@ -1118,6 +1195,8 @@ class SpellStackMixin(GameRuntimeMixin):
             mark_evoked_cast(permanent)
         if spell.alternate.disturb:
             permanent.counters['disturbed'] = 1
+        if spell.payment.morph_face_down:
+            permanent.face_down = True
         self._register_permanent_triggers(permanent)
         detail = f"Cast creature {card_info.name}"
         if counters:
