@@ -126,31 +126,47 @@ def _parse_forge_output(stdout: str, player_name: str) -> list[SimResult]:
     """
     Parse Forge sim stdout into SimResult objects.
 
-    Forge prints one line per game:
+    Forge prints per game (even in quiet -q mode):
+      Game Outcome: Turn N          ← turn the game ended on
+      Game Outcome: <winner> has won because ...
+      Match Result: ...
+
       Game Result: Game N ended in X ms. PlayerName has won!
       Game Result: Game N ended in a Draw! Took X ms.
+
+    We walk the output line by line, tracking the most recent turn number
+    seen before each "Game Result:" line.
     """
     results: list[SimResult] = []
-    pattern = re.compile(
+    turn_pattern = re.compile(r"Game Outcome: Turn (\d+)", re.IGNORECASE)
+    result_pattern = re.compile(
         r"Game Result: Game (\d+) ended.*?(?:(\S.*?) has won!|a Draw)",
         re.IGNORECASE,
     )
-    for match in pattern.finditer(stdout):
-        game_num = int(match.group(1))
-        winner_name = match.group(2)
-        on_the_play = game_num % 2 == 1
-        if winner_name is None:
-            winner = random.randint(0, 1)  # draw → coin flip for stats
-        else:
-            # Forge prefixes "Ai(N)-" to the deck name in game results.
-            winner = 0 if player_name in winner_name else 1
-        results.append(SimResult(
-            winner=winner,
-            turns=None,
-            player_life=0,
-            opponent_life=0,
-            on_the_play=on_the_play,
-        ))
+    current_turn: Optional[int] = None
+    for line in stdout.splitlines():
+        turn_match = turn_pattern.match(line.strip())
+        if turn_match:
+            current_turn = int(turn_match.group(1))
+            continue
+        result_match = result_pattern.search(line)
+        if result_match:
+            game_num = int(result_match.group(1))
+            winner_name = result_match.group(2)
+            on_the_play = game_num % 2 == 1
+            if winner_name is None:
+                winner = random.randint(0, 1)  # draw → coin flip for stats
+            else:
+                # Forge prefixes "Ai(N)-" to the deck name in game results.
+                winner = 0 if player_name in winner_name else 1
+            results.append(SimResult(
+                winner=winner,
+                turns=current_turn,
+                player_life=0,
+                opponent_life=0,
+                on_the_play=on_the_play,
+            ))
+            current_turn = None  # reset for next game
     return results
 
 
