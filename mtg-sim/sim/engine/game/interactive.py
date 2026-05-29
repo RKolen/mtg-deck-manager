@@ -31,6 +31,9 @@ from engine.abilities.keywords.casting.plot import (
     is_plottable_sorcery,
 )
 from engine.abilities.keywords.casting.suspend import can_suspend
+from engine.abilities.keywords.casting.jump_start import can_cast_via_jump_start, has_jump_start
+from engine.abilities.keywords.casting.retrace import can_cast_via_retrace, has_retrace
+from engine.abilities.keywords.casting.aftermath import can_cast_aftermath, has_aftermath
 from engine.abilities.keywords.other.dredge import apply_dredge, can_dredge_instead_of_draw
 from engine.abilities.keywords.other.encore import can_encore
 from engine.abilities.keywords.other.eternalize import can_eternalize
@@ -440,6 +443,12 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
             actions.append("cast_flashback")
         if self._graveyard_can_escape():
             actions.append("cast_escape")
+        if self._graveyard_can_jump_start():
+            actions.append("cast_jump_start")
+        if self._graveyard_can_retrace():
+            actions.append("cast_retrace")
+        if self._graveyard_can_aftermath():
+            actions.append("cast_aftermath")
 
     def _hand_can_cycle(self) -> bool:
         """Return True when a hand card can activate cycling."""
@@ -628,6 +637,45 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
         return any(
             isinstance(c, CardObject)
             and activated.can_scavenge(require_card_info(c), self.phase, True)
+            for c in self._zones(0).graveyard
+        )
+
+    def _graveyard_can_jump_start(self) -> bool:
+        """Return True when a graveyard card can be cast for jump-start."""
+        if not self.state.stack.is_empty:
+            return False
+        hand = self._zones(0).hand
+        if not hand:
+            return False
+        return any(
+            isinstance(c, CardObject)
+            and has_jump_start(require_card_info(c))
+            and can_cast_via_jump_start(require_card_info(c), self.phase, True)
+            for c in self._zones(0).graveyard
+        )
+
+    def _graveyard_can_retrace(self) -> bool:
+        """Return True when a graveyard card can be cast for retrace."""
+        if not self.state.stack.is_empty:
+            return False
+        hand = self._zones(0).hand
+        if not any(isinstance(c, CardObject) and is_land(c) for c in hand):
+            return False
+        return any(
+            isinstance(c, CardObject)
+            and has_retrace(require_card_info(c))
+            and can_cast_via_retrace(require_card_info(c), self.phase, True)
+            for c in self._zones(0).graveyard
+        )
+
+    def _graveyard_can_aftermath(self) -> bool:
+        """Return True when a graveyard card can be cast for aftermath."""
+        if not self.state.stack.is_empty:
+            return False
+        return any(
+            isinstance(c, CardObject)
+            and has_aftermath(require_card_info(c))
+            and can_cast_aftermath(require_card_info(c), self.phase, True)
             for c in self._zones(0).graveyard
         )
 

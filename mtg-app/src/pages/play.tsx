@@ -40,6 +40,8 @@ type PendingAlt =
   | 'craft_host'
   | 'craft_artifacts'
   | 'scavenge_target'
+  | 'jump_discard'
+  | 'retrace_discard'
   | null;
 
 type PendingGyAction =
@@ -49,6 +51,9 @@ type PendingGyAction =
   | 'cast_disturb'
   | 'cast_flashback'
   | 'cast_escape'
+  | 'cast_jump_start'
+  | 'cast_retrace'
+  | 'cast_aftermath'
   | 'dredge'
   | 'scavenge'
   | null;
@@ -188,6 +193,7 @@ const PlayPage: React.FC = () => {
   const [craftHostUid, setCraftHostUid] = useState<string | null>(null);
   const [craftArtifactIds, setCraftArtifactIds] = useState<string[]>([]);
   const [scavengeGyIdx, setScavengeGyIdx] = useState<number | null>(null);
+  const [gyCastIdx, setGyCastIdx] = useState<number | null>(null);
 
   const logRef = useRef<HTMLDivElement>(null);
 
@@ -226,6 +232,7 @@ const PlayPage: React.FC = () => {
     setCraftHostUid(null);
     setCraftArtifactIds([]);
     setScavengeGyIdx(null);
+    setGyCastIdx(null);
     try {
       const next = await gameAction(gs.gameId, action, opts as Parameters<typeof gameAction>[2]);
       setGs(next);
@@ -264,6 +271,9 @@ const PlayPage: React.FC = () => {
   const canCastMadness = gs?.availableActions.includes('cast_madness');
   const canCastForetell = gs?.availableActions.includes('cast_foretell');
   const canCastPlot = gs?.availableActions.includes('cast_plot');
+  const canJumpStart = gs?.availableActions.includes('cast_jump_start');
+  const canRetrace = gs?.availableActions.includes('cast_retrace');
+  const canAftermath = gs?.availableActions.includes('cast_aftermath');
   const _canAttack = gs?.availableActions.includes('go_to_attack') || phase === 'attack'; void _canAttack;
   const inCombat = phase === 'attack';
 
@@ -272,7 +282,24 @@ const PlayPage: React.FC = () => {
   // ---- Handlers ----
 
   function handleHandClick(card: CardInHand, idx: number) {
-    if (!(canPlayLand && card.isLand) && !card.affordable) return;
+    if (pendingAlt === 'jump_discard' && gyCastIdx !== null) {
+      void act('cast_jump_start', {
+        handIdx: gyCastIdx,
+        discardHandIdx: idx,
+        targetPlayer: 1,
+      });
+      return;
+    }
+    if (pendingAlt === 'retrace_discard' && gyCastIdx !== null) {
+      if (!card.isLand) return;
+      void act('cast_retrace', {
+        handIdx: gyCastIdx,
+        discardHandIdx: idx,
+        targetPlayer: 1,
+      });
+      return;
+    }
+    if (!(canPlayLand && card.isLand) && !card.affordable && !pendingAlt) return;
     if (card.isLand && canPlayLand) {
       void act('play_land', { handIdx: idx });
       return;
@@ -413,10 +440,21 @@ const PlayPage: React.FC = () => {
     if (pendingGyAction === 'scavenge') {
       setScavengeGyIdx(idx);
       setPendingGyAction(null);
-    setPendingExileAction(null);
       setPendingAlt('scavenge_target');
       setWaitingTarget(true);
       setTargetMode('self');
+      return;
+    }
+    if (pendingGyAction === 'cast_jump_start') {
+      setGyCastIdx(idx);
+      setPendingGyAction(null);
+      setPendingAlt('jump_discard');
+      return;
+    }
+    if (pendingGyAction === 'cast_retrace') {
+      setGyCastIdx(idx);
+      setPendingGyAction(null);
+      setPendingAlt('retrace_discard');
       return;
     }
     void act(pendingGyAction, { handIdx: idx, targetPlayer: 1 });
@@ -459,6 +497,7 @@ const PlayPage: React.FC = () => {
     setCraftHostUid(null);
     setCraftArtifactIds([]);
     setScavengeGyIdx(null);
+    setGyCastIdx(null);
   }
 
   function handleTargetOpponent() {
@@ -582,12 +621,17 @@ const PlayPage: React.FC = () => {
               {pendingAlt === 'craft_host' && 'Craft: click the permanent to craft'}
               {pendingAlt === 'craft_artifacts' && 'Craft: click artifacts to exile, then confirm'}
               {pendingAlt === 'scavenge_target' && 'Scavenge: click a creature to receive counters'}
+              {pendingAlt === 'jump_discard' && 'Jump-start: click a card in hand to discard'}
+              {pendingAlt === 'retrace_discard' && 'Retrace: click a land in hand to discard'}
               {pendingGyAction === 'encore' && 'Encore: click a creature in your graveyard'}
               {pendingGyAction === 'eternalize' && 'Eternalize: click a creature in your graveyard'}
               {pendingGyAction === 'unearth' && 'Unearth: click a card in your graveyard'}
               {pendingGyAction === 'cast_disturb' && 'Disturb: click a creature in your graveyard'}
               {pendingGyAction === 'cast_flashback' && 'Flashback: click a card in your graveyard'}
               {pendingGyAction === 'cast_escape' && 'Escape: click a card in your graveyard'}
+              {pendingGyAction === 'cast_jump_start' && 'Jump-start: click a card in your graveyard'}
+              {pendingGyAction === 'cast_retrace' && 'Retrace: click a card in your graveyard'}
+              {pendingGyAction === 'cast_aftermath' && 'Aftermath: click a card in your graveyard'}
               {pendingGyAction === 'dredge' && 'Dredge: click a card with dredge in your graveyard'}
               {pendingGyAction === 'scavenge' && 'Scavenge: click a creature card in your graveyard'}
               {pendingExileAction === 'cast_foretell' && 'Foretell cast: click a foretold card in exile'}
@@ -896,6 +940,21 @@ const PlayPage: React.FC = () => {
                     Scavenge
                   </button>
                 )}
+                {canJumpStart && (
+                  <button type="button" onClick={() => setPendingGyAction('cast_jump_start')} style={btnStyle('#6c3483')}>
+                    Jump-start
+                  </button>
+                )}
+                {canRetrace && (
+                  <button type="button" onClick={() => setPendingGyAction('cast_retrace')} style={btnStyle('#7d6608')}>
+                    Retrace
+                  </button>
+                )}
+                {canAftermath && (
+                  <button type="button" onClick={() => setPendingGyAction('cast_aftermath')} style={btnStyle('#566573')}>
+                    Aftermath
+                  </button>
+                )}
                 {canCastForetell && (
                   <button type="button" onClick={() => setPendingExileAction('cast_foretell')} style={btnStyle('#1f618d')}>
                     Cast Foretell
@@ -952,7 +1011,11 @@ const PlayPage: React.FC = () => {
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {gs.playerHand.map((card, idx) => {
-              const isSelectable = (canPlayLand && card.isLand) || (!card.isLand && card.affordable);
+              const isSelectable = isMulligan
+                || pendingAlt === 'jump_discard'
+                || (pendingAlt === 'retrace_discard' && card.isLand)
+                || (canPlayLand && card.isLand)
+                || (!card.isLand && card.affordable);
               return (
                 <CardChip
                   key={`${card.name}-${idx}`}

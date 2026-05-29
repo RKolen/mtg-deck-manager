@@ -106,6 +106,7 @@ export interface GameActionOpts {
   targetUid?: string;
   targetPlayer?: number;
   permanentUid?: string;
+  discardHandIdx?: number;
   castForEvoke?: boolean;
   castForEmerge?: boolean;
   castForMiracle?: boolean;
@@ -143,6 +144,7 @@ export async function gameAction(
     targetUid: opts.targetUid,
     targetPlayer: opts.targetPlayer,
     permanentUid: opts.permanentUid,
+    discardHandIdx: opts.discardHandIdx,
     castForEvoke: opts.castForEvoke ?? false,
     castForEmerge: opts.castForEmerge ?? false,
     castForMiracle: opts.castForMiracle ?? false,
