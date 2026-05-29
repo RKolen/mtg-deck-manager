@@ -12,6 +12,7 @@ from engine.abilities.activated._cost_keyword import (
     parse_alt_cost,
     timing_allows_hand_activation,
 )
+from engine.abilities.keywords.actions.counters import put_plus_counters
 from engine.cards.oracle_parse import parse_damage, parse_draw
 from engine.core.game_object import CardObject, Permanent
 from engine.core.mana import ManaCost
@@ -27,6 +28,10 @@ _CHANNEL_RE = re.compile(
 )
 _UNEARTH_RE = re.compile(
     r"unearth\s*((?:\{[^}]+\})+)",
+    re.IGNORECASE,
+)
+_SCAVENGE_RE = re.compile(
+    r"scavenge\s*((?:\{[^}]+\})+)",
     re.IGNORECASE,
 )
 UNEARTH_COUNTER = "unearth"
@@ -153,3 +158,63 @@ def unearth_from_graveyard(
 def is_unearth_creature(perm: Permanent) -> bool:
     """Return True when a permanent was unearthed and should be exiled."""
     return perm.counters.get(UNEARTH_COUNTER, 0) > 0
+
+
+def has_scavenge(card: CardInfo) -> bool:
+    """Return True when the card has scavenge."""
+    return card.is_creature and has_cost_keyword(card, "Scavenge", _SCAVENGE_RE)
+
+
+def scavenge_cost(card: CardInfo) -> ManaCost | None:
+    """Parse the scavenge cost from oracle text."""
+    return parse_alt_cost(card, _SCAVENGE_RE)
+
+
+def scavenge_mana_needed(card: CardInfo) -> int:
+    """Return generic mana lands to tap for a scavenge activation."""
+    return alt_cost_mana_value(card, _SCAVENGE_RE)
+
+
+def scavenge_counter_amount(card: CardInfo) -> int:
+    """Return +1/+1 counters to place from this card's power."""
+    power = card.numeric_power
+    if power is None:
+        return 0
+    return max(0, int(power))
+
+
+def can_scavenge(card: CardInfo, phase: str, stack_is_empty: bool) -> bool:
+    """Return True when scavenge may be activated from the graveyard."""
+    return (
+        card.is_creature
+        and has_scavenge(card)
+        and phase in ("main1", "main2")
+        and stack_is_empty
+    )
+
+
+def scavenge_from_graveyard(
+    zones: ZoneManager,
+    player_idx: int,
+    graveyard_idx: int,
+    target: Permanent,
+) -> tuple[str | None, str | None]:
+    """Exile a scavenge card and put +1/+1 counters on a creature."""
+    graveyard = zones.player_zones[player_idx].graveyard
+    if graveyard_idx < 0 or graveyard_idx >= len(graveyard):
+        return "Graveyard index out of range", None
+    card = graveyard[graveyard_idx]
+    if not isinstance(card, CardObject) or card.card_info is None:
+        return "Invalid scavenge card", None
+    card_info = card.card_info
+    if not has_scavenge(card_info):
+        return f"{card_info.name} does not have scavenge", None
+    if 'Creature' not in target.type_line:
+        return f"{target.name} is not a creature", None
+    if target.controller_idx != player_idx:
+        return "Scavenge may only target creatures you control", None
+    amount = scavenge_counter_amount(card_info)
+    zones.exile_from_graveyard(card, player_idx)
+    if amount > 0:
+        put_plus_counters(target, amount)
+    return None, f"scavenged {card_info.name} onto {target.name} (+{amount}/+{amount})"

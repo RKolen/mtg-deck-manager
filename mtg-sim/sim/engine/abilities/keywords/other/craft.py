@@ -70,4 +70,6 @@ def apply_craft(
             continue
         game.zones.leave_battlefield(victim, Zone.EXILE, 'craft', game)
     perm.counters['crafted'] = 1
+    if re.search(r'\btransform\b', perm.oracle_text or '', re.IGNORECASE):
+        perm.face_down = not perm.face_down
     return f"crafted {perm.name} (exiled {len(artifact_ids)} artifact(s))"

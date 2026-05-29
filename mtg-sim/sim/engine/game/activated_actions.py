@@ -347,6 +347,34 @@ class ActivatedActionsMixin(GameRuntimeMixin):
         self._log("player", "unearth", f"Unearthed {card_info.name}")
         return self.to_client()
 
+    def action_scavenge(self, graveyard_idx: int, target_uid: str | None) -> dict:
+        """Activate scavenge from the graveyard onto a creature."""
+        card, err = self._graveyard_card_checked(0, graveyard_idx)
+        if err is not None:
+            return err
+        assert card is not None
+        card_info = require_card_info(card)
+        if not activated.can_scavenge(card_info, self.phase, self.state.stack.is_empty):
+            return {**self.to_client(), "error": "Cannot scavenge now"}
+        if target_uid is None:
+            return {**self.to_client(), "error": "Scavenge requires a target creature"}
+        target = self._find_permanent(target_uid)
+        if target is None:
+            return {**self.to_client(), "error": "Scavenge target not found"}
+        mana_needed = activated.scavenge_mana_needed(card_info)
+        if not self._tap_lands_for_mana(0, mana_needed):
+            return {**self.to_client(), "error": f"Need {mana_needed} mana to scavenge"}
+        err, detail = activated.scavenge_from_graveyard(
+            self.state.zones,
+            0,
+            graveyard_idx,
+            target,
+        )
+        if err:
+            return {**self.to_client(), "error": err}
+        self._log("player", "scavenge", detail or "scavenge")
+        return self.to_client()
+
     def action_crew(
         self,
         vehicle_uid: str,

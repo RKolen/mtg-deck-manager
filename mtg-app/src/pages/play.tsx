@@ -39,6 +39,7 @@ type PendingAlt =
   | 'outlast'
   | 'craft_host'
   | 'craft_artifacts'
+  | 'scavenge_target'
   | null;
 
 type PendingGyAction =
@@ -47,6 +48,9 @@ type PendingGyAction =
   | 'unearth'
   | 'cast_disturb'
   | 'cast_flashback'
+  | 'cast_escape'
+  | 'dredge'
+  | 'scavenge'
   | null;
 
 const PHASE_LABELS: Record<string, string> = {
@@ -180,6 +184,7 @@ const PlayPage: React.FC = () => {
   const [pendingGyAction, setPendingGyAction] = useState<PendingGyAction>(null);
   const [craftHostUid, setCraftHostUid] = useState<string | null>(null);
   const [craftArtifactIds, setCraftArtifactIds] = useState<string[]>([]);
+  const [scavengeGyIdx, setScavengeGyIdx] = useState<number | null>(null);
 
   const logRef = useRef<HTMLDivElement>(null);
 
@@ -216,6 +221,7 @@ const PlayPage: React.FC = () => {
     setPendingGyAction(null);
     setCraftHostUid(null);
     setCraftArtifactIds([]);
+    setScavengeGyIdx(null);
     try {
       const next = await gameAction(gs.gameId, action, opts as Parameters<typeof gameAction>[2]);
       setGs(next);
@@ -245,6 +251,9 @@ const PlayPage: React.FC = () => {
   const canUnearth = gs?.availableActions.includes('unearth');
   const canDisturb = gs?.availableActions.includes('cast_disturb');
   const canFlashback = gs?.availableActions.includes('cast_flashback');
+  const canEscape = gs?.availableActions.includes('cast_escape');
+  const canScavenge = gs?.availableActions.includes('scavenge');
+  const canDredge = gs?.availableActions.includes('dredge');
   const _canAttack = gs?.availableActions.includes('go_to_attack') || phase === 'attack'; void _canAttack;
   const inCombat = phase === 'attack';
 
@@ -365,6 +374,11 @@ const PlayPage: React.FC = () => {
       );
       return;
     }
+    if (pendingAlt === 'scavenge_target') {
+      if (scavengeGyIdx === null) return;
+      void act('scavenge', { handIdx: scavengeGyIdx, targetUid: perm.uid });
+      return;
+    }
     if (waitingTarget && targetMode === 'self') {
       handleTargetPermanent(perm, false);
     } else if (inCombat && perm.canAttack) {
@@ -379,6 +393,14 @@ const PlayPage: React.FC = () => {
 
   function handleGraveyardClick(idx: number) {
     if (!pendingGyAction) return;
+    if (pendingGyAction === 'scavenge') {
+      setScavengeGyIdx(idx);
+      setPendingGyAction(null);
+      setPendingAlt('scavenge_target');
+      setWaitingTarget(true);
+      setTargetMode('self');
+      return;
+    }
     void act(pendingGyAction, { handIdx: idx, targetPlayer: 1 });
   }
 
@@ -417,6 +439,7 @@ const PlayPage: React.FC = () => {
     setPendingGyAction(null);
     setCraftHostUid(null);
     setCraftArtifactIds([]);
+    setScavengeGyIdx(null);
   }
 
   function handleTargetOpponent() {
@@ -539,11 +562,15 @@ const PlayPage: React.FC = () => {
               {pendingAlt === 'outlast' && 'Outlast: click a creature with outlast'}
               {pendingAlt === 'craft_host' && 'Craft: click the permanent to craft'}
               {pendingAlt === 'craft_artifacts' && 'Craft: click artifacts to exile, then confirm'}
+              {pendingAlt === 'scavenge_target' && 'Scavenge: click a creature to receive counters'}
               {pendingGyAction === 'encore' && 'Encore: click a creature in your graveyard'}
               {pendingGyAction === 'eternalize' && 'Eternalize: click a creature in your graveyard'}
               {pendingGyAction === 'unearth' && 'Unearth: click a card in your graveyard'}
               {pendingGyAction === 'cast_disturb' && 'Disturb: click a creature in your graveyard'}
               {pendingGyAction === 'cast_flashback' && 'Flashback: click a card in your graveyard'}
+              {pendingGyAction === 'cast_escape' && 'Escape: click a card in your graveyard'}
+              {pendingGyAction === 'dredge' && 'Dredge: click a card with dredge in your graveyard'}
+              {pendingGyAction === 'scavenge' && 'Scavenge: click a creature card in your graveyard'}
             </span>
           )}
           {selectedCard && waitingTarget && !pendingAlt && !pendingGyAction && (
@@ -614,9 +641,16 @@ const PlayPage: React.FC = () => {
             </>}
 
             {phase === 'draw' && (
-              <button type="button" onClick={() => void act('draw')} style={btnStyle('#4a90d9')}>
-                Draw card
-              </button>
+              <>
+                <button type="button" onClick={() => void act('draw')} style={btnStyle('#4a90d9')}>
+                  Draw card
+                </button>
+                {canDredge && (
+                  <button type="button" onClick={() => setPendingGyAction('dredge')} style={btnStyle('#6c3483')}>
+                    Dredge
+                  </button>
+                )}
+              </>
             )}
 
             {phase === 'main1' && <>
@@ -773,6 +807,16 @@ const PlayPage: React.FC = () => {
                 {canFlashback && (
                   <button type="button" onClick={() => setPendingGyAction('cast_flashback')} style={btnStyle('#2874a6')}>
                     Flashback
+                  </button>
+                )}
+                {canEscape && (
+                  <button type="button" onClick={() => setPendingGyAction('cast_escape')} style={btnStyle('#1a5276')}>
+                    Escape
+                  </button>
+                )}
+                {canScavenge && (
+                  <button type="button" onClick={() => setPendingGyAction('scavenge')} style={btnStyle('#784212')}>
+                    Scavenge
                   </button>
                 )}
               </>

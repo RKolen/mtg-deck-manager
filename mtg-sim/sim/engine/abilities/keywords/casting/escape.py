@@ -118,3 +118,22 @@ def exile_for_escape_cost(
         assert isinstance(other, CardObject)
         zones.exile_from_graveyard(other, player_idx)
     return capped
+
+
+def auto_escape_exile_indices(
+    zones: ZoneManager,
+    player_idx: int,
+    spell_graveyard_idx: int,
+    card: CardInfo,
+) -> list[int]:
+    """Pick graveyard indices to exile for escape when the client sends none."""
+    required = escape_exiles_required(card)
+    graveyard = zones.player_zones[player_idx].graveyard
+    picked: list[int] = []
+    for idx in range(len(graveyard)):
+        if idx == spell_graveyard_idx:
+            continue
+        picked.append(idx)
+        if len(picked) >= required:
+            break
+    return picked

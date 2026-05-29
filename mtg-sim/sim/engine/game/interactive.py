@@ -17,7 +17,9 @@ from engine.abilities.keywords.other.boast import can_boast, clear_boast_turn_co
 from engine.abilities.keywords.other.bushido import clear_bushido_combat_markers
 from engine.abilities.keywords.other.craft import has_craft
 from engine.abilities.keywords.casting.disturb import can_cast_via_disturb
+from engine.abilities.keywords.casting.escape import can_cast_via_escape, escape_exiles_required
 from engine.abilities.keywords.casting.flashback import can_cast_via_flashback
+from engine.abilities.keywords.other.dredge import apply_dredge, can_dredge_instead_of_draw
 from engine.abilities.keywords.other.encore import can_encore
 from engine.abilities.keywords.other.eternalize import can_eternalize
 from engine.abilities.keywords.other.outlast import can_outlast, clear_outlast_turn_marker
@@ -79,6 +81,18 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
         self._begin_turn(0)
         drawn = self._draw_cards(0, 1)
         self._log("player", "draw", f"Drew: {card_names(drawn) or '-'}")
+        self._auto_pass_stack()
+        self.phase = "main1"
+        return self.to_client()
+
+    def action_dredge(self, graveyard_idx: int) -> dict:
+        """Replace the draw step draw with dredge."""
+        assert self.phase == "draw"
+        self._begin_turn(0)
+        err, detail, _milled = apply_dredge(self.state.zones, 0, graveyard_idx)
+        if err:
+            return {**self.to_client(), "error": err}
+        self._log("player", "dredge", detail or "dredge")
         self._auto_pass_stack()
         self.phase = "main1"
         return self.to_client()
@@ -303,7 +317,9 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
         elif self.phase in ("game_over", "opp_turn"):
             actions = []
         elif self.phase == "draw":
-            actions = ["auto_draw"]
+            actions = ["draw"]
+            if self._graveyard_can_dredge():
+                actions.append("dredge")
         elif self.phase == "declare_blockers":
             actions = self._declare_blockers_actions()
         elif self.phase in ("main1", "main2"):
@@ -368,6 +384,8 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
             actions.append("ninjutsu")
         if self._graveyard_can_unearth():
             actions.append("unearth")
+        if self._graveyard_can_scavenge():
+            actions.append("scavenge")
         if self._graveyard_can_encore():
             actions.append("encore")
         if self._graveyard_can_eternalize():
@@ -376,6 +394,8 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
             actions.append("cast_disturb")
         if self._graveyard_can_flashback():
             actions.append("cast_flashback")
+        if self._graveyard_can_escape():
+            actions.append("cast_escape")
         if self._battlefield_can_craft():
             actions.append("craft")
         if self._battlefield_can_boast():
@@ -476,6 +496,38 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
         return any(
             isinstance(c, CardObject)
             and can_cast_via_flashback(require_card_info(c), self.phase, True)
+            for c in self._zones(0).graveyard
+        )
+
+    def _graveyard_can_escape(self) -> bool:
+        """Return True when a graveyard card can be cast for escape."""
+        if not self.state.stack.is_empty:
+            return False
+        graveyard = self._zones(0).graveyard
+        return any(
+            isinstance(c, CardObject)
+            and can_cast_via_escape(require_card_info(c), self.phase, True)
+            and len(graveyard) > escape_exiles_required(require_card_info(c))
+            for c in graveyard
+        )
+
+    def _graveyard_can_dredge(self) -> bool:
+        """Return True when a graveyard card can replace the draw step."""
+        if self.phase != "draw":
+            return False
+        return any(
+            isinstance(c, CardObject)
+            and can_dredge_instead_of_draw(require_card_info(c), self.phase)
+            for c in self._zones(0).graveyard
+        )
+
+    def _graveyard_can_scavenge(self) -> bool:
+        """Return True when a graveyard creature can scavenge."""
+        if not self.state.stack.is_empty:
+            return False
+        return any(
+            isinstance(c, CardObject)
+            and activated.can_scavenge(require_card_info(c), self.phase, True)
             for c in self._zones(0).graveyard
         )
 

@@ -70,6 +70,7 @@ from engine.abilities.keywords.casting import (
     has_flashback,
     escape_payment_error,
     exile_for_escape_cost,
+    auto_escape_exile_indices,
     kicked_counter_count,
     pump_with_kicker,
     resolve_cast_adjustments,
@@ -609,11 +610,19 @@ class SpellStackMixin(GameRuntimeMixin):
             return {**self.to_client(), "error": f"{card_info.name} does not have escape"}
         if not can_cast_via_escape(card_info, self.phase, self.state.stack.is_empty):
             return {**self.to_client(), "error": "Cannot cast escape now"}
+        exile_indices = list(escape_exile_indices or [])
+        if not exile_indices:
+            exile_indices = auto_escape_exile_indices(
+                self.state.zones,
+                0,
+                graveyard_idx,
+                card_info,
+            )
         exile_err = escape_payment_error(
             self.state.zones,
             0,
             graveyard_idx,
-            escape_exile_indices or [],
+            exile_indices,
             card_info,
         )
         if exile_err:
@@ -630,7 +639,7 @@ class SpellStackMixin(GameRuntimeMixin):
         exiled = exile_for_escape_cost(
             self.state.zones,
             0,
-            escape_exile_indices or [],
+            exile_indices,
             card_info,
         )
         self.state.players[0].spells_cast_this_turn += 1

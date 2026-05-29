@@ -98,6 +98,8 @@ def _dispatch_hand_actions(game: InteractiveGame, req) -> dict | None:
             req.targetUid,
         ),
         "unearth": lambda: game.action_unearth(req.handIdx),
+        "scavenge": lambda: game.action_scavenge(req.handIdx, req.targetUid),
+        "dredge": lambda: game.action_dredge(req.handIdx),
         "encore": lambda: game.action_encore(req.handIdx),
         "eternalize": lambda: game.action_eternalize(req.handIdx),
         "foretell": lambda: game.action_foretell(req.handIdx),

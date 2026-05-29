@@ -6,6 +6,7 @@ from engine.abilities.keywords.casting.aftermath import (
     has_aftermath,
 )
 from engine.abilities.keywords.casting.escape import (
+    auto_escape_exile_indices,
     can_cast_via_escape,
     escape_cost,
     escape_exiles_required,
@@ -218,6 +219,7 @@ from engine.abilities.keywords.casting.kicker import (
 __all__ = [
     'aftermath_mana_needed',
     'can_cast_aftermath',
+    'auto_escape_exile_indices',
     'can_cast_via_escape',
     'has_aftermath',
     'can_cast_via_flashback',
