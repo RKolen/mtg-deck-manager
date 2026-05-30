@@ -194,17 +194,21 @@ def fetch_deck_title(deck_nid: int) -> str:
     """Return the deck node title, or a fallback string if unavailable."""
     if not DRUPAL_URL:
         return f"Deck #{deck_nid}"
-    url = urljoin(DRUPAL_URL, f"/jsonapi/node/deck/{deck_nid}")
+    url = urljoin(DRUPAL_URL, "/jsonapi/node/deck")
     try:
         resp = requests.get(
             url,
-            params={"fields[node--deck]": "title"},
+            params={
+                "filter[drupal_internal__nid]": str(deck_nid),
+                "fields[node--deck]": "title",
+            },
             auth=_get_auth(),
             timeout=10,
         )
         resp.raise_for_status()
-        return str(resp.json()["data"]["attributes"]["title"])
-    except (requests.RequestException, KeyError, TypeError, ValueError):
+        items = resp.json()["data"]
+        return str(items[0]["attributes"]["title"]) if items else f"Deck #{deck_nid}"
+    except (requests.RequestException, KeyError, TypeError, ValueError, IndexError):
         return f"Deck #{deck_nid}"
 
 

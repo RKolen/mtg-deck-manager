@@ -102,6 +102,19 @@ export interface SimulationResult {
   gameLogs: GameLog[];
 }
 
+export interface SimDeckCard {
+  id: string;
+  quantity: number;
+  isSideboard: boolean;
+  card: {
+    id: string;
+    title: string;
+    manaCost: string | null;
+    typeLine: string | null;
+    imageUri: string | null;
+  };
+}
+
 export interface SimulationHistoryEntry {
   id: string;
   nid: number;
@@ -112,6 +125,9 @@ export interface SimulationHistoryEntry {
   winRate: number;
   resultJson: string;
   created: string;
+  deckTitle: string;
+  deckNotes: string | null;
+  deckCards: SimDeckCard[];
 }
 
 // ---------------------------------------------------------------------------
@@ -134,6 +150,11 @@ export async function fetchSimulationHistory(
     query GetSimHistory($deckNid: Int!, $limit: Int) {
       simulationHistory(deckNid: $deckNid, limit: $limit) {
         id nid opponent format games wins winRate resultJson created
+        deckTitle deckNotes
+        deckCards {
+          id quantity isSideboard
+          card { id title manaCost typeLine imageUri }
+        }
       }
     }
   `;

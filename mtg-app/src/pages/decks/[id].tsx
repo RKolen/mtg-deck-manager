@@ -40,6 +40,7 @@ import {
   fetchSimulationHistory,
   type SimulationResult,
   type SimulationHistoryEntry,
+  type SimDeckCard,
   type TopKiller,
   type GameLog,
 } from '../../services/simulationApi';
@@ -779,6 +780,156 @@ const GameLogPanel: React.FC<{ log: GameLog; index: number }> = ({ log, index })
 const PCT_COLOR = (pct: number) =>
   pct >= 55 ? '#27ae60' : pct >= 45 ? '#e67e22' : '#e74c3c';
 
+/** Renders a SimulationResult in the same rich format as a fresh simulation run. */
+const SimResultPanel: React.FC<{ result: SimulationResult }> = ({ result }) => {
+  const winPct = (result.winRate * 100).toFixed(1);
+  const playPct = (result.onThePlay.winRate * 100).toFixed(1);
+  const drawPct = (result.onTheDraw.winRate * 100).toFixed(1);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+
+      {/* Win-rate summary */}
+      <section style={{ background: '#f8f8f5', border: '1px solid #ddd', borderRadius: 4, padding: '1rem' }}>
+        <h3 style={{ margin: '0 0 0.75rem' }}>{result.playerDeck} vs {result.opponentArchetype} — {result.games} games</h3>
+        <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
+          {(
+            [
+              ['Overall', winPct, result.wins, result.losses],
+              ['On the play', playPct, result.onThePlay.wins, result.onThePlay.games - result.onThePlay.wins],
+              ['On the draw', drawPct, result.onTheDraw.wins, result.onTheDraw.games - result.onTheDraw.wins],
+            ] as [string, string, number, number][]
+          ).map(([label, pct, w, l]) => (
+            <div key={label} style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: PCT_COLOR(parseFloat(pct)) }}>{pct}%</div>
+              <div style={{ fontSize: '0.8rem', color: '#666' }}>{label}</div>
+              <div style={{ fontSize: '0.8rem', color: '#888' }}>{w}W / {l}L</div>
+            </div>
+          ))}
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{result.avgTurnWin !== null ? result.avgTurnWin : '—'}</div>
+            <div style={{ fontSize: '0.8rem', color: '#666' }}>Avg win turn</div>
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{result.avgTurnLoss !== null ? result.avgTurnLoss : '—'}</div>
+            <div style={{ fontSize: '0.8rem', color: '#666' }}>Avg loss turn</div>
+          </div>
+        </div>
+      </section>
+
+      {/* Aggregate game stats */}
+      {result.mulliganStats && (
+        <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+          {(
+            [
+              ['Avg mulligans', result.mulliganStats.avgPlayerMulligan.toFixed(2)],
+              ['7-card keep rate', `${result.mulliganStats.keepRate}%`],
+              ['Opp avg mulligans', result.mulliganStats.avgOpponentMulligan.toFixed(2)],
+              ['Mana efficiency', `${result.manaEfficiency}%`],
+            ] as [string, string][]
+          ).map(([label, val]) => (
+            <div key={label} style={{ background: '#f5f5f0', borderRadius: 4, padding: '0.6rem 0.8rem' }}>
+              <div style={{ fontSize: '1.25rem', fontWeight: 600 }}>{val}</div>
+              <div style={{ fontSize: '0.78rem', color: '#666' }}>{label}</div>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {/* Life progression chart */}
+      {result.lifeProgression && result.lifeProgression.length > 0 && (
+        <section>
+          <h3 style={{ margin: '0 0 0.5rem' }}>Average life totals by turn</h3>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={result.lifeProgression} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="turn" label={{ value: 'Turn', position: 'insideBottom', offset: -2 }} tick={{ fontSize: 11 }} />
+              <YAxis domain={[0, 20]} tick={{ fontSize: 11 }} />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="avgPlayerLife" name="You" fill="#2c7bb6" />
+              <Bar dataKey="avgOppLife" name="Opponent" fill="#d7191c" />
+            </BarChart>
+          </ResponsiveContainer>
+        </section>
+      )}
+
+      {/* Turn-by-turn board development */}
+      {result.turnBreakdown && result.turnBreakdown.length > 0 && (
+        <section>
+          <h3 style={{ margin: '0 0 0.5rem' }}>Board development (your side, avg per game)</h3>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ borderCollapse: 'collapse', fontSize: '0.85rem', minWidth: 500 }}>
+              <thead>
+                <tr style={{ background: '#f5f5f0' }}>
+                  {['Turn', 'Avg creatures', 'Avg power', 'Avg hand', 'Avg dmg dealt'].map(h => (
+                    <th key={h} style={{ padding: '0.3rem 0.6rem', textAlign: h === 'Turn' ? 'left' : 'right' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {result.turnBreakdown.map(row => (
+                  <tr key={row.turn} style={{ borderTop: '1px solid #eee' }}>
+                    <td style={{ padding: '0.3rem 0.6rem' }}>{row.turn}</td>
+                    <td style={{ padding: '0.3rem 0.6rem', textAlign: 'right' }}>{row.avgCreatures}</td>
+                    <td style={{ padding: '0.3rem 0.6rem', textAlign: 'right' }}>{row.avgBoardPower}</td>
+                    <td style={{ padding: '0.3rem 0.6rem', textAlign: 'right' }}>{row.avgHandSize}</td>
+                    <td style={{ padding: '0.3rem 0.6rem', textAlign: 'right' }}>{row.avgDamageDealt}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* Top killers */}
+      {result.topKillers.length > 0 && (
+        <section>
+          <h3 style={{ margin: '0 0 0.5rem' }}>Top opponent threats in losses</h3>
+          <table style={{ borderCollapse: 'collapse', fontSize: '0.9rem', width: '100%', maxWidth: 500 }}>
+            <thead>
+              <tr style={{ background: '#f5f5f0' }}>
+                <th style={{ padding: '0.3rem 0.5rem', textAlign: 'left' }}>Card</th>
+                <th style={{ padding: '0.3rem 0.5rem', textAlign: 'right' }}>Games</th>
+                <th style={{ padding: '0.3rem 0.5rem', textAlign: 'right' }}>Loss contribution</th>
+              </tr>
+            </thead>
+            <tbody>
+              {result.topKillers.map((k: TopKiller) => (
+                <tr key={k.card} style={{ borderTop: '1px solid #eee' }}>
+                  <td style={{ padding: '0.3rem 0.5rem' }}>{k.card}</td>
+                  <td style={{ padding: '0.3rem 0.5rem', textAlign: 'right' }}>{k.appearances}</td>
+                  <td style={{ padding: '0.3rem 0.5rem', textAlign: 'right' }}>{(k.lossContribution * 100).toFixed(0)}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      {/* Key moments */}
+      {result.keyMoments.length > 0 && (
+        <section>
+          <h3 style={{ margin: '0 0 0.5rem' }}>Key patterns</h3>
+          <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '0.9rem' }}>
+            {result.keyMoments.map((m, i) => <li key={i}>{m}</li>)}
+          </ul>
+        </section>
+      )}
+
+      {/* Sample game logs */}
+      {result.gameLogs && result.gameLogs.length > 0 && (
+        <section>
+          <h3 style={{ margin: '0 0 0.5rem' }}>Sample game logs (first {result.gameLogs.length})</h3>
+          {result.gameLogs.map((log, i) => (
+            <GameLogPanel key={i} log={log} index={i} />
+          ))}
+        </section>
+      )}
+    </div>
+  );
+};
+
 const DeckSimulate: React.FC<DeckSimulateProps> = ({ deckNid, format, deckTitle }) => {
   const queryClient = useQueryClient();
   const [selectedArchetype, setSelectedArchetype] = useState('');
@@ -823,10 +974,6 @@ const DeckSimulate: React.FC<DeckSimulateProps> = ({ deckNid, format, deckTitle 
       setRunning(false);
     }
   }
-
-  const winPct = result ? (result.winRate * 100).toFixed(1) : null;
-  const playPct = result ? (result.onThePlay.winRate * 100).toFixed(1) : null;
-  const drawPct = result ? (result.onTheDraw.winRate * 100).toFixed(1) : null;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -880,145 +1027,7 @@ const DeckSimulate: React.FC<DeckSimulateProps> = ({ deckNid, format, deckTitle 
       {running && <p style={{ color: '#888', fontStyle: 'italic' }}>Running {games} games against {selectedArchetype}…</p>}
       {error && <p style={{ color: '#c00', fontSize: '0.88rem' }}>{error}</p>}
 
-      {result && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-
-          {/* Win-rate summary */}
-          <section style={{ background: '#f8f8f5', border: '1px solid #ddd', borderRadius: 4, padding: '1rem' }}>
-            <h3 style={{ margin: '0 0 0.75rem' }}>{result.playerDeck} vs {result.opponentArchetype} — {result.games} games</h3>
-            <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
-              {[
-                ['Overall', winPct, result.wins, result.losses],
-                ['On the play', playPct, result.onThePlay.wins, result.onThePlay.games - result.onThePlay.wins],
-                ['On the draw', drawPct, result.onTheDraw.wins, result.onTheDraw.games - result.onTheDraw.wins],
-              ].map(([label, pct, w, l]) => (
-                <div key={String(label)} style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '2rem', fontWeight: 'bold', color: Number(pct) >= 50 ? '#27ae60' : '#c0392b' }}>{pct}%</div>
-                  <div style={{ fontSize: '0.8rem', color: '#666' }}>{label}</div>
-                  <div style={{ fontSize: '0.8rem', color: '#888' }}>{w}W / {l}L</div>
-                </div>
-              ))}
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{result.avgTurnWin !== null ? result.avgTurnWin : '—'}</div>
-                <div style={{ fontSize: '0.8rem', color: '#666' }}>Avg win turn</div>
-              </div>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{result.avgTurnLoss !== null ? result.avgTurnLoss : '—'}</div>
-                <div style={{ fontSize: '0.8rem', color: '#666' }}>Avg loss turn</div>
-              </div>
-            </div>
-          </section>
-
-          {/* Aggregate game stats */}
-          {result.mulliganStats && (
-            <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-              {[
-                ['Avg mulligans', result.mulliganStats.avgPlayerMulligan.toFixed(2)],
-                ['7-card keep rate', `${result.mulliganStats.keepRate}%`],
-                ['Opp avg mulligans', result.mulliganStats.avgOpponentMulligan.toFixed(2)],
-                ['Mana efficiency', `${result.manaEfficiency}%`],
-              ].map(([label, val]) => (
-                <div key={label} style={{ background: '#f5f5f0', borderRadius: 4, padding: '0.6rem 0.8rem' }}>
-                  <div style={{ fontSize: '1.25rem', fontWeight: 600 }}>{val}</div>
-                  <div style={{ fontSize: '0.78rem', color: '#666' }}>{label}</div>
-                </div>
-              ))}
-            </section>
-          )}
-
-          {/* Life progression chart */}
-          {result.lifeProgression && result.lifeProgression.length > 0 && (
-            <section>
-              <h3 style={{ margin: '0 0 0.5rem' }}>Average life totals by turn</h3>
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={result.lifeProgression} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="turn" label={{ value: 'Turn', position: 'insideBottom', offset: -2 }} tick={{ fontSize: 11 }} />
-                  <YAxis domain={[0, 20]} tick={{ fontSize: 11 }} />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="avgPlayerLife" name="You" fill="#2c7bb6" />
-                  <Bar dataKey="avgOppLife" name="Opponent" fill="#d7191c" />
-                </BarChart>
-              </ResponsiveContainer>
-            </section>
-          )}
-
-          {/* Turn-by-turn board development */}
-          {result.turnBreakdown && result.turnBreakdown.length > 0 && (
-            <section>
-              <h3 style={{ margin: '0 0 0.5rem' }}>Board development (your side, avg per game)</h3>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ borderCollapse: 'collapse', fontSize: '0.85rem', minWidth: 500 }}>
-                  <thead>
-                    <tr style={{ background: '#f5f5f0' }}>
-                      {['Turn', 'Avg creatures', 'Avg power', 'Avg hand', 'Avg dmg dealt'].map(h => (
-                        <th key={h} style={{ padding: '0.3rem 0.6rem', textAlign: h === 'Turn' ? 'left' : 'right' }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {result.turnBreakdown.map(row => (
-                      <tr key={row.turn} style={{ borderTop: '1px solid #eee' }}>
-                        <td style={{ padding: '0.3rem 0.6rem' }}>{row.turn}</td>
-                        <td style={{ padding: '0.3rem 0.6rem', textAlign: 'right' }}>{row.avgCreatures}</td>
-                        <td style={{ padding: '0.3rem 0.6rem', textAlign: 'right' }}>{row.avgBoardPower}</td>
-                        <td style={{ padding: '0.3rem 0.6rem', textAlign: 'right' }}>{row.avgHandSize}</td>
-                        <td style={{ padding: '0.3rem 0.6rem', textAlign: 'right' }}>{row.avgDamageDealt}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          )}
-
-          {/* Top killers */}
-          {result.topKillers.length > 0 && (
-            <section>
-              <h3 style={{ margin: '0 0 0.5rem' }}>Top opponent threats in losses</h3>
-              <table style={{ borderCollapse: 'collapse', fontSize: '0.9rem', width: '100%', maxWidth: 500 }}>
-                <thead>
-                  <tr style={{ background: '#f5f5f0' }}>
-                    <th style={{ padding: '0.3rem 0.5rem', textAlign: 'left' }}>Card</th>
-                    <th style={{ padding: '0.3rem 0.5rem', textAlign: 'right' }}>Games</th>
-                    <th style={{ padding: '0.3rem 0.5rem', textAlign: 'right' }}>Loss contribution</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.topKillers.map((k: TopKiller) => (
-                    <tr key={k.card} style={{ borderTop: '1px solid #eee' }}>
-                      <td style={{ padding: '0.3rem 0.5rem' }}>{k.card}</td>
-                      <td style={{ padding: '0.3rem 0.5rem', textAlign: 'right' }}>{k.appearances}</td>
-                      <td style={{ padding: '0.3rem 0.5rem', textAlign: 'right' }}>{(k.lossContribution * 100).toFixed(0)}%</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </section>
-          )}
-
-          {/* Key moments */}
-          {result.keyMoments.length > 0 && (
-            <section>
-              <h3 style={{ margin: '0 0 0.5rem' }}>Key patterns</h3>
-              <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '0.9rem' }}>
-                {result.keyMoments.map((m, i) => <li key={i}>{m}</li>)}
-              </ul>
-            </section>
-          )}
-
-          {/* Sample game logs */}
-          {result.gameLogs && result.gameLogs.length > 0 && (
-            <section>
-              <h3 style={{ margin: '0 0 0.5rem' }}>Sample game logs (first {result.gameLogs.length})</h3>
-              {result.gameLogs.map((log, i) => (
-                <GameLogPanel key={i} log={log} index={i} />
-              ))}
-            </section>
-          )}
-        </div>
-      )}
+      {result && <SimResultPanel result={result} />}
 
       {/* Simulation history */}
       {history.length > 0 && (
@@ -1071,22 +1080,71 @@ const DeckSimulate: React.FC<DeckSimulateProps> = ({ deckNid, format, deckTitle 
           {showLogId !== null && (() => {
             const entry = history.find(h => h.id === showLogId);
             if (!entry) return null;
-            let formatted = entry.resultJson;
-            try { formatted = JSON.stringify(JSON.parse(entry.resultJson), null, 2); }
-            catch { /* leave as-is if malformed */ }
+            let parsed: SimulationResult | null = null;
+            try { parsed = JSON.parse(entry.resultJson) as SimulationResult; }
+            catch { /* malformed JSON — nothing to show */ }
+            if (!parsed) return null;
+
+            const mainDeck = entry.deckCards.filter((c: SimDeckCard) => !c.isSideboard);
+            const sideboard = entry.deckCards.filter((c: SimDeckCard) => c.isSideboard);
+            const byType = (cards: SimDeckCard[]) => {
+              const groups: Record<string, SimDeckCard[]> = {};
+              for (const c of cards) {
+                const key = c.card.typeLine?.split(' — ')[0] ?? 'Other';
+                groups[key] = [...(groups[key] ?? []), c];
+              }
+              return groups;
+            };
+
             return (
-              <div style={{ marginTop: '0.75rem', background: '#1e1e1e', borderRadius: 4, padding: '1rem', position: 'relative' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <span style={{ color: '#ccc', fontSize: '0.85rem', fontWeight: 600 }}>Full sim log — {entry.opponent}</span>
+              <div style={{ marginTop: '0.75rem', border: '1px solid #ddd', borderRadius: 4, padding: '1rem', position: 'relative' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#333' }}>Sim log — {entry.opponent} ({new Date(entry.created).toLocaleDateString()})</span>
                   <button
                     type="button"
                     onClick={() => setShowLogId(null)}
-                    style={{ background: 'none', border: 'none', color: '#aaa', fontSize: '1.1rem', cursor: 'pointer', lineHeight: 1 }}
+                    style={{ background: 'none', border: 'none', color: '#888', fontSize: '1.1rem', cursor: 'pointer', lineHeight: 1 }}
                   >
                     x
                   </button>
                 </div>
-                <pre style={{ margin: 0, color: '#d4d4d4', fontSize: '0.78rem', overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: '60vh', overflowY: 'auto' }}>{formatted}</pre>
+
+                <SimResultPanel result={parsed} />
+
+                {/* Deck snapshot */}
+                <section style={{ marginTop: '1.5rem', borderTop: '1px solid #eee', paddingTop: '1rem' }}>
+                  <h3 style={{ margin: '0 0 0.5rem', fontSize: '1rem' }}>Deck at time of sim — {entry.deckTitle}</h3>
+                  {entry.deckNotes && (
+                    <p style={{ margin: '0 0 0.75rem', fontSize: '0.88rem', color: '#555', whiteSpace: 'pre-wrap' }}>{entry.deckNotes}</p>
+                  )}
+                  <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', fontSize: '0.85rem' }}>
+                    <div style={{ flex: '1 1 220px' }}>
+                      <strong style={{ display: 'block', marginBottom: 4 }}>Main ({mainDeck.reduce((s, c) => s + c.quantity, 0)})</strong>
+                      {Object.entries(byType(mainDeck)).sort(([a], [b]) => a.localeCompare(b)).map(([type, cards]) => (
+                        <div key={type} style={{ marginBottom: 6 }}>
+                          <div style={{ fontWeight: 600, color: '#555', fontSize: '0.78rem', textTransform: 'uppercase', marginBottom: 2 }}>{type}</div>
+                          {cards.sort((a, b) => a.card.title.localeCompare(b.card.title)).map(c => (
+                            <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: 8 }}>
+                              <span>{c.card.title}</span>
+                              <span style={{ color: '#888' }}>{c.quantity}x</span>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                    {sideboard.length > 0 && (
+                      <div style={{ flex: '0 1 180px' }}>
+                        <strong style={{ display: 'block', marginBottom: 4 }}>Sideboard ({sideboard.reduce((s, c) => s + c.quantity, 0)})</strong>
+                        {sideboard.sort((a, b) => a.card.title.localeCompare(b.card.title)).map(c => (
+                          <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span>{c.card.title}</span>
+                            <span style={{ color: '#888' }}>{c.quantity}x</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </section>
               </div>
             );
           })()}

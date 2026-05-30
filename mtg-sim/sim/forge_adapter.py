@@ -127,7 +127,7 @@ class _ForgeVerboseParser:
     """Line-by-line parser for Forge verbose (no -q flag) stdout."""
 
     _MULLIGAN = re.compile(r"Mulligan: (.+?) has kept a hand of (\d+) cards")
-    _TURN_START = re.compile(r"Turn: Turn (\d+) \((.+?)\)")
+    _TURN_START = re.compile(r"Turn: Turn (\d+) \((.+)\)")
     _LIFE = re.compile(r"Life: Life: (.+?) \d+ > (\d+)")
     _CAST = re.compile(r"Add To Stack: (.+?) cast (.+)")
     _LAND = re.compile(r"Land: (.+?) played (.+)")

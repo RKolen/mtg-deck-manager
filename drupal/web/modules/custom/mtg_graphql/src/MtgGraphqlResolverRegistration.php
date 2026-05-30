@@ -7,8 +7,11 @@ namespace Drupal\mtg_graphql;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Entity\Query\QueryInterface;
 use Drupal\Core\Field\Plugin\Field\FieldType\EntityReferenceItem;
+use Drupal\graphql\GraphQL\Execution\FieldContext;
+use Drupal\graphql\GraphQL\Execution\ResolveContext;
 use Drupal\graphql\GraphQL\ResolverBuilder;
 use Drupal\graphql\GraphQL\ResolverRegistryInterface;
+use GraphQL\Type\Definition\ResolveInfo;
 use Drupal\node\NodeInterface;
 
 /**
@@ -524,9 +527,12 @@ final class MtgGraphqlResolverRegistration {
    */
   public static function addSimulationResultResolvers(ResolverRegistryInterface $registry, ResolverBuilder $builder): void {
     $registry->addFieldResolver('Query', 'simulationHistory',
-      $builder->callback(function ($value, array $args): array {
+      $builder->callback(function ($value, array $args, ResolveContext $context, ResolveInfo $info, FieldContext $fieldContext): array {
         $deckNid = (int) $args['deckNid'];
         $limit   = (int) ($args['limit'] ?? 20);
+        // Tag the response so it is automatically invalidated when any
+        // simulation_result node is created, updated, or deleted.
+        $fieldContext->addCacheTags(['node_list:simulation_result']);
         $storage = \Drupal::entityTypeManager()->getStorage('node');
         $ids     = \Drupal::entityQuery('node')
           ->condition('type', 'simulation_result')
@@ -567,6 +573,83 @@ final class MtgGraphqlResolverRegistration {
     $registry->addFieldResolver('SimulationResult', 'created',
       $builder->callback(fn($n) => date('c', (int) $n->getCreatedTime()))
     );
+    $registry->addFieldResolver('SimulationResult', 'deckTitle',
+      $builder->callback(function ($n): string {
+        $deckNid = (int) ($n->get('field_sim_player_deck_nid')->value ?? 0);
+        $revision = self::loadDeckRevisionAtTime($deckNid, (int) $n->getCreatedTime());
+        return $revision instanceof NodeInterface ? $revision->getTitle() : '';
+      })
+    );
+    $registry->addFieldResolver('SimulationResult', 'deckNotes',
+      $builder->callback(function ($n): ?string {
+        $deckNid = (int) ($n->get('field_sim_player_deck_nid')->value ?? 0);
+        $revision = self::loadDeckRevisionAtTime($deckNid, (int) $n->getCreatedTime());
+        return $revision instanceof NodeInterface ? ($revision->get('field_notes')->value ?? NULL) : NULL;
+      })
+    );
+    $registry->addFieldResolver('SimulationResult', 'deckCards',
+      $builder->callback(function ($n): array {
+        $deckNid = (int) ($n->get('field_sim_player_deck_nid')->value ?? 0);
+        $revision = self::loadDeckRevisionAtTime($deckNid, (int) $n->getCreatedTime());
+        return self::loadDeckCardsFromRevision($revision);
+      })
+    );
+  }
+
+  /**
+   * Finds and loads the deck node revision current at or before a timestamp.
+   *
+   * Uses a per-request static cache so repeated calls for the same deck within
+   * a single GraphQL response do not repeat the database lookup.
+   *
+   * @param int $deckNid
+   *   The node ID of the deck.
+   * @param int $timestamp
+   *   Unix timestamp; the most recent revision at or before this time is used.
+   *
+   * @return \Drupal\node\NodeInterface|null
+   *   The revision entity, or NULL if none found.
+   */
+  private static function loadDeckRevisionAtTime(int $deckNid, int $timestamp): ?NodeInterface {
+    static $cache = [];
+    $key = $deckNid . ':' . $timestamp;
+    if (array_key_exists($key, $cache)) {
+      return $cache[$key];
+    }
+    $vid = \Drupal::database()
+      ->select('node_revision', 'nr')
+      ->fields('nr', ['vid'])
+      ->condition('nid', $deckNid)
+      ->condition('revision_timestamp', $timestamp, '<=')
+      ->orderBy('revision_timestamp', 'DESC')
+      ->range(0, 1)
+      ->execute()
+      ->fetchField();
+    $revision = $vid ? \Drupal::entityTypeManager()->getStorage('node')->loadRevision($vid) : NULL;
+    $cache[$key] = $revision instanceof NodeInterface ? $revision : NULL;
+    return $cache[$key];
+  }
+
+  /**
+   * Returns the deck card paragraph entities from a node revision.
+   *
+   * @param \Drupal\node\NodeInterface|null $revision
+   *   A deck node revision, or NULL.
+   *
+   * @return \Drupal\Core\Entity\EntityInterface[]
+   *   Paragraph entities for each card slot.
+   */
+  private static function loadDeckCardsFromRevision(?NodeInterface $revision): array {
+    if (!$revision instanceof NodeInterface) {
+      return [];
+    }
+    $result = [];
+    foreach ($revision->get('field_deck_cards') as $item) {
+      if ($item instanceof EntityReferenceItem && $item->entity) {
+        $result[] = $item->entity;
+      }
+    }
+    return $result;
   }
 
   /**

@@ -101,4 +101,7 @@ type SimulationResult {
   winRate: Float!
   resultJson: String!
   created: String!
+  deckTitle: String!
+  deckNotes: String
+  deckCards: [DeckCard!]!
 }
