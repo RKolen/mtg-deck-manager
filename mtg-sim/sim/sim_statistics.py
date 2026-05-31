@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING
 import requests
 
 if TYPE_CHECKING:
-    from forge_adapter import SimResult, TurnEvent
+    from forge_adapter import GameLog, SimResult, TurnEvent
 
 OLLAMA_URL: str = os.environ.get("OLLAMA_URL", "")
 OLLAMA_MODEL: str = os.environ.get("OLLAMA_MODEL", "")
@@ -121,6 +121,8 @@ def _turn_breakdown(results: list["SimResult"]) -> list[dict]:
             "avgBoardPower": round(sum(e.board_power for e in evs) / len(evs), 1),
             "avgHandSize": round(sum(e.hand_size for e in evs) / len(evs), 1),
             "avgDamageDealt": round(sum(e.damage_dealt for e in evs) / len(evs), 1),
+            "avgCombatDamage": round(sum(e.combat_damage for e in evs) / len(evs), 1),
+            "avgNonCombatDamage": round(sum(e.noncombat_damage for e in evs) / len(evs), 1),
         })
     return rows
 
@@ -147,6 +149,8 @@ def _serialise_log(log) -> dict:
                 "manaAvailable": e.mana_available,
                 "plays": e.plays,
                 "damageDealt": e.damage_dealt,
+                "combatDamage": e.combat_damage,
+                "nonCombatDamage": e.noncombat_damage,
                 "lifeTotals": e.life_totals,
                 "handSize": e.hand_size,
                 "creaturesInPlay": e.creatures_in_play,
@@ -194,6 +198,87 @@ def _generate_key_moments(stats: dict) -> list[str]:
     except (requests.RequestException, json.JSONDecodeError, ValueError) as exc:
         logger.warning("Could not generate key moments: %s", exc)
     return []
+
+
+# ---------------------------------------------------------------------------
+# Pilot execution checks
+# ---------------------------------------------------------------------------
+
+_AGGRO_KEYWORDS = ("affinity", "burn", "energy", "prowess", "red deck", "zoo", "blitz")
+_COMBO_KEYWORDS = ("storm", "belcher", "ad nauseam", "amulet", "living end", "grinding")
+_CONTROL_KEYWORDS = ("murktide", "control", "blue moon", "delver")
+
+
+def _archetype_category(archetype: str) -> str:
+    """Return a broad category for the given archetype name."""
+    lower = archetype.lower()
+    if any(k in lower for k in _AGGRO_KEYWORDS):
+        return "aggro"
+    if any(k in lower for k in _COMBO_KEYWORDS):
+        return "combo"
+    if any(k in lower for k in _CONTROL_KEYWORDS):
+        return "control"
+    return "midrange"
+
+
+def _pilot_executed_plan(log: "GameLog", category: str) -> bool:
+    """Return True when the opponent's turns suggest they executed their archetype plan."""
+    opp_turns = [ev for ev in log.turns if ev.player == 1]
+    if not opp_turns:
+        return False
+    if category == "aggro":
+        # Should have non-land plays in the first five turns.
+        for ev in opp_turns:
+            if ev.turn <= 5 and any("[Land]" not in p for p in ev.plays):
+                return True
+        return False
+    if category == "combo":
+        # Should cast 3+ non-land spells in a single turn (the combo turn).
+        for ev in opp_turns:
+            non_land = [p for p in ev.plays if "[Land]" not in p]
+            if len(non_land) >= 3:
+                return True
+        return False
+    if category == "control":
+        # Should make plays on at least half of their turns.
+        active = sum(1 for ev in opp_turns if ev.plays)
+        return active >= max(1, len(opp_turns) // 2)
+    # Midrange: made plays on at least 3 turns (or all turns if fewer than 3).
+    turns_with_plays = sum(1 for ev in opp_turns if ev.plays)
+    return turns_with_plays >= min(3, len(opp_turns))
+
+
+def _pilot_confidence(results: list["SimResult"], archetype: str) -> dict:
+    """Compute how often the opponent pilot appeared to execute their deck plan.
+
+    Returns a dict with rate, label ('high'/'medium'/'low'), and raw counts.
+    A LOW confidence tag means the matchup win-rate figure may be misleading
+    because the opponent pilot was not playing their deck correctly.
+    """
+    category = _archetype_category(archetype)
+    logged = [r for r in results if r.log is not None]
+    if not logged:
+        return {"category": category, "executedPlan": 0, "total": 0,
+                "rate": 0.0, "confidence": "unknown"}
+    executed = sum(
+        1 for r in logged
+        if r.log is not None and _pilot_executed_plan(r.log, category)
+    )
+    total = len(logged)
+    rate = executed / total
+    if rate >= 0.8:
+        label = "high"
+    elif rate >= 0.5:
+        label = "medium"
+    else:
+        label = "low"
+    return {
+        "category": category,
+        "executedPlan": executed,
+        "total": total,
+        "rate": round(rate, 3),
+        "confidence": label,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -270,6 +355,8 @@ def compute_statistics(
         "lifeProgression": _life_progression(results),
         "turnBreakdown": _turn_breakdown(results),
         "winConditions": dict(win_conditions.most_common()),
+        "timedOutGames": sum(1 for r in results if r.timed_out),
+        "pilotConfidence": _pilot_confidence(results, opponent_archetype),
         "gameLogs": [
             _serialise_log(r.log)
             for r in results[:sample_logs]

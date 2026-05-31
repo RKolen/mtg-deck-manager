@@ -11,6 +11,7 @@ dependencies:
     - field.field.node.meta_deck.field_format_term
     - field.field.node.meta_deck.field_key_cards
     - field.field.node.meta_deck.field_meta_share
+    - field.field.node.meta_deck.field_pilot_prompt
     - field.field.node.meta_deck.field_sideboard_guide
     - node.type.meta_deck
   module:
@@ -89,9 +90,17 @@ content:
     settings:
       placeholder: ''
     third_party_settings: {  }
-  field_sideboard_guide:
+  field_pilot_prompt:
     type: string_textarea
     weight: 7
+    region: content
+    settings:
+      rows: 12
+      placeholder: 'Leave empty to use the built-in default for this archetype.'
+    third_party_settings: {  }
+  field_sideboard_guide:
+    type: string_textarea
+    weight: 8
     region: content
     settings:
       rows: 5

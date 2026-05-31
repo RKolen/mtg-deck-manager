@@ -520,6 +520,12 @@ final class MtgGraphqlResolverRegistration {
         return is_string($raw) ? $raw : '';
       })
     );
+    $registry->addFieldResolver('MetaDeck', 'pilotPrompt',
+      $builder->callback(function ($n): ?string {
+        $raw = $n->get('field_pilot_prompt')->value ?? NULL;
+        return is_string($raw) && $raw !== '' ? $raw : NULL;
+      })
+    );
   }
 
   /**

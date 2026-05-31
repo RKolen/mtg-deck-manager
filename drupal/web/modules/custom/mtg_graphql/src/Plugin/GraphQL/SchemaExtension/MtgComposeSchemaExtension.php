@@ -6,7 +6,6 @@ namespace Drupal\mtg_graphql\Plugin\GraphQL\SchemaExtension;
 
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\graphql\Attribute\SchemaExtension;
-use Drupal\graphql\GraphQL\ResolverBuilder;
 use Drupal\graphql\GraphQL\ResolverRegistryInterface;
 use Drupal\graphql\Plugin\GraphQL\SchemaExtension\SdlSchemaExtensionPluginBase;
 use Drupal\mtg_graphql\MtgGraphqlResolverRegistration;

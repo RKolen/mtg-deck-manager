@@ -3,7 +3,6 @@ services:
     class: Drupal\mtg_graphql\Service\DeckCardMutator
     arguments:
       - '@entity.repository'
-      - '@entity_type.manager'
 
   mtg_graphql.meta_deck_scraper:
     class: Drupal\mtg_graphql\Service\MetaDeckScraperService

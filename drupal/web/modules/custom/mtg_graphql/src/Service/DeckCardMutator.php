@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Drupal\mtg_graphql\Service;
 
 use Drupal\Core\Entity\EntityRepositoryInterface;
-use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\node\NodeInterface;
 use Drupal\paragraphs\Entity\Paragraph;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
@@ -18,11 +17,13 @@ final class DeckCardMutator {
 
   public function __construct(
     private readonly EntityRepositoryInterface $entityRepository,
-    private readonly EntityTypeManagerInterface $entityTypeManager,
   ) {}
 
   /**
+   * Adds a card to a deck.
+   *
    * @return array{id: string, quantity: int, isSideboard: bool}
+   *   The new deck slot data.
    */
   public function add(string $deckUuid, string $cardUuid, int $quantity, bool $isSideboard): array {
     $deck = $this->loadDeck($deckUuid);
@@ -52,7 +53,10 @@ final class DeckCardMutator {
   }
 
   /**
+   * Updates the quantity of a deck slot.
+   *
    * @return array{id: string, quantity: int, isSideboard: bool}
+   *   The updated deck slot data.
    */
   public function update(string $deckUuid, string $slotUuid, int $quantity): array {
     if ($quantity < 1) {
@@ -70,13 +74,19 @@ final class DeckCardMutator {
     ];
   }
 
+  /**
+   * Removes a deck slot from a deck and deletes the paragraph.
+   *
+   * @return bool
+   *   TRUE on success.
+   */
   public function remove(string $deckUuid, string $slotUuid): bool {
     $deck = $this->loadDeck($deckUuid);
     $para = $this->loadParagraphOnDeck($deck, $slotUuid);
 
     $items = $deck->get('field_deck_cards');
     foreach ($items as $delta => $item) {
-      if ((int) $item->target_id === (int) $para->id()) {
+      if ((int) $item->getValue()['target_id'] === (int) $para->id()) {
         $items->removeItem($delta);
         break;
       }
@@ -87,6 +97,9 @@ final class DeckCardMutator {
     return TRUE;
   }
 
+  /**
+   * Loads a deck node by UUID, throwing if not found.
+   */
   private function loadDeck(string $deckUuid): NodeInterface {
     $deck = $this->entityRepository->loadEntityByUuid('node', $deckUuid);
     if (!$deck instanceof NodeInterface || $deck->bundle() !== 'deck') {
@@ -95,6 +108,9 @@ final class DeckCardMutator {
     return $deck;
   }
 
+  /**
+   * Loads a card node by UUID, throwing if not found.
+   */
   private function loadCard(string $cardUuid): NodeInterface {
     $card = $this->entityRepository->loadEntityByUuid('node', $cardUuid);
     if (!$card instanceof NodeInterface || $card->bundle() !== 'mtg_card') {
@@ -103,10 +119,13 @@ final class DeckCardMutator {
     return $card;
   }
 
+  /**
+   * Finds a specific deck_card paragraph on the deck, throwing if not found.
+   */
   private function loadParagraphOnDeck(NodeInterface $deck, string $slotUuid): Paragraph {
-    foreach ($deck->get('field_deck_cards') as $item) {
-      if ($item->entity instanceof Paragraph && $item->entity->uuid() === $slotUuid) {
-        return $item->entity;
+    foreach ($deck->get('field_deck_cards')->referencedEntities() as $entity) {
+      if ($entity instanceof Paragraph && $entity->uuid() === $slotUuid) {
+        return $entity;
       }
     }
     throw new NotFoundHttpException('Deck slot not found: ' . $slotUuid);

@@ -1,0 +1,19 @@
+uuid: 0b73330f-d20e-494c-9100-8a53f0b9674c
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_pilot_prompt
+    - node.type.meta_deck
+id: node.meta_deck.field_pilot_prompt
+field_name: field_pilot_prompt
+entity_type: node
+bundle: meta_deck
+label: 'Pilot Prompt'
+description: 'LLM strategic-priors prompt for the sim opponent pilot. Edit this when a ban changes the archetype strategy. Leave empty to fall back to the built-in default.'
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: string_long

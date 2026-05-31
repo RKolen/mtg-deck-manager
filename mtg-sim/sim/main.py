@@ -122,7 +122,9 @@ async def simulate(req: SimulateRequest) -> dict:
     deck_title = await asyncio.to_thread(fetch_deck_title, req.playerDeckId)
 
     try:
-        opponent_deck = await asyncio.to_thread(fetch_meta_deck, req.opponentArchetype, req.format)
+        opponent_deck, _ = await asyncio.to_thread(
+            fetch_meta_deck, req.opponentArchetype, req.format
+        )
     except Exception as exc:
         raise HTTPException(
             status_code=502, detail=f"Could not fetch meta deck: {exc}"
@@ -235,7 +237,9 @@ async def game_start(req: StartGameRequest) -> dict:
         raise HTTPException(404, f"Deck {req.playerDeckId} has no cards.")
 
     try:
-        opponent_deck = await asyncio.to_thread(fetch_meta_deck, req.opponentArchetype, req.format)
+        opponent_deck, opp_pilot_prompt = await asyncio.to_thread(
+            fetch_meta_deck, req.opponentArchetype, req.format
+        )
     except Exception as exc:
         raise HTTPException(502, f"Could not fetch meta deck: {exc}") from exc
     if not opponent_deck:
@@ -246,6 +250,7 @@ async def game_start(req: StartGameRequest) -> dict:
         player_name="You",
         opponent_name=req.opponentArchetype,
         on_the_play=req.onThePlay,
+        pilot_prompt=opp_pilot_prompt,
     )
     return game.to_client()
 

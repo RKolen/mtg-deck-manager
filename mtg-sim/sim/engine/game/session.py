@@ -13,6 +13,7 @@ from engine.abilities.keywords.other.companion import validate_companion_deck
 from engine.game.helpers import expand_deck
 from engine.game.interactive import InteractiveGame
 from engine.rules.stack import Stack
+from pilot_prompts import get_pilot_prompt
 
 _sessions: dict[str, InteractiveGame] = {}
 
@@ -23,6 +24,7 @@ def create_game(
     player_name: str = "Player",
     opponent_name: str = "Opponent",
     on_the_play: bool = True,
+    pilot_prompt: str = "",
 ) -> InteractiveGame:
     """Create and register a new interactive game session."""
     companion_err = validate_companion_deck(player_cards)
@@ -40,7 +42,8 @@ def create_game(
         turn=runner,
         stack=Stack(),
     )
-    game = InteractiveGame(state=state, on_the_play=on_the_play)
+    game = InteractiveGame(state=state, on_the_play=on_the_play,
+                           pilot_prompt=get_pilot_prompt(opponent_name, pilot_prompt))
     game.deal_opening_hands()
     if companion_err:
         state.log.append(

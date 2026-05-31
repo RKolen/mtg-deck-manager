@@ -22,17 +22,19 @@ OLLAMA_URL: str = os.environ.get("OLLAMA_URL", "")
 OLLAMA_MODEL: str = os.environ.get("OLLAMA_MODEL", "")
 
 
-def _llm_eval(state: dict, player_idx: int) -> float:
+def _llm_eval(state: dict, player_idx: int, system_prompt: str = "") -> float:
     """
     Ask Ollama to rate the board position for ``player_idx`` (0-10).
 
     Returns 0.5 (neutral) on any failure so MCTS keeps working without Ollama.
+    When ``system_prompt`` is non-empty it is prepended to give the model
+    archetype-specific strategic context before the board description.
     """
     if not OLLAMA_URL or not OLLAMA_MODEL:
         return 0.5
     life = state.get("life", [20, 20])
     battlefield = state.get("battlefield", [])
-    prompt = (
+    board_desc = (
         f"You are evaluating a Magic: The Gathering board state for player {player_idx}.\n"
         f"Life totals: player 0 = {life[0]}, player 1 = {life[1]}.\n"
         f"Battlefield (player {player_idx}): "
@@ -41,6 +43,7 @@ def _llm_eval(state: dict, player_idx: int) -> float:
         f"Rate player {player_idx}'s position 0 (losing badly) to 10 (winning easily). "
         "Respond with a single integer only."
     )
+    prompt = f"{system_prompt}\n\n{board_desc}" if system_prompt else board_desc
     try:
         resp = requests.post(
             f"{OLLAMA_URL}/api/generate",
@@ -52,6 +55,55 @@ def _llm_eval(state: dict, player_idx: int) -> float:
         return max(0.0, min(10.0, score)) / 10.0
     except (requests.exceptions.RequestException, ValueError, KeyError):
         return 0.5
+
+
+def llm_pick(
+    question: str,
+    option_names: list[str],
+    state: dict,
+    system_prompt: str = "",
+) -> tuple[int, str]:
+    """
+    Ask Ollama to choose one option from a numbered list.
+
+    Used by the interactive game's opponent turn logic to pick which spell
+    to cast, guided by an archetype-specific pilot prompt.
+
+    Returns ``(index, reasoning)`` where ``index`` is 0-based and
+    ``reasoning`` is the raw LLM response text.  Falls back to
+    ``(0, "")`` on any failure or when Ollama is not configured.
+    """
+    if not OLLAMA_URL or not OLLAMA_MODEL or not option_names:
+        return 0, ""
+    turn = state.get("turn", 1)
+    own_life = state.get("own_life", 20)
+    opp_life = state.get("opp_life", 20)
+    mana = state.get("mana", 0)
+    numbered = "\n".join(
+        f"{i + 1}. {name}" for i, name in enumerate(option_names)
+    )
+    context = (
+        f"Turn {turn}.  Your life: {own_life}.  "
+        f"Opponent life: {opp_life}.  Available mana: {mana}."
+    )
+    body = (
+        f"{question}\n\n"
+        f"{context}\n\n"
+        f"Options:\n{numbered}\n\n"
+        "Reply with ONLY the number of the best option (e.g. 2)."
+    )
+    full_prompt = f"{system_prompt}\n\n{body}" if system_prompt else body
+    try:
+        resp = requests.post(
+            f"{OLLAMA_URL}/api/generate",
+            json={"model": OLLAMA_MODEL, "prompt": full_prompt, "stream": False},
+            timeout=5,
+        )
+        text = resp.json().get("response", "1").strip()
+        choice = int(text.split()[0]) - 1      # 1-indexed to 0-indexed
+        return max(0, min(len(option_names) - 1, choice)), text
+    except (requests.exceptions.RequestException, ValueError, KeyError):
+        return 0, ""
 
 
 class _Node:
@@ -95,11 +147,13 @@ class MctsAgent:
         rollouts_per_action: int = 20,
         use_llm: bool = False,
         player_idx: int = 0,
+        pilot_prompt: str = "",
     ) -> None:
         """Initialise the MCTS agent with rollout budget and LLM toggle."""
         self.rollouts_per_action = rollouts_per_action
         self.use_llm = use_llm
         self.player_idx = player_idx
+        self.pilot_prompt = pilot_prompt
 
     def __call__(self, options: list[str], state: dict) -> int:
         """Pick the best action index given the list of option strings."""
@@ -114,7 +168,11 @@ class MctsAgent:
 
         for _ in range(self.rollouts_per_action * len(options)):
             node = max(nodes, key=lambda n: n.ucb1())
-            score = _llm_eval(state, self.player_idx) if self.use_llm else random.random()
+            score = (
+                _llm_eval(state, self.player_idx, self.pilot_prompt)
+                if self.use_llm
+                else random.random()
+            )
             node.visits += 1
             node.wins += score
             root.visits += 1
@@ -123,9 +181,11 @@ class MctsAgent:
 
     def __repr__(self) -> str:
         """Return a human-readable representation of the agent."""
+        has_prompt = bool(self.pilot_prompt)
         return (
             f"MctsAgent(rollouts={self.rollouts_per_action}, "
-            f"llm={self.use_llm}, player={self.player_idx})"
+            f"llm={self.use_llm}, player={self.player_idx}, "
+            f"pilot={'yes' if has_prompt else 'none'})"
         )
 
 

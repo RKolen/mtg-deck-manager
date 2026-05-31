@@ -62,6 +62,8 @@ class TurnEvent:
     hand_size: int
     creatures_in_play: int
     board_power: int
+    combat_damage: int = 0
+    noncombat_damage: int = 0
 
 
 @dataclass
@@ -93,6 +95,7 @@ class SimResult:
     on_the_play: bool = True
     player_mulligan: int = 0
     opponent_mulligan: int = 0
+    timed_out: bool = False
     log: Optional[GameLog] = None
 
     @property
@@ -118,6 +121,8 @@ class _GameState:
     mulls: list[int] = field(default_factory=lambda: [0, 0])
     plays: list[str] = field(default_factory=list)
     dmg: int = 0
+    combat_dmg: int = 0
+    noncombat_dmg: int = 0
     p_lands: int = 0
     opp_dmg: Counter[str] = field(default_factory=Counter)
     turn_events: list[TurnEvent] = field(default_factory=list)
@@ -131,9 +136,12 @@ class _ForgeVerboseParser:
     _LIFE = re.compile(r"Life: Life: (.+?) \d+ > (\d+)")
     _CAST = re.compile(r"Add To Stack: (.+?) cast (.+)")
     _LAND = re.compile(r"Land: (.+?) played (.+)")
-    _DAMAGE = re.compile(r"Damage: (.+?) deals (\d+) .+?damage to (.+?)\.")
+    # Groups: (source, amount, damage_type_or_None, target)
+    _DAMAGE = re.compile(
+        r"Damage: (.+?) deals (\d+)(?: (combat|non-combat))? damage(?:.*?)? to (.+?)\.",
+        re.IGNORECASE,
+    )
     _TURN_OUTCOME = re.compile(r"Game Outcome: Turn (\d+)", re.IGNORECASE)
-    _WIN_COND = re.compile(r"Game Outcome: .+ has won because (.+)", re.IGNORECASE)
     _GAME_RESULT = re.compile(
         r"Game Result: Game (\d+) ended.*?(?:(\S.*?) has won!|a Draw)",
         re.IGNORECASE,
@@ -164,6 +172,8 @@ class _ForgeVerboseParser:
             hand_size=0,
             creatures_in_play=0,
             board_power=0,
+            combat_damage=self._st.combat_dmg,
+            noncombat_damage=self._st.noncombat_dmg,
         ))
 
     def _commit(self, game_num: int, winner_raw: Optional[str]) -> None:
@@ -171,6 +181,8 @@ class _ForgeVerboseParser:
         on_play = game_num % 2 == 1
         if winner_raw is None:
             winner = random.randint(0, 1)
+            if not self._st.win_cond:
+                self._st.win_cond = "draw"
         else:
             winner = 0 if self._player_name in winner_raw else 1
         key_cards = (
@@ -198,6 +210,7 @@ class _ForgeVerboseParser:
             on_the_play=on_play,
             player_mulligan=self._st.mulls[0],
             opponent_mulligan=self._st.mulls[1],
+            timed_out=winner_raw is None,
             log=log,
         ))
         self._st = _GameState()
@@ -226,6 +239,8 @@ class _ForgeVerboseParser:
         self._st.half_player = 0 if self._p_forge in m.group(2) else 1
         self._st.plays = []
         self._st.dmg = 0
+        self._st.combat_dmg = 0
+        self._st.noncombat_dmg = 0
         return True
 
     def _try_life(self, s: str) -> bool:
@@ -271,12 +286,17 @@ class _ForgeVerboseParser:
             return False
         source_raw = m.group(1)
         amount = int(m.group(2))
-        target = m.group(3)
+        dmg_type = (m.group(3) or "").lower()
+        target = m.group(4)
         if self._p_forge in target:
             card_name = re.sub(r"\s*\(\d+\)\s*$", "", source_raw).strip()
             self._st.opp_dmg[card_name] += amount
         elif self._st.half_player == 0 and self._p_forge not in target:
             self._st.dmg += amount
+            if dmg_type == "combat":
+                self._st.combat_dmg += amount
+            elif dmg_type == "non-combat":
+                self._st.noncombat_dmg += amount
         return True
 
     def _try_turn_outcome(self, s: str) -> bool:
@@ -288,11 +308,35 @@ class _ForgeVerboseParser:
         return True
 
     def _try_win_cond(self, s: str) -> bool:
-        """Handle Game Outcome win-condition lines."""
-        m = self._WIN_COND.match(s)
-        if not m:
+        """Handle Game Outcome player-outcome lines, extracting the real loss reason.
+
+        Forge emits one line per player, e.g.:
+          Game Outcome: Ai(1)-Deck has won because all opponents have lost
+          Game Outcome: Ai(2)-Opp has lost because life total reached 0
+        The loser's line carries the diagnostic reason; the winner's generic
+        line does not override a more specific reason already recorded.
+        """
+        if not s.startswith("Game Outcome:"):
             return False
-        self._st.win_cond = m.group(1)
+        lower = s.lower()
+        if "life total reached 0" in lower:
+            self._st.win_cond = "life_loss"
+        elif "draw cards from empty library" in lower:
+            self._st.win_cond = "deck_out"
+        elif "10 poison counters" in lower:
+            self._st.win_cond = "poisoned"
+        elif "has conceded" in lower:
+            self._st.win_cond = "concession"
+        elif "effect of spell" in lower or "won by spell" in lower:
+            self._st.win_cond = "lose_the_game_effect"
+        elif "21 damage from generals" in lower:
+            self._st.win_cond = "commander_damage"
+        elif "accepted that the game is a draw" in lower:
+            self._st.win_cond = "draw"
+        elif "has won due to effect of" in lower:
+            self._st.win_cond = "lose_the_game_effect"
+        # "has won because all opponents have lost" — generic; do not overwrite
+        # a specific reason already set from the loser's line.
         return True
 
     def _try_game_result(self, s: str) -> bool:
@@ -596,6 +640,8 @@ def _make_turn_event(side: _BoardSide, turn: int, player: int,
         hand_size=len(side.hand),
         creatures_in_play=len(side.creatures),
         board_power=side.attack_power(),
+        combat_damage=damage,   # mock engine damage is always from combat
+        noncombat_damage=0,
     )
 
 
@@ -626,7 +672,7 @@ class MockGameEngine:
 
         winner = 1
         final_turn = self.MAX_TURNS
-        win_condition = "time"
+        win_condition = "turn_cap"
 
         for turn in range(1, self.MAX_TURNS + 1):
             player.clear_sickness()
@@ -663,6 +709,7 @@ class MockGameEngine:
             on_the_play=on_the_play,
             player_mulligan=player.mulligan_count,
             opponent_mulligan=opponent.mulligan_count,
+            timed_out=win_condition == "turn_cap",
             log=GameLog(
                 game_index=game_index,
                 on_the_play=on_the_play,

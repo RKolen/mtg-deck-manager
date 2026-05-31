@@ -250,32 +250,40 @@ def fetch_player_deck(deck_nid: int) -> list[CardInfo]:
 
 
 @lru_cache(maxsize=64)
-def fetch_meta_deck(archetype: str, fmt: str) -> list[CardInfo]:
+def fetch_meta_deck(archetype: str, fmt: str) -> tuple[list[CardInfo], str]:
     """
     Fetch the canonical card list for a meta archetype, enriched with card data.
+
+    Returns ``(cards, pilot_prompt)`` where ``pilot_prompt`` is the value of
+    ``field_pilot_prompt`` from the Drupal node, or empty string when the field
+    is unset.  Callers should pass the returned prompt to
+    ``get_pilot_prompt(archetype, drupal_prompt=...)`` so the Drupal value
+    takes precedence over the built-in default.
     """
     query = (
         "query MetaDeck($format: String!) { metaDecks(format: $format) {"
-        " title cardsJson } }"
+        " title cardsJson pilotPrompt } }"
     )
     try:
         data = _graphql(query, {"format": fmt})
     except requests.RequestException as exc:
         logger.warning("Meta deck fetch failed for %s / %s: %s", archetype, fmt, exc)
-        return []
+        return [], ""
 
     meta_list = data.get("metaDecks") or []
     match = next((m for m in meta_list if m.get("title") == archetype), None)
     if match is None:
         logger.warning("No meta_deck found for %s / %s", archetype, fmt)
-        return []
+        return [], ""
+
+    pilot_prompt: str = match.get("pilotPrompt") or ""
 
     cards_json = str(match.get("cardsJson") or "")
     try:
         raw_cards: list[dict] = json.loads(cards_json) if cards_json else []
     except json.JSONDecodeError:
         logger.warning("Could not parse field_cards_json for %s", archetype)
-        return []
+        return [], pilot_prompt
 
     all_names = [c["name"] for c in raw_cards if c.get("name")]
     enrichment = _enrich_by_name(all_names)
@@ -291,4 +299,4 @@ def fetch_meta_deck(archetype: str, fmt: str) -> list[CardInfo]:
             quantity=int(c.get("quantity", 1)),
             sideboard=bool(c.get("sideboard", False)),
         ))
-    return cards
+    return cards, pilot_prompt

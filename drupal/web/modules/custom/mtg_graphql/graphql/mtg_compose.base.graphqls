@@ -77,6 +77,7 @@ type MetaDeck {
   archetypeTags: [String!]!
   fetchedAt: String
   cardsJson: String
+  pilotPrompt: String
 }
 
 type MtgFormat {

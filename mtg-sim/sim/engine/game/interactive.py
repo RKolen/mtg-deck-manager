@@ -57,6 +57,8 @@ from engine.game.helpers import (
 )
 from engine.game.combat_actions import CombatActionsMixin
 from engine.game.spell_stack import SpellStackMixin
+from mcts import llm_pick
+from deck_registry import CardInfo
 
 
 @dataclass
@@ -67,6 +69,7 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
     phase: str = "mulligan"
     on_the_play: bool = True
     mulligans_taken: int = 0
+    pilot_prompt: str = ""
     pending_attackers: list[str] = field(default_factory=list)
     pending_opp_attackers: list[str] = field(default_factory=list)
     pending_blockers: dict[str, str] = field(default_factory=dict)
@@ -842,8 +845,44 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
         self._opponent_cast_one_spell()
         self._check_game_over()
 
+    def _llm_pick_spell(
+        self,
+        options: list[tuple[int, CardInfo]],
+    ) -> tuple[int, CardInfo]:
+        """Pick the best spell to cast from available options.
+
+        Uses the LLM with the archetype pilot prompt when available, falling
+        back to the cheapest-creature-first heuristic when no pilot prompt is
+        configured or Ollama is unreachable.
+        """
+        heuristic = sorted(
+            options,
+            key=lambda item: (not item[1].is_creature, item[1].cmc),
+        )[0]
+        if not self.pilot_prompt:
+            return heuristic
+        option_names = [
+            f"{ci.name} ({ci.short_type()}, CMC {int(ci.cmc)})"
+            for _, ci in options
+        ]
+        state = {
+            "turn": self.state.turn.context.turn_number,
+            "own_life": self.state.players[1].life,
+            "opp_life": self.state.players[0].life,
+            "mana": self._available_mana(1),
+        }
+        idx, reasoning = llm_pick(
+            "Choose the ONE spell to cast that best serves your archetype strategy.",
+            option_names,
+            state,
+            system_prompt=self.pilot_prompt,
+        )
+        if reasoning:
+            self._log("pilot", "pick", reasoning)
+        return options[idx]
+
     def _opponent_cast_one_spell(self) -> None:
-        """Cast the cheapest affordable opponent spell."""
+        """Cast the best affordable opponent spell, guided by pilot prompt when set."""
         options = [
             (idx, require_card_info(card))
             for idx, card in enumerate(self._zones(1).hand)
@@ -855,10 +894,7 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
         ]
         if not options:
             return
-        hand_idx, card_info = sorted(
-            options,
-            key=lambda item: (not item[1].is_creature, item[1].cmc),
-        )[0]
+        hand_idx, card_info = self._llm_pick_spell(options)
         card = self._zones(1).hand[hand_idx]
         if not isinstance(card, CardObject):
             return
