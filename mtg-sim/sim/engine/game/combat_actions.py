@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from engine.abilities.keywords.other.afflict import apply_afflict_on_attack
 from engine.abilities.keywords.other.boast import mark_attacked_this_turn
 from engine.abilities.keywords.other.enlist import apply_enlist_on_attack
@@ -10,9 +12,10 @@ from engine.abilities.keywords.other.myriad import apply_myriad_on_attack
 from engine.abilities.keywords.other.annihilator import apply_annihilator_on_attack
 from engine.abilities.keywords.other.exalted import apply_exalted_on_attack
 from engine.abilities.keywords.other.mentor import apply_mentor_on_attack
+from engine.core.game_object import CardObject
 from engine.core.turn_structure import Step
 from engine.game.activated_actions import ActivatedActionsMixin
-from engine.game.helpers import perm_names
+from engine.game.helpers import is_land, perm_names, require_card_info
 from engine.rules.combat import (
     can_attack,
     eligible_attackers,
@@ -24,6 +27,54 @@ from engine.rules.combat import (
 
 class CombatActionsMixin(ActivatedActionsMixin):
     """Attack and block steps for the human player."""
+
+    if TYPE_CHECKING:
+        def action_play_land(self, _hand_idx: int) -> dict:
+            """Play a land from the player's hand (defined in InteractiveGame)."""
+            return {}
+
+        def action_cast(self, _hand_idx: int) -> dict:
+            """Cast a spell from the player's hand (defined in InteractiveGame)."""
+            return {}
+
+    def action_auto_main(self) -> dict:
+        """Auto-play the player's main phase: land first, then affordable spells.
+
+        Spells are cast cheapest-first with creatures prioritised over non-creatures.
+        Stops when no affordable spell remains or the game ends.
+        """
+        assert self.phase in ("main1", "main2")
+        if not self.state.players[0].land_played:
+            hand = self._zones(0).hand
+            for i, card in enumerate(hand):
+                if isinstance(card, CardObject) and is_land(card):
+                    self.action_play_land(i)
+                    break
+        while self.phase != "game_over":
+            hand = self._zones(0).hand
+            options = sorted(
+                [
+                    (i, require_card_info(card))
+                    for i, card in enumerate(hand)
+                    if isinstance(card, CardObject)
+                    and not is_land(card)
+                    and self._is_card_castable(card)
+                ],
+                key=lambda item: (not item[1].is_creature, item[1].cmc),
+            )
+            if not options:
+                break
+            result = self.action_cast(options[0][0])
+            if result.get("error"):
+                break
+        return self.to_client()
+
+    def action_auto_attack(self) -> dict:
+        """Auto-attack with all eligible player creatures and confirm combat."""
+        assert self.phase == "attack"
+        for perm in eligible_attackers(self._permanents(0)):
+            self.action_toggle_attacker(str(perm.obj_id))
+        return self.action_confirm_attack()
 
     def action_go_to_attack(self) -> dict:
         """Move from first main phase to declare attackers."""

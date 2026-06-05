@@ -48,8 +48,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from deck_registry import fetch_deck_title, fetch_meta_deck, fetch_player_deck
+from engine_sim import run_simulation as run_python_simulation
 from forge_adapter import ForgeAdapter
-from engine.game import InteractiveGame, create_game, get_game, remove_game
+from engine.game import InteractiveGame, _GameConfig, create_game, get_game, remove_game
 from engine.game.action_dispatch import dispatch_game_action
 
 logging.basicConfig(level=logging.INFO)
@@ -87,6 +88,10 @@ class SimulateRequest(BaseModel):
     format: str = Field("Modern", description="MTG format")
     games: int = Field(50, ge=1, le=200, description="Number of games to simulate (max 200)")
     useLlm: bool = Field(False, description="Use Ollama for MCTS board evaluation (slower)")
+    engine: str = Field(
+        "python",
+        description="Simulation engine: 'python' (LLM-guided opponent) or 'forge' (Forge JAR)",
+    )
 
 
 @app.get("/health")
@@ -122,7 +127,7 @@ async def simulate(req: SimulateRequest) -> dict:
     deck_title = await asyncio.to_thread(fetch_deck_title, req.playerDeckId)
 
     try:
-        opponent_deck, _ = await asyncio.to_thread(
+        opponent_deck, opp_pilot_prompt = await asyncio.to_thread(
             fetch_meta_deck, req.opponentArchetype, req.format
         )
     except Exception as exc:
@@ -139,13 +144,23 @@ async def simulate(req: SimulateRequest) -> dict:
             ),
         )
 
-    results = await asyncio.to_thread(
-        adapter.run_simulation,
-        player_deck,
-        opponent_deck,
-        req.games,
-        (deck_title, req.opponentArchetype),
-    )
+    if req.engine == "forge":
+        results = await asyncio.to_thread(
+            adapter.run_simulation,
+            player_deck,
+            opponent_deck,
+            req.games,
+            (deck_title, req.opponentArchetype),
+        )
+    else:
+        results = await asyncio.to_thread(
+            run_python_simulation,
+            player_deck,
+            opponent_deck,
+            req.games,
+            (deck_title, req.opponentArchetype),
+            opp_pilot_prompt,
+        )
 
     if not results:
         raise HTTPException(
@@ -156,10 +171,12 @@ async def simulate(req: SimulateRequest) -> dict:
     return await asyncio.to_thread(
         sim_statistics.compute_statistics,
         results,
-        deck_title,
-        req.opponentArchetype,
-        req.format,
-        req.useLlm,
+        sim_statistics.MatchupConfig(
+            player_deck_name=deck_title,
+            opponent_archetype=req.opponentArchetype,
+            fmt=req.format,
+            generate_moments=req.useLlm,
+        ),
     )
 
 
@@ -247,10 +264,12 @@ async def game_start(req: StartGameRequest) -> dict:
 
     game = create_game(
         player_deck, opponent_deck,
-        player_name="You",
-        opponent_name=req.opponentArchetype,
-        on_the_play=req.onThePlay,
-        pilot_prompt=opp_pilot_prompt,
+        _GameConfig(
+            player_name="You",
+            opponent_name=req.opponentArchetype,
+            on_the_play=req.onThePlay,
+            pilot_prompt=opp_pilot_prompt,
+        ),
     )
     return game.to_client()
 

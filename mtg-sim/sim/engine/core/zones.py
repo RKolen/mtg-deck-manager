@@ -25,6 +25,7 @@ from engine.core.game_object import (
     StackObject,
     TokenObject,
     ZoneCard,
+    _PermanentState,
 )
 
 if TYPE_CHECKING:
@@ -115,7 +116,7 @@ class ZoneManager:
             controller_idx=controller_idx,
             owner_idx=source.owner_idx,
             source=source,
-            sick=True,
+            state=_PermanentState(sick=True),
         )
         if "Creature" in perm.type_line and "haste" in perm.oracle_text.lower():
             perm.sick = False

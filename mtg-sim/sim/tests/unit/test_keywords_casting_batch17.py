@@ -26,8 +26,10 @@ from engine.core.game_object import CardObject
 from engine.game import create_game
 from engine.game.helpers import card_to_client, HandCastContext
 from tests.conftest import (
+    _CardStats,
     cast_announce_options,
     fresh_game,
+    make_card,
     make_creature,
     make_deck,
     make_instant,
@@ -128,10 +130,11 @@ def test_game_sneak_cast_exiles_land():
 
 def test_game_dash_cast_marks_creature():
     """Casting for dash marks the creature for end-of-turn return."""
-    sprinter = make_creature(
+    sprinter = make_card(
         name='Sprinter',
-        cmc=3,
+        type_line='Creature — Human Warrior',
         oracle='Dash {1}{R}\nHaste',
+        stats=_CardStats(cmc=3.0, pt='2/1'),
     )
     game = create_game(make_deck(lands=20), make_deck(lands=20))
     game.action_keep()
@@ -151,10 +154,11 @@ def test_game_dash_cast_marks_creature():
 
 def test_game_blitz_cast_marks_creature():
     """Casting for blitz marks the creature for end-of-turn sacrifice."""
-    blitzer = make_creature(
+    blitzer = make_card(
         name='Blitzer',
-        cmc=2,
+        type_line='Creature — Human Warrior',
         oracle='Blitz {1}{R}',
+        stats=_CardStats(cmc=2.0, pt='2/1'),
     )
     game = create_game(make_deck(lands=20), make_deck(lands=20))
     game.action_keep()

@@ -13,7 +13,7 @@ from engine.core.mana import (
     ManaPool,
     mana_of,
 )
-from tests.conftest import make_card
+from tests.conftest import _CardStats, make_card
 
 
 # ---------------------------------------------------------------------------
@@ -262,23 +262,29 @@ def test_can_pay_false_does_not_change_pool():
 
 def test_affordable_bolt_with_mana():
     """Lightning Bolt is affordable when the player has 1 mana."""
-    bolt = make_card("Lightning Bolt", "Instant", cmc=1, mana_cost="{R}")
+    bolt = make_card("Lightning Bolt", "Instant", mana_cost="{R}", stats=_CardStats(
+        cmc=1.0, pt="0/0"
+    ))
     assert spell_is_affordable(bolt, 1)
 
 
 def test_affordable_bolt_without_mana():
     """Lightning Bolt is not affordable with 0 mana available."""
-    bolt = make_card("Lightning Bolt", "Instant", cmc=1, mana_cost="{R}")
+    bolt = make_card("Lightning Bolt", "Instant", mana_cost="{R}", stats=_CardStats(
+        cmc=1.0, pt="0/0"
+    ))
     assert not spell_is_affordable(bolt, 0)
 
 
 def test_affordable_phyrexian_zero_mana():
     """Phyrexian mana card is castable with 0 mana (pay 2 life instead)."""
-    growth = make_card("Mutagenic Growth", "Instant", cmc=1, mana_cost="{G/P}")
+    growth = make_card("Mutagenic Growth", "Instant", mana_cost="{G/P}", stats=_CardStats(
+        cmc=1.0, pt="0/0"
+    ))
     assert spell_is_affordable(growth, 0)
 
 
 def test_affordable_land_never():
     """Lands are played, not cast — always returns False."""
-    land = make_card("Plains", "Basic Land — Plains", cmc=0)
+    land = make_card("Plains", "Basic Land — Plains", stats=_CardStats(cmc=0.0, pt="0/0"))
     assert not spell_is_affordable(land, 10)

@@ -72,21 +72,78 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
-class CastManaModifiers:
-    """Optional cost modifiers for announce-cast mana."""
+class _FlatBoolMods:
+    """Simple boolean cost modifiers."""
 
-    kicker_times: int = 0
     entwined: bool = False
     overloaded: bool = False
-    bestow_target_uid: str | None = None
-    replicate_times: int = 0
     paid_buyback: bool = False
+
+
+@dataclass(frozen=True)
+class _SacManaModifiers:
+    """Sacrifice-based alternate cast modifiers."""
+
     cast_for_emerge: bool = False
     cast_for_evoke: bool = False
     cast_for_mutate: bool = False
     mutate_target_uid: str | None = None
+
+
+@dataclass(frozen=True)
+class CastManaModifiers:
+    """Optional cost modifiers for announce-cast mana."""
+
+    kicker_times: int = 0
+    bestow_target_uid: str | None = None
+    replicate_times: int = 0
     spree_mode_indices: tuple[int, ...] = ()
+    bools: _FlatBoolMods = field(default_factory=_FlatBoolMods)
+    sac: _SacManaModifiers = field(default_factory=_SacManaModifiers)
     face: FaceAlternateCastFlags = field(default_factory=FaceAlternateCastFlags)
+
+    @property
+    def entwined(self) -> bool:
+        """Whether entwine was paid."""
+        return self.bools.entwined
+
+    @property
+    def overloaded(self) -> bool:
+        """Whether overload was paid."""
+        return self.bools.overloaded
+
+    @property
+    def paid_buyback(self) -> bool:
+        """Whether buyback was paid."""
+        return self.bools.paid_buyback
+
+    @property
+    def cast_for_emerge(self) -> bool:
+        """Whether casting for emerge."""
+        return self.sac.cast_for_emerge
+
+    @property
+    def cast_for_evoke(self) -> bool:
+        """Whether casting for evoke."""
+        return self.sac.cast_for_evoke
+
+    @property
+    def cast_for_mutate(self) -> bool:
+        """Whether casting for mutate."""
+        return self.sac.cast_for_mutate
+
+    @property
+    def mutate_target_uid(self) -> str | None:
+        """Mutate target UID."""
+        return self.sac.mutate_target_uid
+
+
+@dataclass(frozen=True)
+class _TimingAvailability:
+    """Alternate cost availability for timing-sensitive casts."""
+
+    freerunning_available: bool = False
+    spectacle_available: bool = False
 
 
 @dataclass(frozen=True)
@@ -95,12 +152,21 @@ class CastManaTiming:
 
     cast_for_miracle: bool = False
     cast_for_freerunning: bool = False
-    freerunning_available: bool = False
     cast_for_spectacle: bool = False
-    spectacle_available: bool = False
     cast_for_cleave: bool = False
     cast_for_morph: bool = False
     paid_conspire: bool = False
+    available: _TimingAvailability = field(default_factory=_TimingAvailability)
+
+    @property
+    def freerunning_available(self) -> bool:
+        """Whether freerunning is available."""
+        return self.available.freerunning_available
+
+    @property
+    def spectacle_available(self) -> bool:
+        """Whether spectacle is available."""
+        return self.available.spectacle_available
 
 
 @dataclass(frozen=True)
@@ -120,6 +186,58 @@ def _payment_requirements(card: CardInfo) -> tuple[int, int]:
     return max(0, total_cmc - phyrexian_pips), phyrexian_pips * 2
 
 
+def _resolve_timing_alternate_mana(
+    card: CardInfo,
+    timing: CastManaTiming,
+) -> tuple[int, int] | None:
+    """Return mana/life for timing-based alternate costs, or None if none apply."""
+    if normalize_miracle_cast(card, timing.cast_for_miracle):
+        return miracle_mana_needed(card)
+    if normalize_spectacle_cast(
+        card, timing.cast_for_spectacle, available=timing.spectacle_available
+    ):
+        return spectacle_mana_needed(card)
+    if normalize_cleave_cast(card, timing.cast_for_cleave):
+        return cleave_mana_needed(card)
+    if normalize_freerunning_cast(card, timing.cast_for_freerunning, timing.freerunning_available):
+        return freerunning_mana_needed(card)
+    return None
+
+
+def _resolve_face_alternate_mana(
+    card: CardInfo,
+    mods: CastManaModifiers,
+) -> tuple[int, int] | None:
+    """Return mana/life for face-down alternate costs, or None if none apply."""
+    if normalize_morph_cast(card, mods.face.cast_for_morph):
+        return morph_face_down_mana_needed()
+    if normalize_disguise_cast(card, mods.face.cast_for_disguise):
+        return disguise_face_down_mana_needed()
+    if normalize_dash_cast(card, mods.face.cast_for_dash):
+        return dash_mana_needed(card)
+    if normalize_blitz_cast(card, mods.face.cast_for_blitz):
+        return blitz_mana_needed(card)
+    return None
+
+
+def _resolve_sac_alternate_mana(
+    card: CardInfo,
+    mods: CastManaModifiers,
+) -> tuple[int, int] | None:
+    """Return mana/life for sacrifice-based alternate costs, or None if none apply."""
+    if normalize_overloaded(card, mods.overloaded):
+        return overload_mana_needed(card)
+    if normalize_evoke_cast(card, mods.cast_for_evoke):
+        return evoke_mana_needed(card)
+    if normalize_emerge_cast(card, mods.cast_for_emerge):
+        return emerge_mana_needed(card)
+    if normalize_mutate_cast(card, mods.cast_for_mutate, mods.mutate_target_uid):
+        return mutate_mana_needed(card)
+    if normalize_bestow(card, mods.bestow_target_uid):
+        return bestow_mana_needed(card)
+    return None
+
+
 def resolve_announce_cast_mana(
     card: CardInfo,
     options: AnnounceCastManaOptions | None = None,
@@ -128,50 +246,18 @@ def resolve_announce_cast_mana(
     opts = options or AnnounceCastManaOptions()
     mods = opts.modifiers
     timing = opts.timing
-    if normalize_miracle_cast(card, timing.cast_for_miracle):
-        mana_needed, life_cost = miracle_mana_needed(card)
-    elif normalize_spectacle_cast(
-        card,
-        timing.cast_for_spectacle,
-        available=timing.spectacle_available,
-    ):
-        mana_needed, life_cost = spectacle_mana_needed(card)
-    elif normalize_cleave_cast(card, timing.cast_for_cleave):
-        mana_needed, life_cost = cleave_mana_needed(card)
-    elif normalize_morph_cast(card, mods.face.cast_for_morph):
-        mana_needed, life_cost = morph_face_down_mana_needed()
-    elif normalize_disguise_cast(card, mods.face.cast_for_disguise):
-        mana_needed, life_cost = disguise_face_down_mana_needed()
-    elif normalize_dash_cast(card, mods.face.cast_for_dash):
-        mana_needed, life_cost = dash_mana_needed(card)
-    elif normalize_blitz_cast(card, mods.face.cast_for_blitz):
-        mana_needed, life_cost = blitz_mana_needed(card)
-    elif normalize_freerunning_cast(
-        card,
-        timing.cast_for_freerunning,
-        timing.freerunning_available,
-    ):
-        mana_needed, life_cost = freerunning_mana_needed(card)
-    elif normalize_overloaded(card, mods.overloaded):
-        mana_needed, life_cost = overload_mana_needed(card)
-    elif normalize_evoke_cast(card, mods.cast_for_evoke):
-        mana_needed, life_cost = evoke_mana_needed(card)
-    elif normalize_emerge_cast(card, mods.cast_for_emerge):
-        mana_needed, life_cost = emerge_mana_needed(card)
-    elif normalize_mutate_cast(card, mods.cast_for_mutate, mods.mutate_target_uid):
-        mana_needed, life_cost = mutate_mana_needed(card)
-    elif normalize_bestow(card, mods.bestow_target_uid):
-        mana_needed, life_cost = bestow_mana_needed(card)
+    base = (
+        _resolve_timing_alternate_mana(card, timing)
+        or _resolve_face_alternate_mana(card, mods)
+        or _resolve_sac_alternate_mana(card, mods)
+    )
+    if base is not None:
+        mana_needed, life_cost = base
     elif has_kicker(card):
         mana_needed, life_cost = cast_mana_needed(card, mods.kicker_times)
     else:
         mana_needed, life_cost = _payment_requirements(card)
-    mana_needed, life_cost = cast_mana_with_entwine(
-        card,
-        mana_needed,
-        life_cost,
-        mods.entwined,
-    )
+    mana_needed, life_cost = cast_mana_with_entwine(card, mana_needed, life_cost, mods.entwined)
     mana_needed += replicate_extra_mana(card, mods.replicate_times)
     mana_needed += buyback_extra_mana(card, mods.paid_buyback)
     mana_needed += spree_extra_mana(card, mods.spree_mode_indices)

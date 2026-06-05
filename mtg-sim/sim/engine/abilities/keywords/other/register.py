@@ -19,7 +19,7 @@ from engine.abilities.keywords.other.exploit import (
     is_source_etb_exploit,
 )
 from engine.core.game_object import Permanent
-from engine.rules.triggers import TriggerKey, TriggerRegistry
+from engine.rules.triggers import TriggerKey, TriggerRegistry, TriggerSpec
 
 
 def register_permanent_other_keywords(
@@ -35,8 +35,7 @@ def register_permanent_other_keywords(
         registry.register(
             permanent,
             TriggerKey.ENTERS_BATTLEFIELD,
-            is_evolve_creature_enters,
-            effect=EvolveEffect(),
+            TriggerSpec(is_evolve_creature_enters, effect=EvolveEffect()),
         )
 
     if has_exploit(permanent):
@@ -44,8 +43,10 @@ def register_permanent_other_keywords(
         registry.register(
             permanent,
             TriggerKey.ENTERS_BATTLEFIELD,
-            is_source_etb_exploit,
-            effect=ExploitEffect(clause) if clause else ExploitEffect(''),
+            TriggerSpec(
+                is_source_etb_exploit,
+                effect=ExploitEffect(clause) if clause else ExploitEffect(''),
+            ),
         )
 
     if has_cipher(permanent):
@@ -53,6 +54,8 @@ def register_permanent_other_keywords(
         registry.register(
             permanent,
             TriggerKey.SPELL_CAST,
-            is_cipher_instant_or_sorcery_cast,
-            effect=CipherEffect(clause or ''),
+            TriggerSpec(
+                is_cipher_instant_or_sorcery_cast,
+                effect=CipherEffect(clause or ''),
+            ),
         )

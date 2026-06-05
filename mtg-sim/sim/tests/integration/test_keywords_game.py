@@ -4,6 +4,7 @@ from engine.core.game_object import CardObject
 from engine.game import create_game
 from engine.rules.combat import can_attack
 from tests.conftest import (
+    _CardStats,
     cast_announce_options,
     make_artifact,
     make_card,
@@ -399,7 +400,7 @@ def test_plot_sorcery_casts_from_exile_for_free():
     heist = make_card(
         name="Heist",
         type_line="Sorcery",
-        cmc=0,
+        stats=_CardStats(cmc=0.0, pt="0/0"),
         oracle="Draw two cards.\nPlot",
     )
     game = create_game(make_deck(lands=20), make_deck(lands=20))
@@ -417,11 +418,12 @@ def test_plot_sorcery_casts_from_exile_for_free():
 
 def test_emerge_cast_sacrifices_creature_and_enters_battlefield():
     """Casting for emerge sacrifices one creature and resolves the emerge spell."""
-    wurm = make_creature(
+    wurm = make_card(
         name="Elder Deep-Fiend",
-        cmc=8,
+        type_line="Creature — Eldrazi Octopus",
         mana_cost="{8}",
         oracle="Flash\nEmerge {0} (Sacrifice a creature.)",
+        stats=_CardStats(cmc=8.0, pt="5/6"),
     )
     game = create_game(make_deck(lands=20), make_deck(lands=20))
     game.action_keep()
@@ -696,11 +698,12 @@ def test_improvise_cast_taps_artifacts_to_pay_mana():
 
 def test_landfall_triggers_when_land_is_played():
     """Landfall registers on ETB and fires when a land enters."""
-    host = make_creature(
+    host = make_card(
         name="Landfall Host",
-        cmc=0,
+        type_line="Creature — Human",
         mana_cost="",
         oracle="Landfall — You gain 2 life.",
+        stats=_CardStats(cmc=0.0, pt="1/1"),
     )
     game = create_game(make_deck(lands=20), make_deck(lands=20))
     game.action_keep()

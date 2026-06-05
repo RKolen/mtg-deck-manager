@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from deck_registry import CardInfo
 from engine.abilities import activated
+from engine.abilities.activated.core import _ActivationCall
 from engine.abilities.activated.bloodrush import (
     apply_bloodrush,
     bloodrush_mana_needed,
@@ -138,8 +139,7 @@ class ActivatedActionsMixin(GameRuntimeMixin):
                 self.state,
                 perm,
                 spec,
-                ability_idx,
-                mana_paid=True,
+                _ActivationCall(ability_idx=ability_idx, mana_paid=True),
             )
         if not result.ok:
             return self._client_error(result.detail)
@@ -318,6 +318,24 @@ class ActivatedActionsMixin(GameRuntimeMixin):
         self._log("player", "outlast", detail)
         return self.to_client()
 
+    def _apply_turn_up(
+        self, perm: Permanent, card_info: CardInfo
+    ) -> tuple[str, str] | str:
+        """Apply morph/disguise turn-up; return (detail, action) or error string."""
+        if can_turn_up_morph(perm, self.state, 0, self.phase):
+            mana_needed = morph_turn_up_mana_needed(card_info)
+            if mana_needed and not self._tap_lands_for_mana(0, mana_needed):
+                return f"Need {mana_needed} mana to turn face up"
+            detail = apply_turn_up_morph(perm)
+            return (detail, "turn_up_morph") if detail is not None else "Turn face up failed"
+        if can_turn_up_disguise(perm, self.state, 0, self.phase):
+            mana_needed = disguise_turn_up_mana_needed(card_info)
+            if mana_needed and not self._tap_lands_for_mana(0, mana_needed):
+                return f"Need {mana_needed} mana to turn face up"
+            detail = apply_turn_up_disguise(perm)
+            return (detail, "turn_up_disguise") if detail is not None else "Turn face up failed"
+        return "Cannot turn face up now"
+
     def action_turn_up_morph(self, permanent_uid: str) -> dict:
         """Turn a face-down morph or disguise creature face up."""
         perm = self._find_permanent(permanent_uid)
@@ -326,22 +344,10 @@ class ActivatedActionsMixin(GameRuntimeMixin):
         card_info = perm.card_info
         if card_info is None:
             return self._client_error("Not a creature card")
-        if can_turn_up_morph(perm, self.state, 0, self.phase):
-            mana_needed = morph_turn_up_mana_needed(card_info)
-            if mana_needed and not self._tap_lands_for_mana(0, mana_needed):
-                return self._client_error(f"Need {mana_needed} mana to turn face up")
-            detail = apply_turn_up_morph(perm)
-            action = "turn_up_morph"
-        elif can_turn_up_disguise(perm, self.state, 0, self.phase):
-            mana_needed = disguise_turn_up_mana_needed(card_info)
-            if mana_needed and not self._tap_lands_for_mana(0, mana_needed):
-                return self._client_error(f"Need {mana_needed} mana to turn face up")
-            detail = apply_turn_up_disguise(perm)
-            action = "turn_up_disguise"
-        else:
-            return self._client_error("Cannot turn face up now")
-        if detail is None:
-            return self._client_error("Turn face up failed")
+        result = self._apply_turn_up(perm, card_info)
+        if isinstance(result, str):
+            return self._client_error(result)
+        detail, action = result
         self._log("player", action, detail)
         return self.to_client()
 
@@ -430,6 +436,12 @@ class ActivatedActionsMixin(GameRuntimeMixin):
             return {**self.to_client(), "error": "Cannot scavenge now"}
         if target_uid is None:
             return {**self.to_client(), "error": "Scavenge requires a target creature"}
+        return self._apply_scavenge(graveyard_idx, card_info, target_uid)
+
+    def _apply_scavenge(
+        self, graveyard_idx: int, card_info: CardInfo, target_uid: str
+    ) -> dict:
+        """Execute the scavenge after validation: check target, pay mana, apply."""
         target = self._find_permanent(target_uid)
         if target is None:
             return {**self.to_client(), "error": "Scavenge target not found"}

@@ -18,8 +18,10 @@ from engine.abilities.keywords.other.dethrone import (
 from engine.abilities.keywords.other.enlist import apply_enlist_on_attack
 from engine.abilities.keywords.other.offspring import apply_offspring_etb
 from tests.conftest import (
+    _CardStats,
     fresh_game,
     make_artifact,
+    make_card,
     make_creature,
     place_on_battlefield,
     resolve_player_attacks,
@@ -37,17 +39,16 @@ _CRAFT_ORACLE = (
 
 def test_companion_validates_creature_deck():
     """Companion accepts decks that satisfy the restriction."""
-    companion = make_creature(
+    companion = make_card(
         'Lurrus',
-        3,
-        3,
-        cmc=3,
+        type_line='Creature — Cat Nightmare',
         oracle=_COMPANION_ORACLE,
+        stats=_CardStats(cmc=3.0, pt='3/3'),
     )
     deck = [
         companion,
-        make_creature('Bear', 3, 3, cmc=3),
-        make_creature('Elf', 4, 4, cmc=4),
+        make_card('Bear', type_line='Creature — Bear', stats=_CardStats(cmc=3.0, pt='3/3')),
+        make_card('Elf', type_line='Creature — Elf', stats=_CardStats(cmc=4.0, pt='4/4')),
     ]
     assert find_companion_in_deck(deck) is companion
     assert validate_companion_deck(deck) is None
@@ -55,14 +56,15 @@ def test_companion_validates_creature_deck():
 
 def test_companion_rejects_low_cmc_creature():
     """Companion rejects decks with creatures below the mana value floor."""
-    companion = make_creature(
+    companion = make_card(
         'Lurrus',
-        3,
-        3,
-        cmc=3,
+        type_line='Creature — Bear',
         oracle=_COMPANION_ORACLE,
+        stats=_CardStats(cmc=3.0, pt='3/3'),
     )
-    deck = [companion, make_creature('Cheap', 1, 1, cmc=1)]
+    deck = [companion, make_card('Cheap', type_line='Creature — Human',
+                                 stats=_CardStats(cmc=1.0, pt='1/1')
+                                )]
     assert validate_companion_deck(deck) is not None
 
 

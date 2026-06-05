@@ -27,9 +27,24 @@ import random
 import re
 import subprocess
 import uuid
-from collections import Counter
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Optional
+
+from _sim_types import (
+    GameLog,
+    GameLogMulligans,
+    GameLogOutcome,
+    GameLogSetup,
+    SimResult,
+    SimResultLife,
+    SimResultMulligans,
+    SimResultOutcome,
+    TurnBoard,
+    TurnDamage,
+    TurnEvent,
+    _GameOutcome,
+    _GameState,
+    _TurnAccum,
+)
 
 if TYPE_CHECKING:
     from deck_registry import CardInfo
@@ -43,89 +58,6 @@ FORGE_JAVA: str = os.environ.get("FORGE_JAVA", "java")
 def _forge_available() -> bool:
     """Return True when FORGE_JAR points to an existing file."""
     return bool(FORGE_JAR and os.path.isfile(FORGE_JAR))
-
-
-# ---------------------------------------------------------------------------
-# Data classes
-# ---------------------------------------------------------------------------
-
-@dataclass
-class TurnEvent:
-    """One player's full turn within a game."""
-
-    turn: int
-    player: int
-    mana_available: int
-    plays: list[str]
-    damage_dealt: int
-    life_totals: list[int]
-    hand_size: int
-    creatures_in_play: int
-    board_power: int
-    combat_damage: int = 0
-    noncombat_damage: int = 0
-
-
-@dataclass
-class GameLog:
-    """Complete record of a single simulated game."""
-
-    game_index: int
-    on_the_play: bool
-    player_mulligan: int
-    opponent_mulligan: int
-    player_opening_hand: list[str]
-    turns: list[TurnEvent]
-    winner: int
-    final_turn: int
-    player_final_life: int
-    opponent_final_life: int
-    win_condition: str
-
-
-@dataclass
-class SimResult:
-    """Outcome of a single simulated game — passed to sim_statistics."""
-
-    winner: int
-    turns: Optional[int]
-    player_life: int
-    opponent_life: int
-    key_cards_on_loss: list[str] = field(default_factory=list)
-    on_the_play: bool = True
-    player_mulligan: int = 0
-    opponent_mulligan: int = 0
-    timed_out: bool = False
-    log: Optional[GameLog] = None
-
-    @property
-    def player_won(self) -> bool:
-        """True when the player (index 0) won this game."""
-        return self.winner == 0
-
-
-# ---------------------------------------------------------------------------
-# Verbose output parser helpers
-# ---------------------------------------------------------------------------
-
-@dataclass
-class _GameState:
-    """Mutable per-game state used by _ForgeVerboseParser."""
-
-    turn_num: Optional[int] = None
-    win_cond: str = ""
-    game_turn: int = 0
-    half_player: int = -1
-    p_life: int = 20
-    o_life: int = 20
-    mulls: list[int] = field(default_factory=lambda: [0, 0])
-    plays: list[str] = field(default_factory=list)
-    dmg: int = 0
-    combat_dmg: int = 0
-    noncombat_dmg: int = 0
-    p_lands: int = 0
-    opp_dmg: Counter[str] = field(default_factory=Counter)
-    turn_events: list[TurnEvent] = field(default_factory=list)
 
 
 class _ForgeVerboseParser:
@@ -160,20 +92,21 @@ class _ForgeVerboseParser:
 
     def _flush(self) -> None:
         """Commit the current half-turn data to turn_events."""
-        if self._st.half_player < 0:
+        if self._st.meta.half_player < 0:
             return
+        mana = self._st.accum.p_lands if self._st.meta.half_player == 0 else 0
         self._st.turn_events.append(TurnEvent(
-            turn=self._st.game_turn,
-            player=self._st.half_player,
-            mana_available=self._st.p_lands if self._st.half_player == 0 else 0,
-            plays=list(self._st.plays),
-            damage_dealt=self._st.dmg,
-            life_totals=[self._st.p_life, self._st.o_life],
-            hand_size=0,
-            creatures_in_play=0,
-            board_power=0,
-            combat_damage=self._st.combat_dmg,
-            noncombat_damage=self._st.noncombat_dmg,
+            turn=self._st.meta.game_turn,
+            player=self._st.meta.half_player,
+            mana_available=mana,
+            plays=list(self._st.accum.plays),
+            life_totals=[self._st.life.p, self._st.life.o],
+            board=TurnBoard(),
+            damage=TurnDamage(
+                total=self._st.accum.dmg,
+                combat=self._st.accum.combat_dmg,
+                noncombat=self._st.accum.noncombat_dmg,
+            ),
         ))
 
     def _commit(self, game_num: int, winner_raw: Optional[str]) -> None:
@@ -188,29 +121,33 @@ class _ForgeVerboseParser:
         key_cards = (
             [c for c, _ in self._st.opp_dmg.most_common(5)] if winner == 1 else []
         )
+        final_turn = self._st.meta.turn_num or self._st.meta.game_turn
         log = GameLog(
-            game_index=game_num - 1,
-            on_the_play=on_play,
-            player_mulligan=self._st.mulls[0],
-            opponent_mulligan=self._st.mulls[1],
+            setup=GameLogSetup(game_index=game_num - 1, on_the_play=on_play),
+            mulligans=GameLogMulligans(
+                player=self._st.mulls[0],
+                opponent=self._st.mulls[1],
+            ),
             player_opening_hand=[],
             turns=list(self._st.turn_events),
-            winner=winner,
-            final_turn=self._st.turn_num or self._st.game_turn,
-            player_final_life=self._st.p_life,
-            opponent_final_life=self._st.o_life,
-            win_condition=self._st.win_cond,
+            outcome=GameLogOutcome(
+                winner=winner,
+                final_turn=final_turn,
+                win_condition=self._st.win_cond,
+            ),
+            player_final_life=self._st.life.p,
+            opponent_final_life=self._st.life.o,
         )
         self._results.append(SimResult(
-            winner=winner,
-            turns=self._st.turn_num,
-            player_life=self._st.p_life,
-            opponent_life=self._st.o_life,
+            outcome=SimResultOutcome(winner=winner, timed_out=winner_raw is None),
+            turns=self._st.meta.turn_num,
+            life=SimResultLife(player=self._st.life.p, opponent=self._st.life.o),
             key_cards_on_loss=key_cards,
             on_the_play=on_play,
-            player_mulligan=self._st.mulls[0],
-            opponent_mulligan=self._st.mulls[1],
-            timed_out=winner_raw is None,
+            mulligans=SimResultMulligans(
+                player=self._st.mulls[0],
+                opponent=self._st.mulls[1],
+            ),
             log=log,
         ))
         self._st = _GameState()
@@ -235,12 +172,9 @@ class _ForgeVerboseParser:
         if not m:
             return False
         self._flush()
-        self._st.game_turn = int(m.group(1))
-        self._st.half_player = 0 if self._p_forge in m.group(2) else 1
-        self._st.plays = []
-        self._st.dmg = 0
-        self._st.combat_dmg = 0
-        self._st.noncombat_dmg = 0
+        self._st.meta.game_turn = int(m.group(1))
+        self._st.meta.half_player = 0 if self._p_forge in m.group(2) else 1
+        self._st.accum = _TurnAccum()
         return True
 
     def _try_life(self, s: str) -> bool:
@@ -250,9 +184,9 @@ class _ForgeVerboseParser:
             return False
         new_life = int(m.group(2))
         if self._p_forge in m.group(1):
-            self._st.p_life = new_life
+            self._st.life.p = new_life
         else:
-            self._st.o_life = new_life
+            self._st.life.o = new_life
         return True
 
     def _try_cast(self, s: str) -> bool:
@@ -262,8 +196,8 @@ class _ForgeVerboseParser:
             return False
         is_player = self._p_forge in m.group(1)
         card = re.sub(r"\s+targeting .+$", "", m.group(2)).strip()
-        if is_player == (self._st.half_player == 0):
-            self._st.plays.append(card)
+        if is_player == (self._st.meta.half_player == 0):
+            self._st.accum.plays.append(card)
         return True
 
     def _try_land(self, s: str) -> bool:
@@ -274,9 +208,9 @@ class _ForgeVerboseParser:
         is_player = self._p_forge in m.group(1)
         land = re.sub(r"\s*\(\d+\)\s*$", "", m.group(2)).strip()
         if is_player:
-            self._st.p_lands += 1
-        if is_player == (self._st.half_player == 0):
-            self._st.plays.append(f"{land} [Land]")
+            self._st.accum.p_lands += 1
+        if is_player == (self._st.meta.half_player == 0):
+            self._st.accum.plays.append(f"{land} [Land]")
         return True
 
     def _try_damage(self, s: str) -> bool:
@@ -291,12 +225,12 @@ class _ForgeVerboseParser:
         if self._p_forge in target:
             card_name = re.sub(r"\s*\(\d+\)\s*$", "", source_raw).strip()
             self._st.opp_dmg[card_name] += amount
-        elif self._st.half_player == 0 and self._p_forge not in target:
-            self._st.dmg += amount
+        elif self._st.meta.half_player == 0 and self._p_forge not in target:
+            self._st.accum.dmg += amount
             if dmg_type == "combat":
-                self._st.combat_dmg += amount
+                self._st.accum.combat_dmg += amount
             elif dmg_type == "non-combat":
-                self._st.noncombat_dmg += amount
+                self._st.accum.noncombat_dmg += amount
         return True
 
     def _try_turn_outcome(self, s: str) -> bool:
@@ -304,7 +238,7 @@ class _ForgeVerboseParser:
         m = self._TURN_OUTCOME.match(s)
         if not m:
             return False
-        self._st.turn_num = int(m.group(1))
+        self._st.meta.turn_num = int(m.group(1))
         return True
 
     def _try_win_cond(self, s: str) -> bool:
@@ -438,10 +372,9 @@ def _parse_forge_output(stdout: str, player_name: str) -> list[SimResult]:
                 # Forge prefixes "Ai(N)-" to the deck name in game results.
                 winner = 0 if player_name in winner_name else 1
             results.append(SimResult(
-                winner=winner,
+                outcome=SimResultOutcome(winner=winner, timed_out=False),
                 turns=current_turn,
-                player_life=0,
-                opponent_life=0,
+                life=SimResultLife(player=0, opponent=0),
                 on_the_play=on_the_play,
             ))
             current_turn = None  # reset for next game
@@ -635,13 +568,17 @@ def _make_turn_event(side: _BoardSide, turn: int, player: int,
         player=player,
         mana_available=len(side.lands),
         plays=plays,
-        damage_dealt=damage,
         life_totals=[side.life, 0],   # opponent life set by caller
-        hand_size=len(side.hand),
-        creatures_in_play=len(side.creatures),
-        board_power=side.attack_power(),
-        combat_damage=damage,   # mock engine damage is always from combat
-        noncombat_damage=0,
+        board=TurnBoard(
+            hand_size=len(side.hand),
+            creatures_in_play=len(side.creatures),
+            power=side.attack_power(),
+        ),
+        damage=TurnDamage(
+            total=damage,
+            combat=damage,  # mock engine damage is always from combat
+            noncombat=0,
+        ),
     )
 
 
@@ -654,6 +591,50 @@ class MockGameEngine:
     """
 
     MAX_TURNS = 12
+
+    def _build_result(
+        self,
+        player: "_BoardSide",
+        opponent: "_BoardSide",
+        outcome: "_GameOutcome",
+    ) -> SimResult:
+        """Assemble the final SimResult from accumulated game state."""
+        key_cards: list[str] = []
+        if outcome.winner == 1 and opponent.creatures:
+            key_cards = random.sample(
+                [c.name for c in opponent.creatures], k=min(3, len(opponent.creatures))
+            )
+        log = GameLog(
+            setup=GameLogSetup(game_index=outcome.game_index, on_the_play=outcome.on_the_play),
+            mulligans=GameLogMulligans(
+                player=player.mulligan_count,
+                opponent=opponent.mulligan_count,
+            ),
+            player_opening_hand=outcome.player_opening_hand,
+            turns=outcome.turn_events,
+            outcome=GameLogOutcome(
+                winner=outcome.winner,
+                final_turn=outcome.final_turn,
+                win_condition=outcome.win_condition,
+            ),
+            player_final_life=player.life,
+            opponent_final_life=opponent.life,
+        )
+        return SimResult(
+            outcome=SimResultOutcome(
+                winner=outcome.winner,
+                timed_out=outcome.win_condition == "turn_cap",
+            ),
+            turns=outcome.final_turn,
+            life=SimResultLife(player=player.life, opponent=opponent.life),
+            key_cards_on_loss=key_cards,
+            on_the_play=outcome.on_the_play,
+            mulligans=SimResultMulligans(
+                player=player.mulligan_count,
+                opponent=opponent.mulligan_count,
+            ),
+            log=log,
+        )
 
     def run(
         self,
@@ -678,14 +659,12 @@ class MockGameEngine:
             player.clear_sickness()
             opponent.clear_sickness()
 
-            # Player's turn (no draw on turn 1 when on the play)
             result = self._run_half_turn(player, opponent, turn, 0, turn == 1 and on_the_play)
             turn_events.append(result)
             if opponent.life <= 0:
                 winner, final_turn, win_condition = 0, turn, self._classify_win(player_cards)
                 break
 
-            # Opponent's turn
             result = self._run_half_turn(opponent, player, turn, 1, False)
             turn_events.append(result)
             if player.life <= 0:
@@ -694,36 +673,16 @@ class MockGameEngine:
         else:
             winner = 0 if player.life > opponent.life else 1
 
-        key_cards: list[str] = []
-        if winner == 1 and opponent.creatures:
-            key_cards = random.sample(
-                [c.name for c in opponent.creatures], k=min(3, len(opponent.creatures))
-            )
-
-        return SimResult(
+        game_outcome = _GameOutcome(
             winner=winner,
-            turns=final_turn,
-            player_life=player.life,
-            opponent_life=opponent.life,
-            key_cards_on_loss=key_cards,
+            final_turn=final_turn,
+            win_condition=win_condition,
+            player_opening_hand=player_opening_hand,
+            turn_events=turn_events,
             on_the_play=on_the_play,
-            player_mulligan=player.mulligan_count,
-            opponent_mulligan=opponent.mulligan_count,
-            timed_out=win_condition == "turn_cap",
-            log=GameLog(
-                game_index=game_index,
-                on_the_play=on_the_play,
-                player_mulligan=player.mulligan_count,
-                opponent_mulligan=opponent.mulligan_count,
-                player_opening_hand=player_opening_hand,
-                turns=turn_events,
-                winner=winner,
-                final_turn=final_turn,
-                player_final_life=player.life,
-                opponent_final_life=opponent.life,
-                win_condition=win_condition,
-            ),
+            game_index=game_index,
         )
+        return self._build_result(player, opponent, game_outcome)
 
     @staticmethod
     def _run_half_turn(

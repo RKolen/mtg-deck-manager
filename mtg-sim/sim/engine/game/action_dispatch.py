@@ -12,6 +12,7 @@ from engine.game.cast_context import (
     CastTargetingIds,
     HandAlternateCastChoices,
     HandCastCostChoices,
+    _CostConditionAlts,
 )
 from engine.game.face_alternate_cast import FaceAlternateCastFlags
 
@@ -37,12 +38,14 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
             paid_conspire=req.paidConspire,
         ),
         alternate=HandAlternateCastChoices(
-            cast_for_miracle=req.castForMiracle,
             cast_for_emerge=req.castForEmerge,
             cast_for_evoke=req.castForEvoke,
             cast_for_mutate=req.castForMutate,
-            cast_for_freerunning=req.castForFreerunning,
-            cast_for_spectacle=req.castForSpectacle,
+            conditions=_CostConditionAlts(
+                cast_for_miracle=req.castForMiracle,
+                cast_for_freerunning=req.castForFreerunning,
+                cast_for_spectacle=req.castForSpectacle,
+            ),
             face=FaceAlternateCastFlags(
                 cast_for_morph=req.castForMorph,
                 cast_for_disguise=req.castForDisguise,

@@ -25,7 +25,7 @@ from engine.abilities.keywords.casting.cast_mana import (
     CastManaTiming,
     resolve_announce_cast_mana,
 )
-from engine.core.game_object import CardObject, SpellCastPayment, Target
+from engine.core.game_object import CardObject, SpellCastPayment, Target, _KeywordPays
 from engine.game.cast_modifiers import apply_post_cast_modifiers
 from engine.game.helpers import SpellCastContext, spell_on_stack_from_context
 from engine.game import create_game
@@ -65,7 +65,7 @@ def test_cleave_copy_on_stack():
     game = fresh_game()
     spell = make_instant('Bolt', cmc=0, mana_cost='', oracle=_CLEAVE_ORACLE)
     card = CardObject(controller_idx=0, owner_idx=0, card_info=spell)
-    context = SpellCastContext(payment=SpellCastPayment(cleave=True))
+    context = SpellCastContext(payment=SpellCastPayment(keywords=_KeywordPays(cleave=True)))
     targets = [Target(player_idx=1)]
     game.stack.push(spell_on_stack_from_context(0, card, targets, context))
     logs = apply_post_cast_modifiers(game, 0, card, targets, context)

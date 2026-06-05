@@ -11,6 +11,7 @@ from engine.core.game_object import (
     SpellOnStack,
     SpellStackCopyFlags,
     Target,
+    _SpellCasting,
 )
 from engine.game.face_alternate_cast import FaceAlternateCastFlags
 
@@ -29,17 +30,39 @@ class HandCastCostChoices:
 
 
 @dataclass(frozen=True)
+class _CostConditionAlts:
+    """Alternate cast modes that modify cost based on a condition."""
+
+    cast_for_miracle: bool = False
+    cast_for_freerunning: bool = False
+    cast_for_spectacle: bool = False
+
+
+@dataclass(frozen=True)
 class HandAlternateCastChoices:
     """Alternate cast modes announced from hand."""
 
-    cast_for_miracle: bool = False
     cast_for_emerge: bool = False
     cast_for_evoke: bool = False
     cast_for_mutate: bool = False
-    cast_for_freerunning: bool = False
-    cast_for_spectacle: bool = False
     cast_for_cleave: bool = False
     face: FaceAlternateCastFlags = field(default_factory=FaceAlternateCastFlags)
+    conditions: _CostConditionAlts = field(default_factory=_CostConditionAlts)
+
+    @property
+    def cast_for_miracle(self) -> bool:
+        """Whether this cast uses miracle."""
+        return self.conditions.cast_for_miracle
+
+    @property
+    def cast_for_freerunning(self) -> bool:
+        """Whether this cast uses freerunning."""
+        return self.conditions.cast_for_freerunning
+
+    @property
+    def cast_for_spectacle(self) -> bool:
+        """Whether this cast uses spectacle."""
+        return self.conditions.cast_for_spectacle
 
     @property
     def cast_for_morph(self) -> bool:
@@ -129,7 +152,9 @@ def spell_on_stack_from_context(
         source=card,
         targets=targets,
         modes=list(context.spree_mode_indices),
-        alternate=context.alternate,
-        payment=context.payment,
-        copies=copy_flags or SpellStackCopyFlags(),
+        casting=_SpellCasting(
+            alternate=context.alternate,
+            payment=context.payment,
+            copies=copy_flags or SpellStackCopyFlags(),
+        ),
     )

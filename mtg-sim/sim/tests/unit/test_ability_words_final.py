@@ -18,6 +18,7 @@ from tests.ability_word_test_helpers import (
     top_trigger,
 )
 from tests.conftest import (
+    _CardStats,
     fresh_game,
     make_card,
     make_creature,
@@ -69,7 +70,7 @@ def test_will_of_planeswalkers_requires_planeswalker():
     assert game.stack.is_empty
 
     place_on_battlefield(
-        make_card(name="Jace", type_line="Planeswalker", cmc=4.0, pt="0/0"),
+        make_card(name="Jace", type_line="Planeswalker", stats=_CardStats(cmc=4.0, pt="0/0")),
         0,
         game.zones,
     )
@@ -99,8 +100,7 @@ def test_bloodrush_grants_power_only():
         card_info=make_card(
             name="Ghor-Clan Rampager",
             type_line="Creature — Beast",
-            cmc=4.0,
-            pt="4/4",
+            stats=_CardStats(cmc=4.0, pt="4/4"),
             oracle=(
                 "Bloodrush — {R}, Discard this card: "
                 "Target creature gets +4/+0 until end of turn."

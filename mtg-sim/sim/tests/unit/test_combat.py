@@ -3,7 +3,7 @@
 from engine.core.game_object import TriggeredAbilityOnStack
 from engine.rules.combat import can_attack, can_block, eligible_attackers, legal_blocker
 from engine.rules.combat import power, resolve_combat_damage, tap_attackers
-from engine.rules.triggers import TriggerKey, is_controller_gains_life
+from engine.rules.triggers import TriggerKey, TriggerSpec, is_controller_gains_life
 from engine.rules.triggers import is_source_deals_combat_damage
 from tests.conftest import fresh_game, make_creature, place_on_battlefield
 
@@ -154,7 +154,7 @@ def test_unblocked_combat_damage_puts_source_trigger_on_stack():
     game.trigger_registry.register(
         attacker,
         TriggerKey.DEALS_COMBAT_DAMAGE,
-        is_source_deals_combat_damage,
+        TriggerSpec(condition=is_source_deals_combat_damage),
     )
 
     resolve_combat_damage(
@@ -658,5 +658,5 @@ def _register_life_gain_observer(game):
     game.trigger_registry.register(
         place_on_battlefield(make_creature("Life Observer", 1, 1), 0, game.zones),
         TriggerKey.LIFE_GAINED,
-        is_controller_gains_life,
+        TriggerSpec(condition=is_controller_gains_life),
     )

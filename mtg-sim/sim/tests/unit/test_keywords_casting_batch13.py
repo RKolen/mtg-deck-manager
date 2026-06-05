@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from engine.abilities.keywords.casting.delayed_exile_cast import _CastTiming
 from engine.abilities.keywords.casting.foretell import (
     FORETELL_EXILE_MODE,
     can_cast_foretold,
@@ -46,5 +47,5 @@ def test_exiled_foretell_and_plot_may_be_cast():
     plotted = CardObject(controller_idx=0, owner_idx=0, card_info=plot_card)
     plotted.exiled_cast_mode = PLOT_EXILE_MODE
     game.zones.player_zones[0].exile.extend([foretold, plotted])
-    assert can_cast_foretold(foretell_card, 'main1', True)
-    assert can_cast_plotted(plot_card, 'main1', True)
+    assert can_cast_foretold(foretell_card, _CastTiming(phase='main1', stack_is_empty=True))
+    assert can_cast_plotted(plot_card, _CastTiming(phase='main1', stack_is_empty=True))

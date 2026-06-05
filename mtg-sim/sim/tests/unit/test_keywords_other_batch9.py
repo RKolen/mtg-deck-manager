@@ -17,7 +17,7 @@ from engine.abilities.keywords.other.encore import (
     encore_mana_needed,
     has_encore_card,
 )
-from engine.core.game_object import CardObject, SpellCastPayment, Target
+from engine.core.game_object import CardObject, SpellCastPayment, Target, _AlternateModes
 from engine.game.cast_modifiers import apply_post_cast_modifiers
 from engine.game.helpers import SpellCastContext, spell_on_stack_from_context
 from tests.conftest import (
@@ -65,7 +65,7 @@ def test_casualty_copy_on_stack():
     game = fresh_game()
     spell = make_instant('Shock', cmc=0, mana_cost='', oracle=_CASUALTY_ORACLE)
     card = CardObject(controller_idx=0, owner_idx=0, card_info=spell)
-    context = SpellCastContext(payment=SpellCastPayment(casualty=True))
+    context = SpellCastContext(payment=SpellCastPayment(modes=_AlternateModes(casualty=True)))
     targets = [Target(player_idx=1)]
     game.stack.push(spell_on_stack_from_context(0, card, targets, context))
     logs = apply_post_cast_modifiers(game, 0, card, targets, context)

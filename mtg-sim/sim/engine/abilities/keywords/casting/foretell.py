@@ -7,6 +7,7 @@ import re
 from deck_registry import CardInfo
 from engine.abilities.keywords.casting.alt_cost_mana import alt_cost_mana_needed
 from engine.abilities.keywords.casting.delayed_exile_cast import (
+    _CastTiming,
     DelayedCastCheck,
     cast_from_delayed_exile,
     delayed_exile_cast_error,
@@ -51,15 +52,15 @@ def can_foretell_setup(phase: str, stack_is_empty: bool) -> bool:
     return main_phase_empty_stack(phase, stack_is_empty)
 
 
-def can_cast_foretold(card: CardInfo, phase: str, stack_is_empty: bool) -> bool:
+def can_cast_foretold(card: CardInfo, timing: _CastTiming) -> bool:
     """Return True when a foretold card may be cast."""
     if card.is_land or not has_foretell(card):
         return False
     if 'Instant' in card.type_line:
-        if phase in ('main1', 'main2', 'attack', 'declare_blockers'):
+        if timing.phase in ('main1', 'main2', 'attack', 'declare_blockers'):
             return True
-        return phase in ('main1', 'main2') and stack_is_empty
-    return phase in ('main1', 'main2') and stack_is_empty
+        return timing.phase in ('main1', 'main2') and timing.stack_is_empty
+    return timing.phase in ('main1', 'main2') and timing.stack_is_empty
 
 
 def foretell_setup_error(
@@ -67,13 +68,12 @@ def foretell_setup_error(
     player_idx: int,
     hand_idx: int,
     card_info: CardInfo,
-    phase: str,
-    stack_is_empty: bool,
+    timing: _CastTiming,
 ) -> str | None:
     """Return an error message when foretell setup from hand is illegal."""
     check = DelayedCastCheck(
         card_allowed=has_foretell(card_info),
-        timing_allowed=can_foretell_setup(phase, stack_is_empty),
+        timing_allowed=main_phase_empty_stack(timing.phase, timing.stack_is_empty),
         card_error=f"{card_info.name} does not have foretell",
         timing_error="Cannot foretell now",
     )
@@ -90,13 +90,12 @@ def foretold_cast_error(
     player_idx: int,
     exile_idx: int,
     card_info: CardInfo,
-    phase: str,
-    stack_is_empty: bool,
+    timing: _CastTiming,
 ) -> str | None:
     """Return an error message when casting a foretold card is illegal."""
     check = DelayedCastCheck(
         card_allowed=has_foretell(card_info),
-        timing_allowed=can_cast_foretold(card_info, phase, stack_is_empty),
+        timing_allowed=can_cast_foretold(card_info, timing),
         card_error=f"{card_info.name} does not have foretell",
         timing_error="Cannot cast foretold card now",
     )

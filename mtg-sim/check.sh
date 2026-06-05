@@ -16,4 +16,4 @@ cd "${ROOT}"
 echo "==> pyright (strict, engine only)"
 "${VENV}/bin/pyright" "${SIM}"
 echo "==> pylint (sim + classifier)"
-"${VENV}/bin/pylint" --rcfile=.pylintrc sim/ classifier/classifier.py classifier/main.py
+"${VENV}/bin/pylint" --rcfile=../.pylintrc sim/ classifier/classifier.py classifier/main.py

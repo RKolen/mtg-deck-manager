@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING
 
@@ -134,14 +134,18 @@ def activate_mana_ability(game: GameState, perm: Permanent, spec: ActivatedAbili
     return f"{perm.name} added {{{joined}}}"
 
 
+@dataclass(frozen=True)
+class _ActivationCall:
+    ability_idx: int
+    targets: list[Target] = field(default_factory=list)
+    mana_paid: bool = False
+
+
 def activate_on_stack(
     game: GameState,
     perm: Permanent,
     spec: ActivatedAbilitySpec,
-    ability_idx: int,
-    targets: list[Target] | None = None,
-    *,
-    mana_paid: bool = False,
+    call: _ActivationCall,
 ) -> ActivationResult:
     """Pay costs and put a non-mana activated ability on the stack."""
     if spec.mana_ability:
@@ -152,7 +156,7 @@ def activate_on_stack(
     if requires_tap(spec.cost_text) and perm.tapped:
         return ActivationResult(ok=False, detail="Already tapped")
     mana_needed = activation_mana_value(spec.cost_text)
-    if mana_needed > 0 and not mana_paid:
+    if mana_needed > 0 and not call.mana_paid:
         return ActivationResult(ok=False, detail=f"Need {mana_needed} mana")
     if requires_tap(spec.cost_text):
         perm.tapped = True
@@ -161,9 +165,9 @@ def activate_on_stack(
         controller_idx=perm.controller_idx,
         owner_idx=perm.owner_idx,
         source_permanent_id=perm.obj_id,
-        ability_idx=ability_idx,
+        ability_idx=call.ability_idx,
         effect=effect,
-        targets=targets or [],
+        targets=call.targets,
     ))
     return ActivationResult(ok=True, detail=f"{perm.name} activated", used_stack=True)
 

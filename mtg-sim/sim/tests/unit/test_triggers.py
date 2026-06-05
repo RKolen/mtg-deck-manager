@@ -4,7 +4,7 @@ from engine.core.game_object import Target, TriggeredAbilityOnStack
 from engine.core.game_state import GameState
 from engine.core.turn_structure import Step
 from engine.core.zones import Zone
-from engine.rules.triggers import TriggerKey, is_attacks, is_beginning_of_combat
+from engine.rules.triggers import TriggerKey, TriggerSpec, is_attacks, is_beginning_of_combat
 from engine.rules.triggers import is_beginning_of_upkeep, is_blocks, is_dies
 from engine.rules.triggers import is_draws_card, is_end_step, is_enters_battlefield
 from engine.rules.triggers import is_controller_gains_life, is_leaves_battlefield
@@ -28,7 +28,7 @@ def test_etb_trigger_goes_on_stack_from_game_state_listener():
     game.trigger_registry.register(
         soul_warden,
         TriggerKey.ENTERS_BATTLEFIELD,
-        is_enters_battlefield,
+        TriggerSpec(condition=is_enters_battlefield),
     )
 
     place_on_battlefield(make_creature("Bear", 2, 2), 1, game.zones)
@@ -51,7 +51,7 @@ def test_etb_condition_ignores_non_battlefield_moves():
     game.trigger_registry.register(
         soul_warden,
         TriggerKey.ENTERS_BATTLEFIELD,
-        is_enters_battlefield,
+        TriggerSpec(condition=is_enters_battlefield),
     )
 
     game.zones.leave_battlefield(bear, Zone.GRAVEYARD, "destroy")
@@ -75,12 +75,12 @@ def test_simultaneous_triggers_are_stacked_in_apnap_order():
     game.trigger_registry.register(
         opponent_observer,
         TriggerKey.ENTERS_BATTLEFIELD,
-        is_enters_battlefield,
+        TriggerSpec(condition=is_enters_battlefield),
     )
     game.trigger_registry.register(
         player_observer,
         TriggerKey.ENTERS_BATTLEFIELD,
-        is_enters_battlefield,
+        TriggerSpec(condition=is_enters_battlefield),
     )
 
     place_on_battlefield(make_creature("Bear", 2, 2), 0, game.zones)
@@ -101,7 +101,7 @@ def test_trigger_does_not_fire_after_source_left_battlefield():
     game.trigger_registry.register(
         soul_warden,
         TriggerKey.ENTERS_BATTLEFIELD,
-        is_enters_battlefield,
+        TriggerSpec(condition=is_enters_battlefield),
     )
     game.zones.leave_battlefield(soul_warden, Zone.GRAVEYARD, "destroy")
 
@@ -119,7 +119,7 @@ def test_dies_trigger_goes_on_stack_from_sba_death():
         game.zones,
     )
     bear = place_on_battlefield(make_creature("Bear", 2, 2), 1, game.zones)
-    game.trigger_registry.register(blood_artist, TriggerKey.DIES, is_dies)
+    game.trigger_registry.register(blood_artist, TriggerKey.DIES, TriggerSpec(condition=is_dies))
 
     bear.damage_marked = 2
     game.check_sbas()
@@ -138,7 +138,7 @@ def test_self_dies_trigger_fires_from_own_sba_death():
         0,
         game.zones,
     )
-    game.trigger_registry.register(doomed, TriggerKey.DIES, is_dies)
+    game.trigger_registry.register(doomed, TriggerKey.DIES, TriggerSpec(condition=is_dies))
 
     doomed.damage_marked = 1
     game.check_sbas()
@@ -161,7 +161,7 @@ def test_leaves_battlefield_trigger_goes_on_stack_from_destroy():
     game.trigger_registry.register(
         watcher,
         TriggerKey.LEAVES_BATTLEFIELD,
-        is_leaves_battlefield,
+        TriggerSpec(condition=is_leaves_battlefield),
     )
 
     game.zones.leave_battlefield(bear, Zone.GRAVEYARD, "destroy")
@@ -183,7 +183,7 @@ def test_self_leaves_battlefield_trigger_fires_from_own_departure():
     game.trigger_registry.register(
         traveler,
         TriggerKey.LEAVES_BATTLEFIELD,
-        is_leaves_battlefield,
+        TriggerSpec(condition=is_leaves_battlefield),
     )
 
     game.zones.leave_battlefield(traveler, Zone.GRAVEYARD, "destroy")
@@ -206,7 +206,7 @@ def test_leaves_battlefield_trigger_ignores_non_battlefield_moves():
     game.trigger_registry.register(
         watcher,
         TriggerKey.LEAVES_BATTLEFIELD,
-        is_leaves_battlefield,
+        TriggerSpec(condition=is_leaves_battlefield),
     )
 
     game.zones.draw(card.controller_idx)
@@ -225,7 +225,7 @@ def test_upkeep_trigger_goes_on_stack_from_step_event():
     game.trigger_registry.register(
         shrine,
         TriggerKey.BEGINNING_OF_UPKEEP,
-        is_beginning_of_upkeep,
+        TriggerSpec(condition=is_beginning_of_upkeep),
     )
 
     game.fire_step_triggers(Step.UPKEEP)
@@ -247,7 +247,7 @@ def test_upkeep_trigger_does_not_fire_during_draw_step():
     game.trigger_registry.register(
         shrine,
         TriggerKey.BEGINNING_OF_UPKEEP,
-        is_beginning_of_upkeep,
+        TriggerSpec(condition=is_beginning_of_upkeep),
     )
 
     game.fire_step_triggers(Step.DRAW)
@@ -266,7 +266,7 @@ def test_beginning_of_combat_trigger_goes_on_stack_from_step_event():
     game.trigger_registry.register(
         captain,
         TriggerKey.BEGINNING_OF_COMBAT,
-        is_beginning_of_combat,
+        TriggerSpec(condition=is_beginning_of_combat),
     )
 
     game.fire_step_triggers(Step.BEGIN_COMBAT)
@@ -288,7 +288,7 @@ def test_beginning_of_combat_trigger_does_not_fire_during_upkeep():
     game.trigger_registry.register(
         captain,
         TriggerKey.BEGINNING_OF_COMBAT,
-        is_beginning_of_combat,
+        TriggerSpec(condition=is_beginning_of_combat),
     )
 
     game.fire_step_triggers(Step.UPKEEP)
@@ -307,7 +307,7 @@ def test_end_step_trigger_goes_on_stack_from_step_event():
     game.trigger_registry.register(
         oracle,
         TriggerKey.END_STEP,
-        is_end_step,
+        TriggerSpec(condition=is_end_step),
     )
 
     game.fire_step_triggers(Step.END_STEP)
@@ -329,7 +329,7 @@ def test_end_step_trigger_does_not_fire_during_cleanup():
     game.trigger_registry.register(
         oracle,
         TriggerKey.END_STEP,
-        is_end_step,
+        TriggerSpec(condition=is_end_step),
     )
 
     game.fire_step_triggers(Step.CLEANUP)
@@ -346,7 +346,9 @@ def test_draw_card_trigger_goes_on_stack_from_draw_event():
         game.zones,
     )
     add_to_library(make_card("Drawn Card"), 0, game.zones)
-    game.trigger_registry.register(observer, TriggerKey.DRAWS_CARD, is_draws_card)
+    game.trigger_registry.register(
+        observer, TriggerKey.DRAWS_CARD, TriggerSpec(condition=is_draws_card)
+    )
 
     game.zones.draw(0)
 
@@ -364,7 +366,9 @@ def test_draw_card_trigger_does_not_fire_from_draw_step_event():
         0,
         game.zones,
     )
-    game.trigger_registry.register(observer, TriggerKey.DRAWS_CARD, is_draws_card)
+    game.trigger_registry.register(
+        observer, TriggerKey.DRAWS_CARD, TriggerSpec(condition=is_draws_card)
+    )
 
     game.fire_step_triggers(Step.DRAW)
 
@@ -379,7 +383,9 @@ def test_life_gained_trigger_goes_on_stack_from_gain_life():
         0,
         game.zones,
     )
-    game.trigger_registry.register(observer, TriggerKey.LIFE_GAINED, is_life_gained)
+    game.trigger_registry.register(
+        observer, TriggerKey.LIFE_GAINED, TriggerSpec(condition=is_life_gained)
+    )
 
     game.gain_life(1, 3)
 
@@ -400,7 +406,7 @@ def test_controller_gains_life_trigger_ignores_opponents_life_gain():
     game.trigger_registry.register(
         observer,
         TriggerKey.LIFE_GAINED,
-        is_controller_gains_life,
+        TriggerSpec(condition=is_controller_gains_life),
     )
 
     game.gain_life(1, 3)
@@ -416,7 +422,9 @@ def test_life_gained_trigger_ignores_zero_life_gain():
         0,
         game.zones,
     )
-    game.trigger_registry.register(observer, TriggerKey.LIFE_GAINED, is_life_gained)
+    game.trigger_registry.register(
+        observer, TriggerKey.LIFE_GAINED, TriggerSpec(condition=is_life_gained)
+    )
 
     game.gain_life(0, 0)
 
@@ -436,7 +444,7 @@ def test_combat_damage_trigger_goes_on_stack_from_damage_event():
     game.trigger_registry.register(
         observer,
         TriggerKey.DEALS_COMBAT_DAMAGE,
-        is_deals_combat_damage,
+        TriggerSpec(condition=is_deals_combat_damage),
     )
 
     game.fire_combat_damage_triggers(attacker, 2, damaged_player_idx=1)
@@ -454,7 +462,7 @@ def test_source_deals_combat_damage_trigger_ignores_other_sources():
     game.trigger_registry.register(
         watched,
         TriggerKey.DEALS_COMBAT_DAMAGE,
-        is_source_deals_combat_damage,
+        TriggerSpec(condition=is_source_deals_combat_damage),
     )
 
     game.fire_combat_damage_triggers(other, 2, damaged_player_idx=1)
@@ -474,7 +482,7 @@ def test_combat_damage_trigger_ignores_zero_damage():
     game.trigger_registry.register(
         observer,
         TriggerKey.DEALS_COMBAT_DAMAGE,
-        is_deals_combat_damage,
+        TriggerSpec(condition=is_deals_combat_damage),
     )
 
     game.fire_combat_damage_triggers(attacker, 0, damaged_player_idx=1)
@@ -491,7 +499,9 @@ def test_spell_cast_trigger_goes_on_stack_from_cast_event():
         game.zones,
     )
     spell = add_to_hand(make_instant("Lightning Bolt"), 0, game.zones)
-    game.trigger_registry.register(observer, TriggerKey.SPELL_CAST, is_spell_cast)
+    game.trigger_registry.register(
+        observer, TriggerKey.SPELL_CAST, TriggerSpec(condition=is_spell_cast)
+    )
 
     game.fire_spell_cast_triggers(spell)
 
@@ -520,7 +530,9 @@ def test_spell_cast_trigger_does_not_fire_from_draw_event():
         game.zones,
     )
     add_to_library(make_card("Drawn Card"), 0, game.zones)
-    game.trigger_registry.register(observer, TriggerKey.SPELL_CAST, is_spell_cast)
+    game.trigger_registry.register(
+        observer, TriggerKey.SPELL_CAST, TriggerSpec(condition=is_spell_cast)
+    )
 
     game.zones.draw(0)
 
@@ -539,7 +551,7 @@ def test_noncreature_nonland_spell_cast_trigger_fires_for_own_instant():
     game.trigger_registry.register(
         prowess_creature,
         TriggerKey.SPELL_CAST,
-        is_noncreature_nonland_spell_cast,
+        TriggerSpec(condition=is_noncreature_nonland_spell_cast),
     )
 
     game.fire_spell_cast_triggers(spell)
@@ -561,7 +573,7 @@ def test_noncreature_nonland_spell_cast_trigger_ignores_creatures():
     game.trigger_registry.register(
         prowess_creature,
         TriggerKey.SPELL_CAST,
-        is_noncreature_nonland_spell_cast,
+        TriggerSpec(condition=is_noncreature_nonland_spell_cast),
     )
 
     game.fire_spell_cast_triggers(spell)
@@ -581,7 +593,7 @@ def test_noncreature_nonland_spell_cast_trigger_ignores_opponents_spells():
     game.trigger_registry.register(
         prowess_creature,
         TriggerKey.SPELL_CAST,
-        is_noncreature_nonland_spell_cast,
+        TriggerSpec(condition=is_noncreature_nonland_spell_cast),
     )
 
     game.fire_spell_cast_triggers(spell)
@@ -601,7 +613,7 @@ def test_spell_targeting_source_trigger_fires_for_own_targeted_spell():
     game.trigger_registry.register(
         heroic_creature,
         TriggerKey.SPELL_CAST,
-        is_spell_targeting_source,
+        TriggerSpec(condition=is_spell_targeting_source),
     )
 
     game.fire_spell_cast_triggers(spell, (Target(obj_id=heroic_creature.obj_id),))
@@ -624,7 +636,7 @@ def test_spell_targeting_source_trigger_ignores_other_targets():
     game.trigger_registry.register(
         heroic_creature,
         TriggerKey.SPELL_CAST,
-        is_spell_targeting_source,
+        TriggerSpec(condition=is_spell_targeting_source),
     )
 
     game.fire_spell_cast_triggers(spell, (Target(obj_id=other_creature.obj_id),))
@@ -645,7 +657,7 @@ def test_attack_trigger_goes_on_stack_from_declared_attacker():
         0,
         game.zones,
     )
-    game.trigger_registry.register(raider, TriggerKey.ATTACKS, is_attacks)
+    game.trigger_registry.register(raider, TriggerKey.ATTACKS, TriggerSpec(condition=is_attacks))
 
     game.fire_attack_triggers(attacker)
 
@@ -663,7 +675,7 @@ def test_attack_trigger_does_not_fire_from_upkeep_event():
         0,
         game.zones,
     )
-    game.trigger_registry.register(raider, TriggerKey.ATTACKS, is_attacks)
+    game.trigger_registry.register(raider, TriggerKey.ATTACKS, TriggerSpec(condition=is_attacks))
 
     game.fire_step_triggers(Step.UPKEEP)
 
@@ -688,7 +700,7 @@ def test_block_trigger_goes_on_stack_from_declared_blocker():
         1,
         game.zones,
     )
-    game.trigger_registry.register(sentry, TriggerKey.BLOCKS, is_blocks)
+    game.trigger_registry.register(sentry, TriggerKey.BLOCKS, TriggerSpec(condition=is_blocks))
 
     game.fire_block_triggers(blocker, attacker)
 
@@ -711,7 +723,7 @@ def test_block_trigger_does_not_fire_from_attack_event():
         1,
         game.zones,
     )
-    game.trigger_registry.register(sentry, TriggerKey.BLOCKS, is_blocks)
+    game.trigger_registry.register(sentry, TriggerKey.BLOCKS, TriggerSpec(condition=is_blocks))
 
     game.fire_attack_triggers(attacker)
 

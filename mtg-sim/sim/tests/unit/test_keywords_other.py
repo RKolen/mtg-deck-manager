@@ -8,7 +8,7 @@ from engine.abilities.keywords.other.affinity import (
 )
 from engine.abilities.keywords.other.etb import apply_etb_other_abilities
 from engine.cards.oracle_parse import is_affordable, mana_needed_to_cast
-from tests.conftest import fresh_game, make_artifact, make_card, place_on_battlefield
+from tests.conftest import _CardStats, fresh_game, make_artifact, make_card, place_on_battlefield
 
 _LIVING_WEAPON_ORACLE = (
     'Living weapon (When this Equipment enters, create a 0/0 black Germ '
@@ -47,7 +47,7 @@ def test_affinity_reduces_cast_cost():
         place_on_battlefield(make_artifact('Vault', oracle=''), 0, game.zones)
     card = make_card(
         'Frogmite',
-        cmc=4.0,
+        stats=_CardStats(cmc=4.0, pt="0/0"),
         mana_cost='{4}',
         oracle=_AFFINITY_ORACLE,
     )

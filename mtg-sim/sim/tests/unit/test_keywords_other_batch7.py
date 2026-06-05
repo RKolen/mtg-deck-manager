@@ -16,6 +16,7 @@ from engine.core.turn_structure import TurnRunner
 from engine.core.zones import ZoneManager
 from engine.rules.stack import Stack
 from tests.conftest import (
+    _CardStats,
     fresh_game,
     make_artifact,
     make_card,
@@ -33,7 +34,7 @@ _AFFINITY_ORACLE = (
 def _affinity_card():
     return make_card(
         'Frogmite',
-        cmc=4.0,
+        stats=_CardStats(cmc=4.0, pt="0/0"),
         mana_cost='{4}',
         oracle=_AFFINITY_ORACLE,
     )

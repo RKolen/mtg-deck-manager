@@ -15,7 +15,7 @@ from engine.abilities.keywords.casting.cleave import supports_cleave_copies
 from engine.abilities.keywords.casting.conspire import supports_conspire_copies
 from engine.abilities.keywords.casting.replicate import supports_replicate_copies
 from engine.abilities.keywords.casting.storm import storm_copy_count, supports_storm_copies
-from engine.core.game_object import CardObject, SpellStackCopyFlags, Target
+from engine.core.game_object import CardObject, SpellStackCopyFlags, Target, _SpellCopy
 from engine.core.game_state import GameState
 from engine.game.helpers import (
     SpellCastContext,
@@ -65,7 +65,7 @@ def _push_storm_copies(
     if not supports_storm_copies(card_info):
         return 0
     copies = storm_copy_count(game.players[player_idx].spells_cast_this_turn)
-    flags = SpellStackCopyFlags(storm=True)
+    flags = SpellStackCopyFlags(copy_source=_SpellCopy(storm=True))
     for _ in range(copies):
         game.stack.push(spell_on_stack_from_context(
             player_idx,
@@ -89,7 +89,7 @@ def _push_replicate_copies(
     times = context.replicate_times
     if not supports_replicate_copies(card_info) or times <= 0:
         return 0
-    flags = SpellStackCopyFlags(replicate=True)
+    flags = SpellStackCopyFlags(copy_source=_SpellCopy(replicate=True))
     for _ in range(times):
         game.stack.push(spell_on_stack_from_context(
             player_idx,

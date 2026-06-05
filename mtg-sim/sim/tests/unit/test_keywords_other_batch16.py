@@ -6,6 +6,7 @@ from engine.abilities.keywords.casting.cast_mana import (
     AnnounceCastManaOptions,
     CastManaModifiers,
     CastManaTiming,
+    _TimingAvailability,
     resolve_announce_cast_mana,
 )
 from engine.game.face_alternate_cast import FaceAlternateCastFlags
@@ -36,6 +37,8 @@ from engine.core.game_object import (
     SpellAlternateCast,
     SpellOnStack,
     spell_exiles_from_graveyard_cast,
+    _GraveyardAlts,
+    _SpellCasting,
 )
 from engine.game import create_game
 from engine.game.helpers import HandCastContext, card_to_client
@@ -147,7 +150,10 @@ def test_spectacle_and_morph_announce_mana():
     spec_mana, _ = resolve_announce_cast_mana(
         spec_card,
         AnnounceCastManaOptions(
-            timing=CastManaTiming(cast_for_spectacle=True, spectacle_available=True),
+            timing=CastManaTiming(
+                cast_for_spectacle=True,
+                available=_TimingAvailability(spectacle_available=True),
+            ),
         ),
     )
     morph_mana, _ = resolve_announce_cast_mana(
@@ -180,7 +186,9 @@ def test_game_harmonize_and_turn_up_morph():
         controller_idx=0,
         owner_idx=0,
         source=gy_card,
-        alternate=SpellAlternateCast(harmonize=True),
+        casting=_SpellCasting(alternate=SpellAlternateCast(
+            graveyard=_GraveyardAlts(harmonize=True)
+        ),),
     )
     assert spell_exiles_from_graveyard_cast(spell)
 

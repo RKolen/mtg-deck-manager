@@ -9,6 +9,14 @@ from engine.core.zones import ZoneManager
 
 
 @dataclass(frozen=True)
+class _CastTiming:
+    """Encapsulates phase and stack state for timing checks."""
+
+    phase: str
+    stack_is_empty: bool
+
+
+@dataclass(frozen=True)
 class DelayedCastCheck:
     """Validation inputs for a delayed-cast setup or resolution."""
 

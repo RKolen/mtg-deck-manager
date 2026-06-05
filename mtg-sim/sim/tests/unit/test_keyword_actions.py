@@ -22,7 +22,11 @@ from engine.abilities.keywords.actions import (
     surveil_cards,
 )
 from engine.abilities.keywords.actions.detect import keyword_actions_in_oracle
-from engine.abilities.keywords.actions.resolve import _HANDLERS
+from engine.abilities.keywords.actions.resolve import (
+    _ActionExtras,
+    _ActionTargets,
+    _HANDLERS,
+)
 from engine.core.game_object import CardObject, effective_power
 from tests.conftest import fresh_game, make_creature, make_instant, place_on_battlefield
 
@@ -150,7 +154,7 @@ def test_resolve_mill_spell_on_stack():
         game=game,
         controller_idx=0,
         oracle_text='Target player mills four cards.',
-        draw_fn=draw_cards,
+        extras=_ActionExtras(draw_fn=draw_cards),
     ))
     assert 'milled 4' in detail
     assert len(game.zones.player_zones[1].graveyard) == 4
@@ -272,7 +276,7 @@ def test_resolve_blight_puts_counter():
         game=game,
         controller_idx=0,
         oracle_text='Blight',
-        target_creature_uid=str(target.obj_id),
+        targets=_ActionTargets(target_creature_uid=str(target.obj_id)),
     ))
     assert 'blighted' in detail
     assert target.counters.get('blight') == 1

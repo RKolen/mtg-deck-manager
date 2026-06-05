@@ -60,6 +60,15 @@ def mana_of(color: str) -> Mana:
 # ---------------------------------------------------------------------------
 
 @dataclass
+class _HybridCosts:
+    """Grouped hybrid mana cost fields for ManaCost."""
+
+    hybrid: list[frozenset[str]] = field(default_factory=list)
+    two_hybrid: list[str] = field(default_factory=list)
+    phyrexian: list[str] = field(default_factory=list)
+
+
+@dataclass
 class ManaCost:
     """Structured representation of a Scryfall mana cost string.
 
@@ -71,11 +80,24 @@ class ManaCost:
     generic: int = 0
     colorless: int = 0
     pips: dict[str, int] = field(default_factory=dict)
-    hybrid: list[frozenset[str]] = field(default_factory=list)
-    two_hybrid: list[str] = field(default_factory=list)
-    phyrexian: list[str] = field(default_factory=list)
+    special: _HybridCosts = field(default_factory=_HybridCosts)
     x_count: int = 0
     snow: int = 0
+
+    @property
+    def hybrid(self) -> list[frozenset[str]]:
+        """Hybrid mana costs for this spell."""
+        return self.special.hybrid
+
+    @property
+    def two_hybrid(self) -> list[str]:
+        """Two-hybrid mana costs for this spell."""
+        return self.special.two_hybrid
+
+    @property
+    def phyrexian(self) -> list[str]:
+        """Phyrexian mana costs for this spell."""
+        return self.special.phyrexian
 
     @staticmethod
     def parse(cost_string: str) -> ManaCost:

@@ -50,8 +50,19 @@ from engine.abilities.keywords.casting import (
     retrace_life_cost,
     retrace_mana_needed,
 )
-from engine.core.game_object import CardObject, SpellAlternateCast
-from engine.game.cast_flow import ExileCastRequest, GraveyardCastRequest
+from engine.abilities.keywords.casting.delayed_exile_cast import _CastTiming
+from engine.core.game_object import (
+    CardObject,
+    SpellAlternateCast,
+    _GraveyardAlts,
+    _ExileAlts,
+)
+from engine.game.cast_flow import (
+    ExileCastRequest,
+    GraveyardCastRequest,
+    _GraveyardCheck,
+    _TargetRef,
+)
 from engine.game.helpers import require_card_info
 from engine.game.spell_stack_placement import SpellStackPlacementMixin
 
@@ -92,19 +103,20 @@ class GraveyardCastMixin(SpellStackPlacementMixin):
         """Pay flashback cost and cast a card from the graveyard."""
         return self._announce_graveyard_spell(
             graveyard_idx,
-            target_uid_str,
-            target_player_idx,
+            _TargetRef(target_uid_str, target_player_idx),
             auto_resolve,
             GraveyardCastRequest(
                 player_idx=0,
-                has_keyword=has_flashback,
-                keyword_error=lambda c: f"{c.name} does not have flashback",
-                can_cast=lambda c: can_cast_via_flashback(
-                    c, self.phase, self.state.stack.is_empty,
+                check=_GraveyardCheck(
+                    has_keyword=has_flashback,
+                    keyword_error=lambda c: f"{c.name} does not have flashback",
+                    can_cast=lambda c: can_cast_via_flashback(
+                        c, self.phase, self.state.stack.is_empty,
+                    ),
+                    timing_error="Cannot cast flashback now",
                 ),
-                timing_error="Cannot cast flashback now",
                 mana_cost=flashback_mana_needed,
-                alternate=SpellAlternateCast(flashback=True),
+                alternate=SpellAlternateCast(graveyard=_GraveyardAlts(flashback=True)),
                 log_action="flashback",
                 log_detail=lambda c: f"{c.name} on stack",
             ),
@@ -113,8 +125,7 @@ class GraveyardCastMixin(SpellStackPlacementMixin):
     def _announce_harmonize_cast(
         self,
         graveyard_idx: int,
-        target_uid_str: str | None,
-        target_player_idx: int | None,
+        target_ref: _TargetRef,
         auto_resolve: bool,
         harmonize_creature_ids: list[int] | None = None,
     ) -> dict:
@@ -150,19 +161,20 @@ class GraveyardCastMixin(SpellStackPlacementMixin):
 
         return self._announce_graveyard_spell(
             graveyard_idx,
-            target_uid_str,
-            target_player_idx,
+            target_ref,
             auto_resolve,
             GraveyardCastRequest(
                 player_idx=0,
-                has_keyword=has_harmonize,
-                keyword_error=lambda c: f"{c.name} does not have harmonize",
-                can_cast=lambda c: can_cast_via_harmonize(
-                    c, self.phase, self.state.stack.is_empty,
+                check=_GraveyardCheck(
+                    has_keyword=has_harmonize,
+                    keyword_error=lambda c: f"{c.name} does not have harmonize",
+                    can_cast=lambda c: can_cast_via_harmonize(
+                        c, self.phase, self.state.stack.is_empty,
+                    ),
+                    timing_error="Cannot cast harmonize now",
                 ),
-                timing_error="Cannot cast harmonize now",
                 mana_cost=harmonize_mana,
-                alternate=SpellAlternateCast(harmonize=True),
+                alternate=SpellAlternateCast(graveyard=_GraveyardAlts(harmonize=True)),
                 log_action="harmonize",
                 log_detail=harmonize_detail,
                 prepay=prepay_harmonize,
@@ -179,19 +191,20 @@ class GraveyardCastMixin(SpellStackPlacementMixin):
         """Pay disturb cost and cast a creature from the graveyard."""
         return self._announce_graveyard_spell(
             graveyard_idx,
-            target_uid_str,
-            target_player_idx,
+            _TargetRef(target_uid_str, target_player_idx),
             auto_resolve,
             GraveyardCastRequest(
                 player_idx=0,
-                has_keyword=has_disturb,
-                keyword_error=lambda c: f"{c.name} does not have disturb",
-                can_cast=lambda c: can_cast_via_disturb(
-                    c, self.phase, self.state.stack.is_empty,
+                check=_GraveyardCheck(
+                    has_keyword=has_disturb,
+                    keyword_error=lambda c: f"{c.name} does not have disturb",
+                    can_cast=lambda c: can_cast_via_disturb(
+                        c, self.phase, self.state.stack.is_empty,
+                    ),
+                    timing_error="Cannot cast disturb now",
                 ),
-                timing_error="Cannot cast disturb now",
                 mana_cost=disturb_mana_needed,
-                alternate=SpellAlternateCast(disturb=True),
+                alternate=SpellAlternateCast(graveyard=_GraveyardAlts(disturb=True)),
                 log_action="disturb",
                 log_detail=lambda c: f"{c.name} on stack (disturb)",
             ),
@@ -207,19 +220,20 @@ class GraveyardCastMixin(SpellStackPlacementMixin):
         """Pay mana and cast an aftermath card from the graveyard."""
         return self._announce_graveyard_spell(
             graveyard_idx,
-            target_uid_str,
-            target_player_idx,
+            _TargetRef(target_uid_str, target_player_idx),
             auto_resolve,
             GraveyardCastRequest(
                 player_idx=0,
-                has_keyword=has_aftermath,
-                keyword_error=lambda c: f"{c.name} does not have aftermath",
-                can_cast=lambda c: can_cast_aftermath(
-                    c, self.phase, self.state.stack.is_empty,
+                check=_GraveyardCheck(
+                    has_keyword=has_aftermath,
+                    keyword_error=lambda c: f"{c.name} does not have aftermath",
+                    can_cast=lambda c: can_cast_aftermath(
+                        c, self.phase, self.state.stack.is_empty,
+                    ),
+                    timing_error="Cannot cast aftermath now",
                 ),
-                timing_error="Cannot cast aftermath now",
                 mana_cost=aftermath_mana_needed,
-                alternate=SpellAlternateCast(aftermath=True),
+                alternate=SpellAlternateCast(graveyard=_GraveyardAlts(aftermath=True)),
                 log_action="aftermath",
                 log_detail=lambda c: f"{c.name} on stack",
             ),
@@ -228,8 +242,7 @@ class GraveyardCastMixin(SpellStackPlacementMixin):
     def _announce_escape_cast(
         self,
         graveyard_idx: int,
-        target_uid_str: str | None,
-        target_player_idx: int | None,
+        target_ref: _TargetRef,
         auto_resolve: bool,
         escape_exile_indices: list[int] | None = None,
     ) -> dict:
@@ -272,19 +285,20 @@ class GraveyardCastMixin(SpellStackPlacementMixin):
 
         return self._announce_graveyard_spell(
             graveyard_idx,
-            target_uid_str,
-            target_player_idx,
+            target_ref,
             auto_resolve,
             GraveyardCastRequest(
                 player_idx=0,
-                has_keyword=has_escape,
-                keyword_error=lambda c: f"{c.name} does not have escape",
-                can_cast=lambda c: can_cast_via_escape(
-                    c, self.phase, self.state.stack.is_empty,
+                check=_GraveyardCheck(
+                    has_keyword=has_escape,
+                    keyword_error=lambda c: f"{c.name} does not have escape",
+                    can_cast=lambda c: can_cast_via_escape(
+                        c, self.phase, self.state.stack.is_empty,
+                    ),
+                    timing_error="Cannot cast escape now",
                 ),
-                timing_error="Cannot cast escape now",
                 mana_cost=escape_mana_needed,
-                alternate=SpellAlternateCast(escape=True),
+                alternate=SpellAlternateCast(graveyard=_GraveyardAlts(escape=True)),
                 log_action="escape",
                 log_detail=escape_detail,
                 prepay=prepay_escape,
@@ -294,8 +308,7 @@ class GraveyardCastMixin(SpellStackPlacementMixin):
     def _announce_jump_start_cast(
         self,
         graveyard_idx: int,
-        target_uid_str: str | None,
-        target_player_idx: int | None,
+        target_ref: _TargetRef,
         auto_resolve: bool,
         discard_hand_idx: int | None = None,
     ) -> dict:
@@ -321,19 +334,20 @@ class GraveyardCastMixin(SpellStackPlacementMixin):
 
         return self._announce_graveyard_spell(
             graveyard_idx,
-            target_uid_str,
-            target_player_idx,
+            target_ref,
             auto_resolve,
             GraveyardCastRequest(
                 player_idx=0,
-                has_keyword=has_jump_start,
-                keyword_error=lambda c: f"{c.name} does not have jump-start",
-                can_cast=lambda c: can_cast_via_jump_start(
-                    c, self.phase, self.state.stack.is_empty,
+                check=_GraveyardCheck(
+                    has_keyword=has_jump_start,
+                    keyword_error=lambda c: f"{c.name} does not have jump-start",
+                    can_cast=lambda c: can_cast_via_jump_start(
+                        c, self.phase, self.state.stack.is_empty,
+                    ),
+                    timing_error="Cannot cast jump-start now",
                 ),
-                timing_error="Cannot cast jump-start now",
                 mana_cost=jump_start_mana_needed,
-                alternate=SpellAlternateCast(jump_start=True),
+                alternate=SpellAlternateCast(graveyard=_GraveyardAlts(jump_start=True)),
                 log_action="jump-start",
                 log_detail=jump_detail,
                 prepay=prepay_jump,
@@ -343,8 +357,7 @@ class GraveyardCastMixin(SpellStackPlacementMixin):
     def _announce_retrace_cast(
         self,
         graveyard_idx: int,
-        target_uid_str: str | None,
-        target_player_idx: int | None,
+        target_ref: _TargetRef,
         auto_resolve: bool,
         discard_hand_idx: int | None = None,
     ) -> dict:
@@ -374,19 +387,20 @@ class GraveyardCastMixin(SpellStackPlacementMixin):
 
         return self._announce_graveyard_spell(
             graveyard_idx,
-            target_uid_str,
-            target_player_idx,
+            target_ref,
             auto_resolve,
             GraveyardCastRequest(
                 player_idx=0,
-                has_keyword=has_retrace,
-                keyword_error=lambda c: f"{c.name} does not have retrace",
-                can_cast=lambda c: can_cast_via_retrace(
-                    c, self.phase, self.state.stack.is_empty,
+                check=_GraveyardCheck(
+                    has_keyword=has_retrace,
+                    keyword_error=lambda c: f"{c.name} does not have retrace",
+                    can_cast=lambda c: can_cast_via_retrace(
+                        c, self.phase, self.state.stack.is_empty,
+                    ),
+                    timing_error="Cannot cast retrace now",
                 ),
-                timing_error="Cannot cast retrace now",
                 mana_cost=retrace_mana_with_life,
-                alternate=SpellAlternateCast(retrace=True),
+                alternate=SpellAlternateCast(graveyard=_GraveyardAlts(retrace=True)),
                 log_action="retrace",
                 log_detail=retrace_detail,
                 prepay=prepay_retrace,
@@ -404,8 +418,7 @@ class GraveyardCastMixin(SpellStackPlacementMixin):
             0,
             hand_idx,
             card_info,
-            self.phase,
-            self.state.stack.is_empty,
+            _CastTiming(phase=self.phase, stack_is_empty=self.state.stack.is_empty),
         )
         if setup_err:
             return self._client_error(setup_err)
@@ -433,8 +446,7 @@ class GraveyardCastMixin(SpellStackPlacementMixin):
             0,
             exile_idx,
             card_info,
-            self.phase,
-            self.state.stack.is_empty,
+            _CastTiming(phase=self.phase, stack_is_empty=self.state.stack.is_empty),
         )
         if cast_err:
             return self._client_error(cast_err)
@@ -448,10 +460,12 @@ class GraveyardCastMixin(SpellStackPlacementMixin):
                 ExileCastRequest(
                     card=card,
                     card_info=card_info,
-                    target_uid_str=target_uid_str,
-                    target_player_idx=target_player_idx,
+                    target=_TargetRef(
+                        target_uid_str=target_uid_str,
+                        target_player_idx=target_player_idx,
+                    ),
                     auto_resolve=auto_resolve,
-                    alternate=SpellAlternateCast(foretell=True),
+                    alternate=SpellAlternateCast(exile=_ExileAlts(foretell=True)),
                     log_detail=f"{card_info.name} on stack (foretell)",
                     life_cost=life_cost,
                 ),
@@ -469,8 +483,7 @@ class GraveyardCastMixin(SpellStackPlacementMixin):
             0,
             hand_idx,
             card_info,
-            self.phase,
-            self.state.stack.is_empty,
+            _CastTiming(phase=self.phase, stack_is_empty=self.state.stack.is_empty),
         )
         if setup_err:
             return self._client_error(setup_err)
@@ -495,8 +508,7 @@ class GraveyardCastMixin(SpellStackPlacementMixin):
             0,
             exile_idx,
             card_info,
-            self.phase,
-            self.state.stack.is_empty,
+            _CastTiming(phase=self.phase, stack_is_empty=self.state.stack.is_empty),
         )
         if cast_err:
             return self._client_error(cast_err)
@@ -506,11 +518,144 @@ class GraveyardCastMixin(SpellStackPlacementMixin):
                 ExileCastRequest(
                     card=card,
                     card_info=card_info,
-                    target_uid_str=target_uid_str,
-                    target_player_idx=target_player_idx,
+                    target=_TargetRef(
+                        target_uid_str=target_uid_str,
+                        target_player_idx=target_player_idx,
+                    ),
                     auto_resolve=auto_resolve,
-                    alternate=SpellAlternateCast(plot=True),
+                    alternate=SpellAlternateCast(exile=_ExileAlts(plot=True)),
                     log_detail=f"{card_info.name} on stack (plot)",
                 ),
             ),
+        )
+
+    def action_cast_disturb(
+        self,
+        graveyard_idx: int,
+        target_uid: str | None = None,
+        target_player: int | None = None,
+    ) -> dict:
+        """Cast a creature from the graveyard for its disturb cost."""
+        return self._announce_disturb_cast(
+            graveyard_idx,
+            target_uid,
+            target_player,
+            auto_resolve=True,
+        )
+
+    def action_cast_flashback(
+        self,
+        graveyard_idx: int,
+        target_uid: str | None = None,
+        target_player: int | None = None,
+    ) -> dict:
+        """Cast a card from the graveyard for its flashback cost."""
+        return self._announce_flashback_cast(
+            graveyard_idx,
+            target_uid,
+            target_player,
+            auto_resolve=True,
+        )
+
+    def action_cast_harmonize(
+        self,
+        graveyard_idx: int,
+        target_uid: str | None = None,
+        target_player: int | None = None,
+        harmonize_creature_ids: list[str] | None = None,
+    ) -> dict:
+        """Cast a card from the graveyard for its harmonize cost."""
+        ids = [int(uid) for uid in (harmonize_creature_ids or [])]
+        return self._announce_harmonize_cast(
+            graveyard_idx,
+            _TargetRef(target_uid, target_player),
+            auto_resolve=True,
+            harmonize_creature_ids=ids,
+        )
+
+    def action_cast_escape(
+        self,
+        graveyard_idx: int,
+        target_uid: str | None = None,
+        target_player: int | None = None,
+        escape_exile_indices: list[int] | None = None,
+    ) -> dict:
+        """Cast a card from the graveyard for its escape cost."""
+        return self._announce_escape_cast(
+            graveyard_idx,
+            _TargetRef(target_uid, target_player),
+            auto_resolve=True,
+            escape_exile_indices=escape_exile_indices,
+        )
+
+    def action_cast_jump_start(
+        self,
+        graveyard_idx: int,
+        target_uid: str | None = None,
+        target_player: int | None = None,
+        discard_hand_idx: int | None = None,
+    ) -> dict:
+        """Cast a card from the graveyard for its jump-start cost."""
+        return self._announce_jump_start_cast(
+            graveyard_idx,
+            _TargetRef(target_uid, target_player),
+            auto_resolve=True,
+            discard_hand_idx=discard_hand_idx,
+        )
+
+    def action_cast_retrace(
+        self,
+        graveyard_idx: int,
+        target_uid: str | None = None,
+        target_player: int | None = None,
+        discard_hand_idx: int | None = None,
+    ) -> dict:
+        """Cast a card from the graveyard for its mana cost and a discarded land."""
+        return self._announce_retrace_cast(
+            graveyard_idx,
+            _TargetRef(target_uid, target_player),
+            auto_resolve=True,
+            discard_hand_idx=discard_hand_idx,
+        )
+
+    def action_cast_foretell(
+        self,
+        exile_idx: int,
+        target_uid: str | None = None,
+        target_player: int | None = None,
+    ) -> dict:
+        """Cast a foretold card from exile for its foretell cost."""
+        return self._announce_cast_foretell(
+            exile_idx,
+            target_uid,
+            target_player,
+            auto_resolve=True,
+        )
+
+    def action_cast_plot(
+        self,
+        exile_idx: int,
+        target_uid: str | None = None,
+        target_player: int | None = None,
+    ) -> dict:
+        """Cast a plotted sorcery from exile without paying mana."""
+        return self._announce_cast_plot(
+            exile_idx,
+            target_uid,
+            target_player,
+            auto_resolve=True,
+        )
+
+    def action_cast_aftermath(
+        self,
+        graveyard_idx: int,
+        target_uid: str | None = None,
+        target_player: int | None = None,
+    ) -> dict:
+        """Cast an aftermath card from the graveyard during a main phase."""
+        return self._announce_aftermath_cast(
+            graveyard_idx,
+            target_uid,
+            target_player,
+            auto_resolve=True,
         )

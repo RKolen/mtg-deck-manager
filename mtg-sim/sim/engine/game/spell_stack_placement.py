@@ -7,6 +7,8 @@ from engine.game.cast_flow import (
     AnnounceCastCompletion,
     ExileCastRequest,
     GraveyardCastRequest,
+    _CastLog,
+    _TargetRef,
     not_enough_mana_message,
     split_mana_cost,
 )
@@ -27,13 +29,12 @@ class SpellStackPlacementMixin(GameRuntimeMixin):
         self,
         player_idx: int,
         card: CardObject,
-        target_uid_str: str | None,
-        target_player_idx: int | None,
+        target_ref: _TargetRef,
         context: SpellCastContext | None = None,
     ) -> list[Target]:
         """Move a cast spell onto the stack."""
         opts = context or SpellCastContext()
-        targets = targets_from_request(target_uid_str, target_player_idx)
+        targets = targets_from_request(target_ref.target_uid_str, target_ref.target_player_idx)
         if opts.from_graveyard:
             self.state.zones.cast_from_graveyard(card, player_idx)
         elif not opts.from_exile:
@@ -79,10 +80,12 @@ class SpellStackPlacementMixin(GameRuntimeMixin):
                 alternate=request.alternate,
                 from_exile=True,
             ),
-            log_action="cast",
-            log_detail=request.log_detail,
-            auto_resolve=request.auto_resolve,
-            life_cost=request.life_cost,
+            log_opts=_CastLog(
+                log_action="cast",
+                log_detail=request.log_detail,
+                auto_resolve=request.auto_resolve,
+                life_cost=request.life_cost,
+            ),
         )
 
     def _complete_announce_cast(self, completion: AnnounceCastCompletion) -> dict:
@@ -95,8 +98,7 @@ class SpellStackPlacementMixin(GameRuntimeMixin):
         targets = self._put_spell_on_stack(
             player_idx,
             card,
-            completion.target_uid_str,
-            completion.target_player_idx,
+            _TargetRef(completion.target_uid_str, completion.target_player_idx),
             context=completion.context,
         )
         actor = "player" if player_idx == 0 else "opponent"
@@ -109,8 +111,7 @@ class SpellStackPlacementMixin(GameRuntimeMixin):
     def _announce_graveyard_spell(
         self,
         graveyard_idx: int,
-        target_uid_str: str | None,
-        target_player_idx: int | None,
+        target_ref: _TargetRef,
         auto_resolve: bool,
         request: GraveyardCastRequest,
     ) -> dict:
@@ -142,15 +143,17 @@ class SpellStackPlacementMixin(GameRuntimeMixin):
                 card=card,
                 card_info=card_info,
                 player_idx=request.player_idx,
-                target_uid_str=target_uid_str,
-                target_player_idx=target_player_idx,
+                target_uid_str=target_ref.target_uid_str,
+                target_player_idx=target_ref.target_player_idx,
                 context=SpellCastContext(
                     alternate=request.alternate,
                     from_graveyard=True,
                 ),
-                log_action=request.log_action,
-                log_detail=detail,
-                auto_resolve=auto_resolve,
-                life_cost=life_cost,
+                log_opts=_CastLog(
+                    log_action=request.log_action,
+                    log_detail=detail,
+                    auto_resolve=auto_resolve,
+                    life_cost=life_cost,
+                ),
             ),
         )

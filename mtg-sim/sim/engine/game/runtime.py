@@ -142,16 +142,19 @@ class GameRuntimeMixin:
                 cards.append(entry)
         return cards
 
+    def _is_card_castable(self, card: CardObject) -> bool:
+        """Return whether the player can currently afford to cast the card."""
+        return is_affordable(
+            require_card_info(card),
+            self._available_mana(0),
+            self.state.zones,
+            0,
+        )
+
     def _has_castable_instant(self) -> bool:
         """Return whether the player can cast an instant in the current window."""
         return any(
-            has_instant_timing(require_card_info(card))
-            and is_affordable(
-                require_card_info(card),
-                self._available_mana(0),
-                self.state.zones,
-                0,
-            )
+            has_instant_timing(require_card_info(card)) and self._is_card_castable(card)
             for card in self._zones(0).hand
             if isinstance(card, CardObject) and not is_land(card)
         )

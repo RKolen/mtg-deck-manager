@@ -2,6 +2,7 @@
 
 from engine.core.game_object import CardObject
 from tests.conftest import (
+    _CardStats,
     add_to_hand,
     fresh_game,
     fresh_zones,
@@ -33,7 +34,8 @@ def test_to_client_hides_opponent_hand_contents():
 def test_to_client_serialises_battlefield_permanents():
     """Battlefield permanents use Permanent.to_dict for public board state."""
     game = fresh_game()
-    perm = place_on_battlefield(make_card("Elite Vanguard", pt="2/1"), 0, game.zones)
+    perm = place_on_battlefield(make_card("Elite Vanguard", stats=_CardStats(pt="2/1")),
+                                 0, game.zones)
     data = game.to_client()
     assert data["battlefield"]["player"][0]["objId"] == perm.obj_id
     assert data["battlefield"]["player"][0]["name"] == "Elite Vanguard"

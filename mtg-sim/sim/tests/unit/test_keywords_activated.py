@@ -5,6 +5,7 @@ from __future__ import annotations
 from engine.abilities import activated
 from engine.core.game_object import CardObject
 from tests.conftest import (
+    _CardStats,
     fresh_game,
     make_card,
     make_creature,
@@ -50,8 +51,8 @@ def test_crew_marks_vehicle_crewed():
         make_card(
             "Sky Skiff",
             type_line="Artifact — Vehicle",
-            pt="3/3",
             oracle="Crew 1",
+            stats=_CardStats(pt="3/3"),
         ),
         0,
         game.zones,

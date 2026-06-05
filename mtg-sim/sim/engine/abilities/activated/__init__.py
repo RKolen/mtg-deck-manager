@@ -31,6 +31,7 @@ from engine.abilities.activated.core import (
     ActivationResult,
     ActivationSpeed,
     ActivatedAbilitySpec,
+    _ActivationCall,
     activate_equip,
     activate_mana_ability,
     activate_on_stack,

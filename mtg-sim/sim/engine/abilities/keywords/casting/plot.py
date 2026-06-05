@@ -6,6 +6,7 @@ import re
 
 from deck_registry import CardInfo
 from engine.abilities.keywords.casting.delayed_exile_cast import (
+    _CastTiming,
     DelayedCastCheck,
     cast_from_delayed_exile,
     delayed_exile_cast_error,
@@ -37,9 +38,11 @@ def can_plot_setup(phase: str, stack_is_empty: bool) -> bool:
     return main_phase_empty_stack(phase, stack_is_empty)
 
 
-def can_cast_plotted(card: CardInfo, phase: str, stack_is_empty: bool) -> bool:
+def can_cast_plotted(card: CardInfo, timing: _CastTiming) -> bool:
     """Return True when a plotted sorcery may be cast."""
-    return is_plottable_sorcery(card) and main_phase_empty_stack(phase, stack_is_empty)
+    return is_plottable_sorcery(card) and main_phase_empty_stack(
+        timing.phase, timing.stack_is_empty
+    )
 
 
 def plot_setup_error(
@@ -47,13 +50,12 @@ def plot_setup_error(
     player_idx: int,
     hand_idx: int,
     card_info: CardInfo,
-    phase: str,
-    stack_is_empty: bool,
+    timing: _CastTiming,
 ) -> str | None:
     """Return an error message when plotting from hand is illegal."""
     check = DelayedCastCheck(
         card_allowed=is_plottable_sorcery(card_info),
-        timing_allowed=can_plot_setup(phase, stack_is_empty),
+        timing_allowed=main_phase_empty_stack(timing.phase, timing.stack_is_empty),
         card_error=f"{card_info.name} cannot be plotted",
         timing_error="Cannot plot now",
     )
@@ -70,13 +72,12 @@ def plotted_cast_error(
     player_idx: int,
     exile_idx: int,
     card_info: CardInfo,
-    phase: str,
-    stack_is_empty: bool,
+    timing: _CastTiming,
 ) -> str | None:
     """Return an error message when casting a plotted card is illegal."""
     check = DelayedCastCheck(
         card_allowed=is_plottable_sorcery(card_info),
-        timing_allowed=can_cast_plotted(card_info, phase, stack_is_empty),
+        timing_allowed=can_cast_plotted(card_info, timing),
         card_error=f"{card_info.name} cannot be plotted",
         timing_error="Cannot cast plotted card now",
     )

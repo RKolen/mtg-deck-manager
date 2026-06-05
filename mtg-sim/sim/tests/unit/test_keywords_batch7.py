@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 from engine.abilities.activated.bloodrush import apply_bloodrush, has_bloodrush
-from engine.abilities.keywords.actions.resolve import _HANDLERS, resolve_spell_keyword_actions
-from engine.abilities.keywords.actions.resolve import ActionContext
+from engine.abilities.keywords.actions.resolve import (
+    _HANDLERS,
+    _ActionTargets,
+    ActionContext,
+    resolve_spell_keyword_actions,
+)
 from engine.abilities.keywords.casting.evoke import (
     evoke_mana_needed,
     has_evoke,
@@ -12,7 +16,7 @@ from engine.abilities.keywords.casting.evoke import (
 )
 from engine.abilities.keywords.other.etb import apply_etb_other_abilities
 from engine.game.cast_context import CastAnnounceOptions, HandAlternateCastChoices
-from engine.game.cast_announce_validate import validate_announce_cast
+from engine.game.cast_announce_validate import validate_announce_cast, _CastValidationContext
 from tests.conftest import add_to_hand, fresh_game, make_creature, place_on_battlefield
 
 
@@ -47,13 +51,11 @@ def test_validate_cast_for_evoke():
     game = fresh_game()
     card_info = make_creature('Rift', 2, 2, oracle='Evoke {1}{U}')
     paid, err = validate_announce_cast(
-        game.zones,
-        0,
+        _CastValidationContext(zones=game.zones, game=game, player_idx=0),
         card_info,
         CastAnnounceOptions(alternate=HandAlternateCastChoices(cast_for_evoke=True)),
         False,
         None,
-        game,
     )
     assert err is None
     assert paid is not None
@@ -93,7 +95,7 @@ def test_activate_keyword_action_taps_target():
         game=game,
         controller_idx=0,
         oracle_text='Activate',
-        target_creature_uid=str(target.obj_id),
+        targets=_ActionTargets(target_creature_uid=str(target.obj_id)),
     ))
     assert 'activated' in detail
     assert target.tapped

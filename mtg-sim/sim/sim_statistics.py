@@ -28,6 +28,36 @@ if TYPE_CHECKING:
 OLLAMA_URL: str = os.environ.get("OLLAMA_URL", "")
 OLLAMA_MODEL: str = os.environ.get("OLLAMA_MODEL", "")
 
+
+class MatchupConfig:
+    """Configuration for a single matchup statistics computation."""
+
+    sample_logs: int = 3
+
+    def __init__(
+        self,
+        player_deck_name: str,
+        opponent_archetype: str,
+        fmt: str,
+        generate_moments: bool = True,
+    ) -> None:
+        self.player_deck_name = player_deck_name
+        self.opponent_archetype = opponent_archetype
+        self.fmt = fmt
+        self.generate_moments = generate_moments
+
+    def label(self) -> str:
+        """Return a short human-readable label for this matchup configuration."""
+        return f"{self.player_deck_name} vs {self.opponent_archetype} ({self.fmt})"
+
+    def with_moments(self, generate: bool = True) -> "MatchupConfig":
+        """Return a copy of this config with generate_moments set."""
+        cfg = MatchupConfig(
+            self.player_deck_name, self.opponent_archetype, self.fmt, generate
+        )
+        cfg.sample_logs = self.sample_logs
+        return cfg
+
 logger = logging.getLogger(__name__)
 
 
@@ -221,29 +251,34 @@ def _archetype_category(archetype: str) -> str:
     return "midrange"
 
 
+def _aggro_executed(opp_turns: list) -> bool:
+    """Return True when an aggro pilot had non-land plays in the first five turns."""
+    return any(
+        ev.turn <= 5 and any("[Land]" not in p for p in ev.plays)
+        for ev in opp_turns
+    )
+
+
+def _combo_executed(opp_turns: list) -> bool:
+    """Return True when a combo pilot cast 3+ non-land spells in a single turn."""
+    return any(
+        len([p for p in ev.plays if "[Land]" not in p]) >= 3
+        for ev in opp_turns
+    )
+
+
 def _pilot_executed_plan(log: "GameLog", category: str) -> bool:
     """Return True when the opponent's turns suggest they executed their archetype plan."""
     opp_turns = [ev for ev in log.turns if ev.player == 1]
     if not opp_turns:
         return False
     if category == "aggro":
-        # Should have non-land plays in the first five turns.
-        for ev in opp_turns:
-            if ev.turn <= 5 and any("[Land]" not in p for p in ev.plays):
-                return True
-        return False
+        return _aggro_executed(opp_turns)
     if category == "combo":
-        # Should cast 3+ non-land spells in a single turn (the combo turn).
-        for ev in opp_turns:
-            non_land = [p for p in ev.plays if "[Land]" not in p]
-            if len(non_land) >= 3:
-                return True
-        return False
+        return _combo_executed(opp_turns)
     if category == "control":
-        # Should make plays on at least half of their turns.
         active = sum(1 for ev in opp_turns if ev.plays)
         return active >= max(1, len(opp_turns) // 2)
-    # Midrange: made plays on at least 3 turns (or all turns if fewer than 3).
     turns_with_plays = sum(1 for ev in opp_turns if ev.plays)
     return turns_with_plays >= min(3, len(opp_turns))
 
@@ -282,90 +317,100 @@ def _pilot_confidence(results: list["SimResult"], archetype: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Main entry point
+# Main entry point helpers
 # ---------------------------------------------------------------------------
 
-def compute_statistics(
-    results: list["SimResult"],
-    player_deck_name: str,
-    opponent_archetype: str,
-    fmt: str,
-    generate_moments: bool = True,
-    sample_logs: int = 3,
-) -> dict:
-    """
-    Compute a full simulation result dict from individual game outcomes.
-    """
-    total = len(results)
-    if total == 0:
-        return {
-            "playerDeck": player_deck_name,
-            "opponentArchetype": opponent_archetype,
-            "format": fmt,
-            "games": 0, "wins": 0, "losses": 0, "winRate": 0.0,
-            "onThePlay": {"wins": 0, "games": 0, "winRate": 0.0},
-            "onTheDraw": {"wins": 0, "games": 0, "winRate": 0.0},
-            "avgTurnWin": None, "avgTurnLoss": None,
-            "topKillers": [], "keyMoments": [],
-            "gameLogs": [], "lifeProgression": [],
-            "turnBreakdown": [], "mulliganStats": {},
-        }
 
-    wins = sum(1 for r in results if r.winner == 0)
-    losses = total - wins
-    on_play = [r for i, r in enumerate(results) if i % 2 == 0]
-    on_draw = [r for i, r in enumerate(results) if i % 2 == 1]
-    win_turns = [r.turns for r in results if r.winner == 0 and r.turns is not None]
-    loss_turns = [r.turns for r in results if r.winner == 1 and r.turns is not None]
-    losing_games = [r for r in results if r.winner == 1]
+def _empty_stats(cfg: MatchupConfig) -> dict:
+    """Return a zeroed-out stats dict for an empty result set."""
+    return {
+        "playerDeck": cfg.player_deck_name,
+        "opponentArchetype": cfg.opponent_archetype,
+        "format": cfg.fmt,
+        "games": 0, "wins": 0, "losses": 0, "winRate": 0.0,
+        "onThePlay": {"wins": 0, "games": 0, "winRate": 0.0},
+        "onTheDraw": {"wins": 0, "games": 0, "winRate": 0.0},
+        "avgTurnWin": None, "avgTurnLoss": None,
+        "topKillers": [], "keyMoments": [],
+        "gameLogs": [], "lifeProgression": [],
+        "turnBreakdown": [], "mulliganStats": {},
+    }
 
-    # Mulligan stats
+
+def _mulligan_stats(results: list["SimResult"], total: int) -> tuple[dict, list[int]]:
+    """Return mulligan stats dict and player mulligan list."""
     player_mulls = [r.player_mulligan for r in results]
     opp_mulls = [r.opponent_mulligan for r in results]
     mull_dist = Counter(player_mulls)
-
-    mulligan_stats = {
+    stats = {
         "avgPlayerMulligan": round(sum(player_mulls) / total, 2),
         "avgOpponentMulligan": round(sum(opp_mulls) / total, 2),
         "distribution": {str(k): v for k, v in sorted(mull_dist.items())},
         "keepRate": round(mull_dist.get(0, 0) / total * 100, 1),
     }
+    return stats, player_mulls
 
-    # Win condition breakdown
+
+def _turn_stats(results: list["SimResult"]) -> tuple[float | None, float | None]:
+    """Return (avg_turn_win, avg_turn_loss) floats."""
+    win_turns = [r.turns for r in results if r.winner == 0 and r.turns is not None]
+    loss_turns = [r.turns for r in results if r.winner == 1 and r.turns is not None]
+    avg_win = round(sum(win_turns) / len(win_turns), 1) if win_turns else None
+    avg_loss = round(sum(loss_turns) / len(loss_turns), 1) if loss_turns else None
+    return avg_win, avg_loss
+
+
+# ---------------------------------------------------------------------------
+# Main entry point
+# ---------------------------------------------------------------------------
+
+def compute_statistics(results: list["SimResult"], cfg: MatchupConfig) -> dict:
+    """
+    Compute a full simulation result dict from individual game outcomes.
+    """
+    total = len(results)
+    if total == 0:
+        return _empty_stats(cfg)
+
+    wins = sum(1 for r in results if r.winner == 0)
+    losses = total - wins
+    on_play = [r for i, r in enumerate(results) if i % 2 == 0]
+    on_draw = [r for i, r in enumerate(results) if i % 2 == 1]
+    losing_games = [r for r in results if r.winner == 1]
+    mull_stats, player_mulls = _mulligan_stats(results, total)
+    avg_turn_win, avg_turn_loss = _turn_stats(results)
     win_conditions: Counter[str] = Counter(
         r.log.win_condition for r in results if r.winner == 0 and r.log
     )
 
     result: dict = {
-        "playerDeck": player_deck_name,
-        "opponentArchetype": opponent_archetype,
-        "format": fmt,
-        "games": total,
-        "wins": wins,
-        "losses": losses,
+        "playerDeck": cfg.player_deck_name,
+        "opponentArchetype": cfg.opponent_archetype,
+        "format": cfg.fmt,
+        "games": total, "wins": wins, "losses": losses,
         "winRate": round(wins / total, 4),
         "onThePlay": _half_stats(on_play),
         "onTheDraw": _half_stats(on_draw),
-        "avgTurnWin": round(sum(win_turns) / len(win_turns), 1) if win_turns else None,
-        "avgTurnLoss": round(sum(loss_turns) / len(loss_turns), 1) if loss_turns else None,
+        "avgTurnWin": avg_turn_win,
+        "avgTurnLoss": avg_turn_loss,
         "topKillers": _top_killers(losing_games, losses),
-        "mulliganStats": mulligan_stats,
+        "mulliganStats": mull_stats,
         "avgMulliganCount": round(sum(player_mulls) / total, 2),
         "manaEfficiency": _mana_efficiency(results),
         "lifeProgression": _life_progression(results),
         "turnBreakdown": _turn_breakdown(results),
         "winConditions": dict(win_conditions.most_common()),
         "timedOutGames": sum(1 for r in results if r.timed_out),
-        "pilotConfidence": _pilot_confidence(results, opponent_archetype),
+        "pilotConfidence": _pilot_confidence(results, cfg.opponent_archetype),
         "gameLogs": [
             _serialise_log(r.log)
-            for r in results[:sample_logs]
+            for r in results[:cfg.sample_logs]
             if r.log is not None
         ],
         "keyMoments": [],
     }
 
-    if generate_moments:
+    if cfg.generate_moments:
         result["keyMoments"] = _generate_key_moments(result)
 
     return result

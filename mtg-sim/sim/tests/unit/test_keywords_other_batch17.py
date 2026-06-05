@@ -19,8 +19,10 @@ from engine.core.zones import Zone
 from engine.game import create_game
 from engine.game.helpers import card_to_client, HandCastContext
 from tests.conftest import (
+    _CardStats,
     cast_announce_options,
     fresh_game,
+    make_card,
     make_creature,
     make_deck,
     make_land,
@@ -86,10 +88,11 @@ def test_card_to_client_disguise_and_embalm_flags():
 
 def test_game_cast_disguise_face_down():
     """Casting for disguise enters as a face-down creature."""
-    agent = make_creature(
+    agent = make_card(
         name='Agent',
-        cmc=4,
+        type_line='Creature — Human',
         oracle='Disguise {2}{U}',
+        stats=_CardStats(cmc=4.0, pt='2/2'),
     )
     game = create_game(make_deck(lands=20), make_deck(lands=20))
     game.action_keep()
@@ -110,10 +113,11 @@ def test_game_cast_disguise_face_down():
 
 def test_game_embalm_from_hand():
     """Embalm exiles the card from hand and creates a token in exile."""
-    honored = make_creature(
+    honored = make_card(
         name='Honored',
-        cmc=4,
+        type_line='Creature — Human Cleric',
         oracle='Embalm {2}{W}',
+        stats=_CardStats(cmc=4.0, pt='3/3'),
     )
     game = create_game(make_deck(lands=20), make_deck(lands=20))
     game.action_keep()

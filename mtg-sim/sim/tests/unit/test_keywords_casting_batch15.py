@@ -27,9 +27,11 @@ from engine.core.game_object import CardObject
 from engine.game import create_game
 from engine.game.helpers import card_to_client
 from tests.conftest import (
+    _CardStats,
     cast_announce_options,
     fresh_game,
     make_artifact,
+    make_card,
     make_creature,
     make_deck,
     make_instant,
@@ -115,11 +117,12 @@ def test_resolve_improvise_taps_artifacts_and_reduces_mana():
 
 def test_has_emerge_parses_cost_and_mana():
     """Emerge cost parses and replaces the creature's mana cost."""
-    card = make_creature(
+    card = make_card(
         'Wurm',
-        cmc=7,
+        type_line='Creature — Wurm',
         oracle='Trample\nEmerge {2}{G}',
         mana_cost='{5}{G}{G}',
+        stats=_CardStats(cmc=7.0, pt='4/5'),
     )
     assert has_emerge(card)
     assert emerge_cost(card) is not None

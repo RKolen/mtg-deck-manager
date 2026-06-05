@@ -14,7 +14,6 @@ from engine.abilities.keywords.ability_words.conditions import (
     is_controller_land_enters,
     is_domain_spell_cast,
     is_ferocious_spell_cast,
-    is_flurry_spell_cast,
     is_formidable_spell_cast,
     is_hellbent_spell_cast,
     is_addendum_spell_cast,
@@ -23,6 +22,22 @@ from engine.abilities.keywords.ability_words.conditions import (
     is_celebration_spell_cast,
     is_converge_spell_cast,
     is_chroma_spell_cast,
+    is_coven_spell_cast,
+    is_morbid_spell_cast,
+    is_pack_tactics_attack,
+    is_parley_at_beginning_of_combat,
+    is_raid_at_beginning_of_combat,
+    is_strive_spell_cast,
+    is_source_enraged,
+    is_source_etb_delirium,
+    is_source_etb_metalcraft,
+    is_source_etb_revolt,
+    is_source_etb_threshold,
+    is_source_inspired_attack,
+    is_threshold_spell_cast,
+    is_undergrowth_spell_cast,
+)
+from engine.abilities.keywords.ability_words.conditions_ext import (
     is_eerie_spell_cast,
     is_eminence_spell_cast,
     is_descend_spell_cast,
@@ -52,27 +67,14 @@ from engine.abilities.keywords.ability_words.conditions import (
     is_will_of_council_spell_cast,
     is_will_of_planeswalkers_spell_cast,
     is_fateful_hour_spell_cast,
+    is_flurry_spell_cast,
     is_grandeur_upkeep,
+    is_kinship_upkeep,
     is_lieutenant_etb,
     is_renew_creature_leaves,
     is_spell_mastery_spell_cast,
     is_underdog_attack,
     is_valiant_first_attack,
-    is_coven_spell_cast,
-    is_kinship_upkeep,
-    is_morbid_spell_cast,
-    is_pack_tactics_attack,
-    is_parley_at_beginning_of_combat,
-    is_raid_at_beginning_of_combat,
-    is_strive_spell_cast,
-    is_source_enraged,
-    is_source_etb_delirium,
-    is_source_etb_metalcraft,
-    is_source_etb_revolt,
-    is_source_etb_threshold,
-    is_source_inspired_attack,
-    is_threshold_spell_cast,
-    is_undergrowth_spell_cast,
 )
 from engine.abilities.keywords.ability_words.detect import has_ability_word
 from engine.abilities.keywords.ability_words.effects import (
@@ -89,6 +91,7 @@ from engine.rules.triggers import (
     TriggerCondition,
     TriggerKey,
     TriggerRegistry,
+    TriggerSpec,
     is_noncreature_nonland_spell_cast,
     is_spell_targeting_source,
 )
@@ -217,24 +220,21 @@ def register_permanent_ability_words(
             registry.register(
                 permanent,
                 wire.trigger_key,
-                wire.condition,
-                effect=ParleyEffect(),
+                TriggerSpec(wire.condition, effect=ParleyEffect()),
             )
             continue
         if word == 'Kinship':
             registry.register(
                 permanent,
                 wire.trigger_key,
-                wire.condition,
-                effect=KinshipEffect(),
+                TriggerSpec(wire.condition, effect=KinshipEffect()),
             )
             continue
         if word == 'Valiant':
             registry.register(
                 permanent,
                 wire.trigger_key,
-                wire.condition,
-                effect=ValiantEffect(),
+                TriggerSpec(wire.condition, effect=ValiantEffect()),
             )
             continue
         clause = clause_after_ability_word(oracle, word)
@@ -242,8 +242,7 @@ def register_permanent_ability_words(
         registry.register(
             permanent,
             wire.trigger_key,
-            wire.condition,
-            effect=effect,
+            TriggerSpec(wire.condition, effect=effect),
         )
 
     _register_heroic(permanent, registry, oracle)
@@ -264,8 +263,7 @@ def _register_heroic(
     registry.register(
         permanent,
         TriggerKey.SPELL_CAST,
-        is_spell_targeting_source,
-        effect=effect,
+        TriggerSpec(is_spell_targeting_source, effect=effect),
     )
 
 
@@ -280,8 +278,7 @@ def _register_prowess(
     registry.register(
         permanent,
         TriggerKey.SPELL_CAST,
-        is_noncreature_nonland_spell_cast,
-        effect=ProwessEffect(),
+        TriggerSpec(is_noncreature_nonland_spell_cast, effect=ProwessEffect()),
     )
 
 
@@ -298,13 +295,11 @@ def _register_threshold(
     registry.register(
         permanent,
         TriggerKey.SPELL_CAST,
-        is_threshold_spell_cast,
-        effect=effect,
+        TriggerSpec(is_threshold_spell_cast, effect=effect),
     )
     if 'enters the battlefield' in (clause or oracle).lower():
         registry.register(
             permanent,
             TriggerKey.ENTERS_BATTLEFIELD,
-            is_source_etb_threshold,
-            effect=effect,
+            TriggerSpec(is_source_etb_threshold, effect=effect),
         )

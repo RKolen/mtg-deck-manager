@@ -10,7 +10,9 @@ from engine.abilities.keywords.other.prowl import mark_prowl_cast, prowl_unblock
 from engine.abilities.keywords.other.register import register_permanent_other_keywords
 from engine.core.game_object import CardObject
 from engine.rules.triggers import SpellCastTriggerEvent, TriggerDefinition, TriggerKey
-from tests.conftest import fresh_game, make_card, make_creature, make_instant, place_on_battlefield
+from tests.conftest import (_CardStats, fresh_game, make_card,make_creature,
+                                make_instant, place_on_battlefield
+                            )
 
 
 def test_evoke_sacrifices_when_marked():
@@ -32,12 +34,14 @@ def test_prowl_unblockable_with_matching_graveyard():
     """Prowl makes the attacker unblockable when a matching creature is in the graveyard."""
     game = fresh_game()
     attacker = place_on_battlefield(
-        make_card('Ninja', type_line='Creature — Human Ninja', pt='2/2', oracle='Prowl {1}{B}'),
+        make_card('Ninja', type_line='Creature — Human Ninja', oracle='Prowl {1}{B}',
+                  stats=_CardStats(pt='2/2')
+                ),
         0,
         game.zones,
         sick=False,
     )
-    gy_card = make_card('Ally', type_line='Creature — Human Warrior', pt='1/1')
+    gy_card = make_card('Ally', type_line='Creature — Human Warrior', stats=_CardStats(pt='1/1'))
     game.zones.player_zones[0].graveyard.append(
         CardObject(controller_idx=0, owner_idx=0, card_info=gy_card),
     )

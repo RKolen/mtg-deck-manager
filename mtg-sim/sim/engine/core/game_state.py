@@ -34,23 +34,127 @@ from engine.rules.triggers import StepTriggerEvent, TriggerRegistry, spell_cast_
 
 
 @dataclass
-class PlayerInfo:
-    """Per-player state that lives outside the zone system."""
+class _PlayerVitals:
+    """Life, mana, and land-drop state for one player."""
 
-    name: str
     life: int = 20
     poison: int = 0
     mana_pool: ManaPool = field(default_factory=ManaPool)
     land_played: bool = False
-    spells_cast_this_turn: int = 0
-    combat_damage_dealt_this_turn: bool = False
-    was_dealt_damage_this_turn: bool = False
-    revolt_this_turn: bool = False
-    permanents_entered_this_turn: int = 0
+
+
+@dataclass
+class _TurnFlags:
+    """Per-turn boolean trackers for one player."""
+
+    spells_cast: int = 0
+    combat_damage_dealt: bool = False
+    was_dealt_damage: bool = False
+    revolt: bool = False
+    permanents_entered: int = 0
+
+
+@dataclass
+class PlayerInfo:
+    """Per-player state that lives outside the zone system."""
+
+    name: str
+    vitals: _PlayerVitals = field(default_factory=_PlayerVitals)
+    turn_flags: _TurnFlags = field(default_factory=_TurnFlags)
     ascended: bool = False
     dungeon_room: int = 0
     attractions: int = 0
     has_lost: bool = False
+
+    @property
+    def life(self) -> int:
+        """Current life total."""
+        return self.vitals.life
+
+    @life.setter
+    def life(self, value: int) -> None:
+        """Set current life total."""
+        self.vitals.life = value
+
+    @property
+    def poison(self) -> int:
+        """Current poison counter count."""
+        return self.vitals.poison
+
+    @poison.setter
+    def poison(self, value: int) -> None:
+        """Set poison counter count."""
+        self.vitals.poison = value
+
+    @property
+    def mana_pool(self) -> ManaPool:
+        """Floating mana available this step."""
+        return self.vitals.mana_pool
+
+    @mana_pool.setter
+    def mana_pool(self, value: ManaPool) -> None:
+        """Replace floating mana pool."""
+        self.vitals.mana_pool = value
+
+    @property
+    def land_played(self) -> bool:
+        """True when a land was played this turn."""
+        return self.vitals.land_played
+
+    @land_played.setter
+    def land_played(self, value: bool) -> None:
+        """Set whether a land was played this turn."""
+        self.vitals.land_played = value
+
+    @property
+    def spells_cast_this_turn(self) -> int:
+        """Number of spells cast this turn."""
+        return self.turn_flags.spells_cast
+
+    @spells_cast_this_turn.setter
+    def spells_cast_this_turn(self, value: int) -> None:
+        """Set spells cast this turn."""
+        self.turn_flags.spells_cast = value
+
+    @property
+    def combat_damage_dealt_this_turn(self) -> bool:
+        """True when combat damage was dealt this turn."""
+        return self.turn_flags.combat_damage_dealt
+
+    @combat_damage_dealt_this_turn.setter
+    def combat_damage_dealt_this_turn(self, value: bool) -> None:
+        """Set combat damage dealt flag."""
+        self.turn_flags.combat_damage_dealt = value
+
+    @property
+    def was_dealt_damage_this_turn(self) -> bool:
+        """True when this player was dealt damage this turn."""
+        return self.turn_flags.was_dealt_damage
+
+    @was_dealt_damage_this_turn.setter
+    def was_dealt_damage_this_turn(self, value: bool) -> None:
+        """Set was-dealt-damage flag."""
+        self.turn_flags.was_dealt_damage = value
+
+    @property
+    def revolt_this_turn(self) -> bool:
+        """True when a permanent left this player's battlefield this turn."""
+        return self.turn_flags.revolt
+
+    @revolt_this_turn.setter
+    def revolt_this_turn(self, value: bool) -> None:
+        """Set revolt flag."""
+        self.turn_flags.revolt = value
+
+    @property
+    def permanents_entered_this_turn(self) -> int:
+        """Number of permanents that entered the battlefield this turn."""
+        return self.turn_flags.permanents_entered
+
+    @permanents_entered_this_turn.setter
+    def permanents_entered_this_turn(self, value: int) -> None:
+        """Set permanents entered count."""
+        self.turn_flags.permanents_entered = value
 
 
 @dataclass
@@ -61,6 +165,16 @@ class LogEntry:
     actor: str
     action: str
     detail: str = ""
+
+
+@dataclass
+class _GameMeta:
+    """Auxiliary game-level state for one session."""
+
+    trigger_registry: TriggerRegistry = field(default_factory=TriggerRegistry)
+    log: list[LogEntry] = field(default_factory=list)
+    winner: int | None = None
+    creature_died_this_turn: bool = False
 
 
 @dataclass
@@ -77,10 +191,37 @@ class GameState:
     players: list[PlayerInfo]
     turn: TurnRunner
     stack: Stack
-    trigger_registry: TriggerRegistry = field(default_factory=TriggerRegistry)
-    log: list[LogEntry] = field(default_factory=list)
-    winner: int | None = None
-    creature_died_this_turn: bool = False
+    meta: _GameMeta = field(default_factory=_GameMeta)
+
+    @property
+    def trigger_registry(self) -> TriggerRegistry:
+        """Trigger registry for this game session."""
+        return self.meta.trigger_registry
+
+    @property
+    def log(self) -> list[LogEntry]:
+        """Game event log."""
+        return self.meta.log
+
+    @property
+    def winner(self) -> int | None:
+        """Index of the winning player, or None if game is ongoing."""
+        return self.meta.winner
+
+    @winner.setter
+    def winner(self, value: int | None) -> None:
+        """Set the winning player index."""
+        self.meta.winner = value
+
+    @property
+    def creature_died_this_turn(self) -> bool:
+        """True when a creature died this turn."""
+        return self.meta.creature_died_this_turn
+
+    @creature_died_this_turn.setter
+    def creature_died_this_turn(self, value: bool) -> None:
+        """Set creature-died flag."""
+        self.meta.creature_died_this_turn = value
 
     def __post_init__(self) -> None:
         """Subscribe the trigger registry to zone movement events."""

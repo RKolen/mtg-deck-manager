@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from deck_registry import CardInfo
 from engine.abilities.keywords.actions import (
     ActionContext,
     has_connive,
     keyword_actions_in_oracle,
     resolve_spell_keyword_actions,
 )
+from engine.abilities.keywords.actions.resolve import _ActionExtras, _ActionTargets
 from engine.abilities.keywords.actions.tokens import connive
 from engine.abilities.keywords.ability_words import register_permanent_ability_words
 from engine.abilities.keywords.casting import (
@@ -73,10 +75,14 @@ class SpellResolveMixin(SpellStackPlacementMixin):
             game=self.state,
             controller_idx=spell.controller_idx,
             oracle_text=card.card_info.oracle_text or '',
-            target_creature_uid=target_uid(spell.targets),
-            second_creature_uid=second_uid,
-            draw_fn=self._draw_cards,
-            skip_actions=skip_actions,
+            targets=_ActionTargets(
+                target_creature_uid=target_uid(spell.targets),
+                second_creature_uid=second_uid,
+            ),
+            extras=_ActionExtras(
+                draw_fn=self._draw_cards,
+                skip_actions=skip_actions,
+            ),
         ))
         if detail:
             self.state.check_sbas()
@@ -131,55 +137,90 @@ class SpellResolveMixin(SpellStackPlacementMixin):
         self._relocate_resolved_spell(spell, card)
         return f"Cast {card_info.name}"
 
+    def _apply_spree_mode(
+        self,
+        effect: str,
+        spell: SpellOnStack,
+        parts: list[str],
+    ) -> None:
+        """Apply one spree mode effect and append a description to parts."""
+        controller_idx = spell.controller_idx
+        draw_count = spree_mode_draw(effect)
+        if draw_count:
+            drawn = self._draw_cards(controller_idx, draw_count)
+            parts.append(f"drew {card_names(drawn) or 'no cards'}")
+        damage = spree_mode_damage(effect)
+        if damage:
+            target_uid_val = target_uid(spell.targets)
+            target_player_idx = first_target_player(spell.targets)
+            victim_idx = (
+                target_player_idx if target_player_idx is not None else 1 - controller_idx
+            )
+            if target_uid_val is None:
+                self._deal_damage_to_player(victim_idx, damage)
+                parts.append(f"dealt {damage} damage")
+            else:
+                target = self._find_permanent(target_uid_val)
+                if target is not None:
+                    target.damage_marked += damage
+                    parts.append(f"dealt {damage} to {target.name}")
+        if spree_mode_is_destroy(effect):
+            target_uid_val = target_uid(spell.targets)
+            target = self._find_permanent(target_uid_val)
+            if target is not None:
+                self.state.zones.leave_battlefield(
+                    target, Zone.GRAVEYARD, 'destroy', self.state,
+                )
+                parts.append(f"destroyed {target.name}")
+
     def _resolve_spree_spell(self, spell: SpellOnStack) -> str:
         """Resolve a spree spell by applying each chosen mode."""
         card = spell.source
         assert card is not None
         card_info = require_card_info(card)
         options = spree_modes(card_info)
-        controller_idx = spell.controller_idx
         parts: list[str] = []
         for idx in spell.modes:
-            if idx >= len(options):
-                continue
-            effect = options[idx].effect
-            draw_count = spree_mode_draw(effect)
-            if draw_count:
-                drawn = self._draw_cards(controller_idx, draw_count)
-                parts.append(f"drew {card_names(drawn) or 'no cards'}")
-            damage = spree_mode_damage(effect)
-            if damage:
-                target_uid_val = target_uid(spell.targets)
-                target_player_idx = first_target_player(spell.targets)
-                victim_idx = (
-                    target_player_idx
-                    if target_player_idx is not None
-                    else 1 - controller_idx
-                )
-                if target_uid_val is None:
-                    self._deal_damage_to_player(victim_idx, damage)
-                    parts.append(f"dealt {damage} damage")
-                else:
-                    target = self._find_permanent(target_uid_val)
-                    if target is not None:
-                        target.damage_marked += damage
-                        parts.append(f"dealt {damage} to {target.name}")
-            if spree_mode_is_destroy(effect):
-                target_uid_val = target_uid(spell.targets)
-                target = self._find_permanent(target_uid_val)
-                if target is not None:
-                    self.state.zones.leave_battlefield(
-                        target,
-                        Zone.GRAVEYARD,
-                        'destroy',
-                        self.state,
-                    )
-                    parts.append(f"destroyed {target.name}")
+            if idx < len(options):
+                self._apply_spree_mode(options[idx].effect, spell, parts)
         if spell.modes:
             self.state.check_sbas()
         self._relocate_resolved_spell(spell, card)
         detail = ", ".join(parts) if parts else "no effect"
         return f"{card_info.name} spree ({detail})"
+
+    def _apply_creature_counters(self, permanent: Permanent, spell: SpellOnStack) -> None:
+        """Apply face-down state and keyword counters after a creature enters."""
+        if spell.payment.evoke:
+            mark_evoked_cast(permanent)
+        if spell.alternate.disturb:
+            permanent.counters['disturbed'] = 1
+        if spell.payment.morph_face_down or spell.payment.disguise_face_down:
+            permanent.face_down = True
+        if spell.payment.dash:
+            permanent.sick = False
+            permanent.counters['dash'] = 1
+        if spell.payment.blitz:
+            permanent.sick = False
+            permanent.counters['blitz'] = 1
+
+    def _resolve_mutate_cast(
+        self,
+        card: CardObject,
+        card_info: CardInfo,
+        spell: SpellOnStack,
+    ) -> str:
+        """Resolve a mutate cast: merge with or discard the creature."""
+        host_id = target_uid(spell.targets)
+        if host_id is not None:
+            host = self._find_permanent(host_id)
+            if host is not None:
+                bonus = mutate_bonus_counters(card_info)
+                host.counters['+1/+1'] = host.counters.get('+1/+1', 0) + bonus
+                self._move_card_to_graveyard(card)
+                return f"Mutated {card_info.name} onto {host.name} (+{bonus}/+{bonus})"
+        self._move_card_to_graveyard(card)
+        return f"Cast {card_info.name} (mutate target not found)"
 
     def _resolve_creature_spell(self, spell: SpellOnStack) -> str:
         """Resolve a creature spell onto the battlefield."""
@@ -192,16 +233,7 @@ class SpellResolveMixin(SpellStackPlacementMixin):
             self._zones(card.owner_idx).hand.append(card)
             return f"{card_info.name} returned to hand (buyback)"
         if spell.payment.mutate:
-            host_id = target_uid(spell.targets)
-            if host_id is not None:
-                host = self._find_permanent(host_id)
-                if host is not None:
-                    bonus = mutate_bonus_counters(card_info)
-                    host.counters['+1/+1'] = host.counters.get('+1/+1', 0) + bonus
-                    self._move_card_to_graveyard(card)
-                    return f"Mutated {card_info.name} onto {host.name} (+{bonus}/+{bonus})"
-            self._move_card_to_graveyard(card)
-            return f"Cast {card_info.name} (mutate target not found)"
+            return self._resolve_mutate_cast(card, card_info, spell)
         permanent = self.state.zones.enter_battlefield(
             card,
             spell.controller_idx,
@@ -224,65 +256,69 @@ class SpellResolveMixin(SpellStackPlacementMixin):
         counters = kicked_counter_count(card_info, spell.payment.kicker_times)
         if counters:
             permanent.counters["+1/+1"] = permanent.counters.get("+1/+1", 0) + counters
-        if spell.payment.evoke:
-            mark_evoked_cast(permanent)
-        if spell.alternate.disturb:
-            permanent.counters['disturbed'] = 1
-        if spell.payment.morph_face_down or spell.payment.disguise_face_down:
-            permanent.face_down = True
-        if spell.payment.dash:
-            permanent.sick = False
-            permanent.counters['dash'] = 1
-        if spell.payment.blitz:
-            permanent.sick = False
-            permanent.counters['blitz'] = 1
+        self._apply_creature_counters(permanent, spell)
         self._register_permanent_triggers(permanent)
         detail = f"Cast creature {card_info.name}"
         if counters:
             detail = f"{detail} with {counters} +1/+1 counter(s)"
         return detail
 
+    def _resolve_overload_burn(
+        self, spell: SpellOnStack, card: CardObject, card_info: CardInfo
+    ) -> str:
+        """Resolve an overloaded burn spell."""
+        damage = resolve_overload_burn_damage(card_info, spell.payment.kicker_times)
+        self._relocate_resolved_spell(spell, card)
+        if overload_hits_each_creature(card_info):
+            for perm in overload_creature_targets(self.state.zones.battlefield):
+                perm.damage_marked += damage
+            self.state.check_sbas()
+            return f"{card_info.name} dealt {damage} damage to each creature"
+        for idx in overload_opponent_indices(spell.controller_idx):
+            self._deal_damage_to_player(idx, damage)
+        return f"{card_info.name} dealt {damage} damage to each opponent"
+
     def _resolve_burn(self, spell: SpellOnStack) -> str:
         """Resolve a burn spell."""
         card = spell.source
         assert card is not None
-        targets = spell.targets
         card_info = require_card_info(card)
-        controller_idx = spell.controller_idx
         if spell.payment.overloaded:
-            damage = resolve_overload_burn_damage(card_info, spell.payment.kicker_times)
-            self._relocate_resolved_spell(spell, card)
-            if overload_hits_each_creature(card_info):
-                for perm in overload_creature_targets(self.state.zones.battlefield):
-                    perm.damage_marked += damage
-                self.state.check_sbas()
-                return f"{card_info.name} dealt {damage} damage to each creature"
-            for idx in overload_opponent_indices(controller_idx):
-                self._deal_damage_to_player(idx, damage)
-            return f"{card_info.name} dealt {damage} damage to each opponent"
+            return self._resolve_overload_burn(spell, card, card_info)
+        targets = spell.targets
         damage = resolve_burn_damage(card_info, spell.payment.entwined, spell.payment.kicker_times)
         extra_draw = entwined_extra_draw(card_info, spell.payment.entwined)
         self._relocate_resolved_spell(spell, card)
         target_uid_val = target_uid(targets)
-        target_player_idx = first_target_player(targets)
-        default_player = 1 - controller_idx
         if target_uid_val is None:
-            victim_idx = (
-                target_player_idx if target_player_idx is not None else default_player
-            )
-            self._deal_damage_to_player(victim_idx, damage)
-            label = "opponent" if victim_idx == 1 else "you"
-            detail = f"{card_info.name} dealt {damage} damage to {label}"
-            if extra_draw:
-                drawn = self._draw_cards(controller_idx, extra_draw)
-                detail = f"{detail} and drew {card_names(drawn) or 'no cards'}"
-            return detail
+            return self._resolve_burn_to_player(spell, card_info, damage, extra_draw)
         target = self._find_permanent(target_uid_val)
         if target is None:
             return f"Cast {card_info.name} (no valid target)"
         target.damage_marked += damage
         self.state.check_sbas()
         return f"{card_info.name} dealt {damage} damage to {target.name}"
+
+    def _resolve_burn_to_player(
+        self,
+        spell: SpellOnStack,
+        card_info: CardInfo,
+        damage: int,
+        extra_draw: int,
+    ) -> str:
+        """Resolve burn that has no creature target (deals to a player)."""
+        controller_idx = spell.controller_idx
+        target_player_idx = first_target_player(spell.targets)
+        victim_idx = (
+            target_player_idx if target_player_idx is not None else 1 - controller_idx
+        )
+        self._deal_damage_to_player(victim_idx, damage)
+        label = "opponent" if victim_idx == 1 else "you"
+        detail = f"{card_info.name} dealt {damage} damage to {label}"
+        if extra_draw:
+            drawn = self._draw_cards(controller_idx, extra_draw)
+            detail = f"{detail} and drew {card_names(drawn) or 'no cards'}"
+        return detail
 
     def _resolve_pump(self, spell: SpellOnStack) -> str:
         """Resolve a pump spell."""

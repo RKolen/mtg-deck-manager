@@ -167,6 +167,7 @@ legitimate code quality issue to address.
 Any style warnings are considered violations and must be fixed.
 
 - never edit `pyproject.toml`
+- never edit `pylintrc`
 
 ### 11. Full Pylint Output for Big Changes
 

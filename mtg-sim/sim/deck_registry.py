@@ -35,6 +35,15 @@ def _get_auth() -> tuple[str, str]:
 
 
 @dataclass
+class ManaProfile:
+    """Mana-related card data grouped to keep CardInfo attribute count within bounds."""
+
+    cmc: float = 0.0
+    cost: str = ""
+    produced: list[str] = field(default_factory=list)
+
+
+@dataclass
 class CardInfo:
     """Enriched card data used by the simulation engine.
 
@@ -45,12 +54,25 @@ class CardInfo:
     name: str
     quantity: int
     sideboard: bool
-    cmc: float = 0.0
+    mana: ManaProfile = field(default_factory=ManaProfile)
     type_line: str = ""
     pt: str = "0/0"
     oracle_text: str = ""
-    mana_cost: str = ""
-    produced_mana: list[str] = field(default_factory=list)
+
+    @property
+    def cmc(self) -> float:
+        """Mana value of this card."""
+        return self.mana.cmc
+
+    @property
+    def mana_cost(self) -> str:
+        """Mana cost string of this card."""
+        return self.mana.cost
+
+    @property
+    def produced_mana(self) -> list[str]:
+        """Mana types this card produces."""
+        return self.mana.produced
 
     @property
     def is_land(self) -> bool:
@@ -137,12 +159,14 @@ def _card_info_from(info: dict, quantity: int, sideboard: bool) -> CardInfo:
         name=info["name"],
         quantity=quantity,
         sideboard=sideboard,
-        cmc=info.get("cmc", 0.0),
+        mana=ManaProfile(
+            cmc=info.get("cmc", 0.0),
+            cost=info.get("mana_cost", ""),
+            produced=info.get("produced_mana", []),
+        ),
         type_line=info.get("type_line", ""),
         pt=info.get("pt", "0/0"),
         oracle_text=info.get("oracle_text", ""),
-        mana_cost=info.get("mana_cost", ""),
-        produced_mana=info.get("produced_mana", []),
     )
 
 
@@ -249,6 +273,22 @@ def fetch_player_deck(deck_nid: int) -> list[CardInfo]:
     return cards
 
 
+def _build_card_list(raw_cards: list[dict], enrichment: dict[str, dict]) -> list[CardInfo]:
+    """Build a list of CardInfo from raw card dicts and pre-fetched enrichment data."""
+    cards: list[CardInfo] = []
+    for c in raw_cards:
+        name = c.get("name", "")
+        if not name:
+            continue
+        info = enrichment.get(name, {})
+        cards.append(_card_info_from(
+            info or {"name": name},
+            quantity=int(c.get("quantity", 1)),
+            sideboard=bool(c.get("sideboard", False)),
+        ))
+    return cards
+
+
 @lru_cache(maxsize=64)
 def fetch_meta_deck(archetype: str, fmt: str) -> tuple[list[CardInfo], str]:
     """
@@ -287,16 +327,4 @@ def fetch_meta_deck(archetype: str, fmt: str) -> tuple[list[CardInfo], str]:
 
     all_names = [c["name"] for c in raw_cards if c.get("name")]
     enrichment = _enrich_by_name(all_names)
-
-    cards: list[CardInfo] = []
-    for c in raw_cards:
-        name = c.get("name", "")
-        if not name:
-            continue
-        info = enrichment.get(name, {})
-        cards.append(_card_info_from(
-            info or {"name": name},
-            quantity=int(c.get("quantity", 1)),
-            sideboard=bool(c.get("sideboard", False)),
-        ))
-    return cards, pilot_prompt
+    return _build_card_list(raw_cards, enrichment), pilot_prompt

@@ -130,6 +130,17 @@ class Modifier:
 
 
 @dataclass
+class _PermanentState:
+    """Zone-status flags for a battlefield permanent."""
+
+    tapped: bool = False
+    flipped: bool = False
+    face_down: bool = False
+    phased_out: bool = False
+    sick: bool = True
+
+
+@dataclass
 class Permanent(GameObject):
     """A card or token currently on the battlefield (CR 110.1).
 
@@ -140,15 +151,61 @@ class Permanent(GameObject):
     """
 
     source: CardObject | TokenObject | None = None
-    tapped: bool = False
-    flipped: bool = False
-    face_down: bool = False
-    phased_out: bool = False
-    sick: bool = True
+    state: _PermanentState = field(default_factory=_PermanentState)
     attached_to: int | None = None
     counters: dict[str, int] = field(default_factory=dict)
     damage_marked: int = 0
     modifiers: list[Modifier] = field(default_factory=list)
+
+    @property
+    def tapped(self) -> bool:
+        """True when this permanent is tapped."""
+        return self.state.tapped
+
+    @tapped.setter
+    def tapped(self, value: bool) -> None:
+        """Set tapped status."""
+        self.state.tapped = value
+
+    @property
+    def flipped(self) -> bool:
+        """True when this permanent is flipped."""
+        return self.state.flipped
+
+    @flipped.setter
+    def flipped(self, value: bool) -> None:
+        """Set flipped status."""
+        self.state.flipped = value
+
+    @property
+    def face_down(self) -> bool:
+        """True when this permanent is face-down."""
+        return self.state.face_down
+
+    @face_down.setter
+    def face_down(self, value: bool) -> None:
+        """Set face-down status."""
+        self.state.face_down = value
+
+    @property
+    def phased_out(self) -> bool:
+        """True when this permanent is phased out."""
+        return self.state.phased_out
+
+    @phased_out.setter
+    def phased_out(self, value: bool) -> None:
+        """Set phased-out status."""
+        self.state.phased_out = value
+
+    @property
+    def sick(self) -> bool:
+        """True when this permanent has summoning sickness."""
+        return self.state.sick
+
+    @sick.setter
+    def sick(self, value: bool) -> None:
+        """Set summoning sickness."""
+        self.state.sick = value
 
     @property
     def is_token(self) -> bool:
@@ -217,36 +274,172 @@ class Permanent(GameObject):
 
 
 @dataclass
-class SpellAlternateCast:
-    """Graveyard and exile alternate cast flags on a spell."""
+class _GraveyardAlts:
+    """Graveyard-based alternate cast modes."""
 
     flashback: bool = False
     escape: bool = False
     jump_start: bool = False
     retrace: bool = False
     aftermath: bool = False
+    harmonize: bool = False
+    disturb: bool = False
+
+
+@dataclass
+class _ExileAlts:
+    """Exile-based alternate cast modes."""
+
     foretell: bool = False
     plot: bool = False
     madness: bool = False
     suspend: bool = False
-    disturb: bool = False
-    harmonize: bool = False
 
 
 @dataclass
-class SpellCastPayment:
-    """Optional costs paid when a spell was announced."""
+class SpellAlternateCast:
+    """Graveyard and exile alternate cast flags on a spell."""
+
+    graveyard: _GraveyardAlts = field(default_factory=_GraveyardAlts)
+    exile: _ExileAlts = field(default_factory=_ExileAlts)
+
+    @property
+    def flashback(self) -> bool:
+        """True when cast via flashback."""
+        return self.graveyard.flashback
+
+    @flashback.setter
+    def flashback(self, value: bool) -> None:
+        """Set flashback flag."""
+        self.graveyard.flashback = value
+
+    @property
+    def escape(self) -> bool:
+        """True when cast via escape."""
+        return self.graveyard.escape
+
+    @escape.setter
+    def escape(self, value: bool) -> None:
+        """Set escape flag."""
+        self.graveyard.escape = value
+
+    @property
+    def jump_start(self) -> bool:
+        """True when cast via jump-start."""
+        return self.graveyard.jump_start
+
+    @jump_start.setter
+    def jump_start(self, value: bool) -> None:
+        """Set jump-start flag."""
+        self.graveyard.jump_start = value
+
+    @property
+    def retrace(self) -> bool:
+        """True when cast via retrace."""
+        return self.graveyard.retrace
+
+    @retrace.setter
+    def retrace(self, value: bool) -> None:
+        """Set retrace flag."""
+        self.graveyard.retrace = value
+
+    @property
+    def aftermath(self) -> bool:
+        """True when cast via aftermath."""
+        return self.graveyard.aftermath
+
+    @aftermath.setter
+    def aftermath(self, value: bool) -> None:
+        """Set aftermath flag."""
+        self.graveyard.aftermath = value
+
+    @property
+    def foretell(self) -> bool:
+        """True when cast via foretell."""
+        return self.exile.foretell
+
+    @foretell.setter
+    def foretell(self, value: bool) -> None:
+        """Set foretell flag."""
+        self.exile.foretell = value
+
+    @property
+    def plot(self) -> bool:
+        """True when cast via plot."""
+        return self.exile.plot
+
+    @plot.setter
+    def plot(self, value: bool) -> None:
+        """Set plot flag."""
+        self.exile.plot = value
+
+    @property
+    def madness(self) -> bool:
+        """True when cast via madness."""
+        return self.exile.madness
+
+    @madness.setter
+    def madness(self, value: bool) -> None:
+        """Set madness flag."""
+        self.exile.madness = value
+
+    @property
+    def suspend(self) -> bool:
+        """True when cast via suspend."""
+        return self.exile.suspend
+
+    @suspend.setter
+    def suspend(self, value: bool) -> None:
+        """Set suspend flag."""
+        self.exile.suspend = value
+
+    @property
+    def disturb(self) -> bool:
+        """True when cast via disturb."""
+        return self.graveyard.disturb
+
+    @disturb.setter
+    def disturb(self, value: bool) -> None:
+        """Set disturb flag."""
+        self.graveyard.disturb = value
+
+    @property
+    def harmonize(self) -> bool:
+        """True when cast via harmonize."""
+        return self.graveyard.harmonize
+
+    @harmonize.setter
+    def harmonize(self, value: bool) -> None:
+        """Set harmonize flag."""
+        self.graveyard.harmonize = value
+
+
+@dataclass
+class _CostMods:
+    """Cost modification payment flags."""
 
     kicker_times: int = 0
     entwined: bool = False
     overloaded: bool = False
     bestow: bool = False
     paid_buyback: bool = False
+
+
+@dataclass
+class _AlternateModes:
+    """Alternate mode payment flags."""
+
     emerge: bool = False
     evoke: bool = False
     mutate: bool = False
     casualty: bool = False
     morph_face_down: bool = False
+
+
+@dataclass
+class _KeywordPays:
+    """Keyword-related payment flags."""
+
     disguise_face_down: bool = False
     dash: bool = False
     blitz: bool = False
@@ -254,16 +447,217 @@ class SpellCastPayment:
     conspire: bool = False
 
 
+class SpellCastPayment:
+    """Optional costs paid when a spell was announced."""
+
+    def __init__(
+        self,
+        costs: _CostMods | None = None,
+        modes: _AlternateModes | None = None,
+        keywords: _KeywordPays | None = None,
+    ) -> None:
+        """Initialise payment flags grouped into sub-structs."""
+        self.costs = costs if costs is not None else _CostMods()
+        self.modes = modes if modes is not None else _AlternateModes()
+        self.keywords = keywords if keywords is not None else _KeywordPays()
+
+    @property
+    def kicker_times(self) -> int:
+        """Number of times kicker was paid."""
+        return self.costs.kicker_times
+
+    @kicker_times.setter
+    def kicker_times(self, value: int) -> None:
+        """Set kicker count."""
+        self.costs.kicker_times = value
+
+    @property
+    def entwined(self) -> bool:
+        """True when entwine was paid."""
+        return self.costs.entwined
+
+    @entwined.setter
+    def entwined(self, value: bool) -> None:
+        """Set entwine flag."""
+        self.costs.entwined = value
+
+    @property
+    def overloaded(self) -> bool:
+        """True when overload was paid."""
+        return self.costs.overloaded
+
+    @overloaded.setter
+    def overloaded(self, value: bool) -> None:
+        """Set overload flag."""
+        self.costs.overloaded = value
+
+    @property
+    def bestow(self) -> bool:
+        """True when bestow was paid."""
+        return self.costs.bestow
+
+    @bestow.setter
+    def bestow(self, value: bool) -> None:
+        """Set bestow flag."""
+        self.costs.bestow = value
+
+    @property
+    def paid_buyback(self) -> bool:
+        """True when buyback was paid."""
+        return self.costs.paid_buyback
+
+    @paid_buyback.setter
+    def paid_buyback(self, value: bool) -> None:
+        """Set paid_buyback flag."""
+        self.costs.paid_buyback = value
+
+    @property
+    def emerge(self) -> bool:
+        """True when emerge was paid."""
+        return self.modes.emerge
+
+    @emerge.setter
+    def emerge(self, value: bool) -> None:
+        """Set emerge flag."""
+        self.modes.emerge = value
+
+    @property
+    def evoke(self) -> bool:
+        """True when evoke was paid."""
+        return self.modes.evoke
+
+    @evoke.setter
+    def evoke(self, value: bool) -> None:
+        """Set evoke flag."""
+        self.modes.evoke = value
+
+    @property
+    def mutate(self) -> bool:
+        """True when mutate was paid."""
+        return self.modes.mutate
+
+    @mutate.setter
+    def mutate(self, value: bool) -> None:
+        """Set mutate flag."""
+        self.modes.mutate = value
+
+    @property
+    def casualty(self) -> bool:
+        """True when casualty was paid."""
+        return self.modes.casualty
+
+    @casualty.setter
+    def casualty(self, value: bool) -> None:
+        """Set casualty flag."""
+        self.modes.casualty = value
+
+    @property
+    def morph_face_down(self) -> bool:
+        """True when cast face-down via morph."""
+        return self.modes.morph_face_down
+
+    @morph_face_down.setter
+    def morph_face_down(self, value: bool) -> None:
+        """Set morph face-down flag."""
+        self.modes.morph_face_down = value
+
+    @property
+    def disguise_face_down(self) -> bool:
+        """True when cast face-down via disguise."""
+        return self.keywords.disguise_face_down
+
+    @disguise_face_down.setter
+    def disguise_face_down(self, value: bool) -> None:
+        """Set disguise face-down flag."""
+        self.keywords.disguise_face_down = value
+
+    @property
+    def dash(self) -> bool:
+        """True when dash was paid."""
+        return self.keywords.dash
+
+    @dash.setter
+    def dash(self, value: bool) -> None:
+        """Set dash flag."""
+        self.keywords.dash = value
+
+    @property
+    def blitz(self) -> bool:
+        """True when blitz was paid."""
+        return self.keywords.blitz
+
+    @blitz.setter
+    def blitz(self, value: bool) -> None:
+        """Set blitz flag."""
+        self.keywords.blitz = value
+
+    @property
+    def cleave(self) -> bool:
+        """True when cleave was paid."""
+        return self.keywords.cleave
+
+    @cleave.setter
+    def cleave(self, value: bool) -> None:
+        """Set cleave flag."""
+        self.keywords.cleave = value
+
+    @property
+    def conspire(self) -> bool:
+        """True when conspire was paid."""
+        return self.keywords.conspire
+
+    @conspire.setter
+    def conspire(self, value: bool) -> None:
+        """Set conspire flag."""
+        self.keywords.conspire = value
+
+
+@dataclass
+class _SpellCopy:
+    """Copy-creating keyword flags."""
+
+    storm: bool = False
+    replicate: bool = False
+
+
 @dataclass
 class SpellStackCopyFlags:
     """Storm, replicate, and cascade copy markers."""
 
-    storm: bool = False
-    replicate: bool = False
+    copy_source: _SpellCopy = field(default_factory=_SpellCopy)
     cascade: bool = False
     casualty: bool = False
     cleave: bool = False
     conspire: bool = False
+
+    @property
+    def storm(self) -> bool:
+        """True when this is a storm copy."""
+        return self.copy_source.storm
+
+    @storm.setter
+    def storm(self, value: bool) -> None:
+        """Set storm flag."""
+        self.copy_source.storm = value
+
+    @property
+    def replicate(self) -> bool:
+        """True when this is a replicate copy."""
+        return self.copy_source.replicate
+
+    @replicate.setter
+    def replicate(self, value: bool) -> None:
+        """Set replicate flag."""
+        self.copy_source.replicate = value
+
+
+@dataclass
+class _SpellCasting:
+    """Cast mode and copy flags for a spell on the stack."""
+
+    alternate: SpellAlternateCast = field(default_factory=SpellAlternateCast)
+    payment: SpellCastPayment = field(default_factory=SpellCastPayment)
+    copies: SpellStackCopyFlags = field(default_factory=SpellStackCopyFlags)
 
 
 @dataclass
@@ -275,9 +669,22 @@ class SpellOnStack(GameObject):
     targets: list[Target] = field(default_factory=list)
     modes: list[int] = field(default_factory=list)
     chosen_x: int = 0
-    alternate: SpellAlternateCast = field(default_factory=SpellAlternateCast)
-    payment: SpellCastPayment = field(default_factory=SpellCastPayment)
-    copies: SpellStackCopyFlags = field(default_factory=SpellStackCopyFlags)
+    casting: _SpellCasting = field(default_factory=_SpellCasting)
+
+    @property
+    def alternate(self) -> SpellAlternateCast:
+        """Alternate cast flags for this spell."""
+        return self.casting.alternate
+
+    @property
+    def payment(self) -> SpellCastPayment:
+        """Payment flags for this spell."""
+        return self.casting.payment
+
+    @property
+    def copies(self) -> SpellStackCopyFlags:
+        """Copy-trigger flags for this spell."""
+        return self.casting.copies
 
 
 def spell_is_ephemeral_copy(spell: SpellOnStack) -> bool:

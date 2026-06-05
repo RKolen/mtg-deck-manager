@@ -144,25 +144,31 @@ def protection_source_from_card(card: CardInfo) -> ProtectionSource:
     )
 
 
+@dataclass(frozen=True)
+class _SourceTypeFlags:
+    is_creature: bool = False
+    is_artifact: bool = False
+    is_enchantment: bool = False
+    is_instant: bool = False
+    is_sorcery: bool = False
+
+
 def protection_source_from_flags(
+    types: _SourceTypeFlags | None = None,
     *,
-    source_is_creature: bool = False,
-    source_is_artifact: bool = False,
-    source_is_enchantment: bool = False,
-    source_is_instant: bool = False,
-    source_is_sorcery: bool = False,
     source_colors: frozenset[str] | None = None,
 ) -> ProtectionSource:
-    """Build a ProtectionSource from explicit boolean flags (tests and legacy callers)."""
+    """Build a ProtectionSource from type flags and optional colors."""
+    flags = types or _SourceTypeFlags()
     normalized = frozenset(
         _normalize_protection_color(color) for color in (source_colors or frozenset())
     )
     return ProtectionSource(
-        is_creature=source_is_creature,
-        is_artifact=source_is_artifact,
-        is_enchantment=source_is_enchantment,
-        is_instant=source_is_instant,
-        is_sorcery=source_is_sorcery,
+        is_creature=flags.is_creature,
+        is_artifact=flags.is_artifact,
+        is_enchantment=flags.is_enchantment,
+        is_instant=flags.is_instant,
+        is_sorcery=flags.is_sorcery,
         colors=normalized,
     )
 

@@ -125,6 +125,15 @@ class TriggerDefinition:
     targets: tuple[Target, ...] = ()
 
 
+@dataclass(frozen=True)
+class TriggerSpec:
+    """Condition and optional payload for a trigger registration."""
+
+    condition: TriggerCondition
+    effect: Effect | None = None
+    targets: tuple[Target, ...] = ()
+
+
 @dataclass
 class TriggerRegistry:
     """Registry of triggered abilities that can fire from game events."""
@@ -135,9 +144,7 @@ class TriggerRegistry:
         self,
         permanent: Permanent,
         trigger_key: TriggerKey,
-        condition: TriggerCondition,
-        effect: Effect | None = None,
-        targets: tuple[Target, ...] = (),
+        spec: TriggerSpec,
     ) -> None:
         """Register a triggered ability controlled by a permanent."""
         self._definitions.append(
@@ -145,9 +152,9 @@ class TriggerRegistry:
                 source_permanent_id=permanent.obj_id,
                 controller_idx=permanent.controller_idx,
                 trigger_key=trigger_key,
-                condition=condition,
-                effect=effect,
-                targets=targets,
+                condition=spec.condition,
+                effect=spec.effect,
+                targets=spec.targets,
             )
         )
 

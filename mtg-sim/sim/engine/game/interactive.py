@@ -16,6 +16,7 @@ from engine.abilities.activated.bloodrush import can_bloodrush
 from engine.abilities.keywords.other.boast import can_boast, clear_boast_turn_counters
 from engine.abilities.keywords.other.bushido import clear_bushido_combat_markers
 from engine.abilities.keywords.other.craft import has_craft
+from engine.abilities.keywords.casting.delayed_exile_cast import _CastTiming
 from engine.abilities.keywords.casting.disturb import can_cast_via_disturb
 from engine.abilities.keywords.casting.escape import can_cast_via_escape, escape_exiles_required
 from engine.abilities.keywords.casting.flashback import can_cast_via_flashback
@@ -48,6 +49,7 @@ from engine.core.game_object import CardObject
 from engine.core.game_state import GameState
 from engine.core.turn_structure import PriorityPassOutcome, Step
 from engine.core.zones import Zone
+from engine.game.cast_flow import _TargetRef
 from engine.game.helpers import (
     CastAnnounceOptions,
     card_names,
@@ -56,9 +58,15 @@ from engine.game.helpers import (
     require_card_info,
 )
 from engine.game.combat_actions import CombatActionsMixin
-from engine.game.spell_stack import SpellStackMixin
+from engine.game.spell_stack import SpellStackMixin, _HandCastRequest
 from mcts import llm_pick
 from deck_registry import CardInfo
+
+
+@dataclass(frozen=True)
+class _GameSetup:
+    on_the_play: bool = True
+    pilot_prompt: str = ""
 
 
 @dataclass
@@ -67,12 +75,21 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
 
     state: GameState
     phase: str = "mulligan"
-    on_the_play: bool = True
     mulligans_taken: int = 0
-    pilot_prompt: str = ""
     pending_attackers: list[str] = field(default_factory=list)
     pending_opp_attackers: list[str] = field(default_factory=list)
     pending_blockers: dict[str, str] = field(default_factory=dict)
+    _setup: _GameSetup = field(default_factory=_GameSetup)
+
+    @property
+    def on_the_play(self) -> bool:
+        """Whether the local player is on the play."""
+        return self._setup.on_the_play
+
+    @property
+    def pilot_prompt(self) -> str:
+        """Pilot LLM prompt string."""
+        return self._setup.pilot_prompt
 
     def action_keep(self) -> dict:
         """Keep the current opening hand and start the first player turn."""
@@ -143,10 +160,12 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
         """Cast a spell through the stack, auto-passing while no responses exist."""
         return self._announce_cast(
             hand_idx,
-            target_uid,
-            target_player,
-            auto_resolve=True,
-            cast_options=cast_options,
+            _HandCastRequest(
+                target_uid_str=target_uid,
+                target_player_idx=target_player,
+                auto_resolve=True,
+                cast_options=cast_options,
+            ),
         )
 
     def action_cast_madness(
@@ -174,145 +193,12 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
         """Cast a spell and leave it on the stack for explicit priority passes."""
         return self._announce_cast(
             hand_idx,
-            target_uid,
-            target_player,
-            auto_resolve=False,
-            cast_options=cast_options,
-        )
-
-    def action_cast_disturb(
-        self,
-        graveyard_idx: int,
-        target_uid: str | None = None,
-        target_player: int | None = None,
-    ) -> dict:
-        """Cast a creature from the graveyard for its disturb cost."""
-        return self._announce_disturb_cast(
-            graveyard_idx,
-            target_uid,
-            target_player,
-            auto_resolve=True,
-        )
-
-    def action_cast_flashback(
-        self,
-        graveyard_idx: int,
-        target_uid: str | None = None,
-        target_player: int | None = None,
-    ) -> dict:
-        """Cast a card from the graveyard for its flashback cost."""
-        return self._announce_flashback_cast(
-            graveyard_idx,
-            target_uid,
-            target_player,
-            auto_resolve=True,
-        )
-
-    def action_cast_harmonize(
-        self,
-        graveyard_idx: int,
-        target_uid: str | None = None,
-        target_player: int | None = None,
-        harmonize_creature_ids: list[str] | None = None,
-    ) -> dict:
-        """Cast a card from the graveyard for its harmonize cost."""
-        ids = [int(uid) for uid in (harmonize_creature_ids or [])]
-        return self._announce_harmonize_cast(
-            graveyard_idx,
-            target_uid,
-            target_player,
-            auto_resolve=True,
-            harmonize_creature_ids=ids,
-        )
-
-    def action_cast_escape(
-        self,
-        graveyard_idx: int,
-        target_uid: str | None = None,
-        target_player: int | None = None,
-        escape_exile_indices: list[int] | None = None,
-    ) -> dict:
-        """Cast a card from the graveyard for its escape cost."""
-        return self._announce_escape_cast(
-            graveyard_idx,
-            target_uid,
-            target_player,
-            auto_resolve=True,
-            escape_exile_indices=escape_exile_indices,
-        )
-
-    def action_cast_jump_start(
-        self,
-        graveyard_idx: int,
-        target_uid: str | None = None,
-        target_player: int | None = None,
-        discard_hand_idx: int | None = None,
-    ) -> dict:
-        """Cast a card from the graveyard for its jump-start cost."""
-        return self._announce_jump_start_cast(
-            graveyard_idx,
-            target_uid,
-            target_player,
-            auto_resolve=True,
-            discard_hand_idx=discard_hand_idx,
-        )
-
-    def action_cast_retrace(
-        self,
-        graveyard_idx: int,
-        target_uid: str | None = None,
-        target_player: int | None = None,
-        discard_hand_idx: int | None = None,
-    ) -> dict:
-        """Cast a card from the graveyard for its mana cost and a discarded land."""
-        return self._announce_retrace_cast(
-            graveyard_idx,
-            target_uid,
-            target_player,
-            auto_resolve=True,
-            discard_hand_idx=discard_hand_idx,
-        )
-
-    def action_cast_foretell(
-        self,
-        exile_idx: int,
-        target_uid: str | None = None,
-        target_player: int | None = None,
-    ) -> dict:
-        """Cast a foretold card from exile for its foretell cost."""
-        return self._announce_cast_foretell(
-            exile_idx,
-            target_uid,
-            target_player,
-            auto_resolve=True,
-        )
-
-    def action_cast_plot(
-        self,
-        exile_idx: int,
-        target_uid: str | None = None,
-        target_player: int | None = None,
-    ) -> dict:
-        """Cast a plotted sorcery from exile without paying mana."""
-        return self._announce_cast_plot(
-            exile_idx,
-            target_uid,
-            target_player,
-            auto_resolve=True,
-        )
-
-    def action_cast_aftermath(
-        self,
-        graveyard_idx: int,
-        target_uid: str | None = None,
-        target_player: int | None = None,
-    ) -> dict:
-        """Cast an aftermath card from the graveyard during a main phase."""
-        return self._announce_aftermath_cast(
-            graveyard_idx,
-            target_uid,
-            target_player,
-            auto_resolve=True,
+            _HandCastRequest(
+                target_uid_str=target_uid,
+                target_player_idx=target_player,
+                auto_resolve=False,
+                cast_options=cast_options,
+            ),
         )
 
     def action_pass_priority(self) -> dict:
@@ -425,6 +311,14 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
             actions.append("embalm")
         self._append_delayed_cast_setup_actions(actions)
         self._append_graveyard_cast_actions(actions)
+        self._append_battlefield_actions(actions)
+        if self.phase == "main1":
+            actions.append("go_to_attack")
+        actions.append("end_turn")
+        return actions
+
+    def _append_battlefield_actions(self, actions: list[str]) -> None:
+        """Append battlefield ability actions available in the main phase."""
         if self._battlefield_can_craft():
             actions.append("craft")
         if self._battlefield_can_boast():
@@ -435,10 +329,6 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
             actions.append("outlast")
         if self._battlefield_can_turn_up_morph():
             actions.append("turn_up_morph")
-        if self.phase == "main1":
-            actions.append("go_to_attack")
-        actions.append("end_turn")
-        return actions
 
     def _append_delayed_cast_setup_actions(self, actions: list[str]) -> None:
         """Append suspend, foretell, plot, madness, and exile cast actions."""
@@ -581,7 +471,9 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
                 continue
             if card.exiled_cast_mode != 'foretell':
                 continue
-            if can_cast_foretold(card.card_info, self.phase, True):
+            if can_cast_foretold(card.card_info, _CastTiming(
+                phase=self.phase, stack_is_empty=True
+            )):
                 return True
         return False
 
@@ -594,7 +486,7 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
                 continue
             if card.exiled_cast_mode != 'plot':
                 continue
-            if can_cast_plotted(card.card_info, self.phase, True):
+            if can_cast_plotted(card.card_info, _CastTiming(phase=self.phase, stack_is_empty=True)):
                 return True
         return False
 
@@ -905,8 +797,7 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
         targets = self._put_spell_on_stack(
             player_idx=1,
             card=card,
-            target_uid_str=None,
-            target_player_idx=target_player,
+            target_ref=_TargetRef(None, target_player),
         )
         self._log("opponent", "cast", f"{card_info.name} on stack")
         self.state.fire_spell_cast_triggers(card, tuple(targets))

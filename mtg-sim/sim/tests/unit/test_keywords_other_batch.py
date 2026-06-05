@@ -7,7 +7,7 @@ from engine.abilities.keywords.other.extort import apply_extort_on_spell_cast
 from engine.abilities.keywords.other.register import register_permanent_other_keywords
 from engine.core.game_object import CardObject, TriggeredAbilityOnStack
 from engine.core.zones import Zone
-from tests.conftest import fresh_game, make_card, make_creature, place_on_battlefield
+from tests.conftest import _CardStats, fresh_game, make_card, make_creature, place_on_battlefield
 
 
 def test_extort_drains_on_spell_cast():
@@ -47,7 +47,7 @@ def test_modular_transfers_counters_on_death():
     )
     donor.counters['+1/+1'] = 2
     recipient = place_on_battlefield(
-        make_card('Recipient', type_line='Artifact Creature — Golem', pt='1/1'),
+        make_card('Recipient', type_line='Artifact Creature — Golem', stats=_CardStats(pt='1/1')),
         0,
         game.zones,
     )

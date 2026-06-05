@@ -2,7 +2,9 @@
 
 from engine.core.game_object import CardObject
 from engine.game import create_game
-from tests.conftest import make_card, make_creature, make_deck, make_instant, place_on_battlefield
+from tests.conftest import (_CardStats, make_card, make_creature,
+                                make_deck, make_instant, place_on_battlefield
+                            )
 
 
 def test_cycle_draws_a_card():
@@ -54,8 +56,8 @@ def test_crew_vehicle_in_combat():
     vehicle_info = make_card(
         name="Sky Skiff",
         type_line="Artifact — Vehicle",
-        pt="3/3",
         oracle="Crew 1",
+        stats=_CardStats(pt="3/3"),
     )
     game = create_game(make_deck(lands=20), make_deck(lands=20))
     game.action_keep()

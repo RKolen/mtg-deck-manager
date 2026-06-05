@@ -12,9 +12,10 @@ Split from the former monolithic game.py:
 """
 
 from engine.game.interactive import InteractiveGame
-from engine.game.session import create_game, get_game, remove_game
+from engine.game.session import _GameConfig, create_game, get_game, remove_game
 
 __all__ = [
+    "_GameConfig",
     "InteractiveGame",
     "create_game",
     "get_game",

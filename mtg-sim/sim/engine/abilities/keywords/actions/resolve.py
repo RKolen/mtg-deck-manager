@@ -170,6 +170,19 @@ if TYPE_CHECKING:
 DrawFn = Callable[[int, int], list[CardObject]]
 
 
+@dataclass(frozen=True)
+class _ActionTargets:
+    target_creature_uid: str | None = None
+    second_creature_uid: str | None = None
+
+
+@dataclass(frozen=True)
+class _ActionExtras:
+    scry_bottom_indices: tuple[int, ...] = ()
+    draw_fn: DrawFn | None = None
+    skip_actions: frozenset[str] = field(default_factory=frozenset)
+
+
 @dataclass
 class ActionContext:
     """Inputs for resolving keyword actions on a spell or ability."""
@@ -178,11 +191,33 @@ class ActionContext:
     game: GameState | None
     controller_idx: int
     oracle_text: str
-    target_creature_uid: str | None = None
-    second_creature_uid: str | None = None
-    scry_bottom_indices: tuple[int, ...] = ()
-    draw_fn: DrawFn | None = None
-    skip_actions: frozenset[str] = field(default_factory=frozenset)
+    targets: _ActionTargets = field(default_factory=_ActionTargets)
+    extras: _ActionExtras = field(default_factory=_ActionExtras)
+
+    @property
+    def target_creature_uid(self) -> str | None:
+        """Primary target creature UID."""
+        return self.targets.target_creature_uid
+
+    @property
+    def second_creature_uid(self) -> str | None:
+        """Secondary target creature UID."""
+        return self.targets.second_creature_uid
+
+    @property
+    def scry_bottom_indices(self) -> tuple[int, ...]:
+        """Indices of cards to bottom when scrying."""
+        return self.extras.scry_bottom_indices
+
+    @property
+    def draw_fn(self) -> DrawFn | None:
+        """Function to draw cards for the controller."""
+        return self.extras.draw_fn
+
+    @property
+    def skip_actions(self) -> frozenset[str]:
+        """Action names to skip during resolution."""
+        return self.extras.skip_actions
 
 
 def _opponent_idx(controller_idx: int) -> int:

@@ -1,15 +1,15 @@
 """Integration tests for the Phase B interactive game loop."""
 
 from deck_registry import CardInfo
-from engine.game import create_game, get_game, remove_game
+from engine.game import _GameConfig, create_game, get_game, remove_game
 from engine.core.game_object import CardObject, Effect, GameObject
 from engine.core.game_state import GameState
 from engine.core.zones import Zone
-from engine.rules.triggers import TriggerKey, is_attacks, is_beginning_of_combat
+from engine.rules.triggers import TriggerKey, TriggerSpec, is_attacks, is_beginning_of_combat
 from engine.rules.triggers import is_beginning_of_upkeep, is_blocks, is_dies
 from engine.rules.triggers import is_draws_card, is_end_step, is_enters_battlefield
 from engine.rules.triggers import is_spell_cast
-from tests.conftest import make_card, make_creature, make_deck, make_land
+from tests.conftest import _CardStats, make_card, make_creature, make_deck, make_land
 from tests.conftest import place_on_battlefield
 
 
@@ -18,8 +18,7 @@ def test_create_game_returns_legacy_client_shape():
     game = create_game(
         make_deck(lands=20),
         make_deck(lands=20),
-        player_name="You",
-        opponent_name="Opponent",
+        _GameConfig(player_name="You", opponent_name="Opponent"),
     )
     data = game.to_client()
     assert data["gameId"]
@@ -31,7 +30,7 @@ def test_create_game_returns_legacy_client_shape():
 
 def test_keep_starts_first_main_phase_on_the_play():
     """Keeping on the play skips the first draw and enters main1."""
-    game = create_game(make_deck(lands=20), make_deck(lands=20), on_the_play=True)
+    game = create_game(make_deck(lands=20), make_deck(lands=20), _GameConfig(on_the_play=True))
     data = game.action_keep()
     assert data["phase"] == "main1"
     assert len(data["playerHand"]) == 7
@@ -40,15 +39,14 @@ def test_keep_starts_first_main_phase_on_the_play():
 
 def test_draw_card_trigger_resolves_from_turn_draw():
     """Draw-card triggers emitted by the turn draw resolve before main phase."""
-    game = create_game(make_deck(lands=20), make_deck(lands=20), on_the_play=True)
+    game = create_game(make_deck(lands=20), make_deck(lands=20), _GameConfig(on_the_play=True))
     game.action_keep()
     observer = place_on_battlefield(make_creature("Draw Observer", 1, 1), 0, game.state.zones)
     game.action_end_turn()
     game.state.trigger_registry.register(
         observer,
         TriggerKey.DRAWS_CARD,
-        is_draws_card,
-        effect=_GainLifeEffect(player_idx=0, amount=1),
+        TriggerSpec(condition=is_draws_card, effect=_GainLifeEffect(player_idx=0, amount=1)),
     )
 
     data = game.action_draw()
@@ -87,8 +85,7 @@ def test_cast_zero_mana_creature_enters_battlefield():
     memnite = make_card(
         name="Memnite",
         type_line="Artifact Creature — Construct",
-        cmc=0,
-        pt="1/1",
+        stats=_CardStats(cmc=0.0, pt="1/1"),
         mana_cost="",
     )
     game = create_game([memnite for _ in range(20)], make_deck(lands=20))
@@ -105,8 +102,7 @@ def test_etb_trigger_resolves_from_creature_spell_resolution():
     memnite = make_card(
         name="Memnite",
         type_line="Artifact Creature — Construct",
-        cmc=0,
-        pt="1/1",
+        stats=_CardStats(cmc=0.0, pt="1/1"),
         mana_cost="",
     )
     game = create_game([memnite for _ in range(20)], make_deck(lands=20))
@@ -119,8 +115,10 @@ def test_etb_trigger_resolves_from_creature_spell_resolution():
     game.state.trigger_registry.register(
         observer,
         TriggerKey.ENTERS_BATTLEFIELD,
-        is_enters_battlefield,
-        effect=_GainLifeEffect(player_idx=0, amount=1),
+        TriggerSpec(
+            condition=is_enters_battlefield,
+            effect=_GainLifeEffect(player_idx=0, amount=1),
+        ),
     )
 
     data = game.action_cast(0)
@@ -134,8 +132,7 @@ def test_cast_uses_stack_before_auto_resolution():
     memnite = make_card(
         name="Memnite",
         type_line="Artifact Creature — Construct",
-        cmc=0,
-        pt="1/1",
+        stats=_CardStats(cmc=0.0, pt="1/1"),
         mana_cost="",
     )
     game = create_game([memnite for _ in range(20)], make_deck(lands=20))
@@ -154,8 +151,7 @@ def test_cast_spell_trigger_goes_above_cast_spell_on_stack():
     memnite = make_card(
         name="Memnite",
         type_line="Artifact Creature — Construct",
-        cmc=0,
-        pt="1/1",
+        stats=_CardStats(cmc=0.0, pt="1/1"),
         mana_cost="",
     )
     game = create_game([memnite for _ in range(20)], make_deck(lands=20))
@@ -168,7 +164,7 @@ def test_cast_spell_trigger_goes_above_cast_spell_on_stack():
     game.state.trigger_registry.register(
         observer,
         TriggerKey.SPELL_CAST,
-        is_spell_cast,
+        TriggerSpec(condition=is_spell_cast),
     )
 
     data = game.action_cast_to_stack(0)
@@ -182,8 +178,7 @@ def test_triggered_ability_effect_resolves_before_spell_below_it():
     memnite = make_card(
         name="Memnite",
         type_line="Artifact Creature — Construct",
-        cmc=0,
-        pt="1/1",
+        stats=_CardStats(cmc=0.0, pt="1/1"),
         mana_cost="",
     )
     game = create_game([memnite for _ in range(20)], make_deck(lands=20))
@@ -196,8 +191,7 @@ def test_triggered_ability_effect_resolves_before_spell_below_it():
     game.state.trigger_registry.register(
         observer,
         TriggerKey.SPELL_CAST,
-        is_spell_cast,
-        effect=_GainLifeEffect(player_idx=0, amount=1),
+        TriggerSpec(condition=is_spell_cast, effect=_GainLifeEffect(player_idx=0, amount=1)),
     )
 
     data = game.action_cast_to_stack(0)
@@ -216,14 +210,13 @@ def test_instant_can_be_cast_while_spell_is_on_stack():
     memnite = make_card(
         name="Memnite",
         type_line="Artifact Creature — Construct",
-        cmc=0,
-        pt="1/1",
+        stats=_CardStats(cmc=0.0, pt="1/1"),
         mana_cost="",
     )
     shock = make_card(
         name="Shock",
         type_line="Instant",
-        cmc=0,
+        stats=_CardStats(cmc=0.0, pt="0/0"),
         oracle="Shock deals 2 damage to any target.",
         mana_cost="",
     )
@@ -252,14 +245,13 @@ def test_sorcery_speed_spell_unavailable_while_stack_is_not_empty():
     memnite = make_card(
         name="Memnite",
         type_line="Artifact Creature — Construct",
-        cmc=0,
-        pt="1/1",
+        stats=_CardStats(cmc=0.0, pt="1/1"),
         mana_cost="",
     )
     divination = make_card(
         name="Divination",
         type_line="Sorcery",
-        cmc=0,
+        stats=_CardStats(cmc=0.0, pt="0/0"),
         oracle="Draw two cards.",
         mana_cost="",
     )
@@ -280,11 +272,11 @@ def test_spell_with_illegal_target_fizzles_through_stack():
     shock = make_card(
         name="Shock",
         type_line="Instant",
-        cmc=0,
+        stats=_CardStats(cmc=0.0, pt="0/0"),
         oracle="Shock deals 2 damage to any target.",
         mana_cost="",
     )
-    bear = make_card(name="Bear", type_line="Creature — Bear", cmc=2, pt="2/2")
+    bear = make_card(name="Bear", type_line="Creature — Bear", stats=_CardStats(cmc=2.0, pt="2/2"))
     game = create_game([shock for _ in range(20)], make_deck(lands=20))
     game.action_keep()
     target_card = CardObject(controller_idx=1, owner_idx=1, card_info=bear)
@@ -303,7 +295,7 @@ def test_dies_trigger_resolves_from_removal_spell_resolution():
     doom_blade = make_card(
         name="Doom Blade",
         type_line="Instant",
-        cmc=0,
+        stats=_CardStats(cmc=0.0, pt="0/0"),
         oracle="Destroy target creature.",
         mana_cost="",
     )
@@ -318,8 +310,7 @@ def test_dies_trigger_resolves_from_removal_spell_resolution():
     game.state.trigger_registry.register(
         observer,
         TriggerKey.DIES,
-        is_dies,
-        effect=_GainLifeEffect(player_idx=0, amount=1),
+        TriggerSpec(condition=is_dies, effect=_GainLifeEffect(player_idx=0, amount=1)),
     )
 
     data = game.action_cast(0, target_uid=str(target.obj_id))
@@ -334,15 +325,14 @@ def test_phyrexian_life_payment_casts_with_no_mana():
     growth = make_card(
         name="Mutagenic Growth",
         type_line="Instant",
-        cmc=1,
+        stats=_CardStats(cmc=1.0, pt="0/0"),
         oracle="Target creature gets +2/+2 until end of turn.",
         mana_cost="{G/P}",
     )
     creature = make_card(
         name="Hero",
         type_line="Creature — Human",
-        cmc=0,
-        pt="1/1",
+        stats=_CardStats(cmc=0.0, pt="1/1"),
         mana_cost="",
     )
     game = create_game(make_deck(lands=20), make_deck(lands=20))
@@ -424,8 +414,7 @@ def test_player_attack_uses_combat_rules_for_unblocked_damage():
     memnite = make_card(
         name="Memnite",
         type_line="Artifact Creature — Construct",
-        cmc=0,
-        pt="1/1",
+        stats=_CardStats(cmc=0.0, pt="1/1"),
         mana_cost="",
     )
     game = create_game([memnite for _ in range(20)], make_deck(lands=20))
@@ -446,8 +435,7 @@ def test_player_attack_trigger_resolves_before_combat_damage():
     memnite = make_card(
         name="Memnite",
         type_line="Artifact Creature — Construct",
-        cmc=0,
-        pt="1/1",
+        stats=_CardStats(cmc=0.0, pt="1/1"),
         mana_cost="",
     )
     game = create_game([memnite for _ in range(20)], make_deck(lands=20))
@@ -458,8 +446,7 @@ def test_player_attack_trigger_resolves_before_combat_damage():
     game.state.trigger_registry.register(
         attacker,
         TriggerKey.ATTACKS,
-        is_attacks,
-        effect=_GainLifeEffect(player_idx=0, amount=1),
+        TriggerSpec(condition=is_attacks, effect=_GainLifeEffect(player_idx=0, amount=1)),
     )
 
     game.action_go_to_attack()
@@ -502,8 +489,7 @@ def test_block_trigger_resolves_before_combat_damage():
     game.state.trigger_registry.register(
         blocker,
         TriggerKey.BLOCKS,
-        is_blocks,
-        effect=_GainLifeEffect(player_idx=0, amount=1),
+        TriggerSpec(condition=is_blocks, effect=_GainLifeEffect(player_idx=0, amount=1)),
     )
     game.action_end_turn()
 
@@ -522,8 +508,10 @@ def test_beginning_of_combat_trigger_resolves_on_attack_step_entry():
     game.state.trigger_registry.register(
         observer,
         TriggerKey.BEGINNING_OF_COMBAT,
-        is_beginning_of_combat,
-        effect=_GainLifeEffect(player_idx=0, amount=1),
+        TriggerSpec(
+            condition=is_beginning_of_combat,
+            effect=_GainLifeEffect(player_idx=0, amount=1),
+        ),
     )
 
     data = game.action_go_to_attack()
@@ -540,8 +528,7 @@ def test_end_step_trigger_resolves_when_player_ends_turn():
     game.state.trigger_registry.register(
         observer,
         TriggerKey.END_STEP,
-        is_end_step,
-        effect=_GainLifeEffect(player_idx=0, amount=1),
+        TriggerSpec(condition=is_end_step, effect=_GainLifeEffect(player_idx=0, amount=1)),
     )
 
     data = game.action_end_turn()
@@ -559,8 +546,10 @@ def test_upkeep_trigger_resolves_before_player_draw():
     game.state.trigger_registry.register(
         observer,
         TriggerKey.BEGINNING_OF_UPKEEP,
-        is_beginning_of_upkeep,
-        effect=_GainLifeEffect(player_idx=0, amount=1),
+        TriggerSpec(
+            condition=is_beginning_of_upkeep,
+            effect=_GainLifeEffect(player_idx=0, amount=1),
+        ),
     )
 
     data = game.action_draw()
@@ -583,8 +572,7 @@ def test_opponent_creature_cast_uses_stack_and_resolves():
     memnite = make_card(
         name="Memnite",
         type_line="Artifact Creature — Construct",
-        cmc=0,
-        pt="1/1",
+        stats=_CardStats(cmc=0.0, pt="1/1"),
         mana_cost="",
     )
     game = create_game(make_deck(lands=20), [memnite for _ in range(20)])
@@ -604,7 +592,7 @@ def test_opponent_burn_cast_uses_stack_and_damages_player():
     shock = make_card(
         name="Shock",
         type_line="Instant",
-        cmc=0,
+        stats=_CardStats(cmc=0.0, pt="0/0"),
         oracle="Shock deals 2 damage to any target.",
         mana_cost="",
     )
@@ -647,8 +635,7 @@ def _heroic_cards() -> tuple[CardInfo, CardInfo]:
     crusader = make_card(
         name="Akroan Crusader",
         type_line="Creature — Human Soldier",
-        cmc=0,
-        pt="1/1",
+        stats=_CardStats(cmc=0.0, pt="1/1"),
         oracle=(
             "Heroic — Whenever you cast a spell that targets Akroan Crusader, "
             "create a 1/1 red Soldier creature token."
@@ -658,7 +645,7 @@ def _heroic_cards() -> tuple[CardInfo, CardInfo]:
     growth = make_card(
         name="Titan's Strength",
         type_line="Instant",
-        cmc=0,
+        stats=_CardStats(cmc=0.0, pt="0/0"),
         oracle="Target creature gets +3/+1 until end of turn.",
         mana_cost="",
     )
@@ -670,15 +657,14 @@ def _prowess_cards() -> tuple[CardInfo, CardInfo]:
     swiftspear = make_card(
         name="Monastery Swiftspear",
         type_line="Creature — Human Monk",
-        cmc=0,
-        pt="1/2",
+        stats=_CardStats(cmc=0.0, pt="1/2"),
         oracle="Prowess",
         mana_cost="",
     )
     growth = make_card(
         name="Titan's Strength",
         type_line="Instant",
-        cmc=0,
+        stats=_CardStats(cmc=0.0, pt="0/0"),
         oracle="Target creature gets +3/+1 until end of turn.",
         mana_cost="",
     )

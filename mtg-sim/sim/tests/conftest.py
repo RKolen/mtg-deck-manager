@@ -6,12 +6,13 @@ parameters inside test functions. Import directly from this module.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
-from deck_registry import CardInfo
+from deck_registry import CardInfo, ManaProfile
 from engine.abilities.keywords import enters_ready
 from engine.core.game_object import CardObject, Permanent
-from engine.core.game_state import GameState, PlayerInfo
+from engine.core.game_state import GameState, PlayerInfo, _PlayerVitals
 from engine.core.turn_structure import TurnRunner
 from engine.core.zones import Zone, ZoneManager
 from engine.game.cast_context import (
@@ -21,6 +22,7 @@ from engine.game.cast_context import (
     CastTargetingIds,
     HandAlternateCastChoices,
     HandCastCostChoices,
+    _CostConditionAlts,
 )
 from engine.game.face_alternate_cast import FaceAlternateCastFlags
 from engine.rules.combat import resolve_combat_damage
@@ -83,13 +85,15 @@ def cast_announce_options(**kwargs: Any) -> CastAnnounceOptions:
             paid_conspire=bool(flat.get("paid_conspire", False)),
         ),
         alternate=HandAlternateCastChoices(
-            cast_for_miracle=bool(flat.get("cast_for_miracle", False)),
             cast_for_emerge=bool(flat.get("cast_for_emerge", False)),
             cast_for_evoke=bool(flat.get("cast_for_evoke", False)),
             cast_for_mutate=bool(flat.get("cast_for_mutate", False)),
-            cast_for_freerunning=bool(flat.get("cast_for_freerunning", False)),
-            cast_for_spectacle=bool(flat.get("cast_for_spectacle", False)),
             cast_for_cleave=bool(flat.get("cast_for_cleave", False)),
+            conditions=_CostConditionAlts(
+                cast_for_miracle=bool(flat.get("cast_for_miracle", False)),
+                cast_for_freerunning=bool(flat.get("cast_for_freerunning", False)),
+                cast_for_spectacle=bool(flat.get("cast_for_spectacle", False)),
+            ),
             face=FaceAlternateCastFlags(
                 cast_for_morph=bool(flat.get("cast_for_morph", False)),
                 cast_for_disguise=bool(flat.get("cast_for_disguise", False)),
@@ -151,24 +155,31 @@ def put_lands_on_battlefield(game: Any, count: int, player_idx: int = 0) -> None
 # CardInfo builders
 # ---------------------------------------------------------------------------
 
+@dataclass
+class _CardStats:
+    """Optional CMC and PT override for make_card."""
+
+    cmc: float = 2.0
+    pt: str = "2/2"
+
+
 def make_card(
     name: str = "Test Card",
     type_line: str = "Creature — Human",
-    cmc: float = 2.0,
-    pt: str = "2/2",
     oracle: str = "",
     mana_cost: str = "",
+    stats: _CardStats | None = None,
 ) -> CardInfo:
     """Create a CardInfo with sensible defaults for testing."""
+    st = stats or _CardStats()
     return CardInfo(
         name=name,
         quantity=1,
         sideboard=False,
-        cmc=cmc,
+        mana=ManaProfile(cmc=st.cmc, cost=mana_cost),
         type_line=type_line,
-        pt=pt,
+        pt=st.pt,
         oracle_text=oracle,
-        mana_cost=mana_cost,
     )
 
 
@@ -178,12 +189,10 @@ def make_land(name: str = "Plains", color: str = "W") -> CardInfo:
         name=name,
         quantity=1,
         sideboard=False,
-        cmc=0.0,
+        mana=ManaProfile(cmc=0.0, cost="", produced=[color]),
         type_line="Basic Land — Plains",
         pt="0/0",
         oracle_text="",
-        mana_cost="",
-        produced_mana=[color],
     )
 
 
@@ -196,7 +205,6 @@ def make_creature(
     name: str = "Grizzly Bears",
     power: int = 2,
     toughness: int = 2,
-    cmc: float = 2.0,
     oracle: str = "",
     mana_cost: str = "{1}{G}",
 ) -> CardInfo:
@@ -204,10 +212,9 @@ def make_creature(
     return make_card(
         name=name,
         type_line="Creature — Bear",
-        cmc=cmc,
-        pt=f"{power}/{toughness}",
         oracle=oracle,
         mana_cost=mana_cost,
+        stats=_CardStats(cmc=2.0, pt=f"{power}/{toughness}"),
     )
 
 
@@ -221,9 +228,9 @@ def make_instant(
     return make_card(
         name=name,
         type_line="Instant",
-        cmc=cmc,
         oracle=oracle,
         mana_cost=mana_cost,
+        stats=_CardStats(cmc=cmc, pt="0/0"),
     )
 
 
@@ -237,9 +244,9 @@ def make_artifact(
     return make_card(
         name=name,
         type_line="Artifact",
-        cmc=cmc,
         oracle=oracle,
         mana_cost=mana_cost,
+        stats=_CardStats(cmc=cmc, pt="0/0"),
     )
 
 
@@ -321,8 +328,8 @@ def fresh_game(
     """Return a minimal GameState for testing with empty zones."""
     zones = ZoneManager()
     players = [
-        PlayerInfo(name=player_name, life=player_life),
-        PlayerInfo(name=opponent_name, life=opponent_life),
+        PlayerInfo(name=player_name, vitals=_PlayerVitals(life=player_life)),
+        PlayerInfo(name=opponent_name, vitals=_PlayerVitals(life=opponent_life)),
     ]
     runner = TurnRunner()
     runner.begin_turn(active_player_idx=0)
@@ -335,3 +342,32 @@ def fresh_game(
         turn=runner,
         stack=stack,
     )
+
+
+# ---------------------------------------------------------------------------
+# Shared card/game setup helpers (used across multiple test modules)
+# ---------------------------------------------------------------------------
+
+def make_entwine_charm(entwine_cost_str: str) -> CardInfo:
+    """Return a modal instant with entwine using the given cost string."""
+    return make_instant(
+        'Charm',
+        cmc=0,
+        oracle=(
+            'Choose one —\n'
+            '• Charm deals 2 damage to any target.\n'
+            '• Target player draws a card.\n'
+            f'Entwine {entwine_cost_str}'
+        ),
+    )
+
+
+def hexproof_game_setup() -> tuple[GameState, Permanent]:
+    """Return a game and a hexproof creature controlled by player 0."""
+    game = fresh_game()
+    protected = place_on_battlefield(
+        make_creature('Slippery', oracle='Hexproof'),
+        0,
+        game.zones,
+    )
+    return game, protected
