@@ -16,9 +16,9 @@ use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;
 
 /**
- * Proxies simulation requests to the Python mtg-sim service and persists results.
+ * Proxies simulation requests to the Python mtg-sim service.
  *
- * POST /api/simulate
+ * POST /api/simulate.
  *
  * Request body:
  *   playerDeckId    (int)     - Drupal node ID of the player's deck
@@ -30,8 +30,7 @@ use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;
  * Response: the full simulation statistics JSON from the Python service,
  * also persisted as a simulation_result node for historical comparison.
  *
- * Requires the MTG_SIM_SERVICE_URL environment variable to be set in DDEV
- * (web_environment in .ddev/config.yaml) pointing at the running sim service.
+ * Requires MTG_SIM_SERVICE_URL in DDEV web_environment (config.local.yaml).
  *
  * @RestResource(
  *   id = "simulation",
@@ -103,17 +102,31 @@ final class SimulationResource extends ResourceBase {
     $simServiceUrl = (string) getenv('MTG_SIM_SERVICE_URL');
     if ($simServiceUrl === '') {
       throw new ServiceUnavailableHttpException(
-        null,
+        NULL,
         'MTG_SIM_SERVICE_URL env var is not set. Set it to the sim service base URL and restart DDEV.',
+      );
+    }
+
+    $simBase = rtrim($simServiceUrl, '/');
+    try {
+      $this->httpClient->get($simBase . '/health', ['timeout' => 5, 'connect_timeout' => 3]);
+    }
+    catch (GuzzleException $e) {
+      $this->logger->error('Simulation service health check failed: @msg', ['@msg' => $e->getMessage()]);
+      throw new ServiceUnavailableHttpException(
+        NULL,
+        'Simulation service is not reachable at ' . $simBase
+        . '. Start it with ./start.sh from the repo root.',
       );
     }
 
     try {
       $httpResponse = $this->httpClient->post(
-        rtrim($simServiceUrl, '/') . '/simulate',
+        $simBase . '/simulate',
         [
-          'json'    => $payload,
-          'timeout' => 600,
+          'json'             => $payload,
+          'timeout'          => 600,
+          'connect_timeout'  => 10,
         ],
       );
       $result = json_decode((string) $httpResponse->getBody(), TRUE, 512, JSON_THROW_ON_ERROR);
@@ -121,8 +134,9 @@ final class SimulationResource extends ResourceBase {
     catch (GuzzleException $e) {
       $this->logger->error('Simulation service unavailable: @msg', ['@msg' => $e->getMessage()]);
       throw new ServiceUnavailableHttpException(
-        null,
-        'Could not reach the simulation service. Check MTG_SIM_SERVICE_URL and ensure the service is running.',
+        NULL,
+        'Simulation request failed: ' . $e->getMessage()
+        . '. Long runs (50+ games with LLM pilots) can take several minutes.',
       );
     }
 

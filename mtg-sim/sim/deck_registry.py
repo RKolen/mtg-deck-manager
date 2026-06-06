@@ -216,24 +216,46 @@ def _enrich_by_name(names: list[str]) -> dict[str, dict]:
 
 def fetch_deck_title(deck_nid: int) -> str:
     """Return the deck node title, or a fallback string if unavailable."""
+    attrs = _fetch_deck_attributes(deck_nid, "title")
+    title = attrs.get("title")
+    return str(title) if title else f"Deck #{deck_nid}"
+
+
+def fetch_deck_notes(deck_nid: int) -> str:
+    """Return the deck's field_notes pilot prompt, or empty string when unset."""
+    attrs = _fetch_deck_attributes(deck_nid, "title,field_notes")
+    notes = attrs.get("field_notes")
+    if isinstance(notes, dict):
+        value = notes.get("value")
+        return str(value).strip() if value else ""
+    if isinstance(notes, str):
+        return notes.strip()
+    return ""
+
+
+def _fetch_deck_attributes(deck_nid: int, fields: str) -> dict:
+    """Fetch selected JSON:API attributes for a deck node."""
     if not DRUPAL_URL:
-        return f"Deck #{deck_nid}"
+        return {}
     url = urljoin(DRUPAL_URL, "/jsonapi/node/deck")
     try:
         resp = requests.get(
             url,
             params={
                 "filter[drupal_internal__nid]": str(deck_nid),
-                "fields[node--deck]": "title",
+                "fields[node--deck]": fields,
             },
             auth=_get_auth(),
             timeout=10,
         )
         resp.raise_for_status()
         items = resp.json()["data"]
-        return str(items[0]["attributes"]["title"]) if items else f"Deck #{deck_nid}"
+        if not items:
+            return {}
+        attrs = items[0].get("attributes") or {}
+        return attrs if isinstance(attrs, dict) else {}
     except (requests.RequestException, KeyError, TypeError, ValueError, IndexError):
-        return f"Deck #{deck_nid}"
+        return {}
 
 
 def fetch_player_deck(deck_nid: int) -> list[CardInfo]:

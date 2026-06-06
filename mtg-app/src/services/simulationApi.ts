@@ -79,10 +79,24 @@ export interface GameLog {
   turns: TurnEvent[];
 }
 
+export interface PilotInfo {
+  engineUsed: string;
+  opponentPilotActive: boolean;
+  playerPilotActive: boolean;
+  opponentPilotSource: string;
+  playerPilotSource: string;
+  llmAvailable: boolean;
+  opponentPromptChars: number;
+  playerPromptChars: number;
+  message: string;
+}
+
 export interface SimulationResult {
   playerDeck: string;
   opponentArchetype: string;
   format: string;
+  engineUsed?: string;
+  pilotInfo?: PilotInfo;
   games: number;
   wins: number;
   losses: number;

@@ -27,6 +27,7 @@ class _GameConfig:
     opponent_name: str = "Opponent"
     on_the_play: bool = True
     pilot_prompt: str = field(default="")
+    player_pilot_prompt: str = field(default="")
 
 
 def create_game(
@@ -56,6 +57,7 @@ def create_game(
         _setup=_GameSetup(
             on_the_play=cfg.on_the_play,
             pilot_prompt=get_pilot_prompt(cfg.opponent_name, cfg.pilot_prompt),
+            player_pilot_prompt=cfg.player_pilot_prompt.strip(),
         ),
     )
     game.deal_opening_hands()

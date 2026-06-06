@@ -77,3 +77,6 @@ desktop.ini
 
 # Ignore local AI agent skills
 skills/
+docs/
+
+REVIEW.md

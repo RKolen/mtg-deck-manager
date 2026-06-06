@@ -15,18 +15,14 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 from collections import Counter, defaultdict
 from typing import TYPE_CHECKING
 
-import requests
+from llm_client import generate_text, is_configured
 
 if TYPE_CHECKING:
     from forge_adapter import GameLog, SimResult, TurnEvent
-
-OLLAMA_URL: str = os.environ.get("OLLAMA_URL", "")
-OLLAMA_MODEL: str = os.environ.get("OLLAMA_MODEL", "")
 
 
 class MatchupConfig:
@@ -213,19 +209,14 @@ def _build_prompt(stats: dict) -> str:
 
 
 def _generate_key_moments(stats: dict) -> list[str]:
-    if not OLLAMA_URL or not OLLAMA_MODEL:
+    if not is_configured():
         return []
     try:
-        resp = requests.post(
-            f"{OLLAMA_URL}/api/generate",
-            json={"model": OLLAMA_MODEL, "prompt": _build_prompt(stats), "stream": False},
-            timeout=30,
-        )
-        text = resp.json().get("response", "[]")
+        text = generate_text(_build_prompt(stats), temperature=0.2, max_tokens=512)
         match = re.search(r"\[.*\]", text, re.DOTALL)
         if match:
             return json.loads(match.group(0))
-    except (requests.RequestException, json.JSONDecodeError, ValueError) as exc:
+    except (json.JSONDecodeError, ValueError) as exc:
         logger.warning("Could not generate key moments: %s", exc)
     return []
 

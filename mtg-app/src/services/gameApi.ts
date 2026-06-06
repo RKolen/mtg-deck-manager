@@ -1,12 +1,12 @@
 /**
  * Client for the interactive MTG game endpoints on the Python sim service.
  *
- * Calls http://localhost:8002/game/* directly (not through Drupal) so the
+ * Calls GATSBY_SIM_URL/game/* directly (not through Drupal) so the
  * game state round-trips are as fast as possible.
  */
 import axios from 'axios';
 
-const SIM_URL = process.env.GATSBY_SIM_URL ?? 'http://localhost:8002';
+const SIM_URL = process.env.GATSBY_SIM_URL;
 const client = axios.create({ baseURL: SIM_URL, timeout: 30_000 });
 
 // ---------------------------------------------------------------------------

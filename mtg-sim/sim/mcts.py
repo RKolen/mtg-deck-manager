@@ -2,7 +2,7 @@
 Simple UCB1 Monte Carlo Tree Search agent for Forge decision-making.
 
 Each node in the tree corresponds to (game_state, action_taken).
-Rollouts are random (or LLM-guided for top-N nodes when Ollama is available).
+Rollouts are random (or LLM-guided for top-N nodes when the sidecar is available).
 
 Usage::
 
@@ -13,24 +13,20 @@ Usage::
 from __future__ import annotations
 
 import math
-import os
 import random
 
-import requests
-
-OLLAMA_URL: str = os.environ.get("OLLAMA_URL", "")
-OLLAMA_MODEL: str = os.environ.get("OLLAMA_MODEL", "")
+from llm_client import generate_text, is_configured, llm_pick as _llm_pick_remote
 
 
 def _llm_eval(state: dict, player_idx: int, system_prompt: str = "") -> float:
     """
-    Ask Ollama to rate the board position for ``player_idx`` (0-10).
+    Ask the LLM to rate the board position for ``player_idx`` (0-10).
 
-    Returns 0.5 (neutral) on any failure so MCTS keeps working without Ollama.
+    Returns 0.5 (neutral) on any failure so MCTS keeps working without AI.
     When ``system_prompt`` is non-empty it is prepended to give the model
     archetype-specific strategic context before the board description.
     """
-    if not OLLAMA_URL or not OLLAMA_MODEL:
+    if not is_configured():
         return 0.5
     life = state.get("life", [20, 20])
     battlefield = state.get("battlefield", [])
@@ -44,16 +40,13 @@ def _llm_eval(state: dict, player_idx: int, system_prompt: str = "") -> float:
         "Respond with a single integer only."
     )
     prompt = f"{system_prompt}\n\n{board_desc}" if system_prompt else board_desc
+    text = generate_text(prompt, temperature=0.1, max_tokens=20)
+    if not text:
+        return 0.5
     try:
-        resp = requests.post(
-            f"{OLLAMA_URL}/api/generate",
-            json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
-            timeout=5,
-        )
-        text = resp.json().get("response", "5").strip()
         score = float(text.split()[0])
         return max(0.0, min(10.0, score)) / 10.0
-    except (requests.exceptions.RequestException, ValueError, KeyError):
+    except (ValueError, IndexError):
         return 0.5
 
 
@@ -64,46 +57,16 @@ def llm_pick(
     system_prompt: str = "",
 ) -> tuple[int, str]:
     """
-    Ask Ollama to choose one option from a numbered list.
+    Ask the LLM to choose one option from a numbered list.
 
-    Used by the interactive game's opponent turn logic to pick which spell
-    to cast, guided by an archetype-specific pilot prompt.
+    Used by the interactive game's pilot logic to pick which spell to cast,
+    guided by an archetype-specific or deck-notes pilot prompt.
 
     Returns ``(index, reasoning)`` where ``index`` is 0-based and
     ``reasoning`` is the raw LLM response text.  Falls back to
-    ``(0, "")`` on any failure or when Ollama is not configured.
+    ``(0, "")`` on any failure or when AI is not configured.
     """
-    if not OLLAMA_URL or not OLLAMA_MODEL or not option_names:
-        return 0, ""
-    turn = state.get("turn", 1)
-    own_life = state.get("own_life", 20)
-    opp_life = state.get("opp_life", 20)
-    mana = state.get("mana", 0)
-    numbered = "\n".join(
-        f"{i + 1}. {name}" for i, name in enumerate(option_names)
-    )
-    context = (
-        f"Turn {turn}.  Your life: {own_life}.  "
-        f"Opponent life: {opp_life}.  Available mana: {mana}."
-    )
-    body = (
-        f"{question}\n\n"
-        f"{context}\n\n"
-        f"Options:\n{numbered}\n\n"
-        "Reply with ONLY the number of the best option (e.g. 2)."
-    )
-    full_prompt = f"{system_prompt}\n\n{body}" if system_prompt else body
-    try:
-        resp = requests.post(
-            f"{OLLAMA_URL}/api/generate",
-            json={"model": OLLAMA_MODEL, "prompt": full_prompt, "stream": False},
-            timeout=5,
-        )
-        text = resp.json().get("response", "1").strip()
-        choice = int(text.split()[0]) - 1      # 1-indexed to 0-indexed
-        return max(0, min(len(option_names) - 1, choice)), text
-    except (requests.exceptions.RequestException, ValueError, KeyError):
-        return 0, ""
+    return _llm_pick_remote(question, option_names, state, system_prompt)
 
 
 class _Node:
@@ -139,7 +102,7 @@ class MctsAgent:
     Callable agent that uses UCB1 MCTS to pick an action index.
 
     For each option it runs ``rollouts_per_action`` simulated rollouts.
-    If ``use_llm`` is True the Ollama model scores the resulting board state.
+    If ``use_llm`` is True the LLM scores the resulting board state.
     """
 
     def __init__(

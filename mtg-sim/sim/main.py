@@ -4,7 +4,7 @@ MTG Game Simulation Service — FastAPI app.
 Start:  SIM_HOST= SIM_PORT= python main.py
 Or:     uvicorn main:app --host $SIM_HOST --port $SIM_PORT
 
-Required environment variables (all defined in .env):
+Required environment variables (repo-root .env — see /.env.example):
   SIM_HOST       - Bind host
   SIM_PORT       - Bind port
   CORS_ORIGINS   - Comma-separated allowed origins
@@ -19,8 +19,9 @@ Drupal environment variables:
   DRUPAL_PASS    - Drupal API password
 
 Optional AI environment variables:
-  OLLAMA_URL     - Ollama base URL (enables key-moments summary)
-  OLLAMA_MODEL   - Chat model for key moments
+  SIDECAR_URL    - Host-side AI sidecar (preferred; keeps inference out of DDEV)
+  OLLAMA_URL     - Direct Ollama URL (fallback when SIDECAR_URL is unset)
+  OLLAMA_MODEL   - Chat model for pilot decisions and key moments
 
 When FORGE_JAR is not set the service runs in mock mode using the built-in
 Python engine (faster, less accurate). Set FORGE_JAR to enable real simulation.
@@ -31,30 +32,31 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import pathlib
-
-# Load .env before importing any local modules that read env vars at import time.
-try:
-    from dotenv import load_dotenv
-    load_dotenv(pathlib.Path(__file__).parent / ".env")
-except ImportError:
-    pass
+import warnings
 
 import sim_statistics
-
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from deck_registry import fetch_deck_title, fetch_meta_deck, fetch_player_deck
-from engine_sim import run_simulation as run_python_simulation
-from forge_adapter import ForgeAdapter
+from deck_registry import (
+    fetch_deck_notes,
+    fetch_deck_title,
+    fetch_meta_deck,
+    fetch_player_deck,
+)
 from engine.game import InteractiveGame, _GameConfig, create_game, get_game, remove_game
 from engine.game.action_dispatch import dispatch_game_action
+from engine_sim import _BatchConfig, run_simulation as run_python_simulation
+from forge_adapter import ForgeAdapter, forge_jar_available
+from game_log_emitter import emit_game_logs
+from llm_client import is_configured as llm_is_configured
+from pilot_info import EngineRequest, build_pilot_info, resolve_sim_engine
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+warnings.filterwarnings("ignore", message="Unverified HTTPS request")
 
 app = FastAPI(
     title="MTG Simulation Service",
@@ -89,18 +91,35 @@ class SimulateRequest(BaseModel):
     games: int = Field(50, ge=1, le=200, description="Number of games to simulate (max 200)")
     useLlm: bool = Field(False, description="Use Ollama for MCTS board evaluation (slower)")
     engine: str = Field(
-        "python",
-        description="Simulation engine: 'python' (LLM-guided opponent) or 'forge' (Forge JAR)",
+        "auto",
+        description=(
+            "Simulation engine: 'auto' (Forge when FORGE_JAR is set, else python), "
+            "'forge' (Forge JAR — full rules, mulligans, turn logs), or "
+            "'python' (LLM pilot prompts — experimental, fewer rules)"
+        ),
     )
+
+
+@app.get("/")
+def root() -> dict:
+    """Return service identity and useful endpoint paths."""
+    return {
+        "service": "MTG Simulation Service",
+        "health": "/health",
+        "simulate": "/simulate",
+        "docs": "/docs",
+    }
 
 
 @app.get("/health")
 def health() -> dict:
     """Return service health and mock-mode status."""
     adapter: ForgeAdapter | None = _state["adapter"]
+    mock_mode = adapter.is_mock if adapter is not None else not forge_jar_available()
     return {
         "status": "ok",
-        "mock_mode": adapter is None or adapter.is_mock,
+        "mock_mode": mock_mode,
+        "forge_configured": not mock_mode,
     }
 
 
@@ -125,6 +144,7 @@ async def simulate(req: SimulateRequest) -> dict:
         )
 
     deck_title = await asyncio.to_thread(fetch_deck_title, req.playerDeckId)
+    player_pilot_prompt = await asyncio.to_thread(fetch_deck_notes, req.playerDeckId)
 
     try:
         opponent_deck, opp_pilot_prompt = await asyncio.to_thread(
@@ -144,7 +164,35 @@ async def simulate(req: SimulateRequest) -> dict:
             ),
         )
 
-    if req.engine == "forge":
+    llm_ready = llm_is_configured()
+    engine = resolve_sim_engine(
+        EngineRequest(
+            requested=req.engine,
+            forge_ready=forge_jar_available(),
+            llm_ready=llm_ready,
+            use_llm=req.useLlm,
+            opponent_archetype=req.opponentArchetype,
+            opp_drupal_prompt=opp_pilot_prompt,
+            player_prompt=player_pilot_prompt,
+        ),
+    )
+    pilot_info = build_pilot_info(
+        engine,
+        opponent_archetype=req.opponentArchetype,
+        opp_drupal_prompt=opp_pilot_prompt,
+        player_prompt=player_pilot_prompt,
+        llm_ready=llm_ready,
+    )
+    logger.info(
+        "Simulation engine=%s matchup=%s vs %s games=%d pilot=%s",
+        engine,
+        deck_title,
+        req.opponentArchetype,
+        req.games,
+        pilot_info.get("message"),
+    )
+
+    if engine == "forge":
         results = await asyncio.to_thread(
             adapter.run_simulation,
             player_deck,
@@ -158,8 +206,11 @@ async def simulate(req: SimulateRequest) -> dict:
             player_deck,
             opponent_deck,
             req.games,
-            (deck_title, req.opponentArchetype),
-            opp_pilot_prompt,
+            _BatchConfig(
+                names=(deck_title, req.opponentArchetype),
+                opponent_pilot_prompt=opp_pilot_prompt,
+                player_pilot_prompt=player_pilot_prompt,
+            ),
         )
 
     if not results:
@@ -168,7 +219,9 @@ async def simulate(req: SimulateRequest) -> dict:
             detail="Simulation returned no results. Check sim service logs.",
         )
 
-    return await asyncio.to_thread(
+    emit_game_logs(results, deck_title, req.opponentArchetype)
+
+    stats = await asyncio.to_thread(
         sim_statistics.compute_statistics,
         results,
         sim_statistics.MatchupConfig(
@@ -178,6 +231,9 @@ async def simulate(req: SimulateRequest) -> dict:
             generate_moments=req.useLlm,
         ),
     )
+    stats["engineUsed"] = engine
+    stats["pilotInfo"] = pilot_info
+    return stats
 
 
 # ---------------------------------------------------------------------------
@@ -253,6 +309,8 @@ async def game_start(req: StartGameRequest) -> dict:
     if not player_deck:
         raise HTTPException(404, f"Deck {req.playerDeckId} has no cards.")
 
+    player_pilot_prompt = await asyncio.to_thread(fetch_deck_notes, req.playerDeckId)
+
     try:
         opponent_deck, opp_pilot_prompt = await asyncio.to_thread(
             fetch_meta_deck, req.opponentArchetype, req.format
@@ -269,6 +327,7 @@ async def game_start(req: StartGameRequest) -> dict:
             opponent_name=req.opponentArchetype,
             on_the_play=req.onThePlay,
             pilot_prompt=opp_pilot_prompt,
+            player_pilot_prompt=player_pilot_prompt,
         ),
     )
     return game.to_client()
@@ -340,6 +399,9 @@ async def game_delete(game_id: str) -> dict:
 
 
 if __name__ == "__main__":
+    from env_loader import load_project_env
+
+    load_project_env()
     host = os.environ.get("SIM_HOST", "")
     port = int(os.environ.get("SIM_PORT", "0"))
     uvicorn.run("main:app", host=host, port=port)

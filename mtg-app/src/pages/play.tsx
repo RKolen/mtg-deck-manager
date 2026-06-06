@@ -4,7 +4,7 @@
  * Route: /play?deckId=<nid>&vs=<archetype>&format=<format>&play=1|0
  *
  * Navigate here from the deck editor's Simulate tab.
- * Game state lives in the Python sim service (http://localhost:8002).
+ * Game state lives in the Python sim service (GATSBY_SIM_URL).
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';

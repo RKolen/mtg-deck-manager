@@ -788,6 +788,27 @@ const SimResultPanel: React.FC<{ result: SimulationResult }> = ({ result }) => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
+      {result.pilotInfo && (
+        <section style={{
+          background: result.pilotInfo.opponentPilotActive ? '#f0f7f0' : '#fff8e6',
+          border: `1px solid ${result.pilotInfo.opponentPilotActive ? '#b8d4b8' : '#e6d9a8'}`,
+          borderRadius: 4,
+          padding: '0.75rem 1rem',
+          fontSize: '0.85rem',
+        }}>
+          <strong>Engine: {result.pilotInfo.engineUsed}</strong>
+          {' — '}
+          {result.pilotInfo.message}
+          <div style={{ marginTop: 4, color: '#666' }}>
+            Opponent pilot: {result.pilotInfo.opponentPilotActive ? 'LLM active' : 'not LLM'}
+            {' '}({result.pilotInfo.opponentPilotSource}, {result.pilotInfo.opponentPromptChars} chars)
+            {' | '}
+            Player pilot: {result.pilotInfo.playerPilotActive ? 'LLM active' : 'not LLM'}
+            {' '}({result.pilotInfo.playerPilotSource}, {result.pilotInfo.playerPromptChars} chars)
+          </div>
+        </section>
+      )}
+
       {/* Win-rate summary */}
       <section style={{ background: '#f8f8f5', border: '1px solid #ddd', borderRadius: 4, padding: '1rem' }}>
         <h3 style={{ margin: '0 0 0.75rem' }}>{result.playerDeck} vs {result.opponentArchetype} — {result.games} games</h3>
@@ -980,7 +1001,7 @@ const DeckSimulate: React.FC<DeckSimulateProps> = ({ deckNid, format, deckTitle 
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
         <p style={{ margin: 0, fontSize: '0.9rem', color: '#555' }}>
           Simulate {deckTitle} against a meta archetype, or play an interactive game.
-          Requires <code>mtg-sim/sim/main.py</code> on port 8002.
+          Requires <code>mtg-sim/sim/main.py</code> (see <code>SIM_PORT</code> in repo <code>.env</code>).
         </p>
         {selectedArchetype && (
           <a

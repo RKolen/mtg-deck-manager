@@ -67,6 +67,7 @@ from deck_registry import CardInfo
 class _GameSetup:
     on_the_play: bool = True
     pilot_prompt: str = ""
+    player_pilot_prompt: str = ""
 
 
 @dataclass
@@ -88,8 +89,72 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
 
     @property
     def pilot_prompt(self) -> str:
-        """Pilot LLM prompt string."""
+        """Opponent pilot LLM prompt string."""
         return self._setup.pilot_prompt
+
+    @property
+    def player_pilot_prompt(self) -> str:
+        """Player pilot LLM prompt string (deck field_notes)."""
+        return self._setup.player_pilot_prompt
+
+    def _opening_hand_is_keepable(self, hand_size: int, land_count: int, final: bool) -> bool:
+        """Return True when an opening hand passes the land-count mulligan heuristic."""
+        if final:
+            return True
+        lo = 2 if hand_size >= 6 else 1
+        hi = min(hand_size - 1, 5)
+        return lo <= land_count <= hi
+
+    def _hand_land_count(self, player_idx: int) -> int:
+        """Count lands in a player's hand."""
+        return sum(
+            1 for card in self._zones(player_idx).hand
+            if isinstance(card, CardObject) and is_land(card)
+        )
+
+    def auto_opponent_opening_mulligan(self, max_mulligans: int = 3) -> int:
+        """Mulligan the opponent opening hand using land-count heuristics."""
+        zones = self._zones(1)
+        mulls = 0
+        for attempt in range(max_mulligans + 1):
+            hand_size = 7 - attempt
+            if attempt > 0:
+                zones.library.extend(zones.hand)
+                zones.hand.clear()
+                random.shuffle(zones.library)
+                drawn = zones.library[:hand_size]
+                zones.library = zones.library[hand_size:]
+                zones.hand = list(drawn)
+                mulls += 1
+                self._log(
+                    "opponent",
+                    "mulligan",
+                    f"Mulligan {mulls}: drew {hand_size} cards",
+                )
+            land_count = self._hand_land_count(1)
+            if self._opening_hand_is_keepable(hand_size, land_count, attempt == max_mulligans):
+                self._log(
+                    "opponent",
+                    "keep",
+                    f"Kept {len(zones.hand)}-card hand ({land_count} lands)",
+                )
+                return mulls
+        return mulls
+
+    def auto_player_opening_mulligan_then_keep(self, max_mulligans: int = 3) -> list[str]:
+        """Mulligan the player opening hand, keep, and return kept card names."""
+        while self.phase == "mulligan" and self.mulligans_taken < max_mulligans:
+            hand_size = len(self._zones(0).hand)
+            land_count = self._hand_land_count(0)
+            if self._opening_hand_is_keepable(hand_size, land_count, False):
+                break
+            self.action_mulligan()
+        self.action_keep()
+        return [
+            card.card_info.name
+            for card in self._zones(0).hand
+            if isinstance(card, CardObject) and card.card_info is not None
+        ]
 
     def action_keep(self) -> dict:
         """Keep the current opening hand and start the first player turn."""
@@ -740,37 +805,42 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
     def _llm_pick_spell(
         self,
         options: list[tuple[int, CardInfo]],
+        player_idx: int,
+        pilot_prompt: str,
+        actor: str,
     ) -> tuple[int, CardInfo]:
         """Pick the best spell to cast from available options.
 
-        Uses the LLM with the archetype pilot prompt when available, falling
-        back to the cheapest-creature-first heuristic when no pilot prompt is
-        configured or Ollama is unreachable.
+        Uses the LLM with the pilot prompt when available, falling back to the
+        cheapest-creature-first heuristic when no prompt is configured or the
+        sidecar/Ollama call fails.
         """
         heuristic = sorted(
             options,
             key=lambda item: (not item[1].is_creature, item[1].cmc),
         )[0]
-        if not self.pilot_prompt:
+        if not pilot_prompt:
             return heuristic
         option_names = [
             f"{ci.name} ({ci.short_type()}, CMC {int(ci.cmc)})"
             for _, ci in options
         ]
+        opp_idx = 1 - player_idx
         state = {
             "turn": self.state.turn.context.turn_number,
-            "own_life": self.state.players[1].life,
-            "opp_life": self.state.players[0].life,
-            "mana": self._available_mana(1),
+            "own_life": self.state.players[player_idx].life,
+            "opp_life": self.state.players[opp_idx].life,
+            "mana": self._available_mana(player_idx),
         }
         idx, reasoning = llm_pick(
-            "Choose the ONE spell to cast that best serves your archetype strategy.",
+            "Choose the ONE spell to cast that best serves your deck strategy.",
             option_names,
             state,
-            system_prompt=self.pilot_prompt,
+            system_prompt=pilot_prompt,
         )
-        if reasoning:
-            self._log("pilot", "pick", reasoning)
+        if not reasoning:
+            return heuristic
+        self._log(actor, "pick", reasoning)
         return options[idx]
 
     def _opponent_cast_one_spell(self) -> None:
@@ -786,7 +856,12 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
         ]
         if not options:
             return
-        hand_idx, card_info = self._llm_pick_spell(options)
+        hand_idx, card_info = self._llm_pick_spell(
+            options,
+            player_idx=1,
+            pilot_prompt=self.pilot_prompt,
+            actor="pilot",
+        )
         card = self._zones(1).hand[hand_idx]
         if not isinstance(card, CardObject):
             return
@@ -802,3 +877,49 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
         self._log("opponent", "cast", f"{card_info.name} on stack")
         self.state.fire_spell_cast_triggers(card, tuple(targets))
         self._auto_pass_stack()
+
+    def _player_castable_spell_options(self) -> list[tuple[int, CardInfo]]:
+        """Return affordable non-land spells in the player's hand."""
+        hand = self._zones(0).hand
+        return [
+            (i, require_card_info(card))
+            for i, card in enumerate(hand)
+            if isinstance(card, CardObject)
+            and not is_land(card)
+            and self._is_card_castable(card)
+        ]
+
+    def _player_play_land_if_needed(self) -> None:
+        """Play the first available land when none has been played this turn."""
+        if self.state.players[0].land_played:
+            return
+        hand = self._zones(0).hand
+        for i, card in enumerate(hand):
+            if isinstance(card, CardObject) and is_land(card):
+                self.action_play_land(i)
+                break
+
+    def action_auto_main(self) -> dict:
+        """Auto-play the player's main phase, using deck notes when configured."""
+        assert self.phase in ("main1", "main2")
+        self._player_play_land_if_needed()
+        while self.phase != "game_over":
+            options = self._player_castable_spell_options()
+            if not options:
+                break
+            if self.player_pilot_prompt:
+                hand_idx, _ = self._llm_pick_spell(
+                    options,
+                    player_idx=0,
+                    pilot_prompt=self.player_pilot_prompt,
+                    actor="player_pilot",
+                )
+            else:
+                hand_idx = sorted(
+                    options,
+                    key=lambda item: (not item[1].is_creature, item[1].cmc),
+                )[0][0]
+            result = self.action_cast(hand_idx)
+            if result.get("error"):
+                break
+        return self.to_client()

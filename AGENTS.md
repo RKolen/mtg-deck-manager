@@ -258,6 +258,54 @@ ddev drush cr    # rebuild Drupal cache
 |--------|------|---------|
 
 
+## Environment files
+
+| File | Purpose |
+|------|---------|
+| **`.env`** (repo root) | Single source of truth: ports, Ollama model, Drupal credentials, Forge paths. Used by `start.sh`, `mtg-sim/sim`, and `mtg-sim/sidecar`. |
+| **`mtg-sim/sim/.env`** | Optional overrides only (e.g. machine-specific `FORGE_JAR`). Loaded after root `.env`. |
+
+Forge LLM pilot work (rules + decision hooks) lives in the sibling clone
+`../forge` on branch `mtg/llm-pilot`. See [docs/forge-llm-pilots.md](docs/forge-llm-pilots.md) (git-ignored).
+| **`mtg-app/.env.development`** | Gatsby-only (`GATSBY_*`). `GATSBY_SIM_URL` port must match root `SIM_PORT`. |
+| **`drupal/.ddev/config.yaml`** | Committed DDEV config with **empty** `web_environment` placeholders only. |
+| **`drupal/.ddev/config.local.yaml`** | Local DDEV overrides (gitignored). Copy from `config.local.yaml.example`; set `MTG_SIM_SERVICE_URL`, `OLLAMA_*` from root `.env`. |
+
+Template: copy `/.env.example` to `/.env`. If a port is already in use locally,
+pick a free one and keep `GATSBY_SIM_URL`, `MTG_SIM_SERVICE_URL`, and `SIM_PORT`
+aligned.
+
+Do not use `mtg-sim/.env` (removed).
+
+## Host Services (outside DDEV)
+
+Ollama and the MTG AI sidecar run on the host to keep GPU/CPU inference out of
+DDEV containers. Start everything with `./start.sh` from the repo root.
+
+| Service | Path | Purpose |
+|---------|------|---------|
+| Ollama | host `OLLAMA_PORT` | LLM inference (qwen3:4b for pilots, nomic for embeddings) |
+| AI sidecar | `mtg-sim/sidecar/` | FastAPI boundary: `/pilot-pick`, `/generate` — proxies to host Ollama |
+| Sim API | `mtg-sim/sim/` | Forge/Python simulations; uses `SIDECAR_URL` for opponent/player pilots |
+
+Simulation pilots:
+- **Player deck** — `field_notes` on the deck node (same role as your heroic pilot prompt).
+- **Gauntlet opponent** — `field_pilot_prompt` on the `meta_deck` node, with built-in
+  fallbacks in `mtg-sim/sim/pilot_prompts.py` when the Drupal field is empty.
+
+Drupal reaches host Ollama via `host.docker.internal` (not the deprecated DDEV
+Ollama container). `MTG_SIM_SERVICE_URL` must match root `.env` `SIM_PORT` in
+DDEV `web_environment`.
+
+**Before running simulations:** `./start.sh` must have started the host sim
+service. Drupal proxies `/api/simulate` to that service; if it is not running
+you get a network or 503 error. Verify with:
+
+```bash
+curl http://localhost:$SIM_PORT/health
+ddev exec curl -s http://host.docker.internal:$SIM_PORT/health
+```
+
 ## Quick Reference
 
 | Task | Command |

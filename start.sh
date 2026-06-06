@@ -15,7 +15,7 @@ DRUPAL_DIR="$SCRIPT_DIR/drupal"
 ENV_FILE="$SCRIPT_DIR/.env"
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "ERROR: .env not found at $ENV_FILE"
-  echo "Create it with GATSBY_PORT, DRUPAL_URL, OLLAMA_PORT, MILVUS_PORT."
+  echo "Create it with GATSBY_PORT, DRUPAL_URL, OLLAMA_PORT, OLLAMA_MODEL, SIDECAR_PORT, MILVUS_PORT, SIM_PORT."
   exit 1
 fi
 # shellcheck source=.env
@@ -23,12 +23,22 @@ set -o allexport
 source "$ENV_FILE"
 set +o allexport
 
-for var in GATSBY_PORT DRUPAL_URL OLLAMA_PORT MILVUS_PORT SIM_PORT; do
+for var in GATSBY_PORT DRUPAL_URL OLLAMA_PORT OLLAMA_MODEL SIDECAR_PORT MILVUS_PORT SIM_PORT; do
   if [[ -z "${!var:-}" ]]; then
-    echo "ERROR: $var is not set in .env"
+    echo "ERROR: $var is not set in $ENV_FILE"
     exit 1
   fi
 done
+
+# Gatsby reads its own .env.development; keep the sim port in sync with root .env.
+GATSBY_ENV="$FRONTEND_DIR/.env.development"
+if [[ -f "$GATSBY_ENV" ]]; then
+  GATSBY_SIM_PORT=$(grep -E '^GATSBY_SIM_URL=' "$GATSBY_ENV" | sed -n 's|.*/:\([0-9]*\).*|\1|p')
+  if [[ -n "$GATSBY_SIM_PORT" && "$GATSBY_SIM_PORT" != "$SIM_PORT" ]]; then
+    echo "WARNING: GATSBY_SIM_URL port ($GATSBY_SIM_PORT) does not match SIM_PORT ($SIM_PORT)."
+    echo "         Update mtg-app/.env.development to use port $SIM_PORT."
+  fi
+fi
 
 FRESH_START=false
 if [[ "${1:-}" == "--fresh" ]]; then
@@ -102,6 +112,14 @@ if [[ "${1:-}" == "--stop" ]]; then
     echo "    Gatsby was not running."
   fi
 
+  echo "==> Stopping AI sidecar..."
+  OLD_SIDECAR=$(lsof -ti :"$SIDECAR_PORT" 2>/dev/null || true)
+  if [[ -n "$OLD_SIDECAR" ]]; then
+    kill "$OLD_SIDECAR" 2>/dev/null && echo "    Sidecar stopped."
+  else
+    echo "    Sidecar was not running."
+  fi
+
   echo "==> Stopping sim service..."
   OLD_SIM=$(lsof -ti :"$SIM_PORT" 2>/dev/null || true)
   if [[ -n "$OLD_SIM" ]]; then
@@ -113,10 +131,7 @@ if [[ "${1:-}" == "--stop" ]]; then
   echo "==> Stopping Ollama..."
   pkill -f "ollama serve" 2>/dev/null && echo "    Ollama stopped." || echo "    Ollama was not running."
 
-  echo "==> Stopping Milvus..."
-  docker stop milvus-standalone 2>/dev/null && echo "    Milvus stopped." || echo "    Milvus was not running."
-
-  echo "==> Stopping DDEV..."
+  echo "==> Stopping DDEV (includes Milvus)..."
   cd "$DRUPAL_DIR" && ddev stop
   echo "    DDEV stopped."
   exit 0
@@ -129,6 +144,19 @@ echo "==> Starting Drupal backend (DDEV)..."
 cd "$DRUPAL_DIR"
 ddev start
 echo "    Drupal:  $DRUPAL_URL"
+
+DDEV_SITENAME=$(grep -E '^name:' "$DRUPAL_DIR/.ddev/config.yaml" | awk '{print $2}')
+MILVUS_CONTAINER="ddev-${DDEV_SITENAME}-milvus"
+
+echo ""
+echo "==> Milvus (DDEV)..."
+if docker ps --filter "name=^${MILVUS_CONTAINER}$" --filter "status=running" -q | grep -q .; then
+  echo "    Milvus running in DDEV ($MILVUS_CONTAINER)."
+  echo "    Milvus:  milvus:$MILVUS_PORT inside DDEV — not exposed on host localhost"
+else
+  echo "    WARNING: DDEV Milvus container not running."
+  echo "    Run: cd drupal && ddev restart"
+fi
 
 # ---------------------------------------------------------------------------
 # 2. Ollama (system service, background)
@@ -144,27 +172,31 @@ fi
 echo "    Ollama:  http://localhost:$OLLAMA_PORT"
 
 # ---------------------------------------------------------------------------
-# 3. Milvus vector database (standalone Docker container)
+# 2b. MTG AI sidecar (host FastAPI, proxies to host Ollama)
 # ---------------------------------------------------------------------------
 echo ""
-echo "==> Starting Milvus..."
-if docker ps --filter "name=milvus-standalone" --filter "status=running" --format '{{.Names}}' | grep -q milvus-standalone; then
-  echo "    Milvus already running on port $MILVUS_PORT."
-elif docker ps -a --filter "name=milvus-standalone" --format '{{.Names}}' | grep -q milvus-standalone; then
-  docker start milvus-standalone > /dev/null
-  echo "    Milvus started (existing container)."
+echo "==> Starting MTG AI sidecar..."
+SIM_DIR="$SCRIPT_DIR/mtg-sim"
+if lsof -ti :"$SIDECAR_PORT" > /dev/null 2>&1; then
+  echo "    Sidecar already running on port $SIDECAR_PORT."
+elif [[ ! -f "$SIM_DIR/.venv/bin/python" ]]; then
+  echo "    WARNING: $SIM_DIR/.venv not found — sidecar not started."
 else
-  echo "    WARNING: no 'milvus-standalone' Docker container found."
-  echo "    Create it first — see docs/architecture.md for the docker run command."
+  OLLAMA_URL="http://127.0.0.1:$OLLAMA_PORT" \
+  OLLAMA_MODEL="$OLLAMA_MODEL" \
+  SIDECAR_HOST="127.0.0.1" \
+  SIDECAR_PORT="$SIDECAR_PORT" \
+  "$SIM_DIR/.venv/bin/python" "$SIM_DIR/sidecar/main.py" \
+    > "$SCRIPT_DIR/.sidecar.log" 2>&1 &
+  echo "    Sidecar started on port $SIDECAR_PORT (logs: .sidecar.log)."
 fi
-echo "    Milvus:  localhost:$MILVUS_PORT"
+echo "    Sidecar: http://localhost:$SIDECAR_PORT/health"
 
 # ---------------------------------------------------------------------------
-# 4. Python simulation service (mtg-sim/sim, background)
+# 3. Python simulation service (mtg-sim/sim, background)
 # ---------------------------------------------------------------------------
 echo ""
 echo "==> Starting Python simulation service..."
-SIM_DIR="$SCRIPT_DIR/mtg-sim"
 if lsof -ti :"$SIM_PORT" > /dev/null 2>&1; then
   echo "    Sim service already running on port $SIM_PORT."
 elif [[ ! -f "$SIM_DIR/.venv/bin/python" ]]; then
@@ -172,15 +204,17 @@ elif [[ ! -f "$SIM_DIR/.venv/bin/python" ]]; then
   echo "    Run: cd mtg-sim && python3 -m venv .venv && source .venv/bin/activate && pip install -r sim/requirements.txt"
 else
   cd "$SIM_DIR/sim"
-  SIM_PORT="$SIM_PORT" "$SIM_DIR/.venv/bin/python" main.py \
+  SIDECAR_URL="http://127.0.0.1:$SIDECAR_PORT" \
+  OLLAMA_URL="http://127.0.0.1:$OLLAMA_PORT" \
+  "$SIM_DIR/.venv/bin/python" main.py \
     > "$SCRIPT_DIR/.sim.log" 2>&1 &
   cd "$SCRIPT_DIR"
   echo "    Sim service started on port $SIM_PORT (logs: .sim.log)."
 fi
-echo "    Sim API:  http://localhost:$SIM_PORT"
+echo "    Sim API:  http://localhost:$SIM_PORT/health"
 
 # ---------------------------------------------------------------------------
-# 5. Gatsby frontend (dev server in background)
+# 4. Gatsby frontend (dev server in background)
 # ---------------------------------------------------------------------------
 echo ""
 cd "$FRONTEND_DIR"
@@ -223,9 +257,10 @@ echo "All services started."
 echo ""
 echo "  Drupal admin:  $DRUPAL_URL/user"
 echo "  Frontend:      http://localhost:$GATSBY_PORT"
-echo "  Sim API:       http://localhost:$SIM_PORT"
+echo "  Sim API:       http://localhost:$SIM_PORT/health"
 echo "  Ollama:        http://localhost:$OLLAMA_PORT"
-echo "  Milvus:        localhost:$MILVUS_PORT"
+echo "  AI sidecar:    http://localhost:$SIDECAR_PORT/health"
+echo "  Milvus:        milvus:$MILVUS_PORT (DDEV internal — not on host localhost)"
 echo ""
 echo "Run './start.sh --stop' to shut everything down."
 echo "Run './start.sh --fresh' to clear the Gatsby cache on the next start."

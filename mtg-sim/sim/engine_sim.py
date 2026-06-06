@@ -2,36 +2,60 @@
 
 Drives both players automatically so that the full game runs without human input.
 
-Player (index 0) strategy — greedy heuristic:
+This engine is opt-in via ``engine=python`` on POST /simulate. The default
+``auto`` engine uses Forge for full rules fidelity, realistic mulligans, and
+rich turn logs. Use the python engine when testing LLM pilot prompts.
+
+Player (index 0) strategy — greedy heuristic or LLM pilot when field_notes set:
+  * Auto-mulligan using land-count heuristics, then keep.
   * Play a land on the first opportunity each turn.
-  * Cast all affordable non-land spells cheapest-first (creatures before others).
+  * Cast affordable spells (LLM-guided when pilot prompt configured).
   * Attack with every eligible creature each turn.
-  * Never block (opponent attackers pass through uncontested).
 
 Opponent (index 1) strategy — archetype-aware:
-  * Uses ``InteractiveGame._opponent_main_phase`` which calls ``llm_pick`` with
-    the pilot prompt when one is configured, giving archetype-specific spell
-    selection instead of a generic cheapest-spell heuristic.
+  * Auto-mulligan opening hand using land-count heuristics.
+  * Uses ``InteractiveGame._opponent_main_phase`` with LLM pilot when configured.
   * Attacks with all eligible creatures each turn.
-
-The pilot prompt is fetched from Drupal (``field_pilot_prompt``) by the caller
-and passed through to ``create_game``.  When the field is empty the built-in
-``_PROMPTS`` dict in ``pilot_prompts.py`` provides the fallback.
 """
 
 from __future__ import annotations
 
 import logging
 import random
+from dataclasses import dataclass
 
 from deck_registry import CardInfo
 from engine.game.interactive import InteractiveGame
 from engine.game.session import _GameConfig, create_game
-from forge_adapter import SimResult, SimResultLife, SimResultOutcome
+from forge_adapter import SimResult, SimResultLife, SimResultMulligans, SimResultOutcome
+from game_log_emitter import (
+    build_interactive_game_log,
+    emit_interactive_log,
+)
 
 logger = logging.getLogger(__name__)
 
 _MAX_TURNS: int = 30
+
+
+@dataclass(frozen=True)
+class _HeadlessConfig:
+    """Pilot prompts and display names for a headless simulation."""
+
+    names: tuple[str, str]
+    on_the_play: bool
+    opponent_pilot_prompt: str = ""
+    player_pilot_prompt: str = ""
+    game_index: int = 0
+
+
+@dataclass(frozen=True)
+class _BatchConfig:
+    """Shared matchup settings for a multi-game simulation run."""
+
+    names: tuple[str, str]
+    opponent_pilot_prompt: str = ""
+    player_pilot_prompt: str = ""
 
 
 def _run_player_turn(game: InteractiveGame) -> None:
@@ -60,28 +84,23 @@ def _run_player_turn(game: InteractiveGame) -> None:
 def run_one_game(
     player_cards: list[CardInfo],
     opponent_cards: list[CardInfo],
-    names: tuple[str, str],
-    on_the_play: bool,
-    pilot_prompt: str = "",
+    config: _HeadlessConfig,
 ) -> SimResult:
-    """Create and drive a single headless game to completion.
-
-    Returns a :class:`~forge_adapter.SimResult` with outcome data.
-    Games that exceed ``_MAX_TURNS`` are marked as ``timed_out=True``
-    with the winner chosen at random (same behaviour as Forge timeout).
-    """
-    player_name, opponent_name = names
+    """Create and drive a single headless game to completion."""
+    player_name, opponent_name = config.names
     game: InteractiveGame = create_game(
         player_cards,
         opponent_cards,
         _GameConfig(
             player_name=player_name,
             opponent_name=opponent_name,
-            on_the_play=on_the_play,
-            pilot_prompt=pilot_prompt,
+            on_the_play=config.on_the_play,
+            pilot_prompt=config.opponent_pilot_prompt,
+            player_pilot_prompt=config.player_pilot_prompt,
         ),
     )
-    game.action_keep()
+    opp_mulls = game.auto_opponent_opening_mulligan()
+    opening_hand = game.auto_player_opening_mulligan_then_keep()
 
     while game.phase != "game_over":
         if game.turn > _MAX_TURNS:
@@ -99,6 +118,17 @@ def run_one_game(
     if winner is None:
         winner = random.randint(0, 1)
 
+    if config.game_index < 3:
+        emit_interactive_log(game, player_name, opponent_name, config.game_index)
+
+    game_log = build_interactive_game_log(
+        game,
+        config.game_index,
+        config.on_the_play,
+        opp_mulls,
+        opening_hand,
+    )
+
     return SimResult(
         outcome=SimResultOutcome(winner=winner, timed_out=timed_out),
         turns=game.turn,
@@ -106,7 +136,12 @@ def run_one_game(
             player=game.state.players[0].life,
             opponent=game.state.players[1].life,
         ),
-        on_the_play=on_the_play,
+        on_the_play=config.on_the_play,
+        mulligans=SimResultMulligans(
+            player=game.mulligans_taken,
+            opponent=opp_mulls,
+        ),
+        log=game_log,
     )
 
 
@@ -114,14 +149,9 @@ def run_simulation(
     player_cards: list[CardInfo],
     opponent_cards: list[CardInfo],
     n_games: int,
-    names: tuple[str, str],
-    pilot_prompt: str = "",
+    batch: _BatchConfig,
 ) -> list[SimResult]:
-    """Run ``n_games`` headless games and return all results.
-
-    Games alternate on-the-play / on-the-draw to balance the sample.
-    Failed games are logged and skipped so one bad game cannot abort the run.
-    """
+    """Run ``n_games`` headless games and return all results."""
     results: list[SimResult] = []
     for i in range(n_games):
         on_the_play = i % 2 == 0
@@ -129,9 +159,13 @@ def run_simulation(
             result = run_one_game(
                 player_cards,
                 opponent_cards,
-                names,
-                on_the_play=on_the_play,
-                pilot_prompt=pilot_prompt,
+                _HeadlessConfig(
+                    names=batch.names,
+                    on_the_play=on_the_play,
+                    opponent_pilot_prompt=batch.opponent_pilot_prompt,
+                    player_pilot_prompt=batch.player_pilot_prompt,
+                    game_index=i,
+                ),
             )
             results.append(result)
         except RuntimeError as exc:

@@ -55,7 +55,7 @@ FORGE_JAR: str = os.environ.get("FORGE_JAR", "")
 FORGE_JAVA: str = os.environ.get("FORGE_JAVA", "java")
 
 
-def _forge_available() -> bool:
+def forge_jar_available() -> bool:
     """Return True when FORGE_JAR points to an existing file."""
     return bool(FORGE_JAR and os.path.isfile(FORGE_JAR))
 
@@ -410,7 +410,8 @@ def run_forge_batch(
         _write_dck(opponent_cards, o_name, o_dck)
 
         logger.info(
-            "Running Forge: %s vs %s, %d games",
+            "Running Forge: %s vs %s, %d games — Forge built-in AI only "
+            "(LLM pilot prompts are NOT used on this engine)",
             player_name, opponent_name, n_games,
         )
         cmd = [
@@ -759,7 +760,7 @@ class ForgeAdapter:
 
     def __init__(self) -> None:
         """Initialise, selecting Forge or mock mode based on environment."""
-        self._mock = not _forge_available()
+        self._mock = not forge_jar_available()
         self._mock_engine = MockGameEngine()
         self._mock_decks: dict[str, tuple[list, list]] = {}
         self._game_counter: int = 0
