@@ -688,7 +688,8 @@ interface DeckSimulateProps {
   deckTitle: string;
 }
 
-const GAME_COUNT_OPTIONS = [50, 200] as const;
+const GAME_COUNT_OPTIONS = [1, 5, 50, 200] as const;
+type GameCount = (typeof GAME_COUNT_OPTIONS)[number];
 
 /** Single expandable game log panel */
 const GameLogPanel: React.FC<{ log: GameLog; index: number }> = ({ log, index }) => {
@@ -731,6 +732,39 @@ const GameLogPanel: React.FC<{ log: GameLog; index: number }> = ({ log, index })
             </div>
           </div>
 
+          {(log.playerPilotNotes?.length || log.opponentPilotNotes?.length || log.pilotNotes?.length) ? (
+            <div style={{ marginBottom: '0.75rem' }}>
+              <strong>LLM pilot</strong>
+              {log.playerPilotNotes && log.playerPilotNotes.length > 0 && (
+                <div style={{ marginTop: 6 }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#2c5f8a' }}>Your deck</div>
+                  <div style={{ marginTop: 4, fontSize: '0.82rem', color: '#444' }}>
+                    {log.playerPilotNotes.map((note, i) => (
+                      <div key={`p-${i}`}>{note}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {log.opponentPilotNotes && log.opponentPilotNotes.length > 0 && (
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#8a2c2c' }}>Opponent</div>
+                  <div style={{ marginTop: 4, fontSize: '0.82rem', color: '#444' }}>
+                    {log.opponentPilotNotes.map((note, i) => (
+                      <div key={`o-${i}`}>{note}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {(!log.playerPilotNotes?.length && !log.opponentPilotNotes?.length && log.pilotNotes) && (
+                <div style={{ marginTop: 4, fontSize: '0.82rem', color: '#444' }}>
+                  {log.pilotNotes.map((note, i) => (
+                    <div key={i}>{note}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : null}
+
           {/* Turn-by-turn log */}
           <div>
             <strong>Turn log</strong>
@@ -757,7 +791,8 @@ const GameLogPanel: React.FC<{ log: GameLog; index: number }> = ({ log, index })
                         </span>
                       )}
                       <span style={{ color: '#999', marginLeft: 8, fontSize: '0.78rem' }}>
-                        life {lifeStr} | hand {ev.handSize} | board {ev.creaturesInPlay} (power {ev.boardPower})
+                        life {lifeStr} | hand {ev.handSize}
+                        {ev.handCards ? ` (${ev.handCards})` : ''} | board {ev.creaturesInPlay} (power {ev.boardPower})
                       </span>
                     </div>
                   </React.Fragment>
@@ -790,8 +825,10 @@ const SimResultPanel: React.FC<{ result: SimulationResult }> = ({ result }) => {
 
       {result.pilotInfo && (
         <section style={{
-          background: result.pilotInfo.opponentPilotActive ? '#f0f7f0' : '#fff8e6',
-          border: `1px solid ${result.pilotInfo.opponentPilotActive ? '#b8d4b8' : '#e6d9a8'}`,
+          background: (result.pilotInfo.opponentPilotActive || result.pilotInfo.playerPilotActive)
+            ? '#f0f7f0' : '#fff8e6',
+          border: `1px solid ${(result.pilotInfo.opponentPilotActive || result.pilotInfo.playerPilotActive)
+            ? '#b8d4b8' : '#e6d9a8'}`,
           borderRadius: 4,
           padding: '0.75rem 1rem',
           fontSize: '0.85rem',
@@ -800,12 +837,45 @@ const SimResultPanel: React.FC<{ result: SimulationResult }> = ({ result }) => {
           {' — '}
           {result.pilotInfo.message}
           <div style={{ marginTop: 4, color: '#666' }}>
-            Opponent pilot: {result.pilotInfo.opponentPilotActive ? 'LLM active' : 'not LLM'}
-            {' '}({result.pilotInfo.opponentPilotSource}, {result.pilotInfo.opponentPromptChars} chars)
+            Opponent (archetype): {result.pilotInfo.opponentPilotActive ? 'LLM active' : 'Forge built-in AI'}
+            {' '}({result.pilotInfo.opponentPilotSource}, {result.pilotInfo.opponentPromptChars} chars
+            {result.pilotInfo.cavemanOpponentApplied && result.pilotInfo.opponentPromptOriginalChars
+              ? `, caveman ${result.pilotInfo.opponentPromptOriginalChars}→${result.pilotInfo.opponentPromptChars}`
+              : ''})
             {' | '}
-            Player pilot: {result.pilotInfo.playerPilotActive ? 'LLM active' : 'not LLM'}
-            {' '}({result.pilotInfo.playerPilotSource}, {result.pilotInfo.playerPromptChars} chars)
+            Your deck (field notes): {result.pilotInfo.playerPilotActive ? 'LLM active' : 'Forge built-in AI'}
+            {' '}({result.pilotInfo.playerPilotSource}, {result.pilotInfo.playerPromptChars} chars
+            {result.pilotInfo.cavemanPlayerApplied && result.pilotInfo.playerPromptOriginalChars
+              ? `, caveman ${result.pilotInfo.playerPromptOriginalChars}→${result.pilotInfo.playerPromptChars}`
+              : ''})
           </div>
+          {(result.pilotInfo.playerPromptPreview || result.pilotInfo.opponentPromptPreview) && (
+            <details style={{ marginTop: 8, fontSize: '0.82rem', color: '#444' }}>
+              <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Pilot prompts sent to LLM</summary>
+              {result.pilotInfo.playerPromptPreview && (
+                <div style={{ marginTop: 6 }}>
+                  <strong>Your deck</strong>
+                  <pre style={{
+                    margin: '4px 0 0', padding: 8, background: '#f4f4f0',
+                    borderRadius: 4, whiteSpace: 'pre-wrap', fontSize: '0.8rem',
+                  }}>
+                    {result.pilotInfo.playerPromptPreview}
+                  </pre>
+                </div>
+              )}
+              {result.pilotInfo.opponentPromptPreview && (
+                <div style={{ marginTop: 8 }}>
+                  <strong>Opponent ({result.pilotInfo.opponentPilotSource})</strong>
+                  <pre style={{
+                    margin: '4px 0 0', padding: 8, background: '#f4f4f0',
+                    borderRadius: 4, whiteSpace: 'pre-wrap', fontSize: '0.8rem',
+                  }}>
+                    {result.pilotInfo.opponentPromptPreview}
+                  </pre>
+                </div>
+              )}
+            </details>
+          )}
         </section>
       )}
 
@@ -954,7 +1024,7 @@ const SimResultPanel: React.FC<{ result: SimulationResult }> = ({ result }) => {
 const DeckSimulate: React.FC<DeckSimulateProps> = ({ deckNid, format, deckTitle }) => {
   const queryClient = useQueryClient();
   const [selectedArchetype, setSelectedArchetype] = useState('');
-  const [games, setGames] = useState<50 | 200>(50);
+  const [games, setGames] = useState<GameCount>(50);
   const [useLlm, setUseLlm] = useState(false);
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [running, setRunning] = useState(false);
@@ -981,7 +1051,13 @@ const DeckSimulate: React.FC<DeckSimulateProps> = ({ deckNid, format, deckTitle 
     setError(null);
     setResult(null);
     try {
-      const r = await runSimulation({ playerDeckId: deckNid, opponentArchetype: archetype, format, games, useLlm });
+      const r = await runSimulation({
+        playerDeckId: deckNid,
+        opponentArchetype: archetype,
+        format,
+        games,
+        useLlm,
+      });
       setResult(r);
       void queryClient.invalidateQueries({ queryKey: historyKey });
     } catch (e: unknown) {
@@ -1025,11 +1101,16 @@ const DeckSimulate: React.FC<DeckSimulateProps> = ({ deckNid, format, deckTitle 
               <option key={d.id} value={d.attributes.title}>{d.attributes.title}</option>
             ))}
           </select>
+          <span style={{ fontSize: '0.75rem', color: '#666', maxWidth: 260 }}>
+            LLM opponent strategy comes from this archetype. Your deck uses field notes when set.
+          </span>
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span style={{ fontSize: '0.85rem', fontWeight: 'bold' }}>Games</span>
-          <select value={games} onChange={e => setGames(Number(e.target.value) as 50 | 200)}>
-            {GAME_COUNT_OPTIONS.map(n => <option key={n} value={n}>{n}</option>)}
+          <select value={games} onChange={e => setGames(Number(e.target.value) as GameCount)}>
+            {GAME_COUNT_OPTIONS.map(n => (
+              <option key={n} value={n}>{n === 1 ? '1 (single game)' : n}</option>
+            ))}
           </select>
         </label>
         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem' }}>
@@ -1045,7 +1126,11 @@ const DeckSimulate: React.FC<DeckSimulateProps> = ({ deckNid, format, deckTitle 
         </button>
       </div>
 
-      {running && <p style={{ color: '#888', fontStyle: 'italic' }}>Running {games} games against {selectedArchetype}…</p>}
+      {running && (
+        <p style={{ color: '#888', fontStyle: 'italic' }}>
+          Running {games} {games === 1 ? 'game' : 'games'} against {selectedArchetype}…
+        </p>
+      )}
       {error && <p style={{ color: '#c00', fontSize: '0.88rem' }}>{error}</p>}
 
       {result && <SimResultPanel result={result} />}

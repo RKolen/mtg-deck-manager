@@ -28,6 +28,7 @@ class _GameConfig:
     on_the_play: bool = True
     pilot_prompt: str = field(default="")
     player_pilot_prompt: str = field(default="")
+    pilot_prompt_resolved: bool = False
 
 
 def create_game(
@@ -52,11 +53,16 @@ def create_game(
         turn=runner,
         stack=Stack(),
     )
+    opp_prompt = (
+        cfg.pilot_prompt.strip()
+        if cfg.pilot_prompt_resolved
+        else get_pilot_prompt(cfg.opponent_name, cfg.pilot_prompt)
+    )
     game = InteractiveGame(
         state=state,
         _setup=_GameSetup(
             on_the_play=cfg.on_the_play,
-            pilot_prompt=get_pilot_prompt(cfg.opponent_name, cfg.pilot_prompt),
+            pilot_prompt=opp_prompt,
             player_pilot_prompt=cfg.player_pilot_prompt.strip(),
         ),
     )

@@ -30,8 +30,10 @@ from engine.game.session import _GameConfig, create_game
 from forge_adapter import SimResult, SimResultLife, SimResultMulligans, SimResultOutcome
 from game_log_emitter import (
     build_interactive_game_log,
+    emit_batch_game_logs,
     emit_interactive_log,
 )
+from sim_batch import on_the_play_for_index, run_chunked_simulation
 
 logger = logging.getLogger(__name__)
 
@@ -151,25 +153,35 @@ def run_simulation(
     n_games: int,
     batch: _BatchConfig,
 ) -> list[SimResult]:
-    """Run ``n_games`` headless games and return all results."""
-    results: list[SimResult] = []
-    for i in range(n_games):
-        on_the_play = i % 2 == 0
-        try:
-            result = run_one_game(
-                player_cards,
-                opponent_cards,
-                _HeadlessConfig(
-                    names=batch.names,
-                    on_the_play=on_the_play,
-                    opponent_pilot_prompt=batch.opponent_pilot_prompt,
-                    player_pilot_prompt=batch.player_pilot_prompt,
-                    game_index=i,
-                ),
-            )
-            results.append(result)
-        except RuntimeError as exc:
-            logger.warning("Game %d raised RuntimeError, skipping: %s", i, exc)
-        except AssertionError as exc:
-            logger.warning("Game %d assertion failed, skipping: %s", i, exc)
-    return results
+    """Run ``n_games`` headless games in batches, returning all results."""
+    player_name, opponent_name = batch.names
+
+    def run_chunk(chunk: int, start: int) -> list[SimResult]:
+        results: list[SimResult] = []
+        for i in range(chunk):
+            game_index = start + i
+            try:
+                result = run_one_game(
+                    player_cards,
+                    opponent_cards,
+                    _HeadlessConfig(
+                        names=batch.names,
+                        on_the_play=on_the_play_for_index(game_index),
+                        opponent_pilot_prompt=batch.opponent_pilot_prompt,
+                        player_pilot_prompt=batch.player_pilot_prompt,
+                        game_index=game_index,
+                    ),
+                )
+                results.append(result)
+            except RuntimeError as exc:
+                logger.warning("Game %d raised RuntimeError, skipping: %s", game_index, exc)
+            except AssertionError as exc:
+                logger.warning("Game %d assertion failed, skipping: %s", game_index, exc)
+        return results
+
+    return run_chunked_simulation(
+        n_games,
+        run_chunk,
+        label=f"{player_name} vs {opponent_name}",
+        after_batch=lambda b: emit_batch_game_logs(b, player_name, opponent_name),
+    )

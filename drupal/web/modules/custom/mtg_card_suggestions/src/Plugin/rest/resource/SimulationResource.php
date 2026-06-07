@@ -97,6 +97,7 @@ final class SimulationResource extends ResourceBase {
       'format'            => (string) ($data['format'] ?? 'Modern'),
       'games'             => min(200, max(1, (int) ($data['games'] ?? 50))),
       'useLlm'            => (bool) ($data['useLlm'] ?? FALSE),
+      'pilotSide'         => (string) ($data['pilotSide'] ?? 'auto'),
     ];
 
     $simServiceUrl = (string) getenv('MTG_SIM_SERVICE_URL');
@@ -125,7 +126,7 @@ final class SimulationResource extends ResourceBase {
         $simBase . '/simulate',
         [
           'json'             => $payload,
-          'timeout'          => 600,
+          'timeout'          => 3600,
           'connect_timeout'  => 10,
         ],
       );

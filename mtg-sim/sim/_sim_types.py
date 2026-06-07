@@ -21,6 +21,7 @@ class TurnBoard:
     """Board state snapshot for one player's turn."""
 
     hand_size: int = 0
+    hand_cards: str = ""
     creatures_in_play: int = 0
     power: int = 0
 
@@ -103,6 +104,23 @@ class GameLogMulligans:
 
 
 @dataclass
+class GameLogLife:
+    """Final life totals for both players."""
+
+    player: int
+    opponent: int
+
+
+@dataclass
+class PilotNotesGroup:
+    """Pilot LLM log lines captured from Forge stdout."""
+
+    all_notes: list[str] = field(default_factory=list)
+    player: list[str] = field(default_factory=list)
+    opponent: list[str] = field(default_factory=list)
+
+
+@dataclass
 class GameLog:
     """Complete record of a single simulated game."""
 
@@ -111,8 +129,23 @@ class GameLog:
     player_opening_hand: list[str]
     turns: list[TurnEvent]
     outcome: GameLogOutcome
-    player_final_life: int
-    opponent_final_life: int
+    life: GameLogLife
+    pilots: PilotNotesGroup = field(default_factory=PilotNotesGroup)
+
+    @property
+    def pilot_notes(self) -> list[str]:
+        """All pilot log lines (both decks)."""
+        return self.pilots.all_notes
+
+    @property
+    def player_pilot_notes(self) -> list[str]:
+        """Pilot log lines for the simulated player deck."""
+        return self.pilots.player
+
+    @property
+    def opponent_pilot_notes(self) -> list[str]:
+        """Pilot log lines for the opponent deck."""
+        return self.pilots.opponent
 
     @property
     def game_index(self) -> int:
@@ -148,6 +181,16 @@ class GameLog:
     def win_condition(self) -> str:
         """String describing how the game was won."""
         return self.outcome.win_condition
+
+    @property
+    def player_final_life(self) -> int:
+        """Player life total when the game ended."""
+        return self.life.player
+
+    @property
+    def opponent_final_life(self) -> int:
+        """Opponent life total when the game ended."""
+        return self.life.opponent
 
 
 @dataclass
@@ -268,6 +311,19 @@ class _GameOutcome:
 
 
 @dataclass
+class _ForgeParseExtras:
+    """Forge verbose parser counters not tied to a single turn."""
+
+    opp_dmg: Counter[str] = field(default_factory=Counter)
+    pilot_notes: list[str] = field(default_factory=list)
+    player_pilot_notes: list[str] = field(default_factory=list)
+    opponent_pilot_notes: list[str] = field(default_factory=list)
+    attack_by_turn: dict[tuple[int, int], int] = field(default_factory=dict)
+    hand_by_turn: dict[tuple[int, int], int] = field(default_factory=dict)
+    hand_cards_by_turn: dict[tuple[int, int], str] = field(default_factory=dict)
+
+
+@dataclass
 class _GameState:
     """Mutable per-game state used by _ForgeVerboseParser."""
 
@@ -276,5 +332,5 @@ class _GameState:
     life: _LifePair = field(default_factory=_LifePair)
     mulls: list[int] = field(default_factory=lambda: [0, 0])
     accum: _TurnAccum = field(default_factory=_TurnAccum)
-    opp_dmg: Counter[str] = field(default_factory=Counter)
+    extras: _ForgeParseExtras = field(default_factory=_ForgeParseExtras)
     turn_events: list[TurnEvent] = field(default_factory=list)

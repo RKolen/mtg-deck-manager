@@ -10,9 +10,11 @@ if __name__ == "__main__":
     import pathlib
     import sys
 
-    _sim_dir = pathlib.Path(__file__).resolve().parent.parent / "sim"
-    if str(_sim_dir) not in sys.path:
-        sys.path.insert(0, str(_sim_dir))
+    _mtg_sim = pathlib.Path(__file__).resolve().parent.parent
+    _sim_dir = _mtg_sim / "sim"
+    for path in (_mtg_sim, _sim_dir):
+        if str(path) not in sys.path:
+            sys.path.insert(0, str(path))
     from env_loader import load_project_env
 
     load_project_env()

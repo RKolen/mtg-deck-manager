@@ -10,8 +10,9 @@ Required environment variables (repo-root .env — see /.env.example):
   CORS_ORIGINS   - Comma-separated allowed origins
 
 Forge environment variables:
-  FORGE_JAR      - Absolute path to the built forge-gui-desktop JAR
-  FORGE_JAVA     - Path to java binary (defaults to "java" on PATH)
+  FORGE_JAR           - Absolute path to the built forge-gui-desktop JAR
+  FORGE_JAVA          - Path to java binary (defaults to "java" on PATH)
+  FORGE_PILOT_TIMEOUT - Sidecar timeout seconds for Forge (default 10)
 
 Drupal environment variables:
   DRUPAL_URL     - Drupal backend URL for deck/meta data
@@ -22,6 +23,9 @@ Optional AI environment variables:
   SIDECAR_URL    - Host-side AI sidecar (preferred; keeps inference out of DDEV)
   OLLAMA_URL     - Direct Ollama URL (fallback when SIDECAR_URL is unset)
   OLLAMA_MODEL   - Chat model for pilot decisions and key moments
+  CAVEMAN_PILOT  - Pilot prompt compression: rules (default), llm, or off
+  CAVEMAN_PILOT_MIN_CHARS - Skip compression below this length (default 120)
+  SIM_BATCH_SIZE - Games per Forge subprocess chunk (default 5)
 
 When FORGE_JAR is not set the service runs in mock mode using the built-in
 Python engine (faster, less accurate). Set FORGE_JAR to enable real simulation.
@@ -33,6 +37,7 @@ import asyncio
 import logging
 import os
 import warnings
+from dataclasses import dataclass
 
 import sim_statistics
 import uvicorn
@@ -49,10 +54,13 @@ from deck_registry import (
 from engine.game import InteractiveGame, _GameConfig, create_game, get_game, remove_game
 from engine.game.action_dispatch import dispatch_game_action
 from engine_sim import _BatchConfig, run_simulation as run_python_simulation
-from forge_adapter import ForgeAdapter, forge_jar_available
+from caveman_compress import CompressedPrompt, compress_pilot_prompt
+from forge_adapter import ForgeAdapter, ForgeSimOptions, forge_jar_available
+from forge_pilot import resolve_forge_pilot_config
 from game_log_emitter import emit_game_logs
 from llm_client import is_configured as llm_is_configured
-from pilot_info import EngineRequest, build_pilot_info, resolve_sim_engine
+from pilot_info import EngineRequest, PilotInfoRequest, build_pilot_info, resolve_sim_engine
+from pilot_prompts import get_pilot_prompt
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -98,6 +106,13 @@ class SimulateRequest(BaseModel):
             "'python' (LLM pilot prompts — experimental, fewer rules)"
         ),
     )
+    pilotSide: str = Field(
+        "auto",
+        description=(
+            "Deprecated Forge override; each deck with a prompt is LLM-piloted when "
+            "SIDECAR_URL is set. field_notes for your deck, archetype prompt for opponent."
+        ),
+    )
 
 
 @app.get("/")
@@ -123,6 +138,56 @@ def health() -> dict:
     }
 
 
+@dataclass(frozen=True)
+class _SimMatchup:
+    """Deck lists and caveman-compressed pilot prompts for one simulation."""
+
+    deck_title: str
+    player_deck: list
+    opponent_deck: list
+    player_pilot: CompressedPrompt
+    opponent_pilot: CompressedPrompt
+    opp_pilot_raw: str
+
+
+async def _load_sim_matchup(deck_id: int, archetype: str, fmt: str) -> _SimMatchup:
+    """Fetch decks and compress pilot prompts for a gauntlet simulation."""
+    player_deck = await asyncio.to_thread(fetch_player_deck, deck_id)
+    if not player_deck:
+        raise HTTPException(status_code=404, detail=f"Deck {deck_id} has no cards.")
+    deck_title = await asyncio.to_thread(fetch_deck_title, deck_id)
+    player_pilot = compress_pilot_prompt(
+        await asyncio.to_thread(fetch_deck_notes, deck_id),
+    )
+    try:
+        opponent_deck, opp_pilot_raw = await asyncio.to_thread(
+            fetch_meta_deck, archetype, fmt,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502, detail=f"Could not fetch meta deck: {exc}",
+        ) from exc
+    if not opponent_deck:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"No meta_deck found for '{archetype}' in {fmt}. "
+                "Populate meta_deck nodes via the MTGGoldfish scraper first."
+            ),
+        )
+    opponent_pilot = compress_pilot_prompt(
+        get_pilot_prompt(archetype, opp_pilot_raw),
+    )
+    return _SimMatchup(
+        deck_title=deck_title,
+        player_deck=player_deck,
+        opponent_deck=opponent_deck,
+        player_pilot=player_pilot,
+        opponent_pilot=opponent_pilot,
+        opp_pilot_raw=opp_pilot_raw,
+    )
+
+
 @app.post("/simulate")
 async def simulate(req: SimulateRequest) -> dict:
     """Run a simulation and return aggregate win-rate statistics."""
@@ -132,37 +197,15 @@ async def simulate(req: SimulateRequest) -> dict:
     adapter: ForgeAdapter = _state["adapter"]
 
     try:
-        player_deck = await asyncio.to_thread(fetch_player_deck, req.playerDeckId)
+        matchup = await _load_sim_matchup(
+            req.playerDeckId, req.opponentArchetype, req.format,
+        )
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(
-            status_code=502, detail=f"Could not fetch player deck: {exc}"
+            status_code=502, detail=f"Could not fetch player deck: {exc}",
         ) from exc
-
-    if not player_deck:
-        raise HTTPException(
-            status_code=404, detail=f"Deck {req.playerDeckId} has no cards."
-        )
-
-    deck_title = await asyncio.to_thread(fetch_deck_title, req.playerDeckId)
-    player_pilot_prompt = await asyncio.to_thread(fetch_deck_notes, req.playerDeckId)
-
-    try:
-        opponent_deck, opp_pilot_prompt = await asyncio.to_thread(
-            fetch_meta_deck, req.opponentArchetype, req.format
-        )
-    except Exception as exc:
-        raise HTTPException(
-            status_code=502, detail=f"Could not fetch meta deck: {exc}"
-        ) from exc
-
-    if not opponent_deck:
-        raise HTTPException(
-            status_code=404,
-            detail=(
-                f"No meta_deck found for '{req.opponentArchetype}' in {req.format}. "
-                "Populate meta_deck nodes via the MTGGoldfish scraper first."
-            ),
-        )
 
     llm_ready = llm_is_configured()
     engine = resolve_sim_engine(
@@ -172,44 +215,55 @@ async def simulate(req: SimulateRequest) -> dict:
             llm_ready=llm_ready,
             use_llm=req.useLlm,
             opponent_archetype=req.opponentArchetype,
-            opp_drupal_prompt=opp_pilot_prompt,
-            player_prompt=player_pilot_prompt,
+            opp_drupal_prompt=matchup.opp_pilot_raw,
+            player_prompt=matchup.player_pilot.text,
         ),
     )
     pilot_info = build_pilot_info(
-        engine,
-        opponent_archetype=req.opponentArchetype,
-        opp_drupal_prompt=opp_pilot_prompt,
-        player_prompt=player_pilot_prompt,
-        llm_ready=llm_ready,
+        PilotInfoRequest(
+            engine=engine,
+            opponent_archetype=req.opponentArchetype,
+            opp_drupal_prompt=matchup.opp_pilot_raw,
+            player=matchup.player_pilot,
+            opponent=matchup.opponent_pilot,
+            llm_ready=llm_ready,
+        ),
     )
     logger.info(
         "Simulation engine=%s matchup=%s vs %s games=%d pilot=%s",
         engine,
-        deck_title,
+        matchup.deck_title,
         req.opponentArchetype,
         req.games,
         pilot_info.get("message"),
     )
 
     if engine == "forge":
+        forge_pilot = resolve_forge_pilot_config(
+            matchup.player_pilot.text,
+            matchup.opponent_pilot.text,
+            req.opponentArchetype,
+        )
         results = await asyncio.to_thread(
             adapter.run_simulation,
-            player_deck,
-            opponent_deck,
+            matchup.player_deck,
+            matchup.opponent_deck,
             req.games,
-            (deck_title, req.opponentArchetype),
+            options=ForgeSimOptions(
+                deck_names=(matchup.deck_title, req.opponentArchetype),
+                pilot=forge_pilot,
+            ),
         )
     else:
         results = await asyncio.to_thread(
             run_python_simulation,
-            player_deck,
-            opponent_deck,
+            matchup.player_deck,
+            matchup.opponent_deck,
             req.games,
             _BatchConfig(
-                names=(deck_title, req.opponentArchetype),
-                opponent_pilot_prompt=opp_pilot_prompt,
-                player_pilot_prompt=player_pilot_prompt,
+                names=(matchup.deck_title, req.opponentArchetype),
+                opponent_pilot_prompt=matchup.opponent_pilot.text,
+                player_pilot_prompt=matchup.player_pilot.text,
             ),
         )
 
@@ -219,13 +273,13 @@ async def simulate(req: SimulateRequest) -> dict:
             detail="Simulation returned no results. Check sim service logs.",
         )
 
-    emit_game_logs(results, deck_title, req.opponentArchetype)
+    emit_game_logs(results, matchup.deck_title, req.opponentArchetype)
 
     stats = await asyncio.to_thread(
         sim_statistics.compute_statistics,
         results,
         sim_statistics.MatchupConfig(
-            player_deck_name=deck_title,
+            player_deck_name=matchup.deck_title,
             opponent_archetype=req.opponentArchetype,
             fmt=req.format,
             generate_moments=req.useLlm,
@@ -309,10 +363,11 @@ async def game_start(req: StartGameRequest) -> dict:
     if not player_deck:
         raise HTTPException(404, f"Deck {req.playerDeckId} has no cards.")
 
-    player_pilot_prompt = await asyncio.to_thread(fetch_deck_notes, req.playerDeckId)
+    player_pilot_raw = await asyncio.to_thread(fetch_deck_notes, req.playerDeckId)
+    player_pilot = compress_pilot_prompt(player_pilot_raw)
 
     try:
-        opponent_deck, opp_pilot_prompt = await asyncio.to_thread(
+        opponent_deck, opp_pilot_raw = await asyncio.to_thread(
             fetch_meta_deck, req.opponentArchetype, req.format
         )
     except Exception as exc:
@@ -320,14 +375,19 @@ async def game_start(req: StartGameRequest) -> dict:
     if not opponent_deck:
         raise HTTPException(404, f"No meta_deck for '{req.opponentArchetype}' in {req.format}.")
 
+    opponent_pilot = compress_pilot_prompt(
+        get_pilot_prompt(req.opponentArchetype, opp_pilot_raw),
+    )
+
     game = create_game(
         player_deck, opponent_deck,
         _GameConfig(
             player_name="You",
             opponent_name=req.opponentArchetype,
             on_the_play=req.onThePlay,
-            pilot_prompt=opp_pilot_prompt,
-            player_pilot_prompt=player_pilot_prompt,
+            pilot_prompt=opponent_pilot.text,
+            player_pilot_prompt=player_pilot.text,
+            pilot_prompt_resolved=True,
         ),
     )
     return game.to_client()

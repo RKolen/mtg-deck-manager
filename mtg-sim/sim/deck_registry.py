@@ -247,14 +247,17 @@ def _fetch_deck_attributes(deck_nid: int, fields: str) -> dict:
             },
             auth=_get_auth(),
             timeout=10,
+            verify=False,
         )
         resp.raise_for_status()
         items = resp.json()["data"]
         if not items:
+            logger.warning("JSON:API deck nid %s not found", deck_nid)
             return {}
         attrs = items[0].get("attributes") or {}
         return attrs if isinstance(attrs, dict) else {}
-    except (requests.RequestException, KeyError, TypeError, ValueError, IndexError):
+    except (requests.RequestException, KeyError, TypeError, ValueError, IndexError) as exc:
+        logger.warning("Deck attribute fetch failed for nid %s: %s", deck_nid, exc)
         return {}
 
 

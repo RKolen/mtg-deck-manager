@@ -25,12 +25,13 @@ import os
 import pathlib
 import random
 import re
-import subprocess
 import uuid
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 
 from _sim_types import (
     GameLog,
+    GameLogLife,
     GameLogMulligans,
     GameLogOutcome,
     GameLogSetup,
@@ -42,9 +43,18 @@ from _sim_types import (
     TurnDamage,
     TurnEvent,
     _GameOutcome,
-    _GameState,
-    _TurnAccum,
 )
+from forge_verbose_parser import _parse_forge_verbose_output
+from forge_pilot import (
+    ForgePilotConfig,
+    ForgeSimOptions,
+    build_forge_cmd,
+    deck_ai_hints,
+    forge_pilot_mode_for_archetype,
+    invoke_forge,
+)
+from game_log_emitter import emit_batch_game_logs
+from sim_batch import on_the_play_for_index, run_chunked_simulation
 
 if TYPE_CHECKING:
     from deck_registry import CardInfo
@@ -60,265 +70,21 @@ def forge_jar_available() -> bool:
     return bool(FORGE_JAR and os.path.isfile(FORGE_JAR))
 
 
-class _ForgeVerboseParser:
-    """Line-by-line parser for Forge verbose (no -q flag) stdout."""
-
-    _MULLIGAN = re.compile(r"Mulligan: (.+?) has kept a hand of (\d+) cards")
-    _TURN_START = re.compile(r"Turn: Turn (\d+) \((.+)\)")
-    _LIFE = re.compile(r"Life: Life: (.+?) \d+ > (\d+)")
-    _CAST = re.compile(r"Add To Stack: (.+?) cast (.+)")
-    _LAND = re.compile(r"Land: (.+?) played (.+)")
-    # Groups: (source, amount, damage_type_or_None, target)
-    _DAMAGE = re.compile(
-        r"Damage: (.+?) deals (\d+)(?: (combat|non-combat))? damage(?:.*?)? to (.+?)\.",
-        re.IGNORECASE,
-    )
-    _TURN_OUTCOME = re.compile(r"Game Outcome: Turn (\d+)", re.IGNORECASE)
-    _GAME_RESULT = re.compile(
-        r"Game Result: Game (\d+) ended.*?(?:(\S.*?) has won!|a Draw)",
-        re.IGNORECASE,
-    )
-
-    def __init__(self, player_name: str) -> None:
-        """Initialise parser with the short player deck name."""
-        self._player_name = player_name
-        self._p_forge = f"Ai(1)-{player_name}"
-        self._results: list[SimResult] = []
-        self._st = _GameState()
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
-    def _flush(self) -> None:
-        """Commit the current half-turn data to turn_events."""
-        if self._st.meta.half_player < 0:
-            return
-        mana = self._st.accum.p_lands if self._st.meta.half_player == 0 else 0
-        self._st.turn_events.append(TurnEvent(
-            turn=self._st.meta.game_turn,
-            player=self._st.meta.half_player,
-            mana_available=mana,
-            plays=list(self._st.accum.plays),
-            life_totals=[self._st.life.p, self._st.life.o],
-            board=TurnBoard(),
-            damage=TurnDamage(
-                total=self._st.accum.dmg,
-                combat=self._st.accum.combat_dmg,
-                noncombat=self._st.accum.noncombat_dmg,
-            ),
-        ))
-
-    def _commit(self, game_num: int, winner_raw: Optional[str]) -> None:
-        """Finalise a game and append a SimResult."""
-        on_play = game_num % 2 == 1
-        if winner_raw is None:
-            winner = random.randint(0, 1)
-            if not self._st.win_cond:
-                self._st.win_cond = "draw"
-        else:
-            winner = 0 if self._player_name in winner_raw else 1
-        key_cards = (
-            [c for c, _ in self._st.opp_dmg.most_common(5)] if winner == 1 else []
-        )
-        final_turn = self._st.meta.turn_num or self._st.meta.game_turn
-        log = GameLog(
-            setup=GameLogSetup(game_index=game_num - 1, on_the_play=on_play),
-            mulligans=GameLogMulligans(
-                player=self._st.mulls[0],
-                opponent=self._st.mulls[1],
-            ),
-            player_opening_hand=[],
-            turns=list(self._st.turn_events),
-            outcome=GameLogOutcome(
-                winner=winner,
-                final_turn=final_turn,
-                win_condition=self._st.win_cond,
-            ),
-            player_final_life=self._st.life.p,
-            opponent_final_life=self._st.life.o,
-        )
-        self._results.append(SimResult(
-            outcome=SimResultOutcome(winner=winner, timed_out=winner_raw is None),
-            turns=self._st.meta.turn_num,
-            life=SimResultLife(player=self._st.life.p, opponent=self._st.life.o),
-            key_cards_on_loss=key_cards,
-            on_the_play=on_play,
-            mulligans=SimResultMulligans(
-                player=self._st.mulls[0],
-                opponent=self._st.mulls[1],
-            ),
-            log=log,
-        ))
-        self._st = _GameState()
-
-    # ------------------------------------------------------------------
-    # Per-prefix handlers (return True when the line was consumed)
-    # ------------------------------------------------------------------
-
-    def _try_mulligan(self, s: str) -> bool:
-        """Handle Mulligan lines."""
-        m = self._MULLIGAN.match(s)
-        if not m:
-            return False
-        kept = int(m.group(2))
-        idx = 0 if self._p_forge in m.group(1) else 1
-        self._st.mulls[idx] = 7 - kept
-        return True
-
-    def _try_turn_start(self, s: str) -> bool:
-        """Handle Turn start lines."""
-        m = self._TURN_START.match(s)
-        if not m:
-            return False
-        self._flush()
-        self._st.meta.game_turn = int(m.group(1))
-        self._st.meta.half_player = 0 if self._p_forge in m.group(2) else 1
-        self._st.accum = _TurnAccum()
-        return True
-
-    def _try_life(self, s: str) -> bool:
-        """Handle Life change lines."""
-        m = self._LIFE.match(s)
-        if not m:
-            return False
-        new_life = int(m.group(2))
-        if self._p_forge in m.group(1):
-            self._st.life.p = new_life
-        else:
-            self._st.life.o = new_life
-        return True
-
-    def _try_cast(self, s: str) -> bool:
-        """Handle Add To Stack cast lines."""
-        m = self._CAST.match(s)
-        if not m:
-            return False
-        is_player = self._p_forge in m.group(1)
-        card = re.sub(r"\s+targeting .+$", "", m.group(2)).strip()
-        if is_player == (self._st.meta.half_player == 0):
-            self._st.accum.plays.append(card)
-        return True
-
-    def _try_land(self, s: str) -> bool:
-        """Handle Land played lines."""
-        m = self._LAND.match(s)
-        if not m:
-            return False
-        is_player = self._p_forge in m.group(1)
-        land = re.sub(r"\s*\(\d+\)\s*$", "", m.group(2)).strip()
-        if is_player:
-            self._st.accum.p_lands += 1
-        if is_player == (self._st.meta.half_player == 0):
-            self._st.accum.plays.append(f"{land} [Land]")
-        return True
-
-    def _try_damage(self, s: str) -> bool:
-        """Handle Damage lines."""
-        m = self._DAMAGE.match(s)
-        if not m:
-            return False
-        source_raw = m.group(1)
-        amount = int(m.group(2))
-        dmg_type = (m.group(3) or "").lower()
-        target = m.group(4)
-        if self._p_forge in target:
-            card_name = re.sub(r"\s*\(\d+\)\s*$", "", source_raw).strip()
-            self._st.opp_dmg[card_name] += amount
-        elif self._st.meta.half_player == 0 and self._p_forge not in target:
-            self._st.accum.dmg += amount
-            if dmg_type == "combat":
-                self._st.accum.combat_dmg += amount
-            elif dmg_type == "non-combat":
-                self._st.accum.noncombat_dmg += amount
-        return True
-
-    def _try_turn_outcome(self, s: str) -> bool:
-        """Handle Game Outcome turn lines."""
-        m = self._TURN_OUTCOME.match(s)
-        if not m:
-            return False
-        self._st.meta.turn_num = int(m.group(1))
-        return True
-
-    def _try_win_cond(self, s: str) -> bool:
-        """Handle Game Outcome player-outcome lines, extracting the real loss reason.
-
-        Forge emits one line per player, e.g.:
-          Game Outcome: Ai(1)-Deck has won because all opponents have lost
-          Game Outcome: Ai(2)-Opp has lost because life total reached 0
-        The loser's line carries the diagnostic reason; the winner's generic
-        line does not override a more specific reason already recorded.
-        """
-        if not s.startswith("Game Outcome:"):
-            return False
-        lower = s.lower()
-        if "life total reached 0" in lower:
-            self._st.win_cond = "life_loss"
-        elif "draw cards from empty library" in lower:
-            self._st.win_cond = "deck_out"
-        elif "10 poison counters" in lower:
-            self._st.win_cond = "poisoned"
-        elif "has conceded" in lower:
-            self._st.win_cond = "concession"
-        elif "effect of spell" in lower or "won by spell" in lower:
-            self._st.win_cond = "lose_the_game_effect"
-        elif "21 damage from generals" in lower:
-            self._st.win_cond = "commander_damage"
-        elif "accepted that the game is a draw" in lower:
-            self._st.win_cond = "draw"
-        elif "has won due to effect of" in lower:
-            self._st.win_cond = "lose_the_game_effect"
-        # "has won because all opponents have lost" — generic; do not overwrite
-        # a specific reason already set from the loser's line.
-        return True
-
-    def _try_game_result(self, s: str) -> bool:
-        """Handle Game Result lines (end of game)."""
-        m = self._GAME_RESULT.search(s)
-        if not m:
-            return False
-        self._flush()
-        self._commit(int(m.group(1)), m.group(2))
-        return True
-
-    def feed(self, line: str) -> None:
-        """Process one line of Forge verbose output."""
-        s = line.strip()
-        for handler in (
-            self._try_mulligan,
-            self._try_turn_start,
-            self._try_life,
-            self._try_cast,
-            self._try_land,
-            self._try_damage,
-            self._try_turn_outcome,
-            self._try_win_cond,
-            self._try_game_result,
-        ):
-            if handler(s):
-                break
-
-    def results(self) -> list[SimResult]:
-        """Return all completed SimResult objects."""
-        return list(self._results)
-
-
-def _parse_forge_verbose_output(stdout: str, player_name: str) -> list[SimResult]:
-    """Parse Forge verbose stdout (no -q flag) into rich SimResult objects."""
-    parser = _ForgeVerboseParser(player_name)
-    for line in stdout.splitlines():
-        parser.feed(line)
-    return parser.results()
-
-
 # ---------------------------------------------------------------------------
 # .dck export
 # ---------------------------------------------------------------------------
 
-def _write_dck(cards: list["CardInfo"], name: str, path: pathlib.Path) -> None:
+def _write_dck(
+    cards: list["CardInfo"],
+    name: str,
+    path: pathlib.Path,
+    ai_hints_line: Optional[str] = None,
+) -> None:
     """Write a list of CardInfo objects as a Forge .dck file."""
-    lines = ["[metadata]", f"Name={name}", "[Main]"]
+    lines = ["[metadata]", f"Name={name}"]
+    if ai_hints_line:
+        lines.append(ai_hints_line)
+    lines.append("[Main]")
     for c in cards:
         if not c.sideboard:
             lines.append(f"{c.quantity} {c.name}")
@@ -384,12 +150,76 @@ def _parse_forge_output(stdout: str, player_name: str) -> list[SimResult]:
 _FORGE_DECK_DIR = pathlib.Path.home() / ".forge" / "decks" / "constructed"
 
 
+def _log_forge_run(
+    player_name: str,
+    opponent_name: str,
+    n_games: int,
+    pilot_cfg: ForgePilotConfig,
+) -> None:
+    """Log whether this batch uses LLM pilot or built-in AI."""
+    if pilot_cfg.pilot_active():
+        logger.info(
+            "Running Forge: %s vs %s, %d games — LLM pilot "
+            "(player %d chars, opponent %d chars) via %s (timeout %ds)",
+            player_name,
+            opponent_name,
+            n_games,
+            len(pilot_cfg.player_pilot_prompt.strip()),
+            len(pilot_cfg.opponent_pilot_prompt.strip()),
+            pilot_cfg.pilot_url,
+            pilot_cfg.pilot_timeout,
+        )
+        return
+    logger.info(
+        "Running Forge: %s vs %s, %d games — Forge built-in AI only",
+        player_name, opponent_name, n_games,
+    )
+
+
+def _forge_file_slug(display_name: str, run_id: str, fallback: str) -> str:
+    """Build a unique Forge .dck filename stem from a human deck title."""
+    slug = re.sub(r"[^a-zA-Z0-9]+", "_", display_name).strip("_")[:48]
+    return f"{slug or fallback}_{run_id}"
+
+
+@dataclass(frozen=True)
+class ForgeDeckNames:
+    """Human-readable deck titles written into Forge .dck metadata."""
+
+    player: str
+    opponent: str
+
+
+def _materialize_forge_decks(
+    player_cards: list["CardInfo"],
+    opponent_cards: list["CardInfo"],
+    pilot_cfg: ForgePilotConfig,
+    run_id: str,
+    deck_names: ForgeDeckNames,
+) -> tuple[str, str, pathlib.Path, pathlib.Path]:
+    """Write temporary .dck files and return deck file stems and paths."""
+    combo_mode = forge_pilot_mode_for_archetype(pilot_cfg.opponent_archetype)
+    p_slug = _forge_file_slug(deck_names.player, run_id, "player")
+    o_slug = _forge_file_slug(deck_names.opponent, run_id, "opponent")
+    p_dck = _FORGE_DECK_DIR / f"{p_slug}.dck"
+    o_dck = _FORGE_DECK_DIR / f"{o_slug}.dck"
+    p_hints = deck_ai_hints(pilot_cfg.player_pilot_prompt)
+    o_hints = deck_ai_hints(
+        pilot_cfg.opponent_pilot_prompt,
+        combo_mode,
+    )
+    _write_dck(player_cards, deck_names.player, p_dck, p_hints)
+    _write_dck(opponent_cards, deck_names.opponent, o_dck, o_hints)
+    return p_slug, o_slug, p_dck, o_dck
+
+
 def run_forge_batch(
     player_cards: list["CardInfo"],
     opponent_cards: list["CardInfo"],
     n_games: int,
-    player_name: str = "Player",
-    opponent_name: str = "Opponent",
+    *,
+    deck_names: tuple[str, str] = ("Player", "Opponent"),
+    pilot: Optional[ForgePilotConfig] = None,
 ) -> list[SimResult]:
     """
     Run n_games via Forge's built-in sim command.
@@ -398,52 +228,28 @@ def run_forge_batch(
     deckFromCommandLineParameter expects them), invokes the JAR as a subprocess,
     and parses stdout for per-game winners.
     """
+    player_name, opponent_name = deck_names
+    pilot_cfg = pilot or ForgePilotConfig()
     _FORGE_DECK_DIR.mkdir(parents=True, exist_ok=True)
     run_id = uuid.uuid4().hex[:8]
-    p_name = f"sim_p_{run_id}"
-    o_name = f"sim_o_{run_id}"
-    p_dck = _FORGE_DECK_DIR / f"{p_name}.dck"
-    o_dck = _FORGE_DECK_DIR / f"{o_name}.dck"
+    p_slug, o_slug, p_dck, o_dck = _materialize_forge_decks(
+        player_cards, opponent_cards, pilot_cfg, run_id,
+        ForgeDeckNames(player=player_name, opponent=opponent_name),
+    )
 
     try:
-        _write_dck(player_cards, p_name, p_dck)
-        _write_dck(opponent_cards, o_name, o_dck)
-
-        logger.info(
-            "Running Forge: %s vs %s, %d games — Forge built-in AI only "
-            "(LLM pilot prompts are NOT used on this engine)",
-            player_name, opponent_name, n_games,
+        _log_forge_run(player_name, opponent_name, n_games, pilot_cfg)
+        stdout = invoke_forge(
+            build_forge_cmd(p_slug, o_slug, n_games, pilot_cfg),
+            n_games,
         )
-        cmd = [
-            FORGE_JAVA, "-jar", FORGE_JAR,
-            "sim",
-            "-d", f"{p_name}.dck", f"{o_name}.dck",
-            "-n", str(n_games),
-            "-c", "60",
-        ]
-        try:
-            proc = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=n_games * 90,
-                check=False,
-                cwd=str(pathlib.Path(FORGE_JAR).parent),
-            )
-        except subprocess.TimeoutExpired:
-            logger.error("Forge simulation timed out after %d games", n_games)
-            return []
-        except FileNotFoundError:
-            logger.error("Java not found. Set FORGE_JAVA to the java binary path.")
+        if not stdout:
             return []
 
-        if proc.returncode != 0:
-            logger.error("Forge exited %d: %s", proc.returncode, proc.stderr[:500])
-
-        results = _parse_forge_verbose_output(proc.stdout, p_name)
+        results = _parse_forge_verbose_output(stdout, player_name)
         if not results:
             logger.warning(
-                "Forge produced no parseable results.\nstdout: %s", proc.stdout[:1000]
+                "Forge produced no parseable results.\nstdout: %s", stdout[:1000]
             )
         return results
     finally:
@@ -618,8 +424,7 @@ class MockGameEngine:
                 final_turn=outcome.final_turn,
                 win_condition=outcome.win_condition,
             ),
-            player_final_life=player.life,
-            opponent_final_life=opponent.life,
+            life=GameLogLife(player=player.life, opponent=opponent.life),
         )
         return SimResult(
             outcome=SimResultOutcome(
@@ -783,31 +588,50 @@ class ForgeAdapter:
         player_cards: list["CardInfo"],
         opponent_cards: list["CardInfo"],
         n_games: int,
-        deck_names: tuple[str, str] = ("Player", "Opponent"),
+        *,
+        options: Optional[ForgeSimOptions] = None,
     ) -> list[SimResult]:
         """
         Run n_games and return one SimResult per game.
 
         Uses Forge when available, MockGameEngine otherwise.
-        deck_names is (player_name, opponent_name) used for .dck metadata.
         """
-        player_name, opponent_name = deck_names
+        opts = options or ForgeSimOptions()
+        player_name, opponent_name = opts.deck_names
+
+        def after_batch(batch: list[SimResult]) -> None:
+            emit_batch_game_logs(batch, player_name, opponent_name)
+
         if not self._mock:
-            results = run_forge_batch(
-                player_cards, opponent_cards, n_games, player_name, opponent_name,
+            results = run_chunked_simulation(
+                n_games,
+                lambda chunk, start: run_forge_batch(
+                    player_cards,
+                    opponent_cards,
+                    chunk,
+                    deck_names=opts.deck_names,
+                    pilot=opts.pilot,
+                ),
+                label=f"{player_name} vs {opponent_name}",
+                after_batch=after_batch,
             )
             if results:
                 return results
             logger.warning("Forge returned no results — falling back to mock engine")
 
-        return [
-            self._mock_engine.run(
-                player_cards, opponent_cards,
-                on_the_play=i % 2 == 0,
-                game_index=i,
-            )
-            for i in range(n_games)
-        ]
+        return run_chunked_simulation(
+            n_games,
+            lambda chunk, start: [
+                self._mock_engine.run(
+                    player_cards, opponent_cards,
+                    on_the_play=on_the_play_for_index(start + i),
+                    game_index=start + i,
+                )
+                for i in range(chunk)
+            ],
+            label=f"{player_name} vs {opponent_name}",
+            after_batch=after_batch,
+        )
 
     # ------------------------------------------------------------------
     # Legacy single-game API retained for the interactive game path

@@ -18,6 +18,8 @@ export interface SimulateRequest {
   format?: string;
   games?: number;
   useLlm?: boolean;
+  /** Advanced override for Forge single-pilot limit; UI omits this (auto from prompts). */
+  pilotSide?: 'auto' | 'player' | 'opponent';
 }
 
 export interface HalfStats {
@@ -61,6 +63,7 @@ export interface TurnEvent {
   damageDealt: number;
   lifeTotals: [number, number];
   handSize: number;
+  handCards?: string;
   creaturesInPlay: number;
   boardPower: number;
 }
@@ -76,6 +79,9 @@ export interface GameLog {
   playerFinalLife: number;
   opponentFinalLife: number;
   winCondition: string;
+  pilotNotes?: string[];
+  playerPilotNotes?: string[];
+  opponentPilotNotes?: string[];
   turns: TurnEvent[];
 }
 
@@ -88,6 +94,13 @@ export interface PilotInfo {
   llmAvailable: boolean;
   opponentPromptChars: number;
   playerPromptChars: number;
+  opponentPromptOriginalChars?: number;
+  playerPromptOriginalChars?: number;
+  opponentPromptPreview?: string;
+  playerPromptPreview?: string;
+  cavemanMode?: string;
+  cavemanPlayerApplied?: boolean;
+  cavemanOpponentApplied?: boolean;
   message: string;
 }
 

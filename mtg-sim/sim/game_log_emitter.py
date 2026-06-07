@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 from _sim_types import (
     GameLog,
+    GameLogLife,
     GameLogMulligans,
     GameLogOutcome,
     GameLogSetup,
@@ -50,13 +51,19 @@ def format_game_log_text(
     if log.player_opening_hand:
         lines.append(f"Opening hand ({player_name}): {', '.join(log.player_opening_hand)}")
 
+    if log.pilot_notes:
+        lines.append("Pilot decisions:")
+        lines.extend(f"  {note}" for note in log.pilot_notes)
+
     for ev in log.turns:
         who = player_name if ev.player == 0 else opponent_name
         plays = ", ".join(ev.plays) if ev.plays else "pass"
         dmg = f" | {ev.damage_dealt} dmg" if ev.damage_dealt else ""
         life = f"life {ev.life_totals[0]}-{ev.life_totals[1]}"
         board = (
-            f"hand {ev.hand_size} | board {ev.creatures_in_play} "
+            f"hand {ev.hand_size}"
+            + (f" ({ev.board.hand_cards})" if ev.board.hand_cards else "")
+            + f" | board {ev.creatures_in_play} "
             f"(power {ev.board_power})"
         )
         lines.append(f"T{ev.turn} {who}: {plays}{dmg} | {life} | {board}")
@@ -67,6 +74,21 @@ def format_game_log_text(
         f"final life {log.player_final_life}-{log.opponent_final_life}"
     )
     return "\n".join(lines)
+
+
+def emit_batch_game_logs(
+    results: list[SimResult],
+    player_name: str,
+    opponent_name: str,
+) -> None:
+    """Write full game logs for one completed sim batch to the service logger."""
+    for result in results:
+        if result.log is None:
+            continue
+        logger.info(
+            "\n%s",
+            format_game_log_text(result.log, player_name, opponent_name),
+        )
 
 
 def emit_game_logs(
@@ -249,6 +271,8 @@ def build_interactive_game_log(
             final_turn=game.turn,
             win_condition=win_condition,
         ),
-        player_final_life=game.state.players[0].life,
-        opponent_final_life=game.state.players[1].life,
+        life=GameLogLife(
+            player=game.state.players[0].life,
+            opponent=game.state.players[1].life,
+        ),
     )

@@ -182,12 +182,15 @@ if lsof -ti :"$SIDECAR_PORT" > /dev/null 2>&1; then
 elif [[ ! -f "$SIM_DIR/.venv/bin/python" ]]; then
   echo "    WARNING: $SIM_DIR/.venv not found — sidecar not started."
 else
+  cd "$SIM_DIR"
   OLLAMA_URL="http://127.0.0.1:$OLLAMA_PORT" \
   OLLAMA_MODEL="$OLLAMA_MODEL" \
   SIDECAR_HOST="127.0.0.1" \
   SIDECAR_PORT="$SIDECAR_PORT" \
-  "$SIM_DIR/.venv/bin/python" "$SIM_DIR/sidecar/main.py" \
+  PYTHONPATH="$SIM_DIR" \
+  "$SIM_DIR/.venv/bin/python" -m sidecar.main \
     > "$SCRIPT_DIR/.sidecar.log" 2>&1 &
+  cd "$SCRIPT_DIR"
   echo "    Sidecar started on port $SIDECAR_PORT (logs: .sidecar.log)."
 fi
 echo "    Sidecar: http://localhost:$SIDECAR_PORT/health"

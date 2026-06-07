@@ -168,6 +168,9 @@ def _serialise_log(log) -> dict:
         "playerFinalLife": log.player_final_life,
         "opponentFinalLife": log.opponent_final_life,
         "winCondition": log.win_condition,
+        "pilotNotes": log.pilot_notes,
+        "playerPilotNotes": log.player_pilot_notes,
+        "opponentPilotNotes": log.opponent_pilot_notes,
         "turns": [
             {
                 "turn": e.turn,
@@ -179,6 +182,7 @@ def _serialise_log(log) -> dict:
                 "nonCombatDamage": e.noncombat_damage,
                 "lifeTotals": e.life_totals,
                 "handSize": e.hand_size,
+                "handCards": e.board.hand_cards,
                 "creaturesInPlay": e.creatures_in_play,
                 "boardPower": e.board_power,
             }

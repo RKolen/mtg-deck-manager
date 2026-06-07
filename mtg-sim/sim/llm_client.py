@@ -16,6 +16,7 @@ from ollama_http import (
     generate_text as ollama_generate_text,
     is_configured as ollama_configured,
     parse_pilot_pick_index,
+    pilot_pick_generate,
 )
 
 logger = logging.getLogger(__name__)
@@ -41,8 +42,19 @@ def llm_pick(
         return _sidecar_pick(question, option_names, state, system_prompt)
     if ollama_configured():
         prompt = build_pilot_pick_prompt(question, option_names, state, system_prompt)
-        text = ollama_generate_text(prompt, temperature=0.1, max_tokens=150)
-        return parse_pilot_pick_index(text, len(option_names))
+        result = pilot_pick_generate(prompt)
+        if not result.response and not result.thinking:
+            return 0, ""
+        index, reasoning = parse_pilot_pick_index(
+            result.response, len(option_names), thinking=result.thinking,
+            context={
+                "question": question,
+                "options": option_names,
+                "state": state,
+                "system_prompt": system_prompt,
+            },
+        )
+        return index, reasoning
     return 0, ""
 
 

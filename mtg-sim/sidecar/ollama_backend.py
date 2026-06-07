@@ -8,6 +8,7 @@ from ollama_http import (
     generate_text,
     is_configured,
     parse_pilot_pick_index,
+    pilot_pick_generate,
 )
 
 __all__ = ["OLLAMA_MODEL", "generate_text", "is_configured", "pilot_pick"]
@@ -21,7 +22,18 @@ def pilot_pick(
 ) -> tuple[int, str]:
     """Ask Ollama to choose one option from a numbered list."""
     prompt = build_pilot_pick_prompt(question, options, state, system_prompt)
-    text = generate_text(prompt, temperature=0.1, max_tokens=150)
-    if not text:
+    result = pilot_pick_generate(prompt)
+    if not result.response and not result.thinking:
         raise RuntimeError("Ollama returned an empty pilot-pick response")
-    return parse_pilot_pick_index(text, len(options))
+    index, reasoning = parse_pilot_pick_index(
+        result.response,
+        len(options),
+        thinking=result.thinking,
+        context={
+            "question": question,
+            "options": options,
+            "state": state,
+            "system_prompt": system_prompt,
+        },
+    )
+    return index, reasoning
