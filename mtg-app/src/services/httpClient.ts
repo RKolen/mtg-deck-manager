@@ -1,38 +1,46 @@
 /**
  * Shared Axios factory for all Drupal backend clients.
  *
- * Reads connection details from environment variables and throws immediately
- * if any are missing, so misconfiguration surfaces at startup rather than
- * silently producing requests with empty credentials.
+ * Credentials are resolved on the first request so Next.js builds do not
+ * require runtime environment variables at module load time.
  */
 
-import axios, { type AxiosInstance } from 'axios';
+import axios, { type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
+
+function applyDrupalAuth(config: InternalAxiosRequestConfig): InternalAxiosRequestConfig {
+  const url = process.env.NEXT_PUBLIC_DRUPAL_URL;
+  const user = process.env.NEXT_PUBLIC_DRUPAL_USER;
+  const pass = process.env.NEXT_PUBLIC_DRUPAL_PASS;
+
+  if (!url || !user || !pass) {
+    throw new Error(
+      'Missing required environment variables: ' +
+        'NEXT_PUBLIC_DRUPAL_URL, NEXT_PUBLIC_DRUPAL_USER, NEXT_PUBLIC_DRUPAL_PASS',
+    );
+  }
+
+  config.auth = { username: user, password: pass };
+  if (config.baseURL != null && !config.baseURL.startsWith('http')) {
+    config.baseURL = `${url}${config.baseURL}`;
+  }
+  return config;
+}
 
 /**
  * Creates an Axios instance pre-configured with the Drupal base URL and
  * Basic Auth credentials sourced from environment variables.
  *
- * @param basePath     - Path appended to GATSBY_DRUPAL_URL (e.g. '/api').
+ * @param basePath     - Path appended to NEXT_PUBLIC_DRUPAL_URL (e.g. '/api').
  * @param extraHeaders - Additional headers merged into every request.
  */
 export function createDrupalClient(
   basePath: string,
   extraHeaders: Record<string, string> = {},
 ): AxiosInstance {
-  const url = process.env.GATSBY_DRUPAL_URL;
-  const user = process.env.GATSBY_DRUPAL_USER;
-  const pass = process.env.GATSBY_DRUPAL_PASS;
-
-  if (!url || !user || !pass) {
-    throw new Error(
-      'Missing required environment variables: ' +
-        'GATSBY_DRUPAL_URL, GATSBY_DRUPAL_USER, GATSBY_DRUPAL_PASS',
-    );
-  }
-
-  return axios.create({
-    baseURL: `${url}${basePath}`,
-    auth: { username: user, password: pass },
+  const instance = axios.create({
+    baseURL: basePath,
     headers: extraHeaders,
   });
+  instance.interceptors.request.use(applyDrupalAuth);
+  return instance;
 }

@@ -4,7 +4,8 @@
  */
 
 import React from 'react';
-import { Link } from 'gatsby';
+import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   fetchCardBySlug,
@@ -12,18 +13,15 @@ import {
   upsertCollectionCard,
 } from '../../../services/drupalApi';
 
-interface Props {
-  params: { id: string };
-}
-
-const CollectionCardPage: React.FC<Props> = ({ params }) => {
-  const slug = params.id;
+const CollectionCardPage: React.FC = () => {
+  const router = useRouter();
+  const slug = typeof router.query.id === 'string' ? router.query.id : '';
   const qc = useQueryClient();
 
   const { data: card, isLoading: cardLoading } = useQuery({
     queryKey: ['card', slug],
     queryFn: () => fetchCardBySlug(slug),
-    enabled: slug != null,
+    enabled: router.isReady && slug !== '',
   });
 
   const cardId = card?.id;
@@ -65,7 +63,7 @@ const CollectionCardPage: React.FC<Props> = ({ params }) => {
   return (
     <main style={{ padding: '1.5rem', maxWidth: 700 }}>
       <p style={{ margin: '0 0 1rem' }}>
-        <Link to="/collection">Back to collection</Link>
+        <Link href="/collection">Back to collection</Link>
       </p>
 
       <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
@@ -171,5 +169,7 @@ const CollectionCardPage: React.FC<Props> = ({ params }) => {
     </main>
   );
 };
+
+export const getServerSideProps = async () => ({ props: {} });
 
 export default CollectionCardPage;

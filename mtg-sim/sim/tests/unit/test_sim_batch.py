@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from _sim_types import (
     GameLog,
     GameLogLife,
@@ -74,7 +76,8 @@ def test_run_chunked_simulation(monkeypatch) -> None:
     assert results[3].on_the_play is False
 
 
-def test_sim_batch_size_default(monkeypatch) -> None:
-    """Default batch size is 5."""
+def test_sim_batch_size_requires_env(monkeypatch) -> None:
+    """SIM_BATCH_SIZE must be set in the environment."""
     monkeypatch.delenv("SIM_BATCH_SIZE", raising=False)
-    assert sim_batch_size() == 5
+    with pytest.raises(RuntimeError, match="SIM_BATCH_SIZE"):
+        sim_batch_size()

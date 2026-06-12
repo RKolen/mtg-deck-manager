@@ -21,6 +21,7 @@ drupal/.ddev/solr-core/data/
 drupal/vendor/
 drupal/web/sites/default/files/
 drupal/web/sites/default/settings.local.php
+drupal/web/sites/default/services.cors.env.yml
 drupal/web/sites/simpletest/
 
 # Composer-generated lock artifacts (keep composer.lock in git)
@@ -39,11 +40,10 @@ drupal/scripts/
 drupal/tmp/
 
 # ============================================================
-# Gatsby / Node
+# Next.js / Node
 # ============================================================
 mtg-app/node_modules/
-mtg-app/.cache/
-mtg-app/public/
+mtg-app/.next/
 mtg-app/.env
 mtg-app/.env.local
 mtg-app/.env.development

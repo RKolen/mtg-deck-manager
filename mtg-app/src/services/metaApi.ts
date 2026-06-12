@@ -7,7 +7,7 @@
  *   Python service   — POST /classify            (deck deduction classifier)
  */
 
-import axios from 'axios';
+import axios, { type InternalAxiosRequestConfig } from 'axios';
 import { gql } from 'graphql-request';
 import { createDrupalClient } from './httpClient';
 import { getGraphQLClient } from './graphqlClient';
@@ -114,10 +114,16 @@ export async function fetchMatchupAdvice(req: MatchupAdviceRequest): Promise<Mat
 // Deck deduction classifier (Python service on host)
 // ---------------------------------------------------------------------------
 
-const CLASSIFIER_URL =
-  process.env.GATSBY_CLASSIFIER_URL ?? 'http://localhost:8001';
+const classifierClient = axios.create({ timeout: 10_000 });
 
-const classifierClient = axios.create({ baseURL: CLASSIFIER_URL, timeout: 10_000 });
+classifierClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  const classifierUrl = process.env.NEXT_PUBLIC_CLASSIFIER_URL;
+  if (!classifierUrl) {
+    throw new Error('Missing required environment variable: NEXT_PUBLIC_CLASSIFIER_URL');
+  }
+  config.baseURL = classifierUrl;
+  return config;
+});
 
 /**
  * Returns P(archetype) for each known archetype given observed plays.

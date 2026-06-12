@@ -3,22 +3,18 @@
 from __future__ import annotations
 
 import logging
-import os
 from collections.abc import Callable
 from typing import Optional
 
 from _sim_types import GameLogSetup, SimResult
+from env_loader import require_env_int
 
 logger = logging.getLogger(__name__)
 
 
 def sim_batch_size() -> int:
-    """Games per Forge/Python subprocess (env SIM_BATCH_SIZE, default 5)."""
-    raw = os.environ.get("SIM_BATCH_SIZE", "5").strip()
-    try:
-        size = int(raw)
-    except ValueError:
-        size = 5
+    """Games per Forge/Python subprocess (env SIM_BATCH_SIZE)."""
+    size = require_env_int("SIM_BATCH_SIZE")
     return max(1, min(size, 50))
 
 

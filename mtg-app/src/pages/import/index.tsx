@@ -7,7 +7,8 @@
  */
 
 import React, { useState, useCallback, useRef } from 'react';
-import { Link, navigate } from 'gatsby';
+import Link from 'next/link';
+import { useRouter } from 'next/router';
 import * as XLSX from 'xlsx';
 import {
   findCardsByName,
@@ -182,6 +183,7 @@ function parseSheet(sheet: XLSX.WorkSheet): ParsedRow[] {
 type Step = 'upload' | 'matching' | 'confirm' | 'importing' | 'done';
 
 const ImportPage: React.FC = () => {
+  const router = useRouter();
   const [step, setStep] = useState<Step>('upload');
   const [deckTitle, setDeckTitle] = useState('Imported Deck');
   const [deckFormat, setDeckFormat] = useState('Other');
@@ -351,7 +353,7 @@ const ImportPage: React.FC = () => {
   return (
     <main style={{ padding: '1.5rem', maxWidth: 800 }}>
       <p style={{ margin: '0 0 1rem' }}>
-        <Link to="/">Home</Link>
+        <Link href="/">Home</Link>
       </p>
       <h1 style={{ marginTop: 0 }}>Import XLSX deck</h1>
 
@@ -566,7 +568,7 @@ const ImportPage: React.FC = () => {
           </p>
           <button
             type="button"
-            onClick={() => void navigate(`/decks/${createdDeckId}`)}
+            onClick={() => void router.push(`/decks/${createdDeckId}`)}
           >
             Open deck
           </button>

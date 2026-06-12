@@ -2,7 +2,7 @@
 
 A personal Magic: The Gathering deck management web application. Migrates
 existing Excel/ODS spreadsheets to a full-stack web app with a Drupal 11
-headless backend and a Gatsby + TypeScript frontend.
+headless backend and a Next.js + TypeScript frontend.
 
 ---
 
@@ -35,8 +35,8 @@ headless backend and a Gatsby + TypeScript frontend.
 
 | Layer | Technology |
 |---|---|
-| Frontend | Gatsby 5 + TypeScript |
-| Backend | Drupal 11 (headless JSON:API) |
+| Frontend | Next.js 15 + TypeScript |
+| Backend | Drupal 11 (headless GraphQL) |
 | PHP | 8.4 |
 | Database | MySQL 8 |
 | Local dev | DDEV |
@@ -59,11 +59,11 @@ headless backend and a Gatsby + TypeScript frontend.
 
 ```bash
 cp .env.example .env        # configure ports and URLs (gitignored)
-./start.sh                  # start DDEV, Ollama, Milvus, and Gatsby
+./start.sh                  # start DDEV, Ollama, Milvus, and Next.js
 ./start.sh --stop           # stop all services
 ```
 
-Logs are written to `.gatsby.log` and `.ollama.log` in the project root.
+Logs are written to `.frontend.log` and `.ollama.log` in the project root.
 
 ### Manual Setup (first time only)
 
@@ -76,7 +76,7 @@ ddev drush cr    # rebuild cache
 
 # Frontend
 cd mtg-app
-cp .env.development.example .env.development   # adjust credentials if needed
+cp .env.example .env.local   # adjust credentials if needed
 npm install
 ```
 
@@ -84,13 +84,14 @@ Drupal admin: https://mtg-deck-manager.ddev.site/user
 
 Frontend: http://localhost:8001
 
-### Environment Variables (`mtg-app/.env.development`)
+### Environment Variables (`mtg-app/.env.local`)
 
 | Variable | Default | Description |
 |---|---|---|
-| `GATSBY_DRUPAL_URL` | `https://mtg-deck-manager.ddev.site` | Drupal base URL |
-| `GATSBY_DRUPAL_USER` | `admin` | JSON:API basic-auth username |
-| `GATSBY_DRUPAL_PASS` | `admin` | JSON:API basic-auth password |
+| `NEXT_PUBLIC_DRUPAL_URL` | `https://mtg-deck-manager.ddev.site` | Drupal base URL |
+| `NEXT_PUBLIC_DRUPAL_USER` | `admin` | GraphQL basic-auth username |
+| `NEXT_PUBLIC_DRUPAL_PASS` | `admin` | GraphQL basic-auth password |
+| `NEXT_PUBLIC_SIM_URL` | `http://localhost:8002` | Python sim service (port matches root `SIM_PORT`) |
 
 ---
 
@@ -120,11 +121,11 @@ drupal/          Drupal 11 headless backend (DDEV project root)
     custom/
       mtg_scryfall_sync/  Scryfall bulk import + weekly cron resync
 
-mtg-app/         Gatsby + TypeScript frontend
+mtg-app/         Next.js + TypeScript frontend
   src/
     pages/       Route pages (collection, decks/[id], import)
     components/  Shared React components
-    services/    drupalApi.ts — typed JSON:API client
+    services/    drupalApi.ts — GraphQL client (JSON:API-shaped adapters)
     utils/       deckAnalysis.ts — pure analysis functions
     types/       Shared TypeScript types (drupal.ts)
 ```

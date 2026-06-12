@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-
 import uvicorn
 
 if __name__ == "__main__":
@@ -17,7 +15,9 @@ if __name__ == "__main__":
             sys.path.insert(0, str(path))
     from env_loader import load_project_env
 
+    from env_loader import require_env, require_env_int
+
     load_project_env()
-    host = os.environ.get("SIDECAR_HOST", "127.0.0.1")
-    port = int(os.environ.get("SIDECAR_PORT", "8010"))
+    host = require_env("SIDECAR_HOST")
+    port = require_env_int("SIDECAR_PORT")
     uvicorn.run("sidecar.app:app", host=host, port=port)

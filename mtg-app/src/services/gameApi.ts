@@ -1,13 +1,21 @@
 /**
  * Client for the interactive MTG game endpoints on the Python sim service.
  *
- * Calls GATSBY_SIM_URL/game/* directly (not through Drupal) so the
+ * Calls NEXT_PUBLIC_SIM_URL/game/* directly (not through Drupal) so the
  * game state round-trips are as fast as possible.
  */
-import axios from 'axios';
+import axios, { type InternalAxiosRequestConfig } from 'axios';
 
-const SIM_URL = process.env.GATSBY_SIM_URL;
-const client = axios.create({ baseURL: SIM_URL, timeout: 30_000 });
+const client = axios.create({ timeout: 30_000 });
+
+client.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  const simUrl = process.env.NEXT_PUBLIC_SIM_URL;
+  if (!simUrl) {
+    throw new Error('Missing required environment variable: NEXT_PUBLIC_SIM_URL');
+  }
+  config.baseURL = simUrl;
+  return config;
+});
 
 // ---------------------------------------------------------------------------
 // Types

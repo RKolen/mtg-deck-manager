@@ -4,11 +4,11 @@
  * Route: /play?deckId=<nid>&vs=<archetype>&format=<format>&play=1|0
  *
  * Navigate here from the deck editor's Simulate tab.
- * Game state lives in the Python sim service (GATSBY_SIM_URL).
+ * Game state lives in the Python sim service (NEXT_PUBLIC_SIM_URL).
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Link } from 'gatsby';
+import Link from 'next/link';
 import {
   startGame,
   gameAction,
@@ -708,7 +708,7 @@ const PlayPage: React.FC = () => {
       <main style={{ padding: '2rem', color: '#eee', background: '#111', minHeight: '100vh' }}>
         <h2>Missing parameters</h2>
         <p>Navigate here from the deck editor's Simulate tab.</p>
-        <Link to="/" style={{ color: '#4a90d9' }}>Back to home</Link>
+        <Link href="/" style={{ color: '#4a90d9' }}>Back to home</Link>
       </main>
     );
   }
@@ -719,7 +719,7 @@ const PlayPage: React.FC = () => {
         <h2 style={{ color: '#e74c3c' }}>Error</h2>
         <pre style={{ color: '#aaa' }}>{error}</pre>
         <p style={{ color: '#888' }}>Make sure the sim service is running: <code>cd mtg-sim/sim && python main.py</code></p>
-        <Link to="/" style={{ color: '#4a90d9' }}>Back to home</Link>
+        <Link href="/" style={{ color: '#4a90d9' }}>Back to home</Link>
       </main>
     );
   }
@@ -737,7 +737,7 @@ const PlayPage: React.FC = () => {
 
       {/* Header bar */}
       <div style={{ background: '#1a1a2e', padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: 16, borderBottom: '1px solid #333' }}>
-        <Link to={`/decks/${vsArch}`} style={{ color: '#aaa', fontSize: '0.85rem' }}>Back</Link>
+        <Link href={`/decks/${vsArch}`} style={{ color: '#aaa', fontSize: '0.85rem' }}>Back</Link>
         <span style={{ fontWeight: 700, fontSize: '1rem' }}>You vs {vsArch}</span>
         <span style={{ color: '#f1c40f', fontSize: '0.9rem', fontWeight: 600 }}>
           T{gs.turn} — {PHASE_LABELS[phase] ?? phase}

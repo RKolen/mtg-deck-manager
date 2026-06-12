@@ -1,13 +1,13 @@
 # AGENTS.md - MTG Deck Manager
 
 This file covers the full MTG Deck Manager project: Drupal 11 headless backend
-(`drupal/`) and Gatsby + TypeScript frontend (`mtg-app/`).
+(`drupal/`) and Next.js + TypeScript frontend (`mtg-app/`).
 
 ## Overview
 
 The `drupal/` directory contains the Drupal 11 headless CMS. All Drupal/PHP
 work is done here and requires DDEV for local development. The `mtg-app/`
-directory contains the Gatsby + TypeScript frontend. See `plan.md` for the
+directory contains the Next.js + TypeScript frontend. See `plan.md` for the
 full architecture and phase breakdown.
 
 ---
@@ -267,13 +267,14 @@ ddev drush cr    # rebuild Drupal cache
 
 Forge LLM pilot work (rules + decision hooks) lives in the sibling clone
 `../forge` on branch `mtg/llm-pilot`. See [docs/forge-llm-pilots.md](docs/forge-llm-pilots.md) (git-ignored).
-| **`mtg-app/.env.development`** | Gatsby-only (`GATSBY_*`). `GATSBY_SIM_URL` port must match root `SIM_PORT`. |
+| **`mtg-app/.env.local`** | Next.js-only (`NEXT_PUBLIC_*`). `NEXT_PUBLIC_SIM_URL` / `NEXT_PUBLIC_CLASSIFIER_URL` ports must match root `SIM_PORT` / `CLASSIFIER_PORT`. |
 | **`drupal/.ddev/config.yaml`** | Committed DDEV config with **empty** `web_environment` placeholders only. |
 | **`drupal/.ddev/config.local.yaml`** | Local DDEV overrides (gitignored). Copy from `config.local.yaml.example`; set `MTG_SIM_SERVICE_URL`, `OLLAMA_*` from root `.env`. |
 
 Template: copy `/.env.example` to `/.env`. If a port is already in use locally,
-pick a free one and keep `GATSBY_SIM_URL`, `MTG_SIM_SERVICE_URL`, and `SIM_PORT`
-aligned.
+pick a free one and keep `NEXT_PUBLIC_SIM_URL`, `MTG_SIM_SERVICE_URL`, `SIM_PORT`,
+`NEXT_PUBLIC_CLASSIFIER_URL`, and `CLASSIFIER_PORT` aligned. Set `DRUPAL_CORS_ORIGINS`
+in root `.env` and DDEV `web_environment` (no hardcoded localhost origins in PHP).
 
 Do not use `mtg-sim/.env` (removed).
 

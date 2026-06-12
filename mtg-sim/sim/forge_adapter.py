@@ -62,7 +62,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 FORGE_JAR: str = os.environ.get("FORGE_JAR", "")
-FORGE_JAVA: str = os.environ.get("FORGE_JAVA", "java")
 
 
 def forge_jar_available() -> bool:

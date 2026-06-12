@@ -4,21 +4,21 @@ let _client: GraphQLClient | null = null;
 
 /**
  * Singleton GraphQL client for Drupal GraphQL Compose + MTG schema extension.
- * All entity reads and mutations use {GATSBY_DRUPAL_URL}/graphql.
+ * All entity reads and mutations use {NEXT_PUBLIC_DRUPAL_URL}/graphql.
  */
 export function getGraphQLClient(): GraphQLClient {
   if (_client !== null) {
     return _client;
   }
 
-  const url = process.env.GATSBY_DRUPAL_URL;
-  const user = process.env.GATSBY_DRUPAL_USER;
-  const pass = process.env.GATSBY_DRUPAL_PASS;
+  const url = process.env.NEXT_PUBLIC_DRUPAL_URL;
+  const user = process.env.NEXT_PUBLIC_DRUPAL_USER;
+  const pass = process.env.NEXT_PUBLIC_DRUPAL_PASS;
 
   if (!url || !user || !pass) {
     throw new Error(
       'Missing required environment variables: ' +
-        'GATSBY_DRUPAL_URL, GATSBY_DRUPAL_USER, GATSBY_DRUPAL_PASS',
+        'NEXT_PUBLIC_DRUPAL_URL, NEXT_PUBLIC_DRUPAL_USER, NEXT_PUBLIC_DRUPAL_PASS',
     );
   }
 

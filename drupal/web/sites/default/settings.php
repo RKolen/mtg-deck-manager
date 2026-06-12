@@ -718,6 +718,11 @@ $settings['update_free_access'] = FALSE;
 $settings['container_yamls'][] = $app_root . '/' . $site_path . '/services.yml';
 
 /**
+ * MTG project overrides (CORS from DRUPAL_CORS_ORIGINS).
+ */
+include __DIR__ . '/settings.mtg.php';
+
+/**
  * Override the default service container class.
  *
  * This is useful for example to trace the service container for performance

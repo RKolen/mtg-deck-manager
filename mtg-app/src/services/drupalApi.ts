@@ -264,13 +264,6 @@ const MTG_DECK_FIELDS = gql`
   }
 `;
 
-const COLLECTION_CARD_FIELDS = gql`
-  fragment CollectionCardFields on CollectionCard {
-    id quantityOwned quantityFoil
-    card { id }
-  }
-`;
-
 // ---------------------------------------------------------------------------
 // MTG Card queries
 // ---------------------------------------------------------------------------

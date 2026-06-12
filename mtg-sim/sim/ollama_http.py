@@ -10,6 +10,7 @@ from typing import Any
 
 import requests
 
+from env_loader import require_env, require_env_int
 from pilot_prompt_sanitize import (
     extract_attack_rules,
     extract_mulligan_rules_from_strategy,
@@ -49,14 +50,7 @@ def is_configured() -> bool:
 
 def think_enabled() -> bool:
     """Return True when Ollama thinking mode is enabled via OLLAMA_THINK."""
-    return os.environ.get("OLLAMA_THINK", "false").strip().lower() in _TRUTHY
-
-
-def _env_int(name: str, default: int) -> int:
-    raw = os.environ.get(name, "").strip()
-    if not raw:
-        return default
-    return int(raw)
+    return require_env("OLLAMA_THINK").lower() in _TRUTHY
 
 
 def pilot_num_predict() -> int:
@@ -64,10 +58,10 @@ def pilot_num_predict() -> int:
     override = os.environ.get("OLLAMA_PILOT_NUM_PREDICT", "").strip()
     if override:
         return int(override)
-    response_budget = _env_int("OLLAMA_PILOT_RESPONSE_BUDGET", 64)
+    response_budget = require_env_int("OLLAMA_PILOT_RESPONSE_BUDGET")
     if not think_enabled():
         return max(response_budget, 32)
-    think_budget = _env_int("OLLAMA_PILOT_THINK_BUDGET", 512)
+    think_budget = require_env_int("OLLAMA_PILOT_THINK_BUDGET")
     return think_budget + response_budget
 
 
@@ -77,7 +71,7 @@ def generate_num_predict(max_tokens: int) -> int:
     if override:
         return int(override)
     if think_enabled():
-        think_budget = _env_int("OLLAMA_GENERATE_THINK_BUDGET", 1024)
+        think_budget = require_env_int("OLLAMA_GENERATE_THINK_BUDGET")
         return think_budget + max(max_tokens, 128)
     return max_tokens
 
@@ -231,7 +225,7 @@ def _format_pilot_context(state: dict) -> str:
     return _format_turn_context(state)
 
 
-def _pilot_answer_rule(question_lower: str, is_keep_or_mull: bool) -> str:
+def _pilot_answer_rule(_question_lower: str, is_keep_or_mull: bool) -> str:
     """Generic answer-format instruction; strategy lives in DECK STRATEGY only."""
     if is_keep_or_mull:
         return _ANSWER_MULL
@@ -360,7 +354,7 @@ def pilot_pick_generate(prompt: str) -> OllamaGenerateResult:
     return ollama_generate(
         prompt,
         temperature=0.1,
-        num_predict=max(_env_int("OLLAMA_PILOT_RESPONSE_BUDGET", 64), 32),
+        num_predict=max(require_env_int("OLLAMA_PILOT_RESPONSE_BUDGET"), 32),
         use_think=False,
     )
 

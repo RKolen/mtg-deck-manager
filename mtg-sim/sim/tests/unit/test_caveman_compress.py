@@ -2,11 +2,21 @@
 
 from __future__ import annotations
 
+import pytest
+
 from caveman_compress import (
     compress_pilot_prompt,
     compress_pilot_prompt_rules,
     prompt_preview,
 )
+
+
+@pytest.fixture(autouse=True)
+def caveman_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Provide required CAVEMAN_* env vars for each test."""
+    monkeypatch.setenv("CAVEMAN_PILOT_MIN_SAVED", "40")
+    monkeypatch.setenv("CAVEMAN_PILOT_MIN_RATIO", "0.08")
+    monkeypatch.setenv("CAVEMAN_PILOT_PREVIEW_CHARS", "600")
 
 
 def test_rules_compress_drops_filler(monkeypatch) -> None:

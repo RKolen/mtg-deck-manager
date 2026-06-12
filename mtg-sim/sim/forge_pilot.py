@@ -9,10 +9,11 @@ import subprocess
 from dataclasses import dataclass
 from typing import Optional
 
+from env_loader import require_env, require_env_int
+
 logger = logging.getLogger(__name__)
 
 FORGE_JAR: str = os.environ.get("FORGE_JAR", "")
-FORGE_JAVA: str = os.environ.get("FORGE_JAVA", "java")
 
 _COMBO_ARCHETYPE_KEYWORDS = (
     "storm", "belcher", "ad nauseam", "amulet", "living end", "grinding",
@@ -73,8 +74,12 @@ def resolve_forge_pilot_config(
     opponent_archetype: str,
 ) -> ForgePilotConfig:
     """Build pilot config from env and resolved Drupal/builtin prompts."""
-    pilot_url = os.environ.get("SIDECAR_URL", "").strip().rstrip("/")
-    pilot_timeout = int(os.environ.get("FORGE_PILOT_TIMEOUT", "120"))
+    needs_pilot = bool(player_prompt.strip() or opponent_prompt.strip())
+    pilot_url = ""
+    pilot_timeout = 0
+    if needs_pilot:
+        pilot_url = require_env("SIDECAR_URL").rstrip("/")
+        pilot_timeout = require_env_int("FORGE_PILOT_TIMEOUT")
     logger.info(
         "Forge LLM pilot (player_chars=%d, opp_chars=%d)",
         len(player_prompt.strip()),
@@ -107,7 +112,7 @@ def build_forge_cmd(
 ) -> list[str]:
     """Assemble the java -jar forge sim command line."""
     cmd = [
-        FORGE_JAVA, "-jar", FORGE_JAR,
+        require_env("FORGE_JAVA"), "-jar", FORGE_JAR,
         "sim",
         "-d", f"{p_name}.dck", f"{o_name}.dck",
         "-n", str(n_games),

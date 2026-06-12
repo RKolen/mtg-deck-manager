@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import functools
 import logging
-import os
 import re
 from dataclasses import dataclass
 
+from env_loader import require_env, require_env_float, require_env_int
 from ollama_http import generate_response_only, is_configured
 from pilot_prompt_sanitize import is_contaminated_pilot_prompt
 
@@ -73,7 +73,7 @@ class CompressedPrompt:
 
 def _env_mode() -> str:
     """Return compression mode: off, rules, or llm."""
-    raw = os.environ.get("CAVEMAN_PILOT", "rules").strip().lower()
+    raw = require_env("CAVEMAN_PILOT").lower()
     if raw in _OFF:
         return "off"
     if raw in ("llm", "ollama", "model"):
@@ -82,8 +82,7 @@ def _env_mode() -> str:
 
 
 def _min_chars() -> int:
-    raw = os.environ.get("CAVEMAN_PILOT_MIN_CHARS", "120").strip()
-    return int(raw) if raw.isdigit() else 120
+    return require_env_int("CAVEMAN_PILOT_MIN_CHARS")
 
 
 def _meaningful_compression(original_chars: int, compressed_chars: int) -> bool:
@@ -92,31 +91,13 @@ def _meaningful_compression(original_chars: int, compressed_chars: int) -> bool:
         return False
     saved = original_chars - compressed_chars
     ratio = saved / original_chars if original_chars else 0.0
-    min_saved = _env_int("CAVEMAN_PILOT_MIN_SAVED", 40)
-    min_ratio = _env_float("CAVEMAN_PILOT_MIN_RATIO", 0.08)
+    min_saved = require_env_int("CAVEMAN_PILOT_MIN_SAVED")
+    min_ratio = require_env_float("CAVEMAN_PILOT_MIN_RATIO")
     return saved >= min_saved or ratio >= min_ratio
 
 
-def _env_int(name: str, default: int) -> int:
-    raw = os.environ.get(name, "").strip()
-    if not raw:
-        return default
-    return int(raw) if raw.isdigit() else default
-
-
-def _env_float(name: str, default: float) -> float:
-    raw = os.environ.get(name, "").strip()
-    if not raw:
-        return default
-    try:
-        return float(raw)
-    except ValueError:
-        return default
-
-
 def _preview_max() -> int:
-    raw = os.environ.get("CAVEMAN_PILOT_PREVIEW_CHARS", "600").strip()
-    return int(raw) if raw.isdigit() else 600
+    return require_env_int("CAVEMAN_PILOT_PREVIEW_CHARS")
 
 
 def _compress_prose_line(line: str) -> str:

@@ -13,7 +13,7 @@ Placeholder for a future design system. Notes on hard constraints discovered dur
 ## Caching Strategy (to define)
 
 - Client-side: React Query is already in place. `staleTime` / `cacheTime` should be tuned per query.
-- Consider a pre-built card index (e.g. a nightly Gatsby build that writes a static JSON manifest of all card IDs + names) so autocomplete can work offline without hitting the API.
+- Consider a pre-built card index (e.g. a nightly build step that writes a static JSON manifest of all card IDs + names) so autocomplete can work offline without hitting the API.
 - Drupal internal page cache and dynamic page cache are active. JSON:API responses are cached by Drupal's cache tags.
 - For the collection page, a service worker or IndexedDB cache for the card catalog would eliminate repeated API round trips between sessions.
 

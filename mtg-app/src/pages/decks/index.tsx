@@ -5,7 +5,7 @@
  */
 
 import React, { useState } from 'react';
-import { Link } from 'gatsby';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   fetchDecks,
@@ -76,7 +76,7 @@ const DecksPage: React.FC = () => {
             }}
           >
             <Link
-              to={`/decks/${slugify(deck.attributes.title)}`}
+              href={`/decks/${slugify(deck.attributes.title)}`}
               style={{ flex: 1, fontWeight: 'bold' }}
             >
               {deck.attributes.title}
@@ -183,7 +183,7 @@ const DecksPage: React.FC = () => {
       )}
 
       <p style={{ marginTop: '2rem' }}>
-        <Link to="/">Back to home</Link>
+        <Link href="/">Back to home</Link>
       </p>
     </main>
   );

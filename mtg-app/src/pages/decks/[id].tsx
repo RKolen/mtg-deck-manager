@@ -4,11 +4,12 @@
  * All card/deck data is fetched at runtime via GraphQL.
  * The page has two tabs: Editor and Analysis.
  *
- * Route: /decks/:id  (Gatsby client-only route via [id].tsx)
+ * Route: /decks/:id  (Next.js dynamic route via [id].tsx)
  */
 
 import React, { useState, useMemo, useRef } from 'react';
-import { Link } from 'gatsby';
+import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   BarChart,
@@ -78,10 +79,6 @@ import {
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-interface DeckPageProps {
-  params: { id: string };
-}
 
 // ---------------------------------------------------------------------------
 // Color constants
@@ -197,7 +194,7 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, cards }) => {
       <tr key={dc.card.id + String(dc.isSideboard)}>
         <td style={{ padding: '0.25rem 0.5rem' }}>
           <Link
-            to={`/cards/${slugify(dc.card.title)}`}
+            href={`/cards/${slugify(dc.card.title)}`}
             style={{ color: 'inherit', textDecoration: 'none', fontWeight: 'bold' }}
           >
             {dc.card.title}
@@ -1490,7 +1487,7 @@ const DeckMetaMatchup: React.FC<DeckMetaMatchupProps> = ({ deckNid, format }) =>
         <h3>Deck deduction</h3>
         <p style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', color: '#555' }}>
           Enter cards you've seen the opponent play — the classifier updates P(archetype) live.
-          {classifierResults.length === 0 && ' (Requires the Python classifier to be running on port 8001.)'}
+          {classifierResults.length === 0 && ' (Requires the Python classifier service — set NEXT_PUBLIC_CLASSIFIER_URL.)'}
         </p>
         <div style={{ display: 'flex', gap: 8, marginBottom: '0.75rem' }}>
           <input
@@ -1866,14 +1863,15 @@ const DeckHeader: React.FC<DeckHeaderProps> = ({ deckId, title, format }) => {
 // Page component
 // ---------------------------------------------------------------------------
 
-const DeckPage: React.FC<DeckPageProps> = ({ params }) => {
-  const { id: slug } = params;
+const DeckPage: React.FC = () => {
+  const router = useRouter();
+  const slug = typeof router.query.id === 'string' ? router.query.id : '';
   const [tab, setTab] = useState<'editor' | 'analysis' | 'suggestions' | 'meta' | 'simulate'>('editor');
 
   const { data: deck, isLoading: deckLoading } = useQuery({
     queryKey: ['deck', slug],
     queryFn: () => fetchDeckBySlug(slug),
-    enabled: slug != null,
+    enabled: router.isReady && slug !== '',
   });
 
   const deckId = deck?.id;
@@ -1905,7 +1903,7 @@ const DeckPage: React.FC<DeckPageProps> = ({ params }) => {
   return (
     <main style={{ padding: '1.5rem', maxWidth: 900 }}>
       <p style={{ margin: '0 0 1rem' }}>
-        <Link to="/decks">Back to decks</Link>
+        <Link href="/decks">Back to decks</Link>
       </p>
 
       <DeckHeader
@@ -1980,5 +1978,7 @@ const DeckPage: React.FC<DeckPageProps> = ({ params }) => {
     </main>
   );
 };
+
+export const getServerSideProps = async () => ({ props: {} });
 
 export default DeckPage;

@@ -7,7 +7,7 @@
  */
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Link } from 'gatsby';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { slugify } from '../../utils/slugify';
 
@@ -300,7 +300,7 @@ const CollectionPage: React.FC = () => {
                     title={title}
                   >
                     <Link
-                      to={`/collection/card/${slugify(title)}`}
+                      href={`/collection/card/${slugify(title)}`}
                       style={{ color: 'inherit', textDecoration: 'none' }}
                     >
                       {title}

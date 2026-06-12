@@ -202,10 +202,10 @@ parameters:
   # for more information about the topic in general.
   # Note: By default the configuration is disabled.
   cors.config:
-    enabled: true
+    enabled: false
     allowedHeaders: ['Content-Type', 'Accept', 'Authorization', 'X-CSRF-Token']
     allowedMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS']
-    allowedOrigins: ['http://localhost:8000', 'http://localhost:8001']
+    allowedOrigins: []
     allowedOriginsPatterns: []
     exposedHeaders: false
     maxAge: 600

@@ -1,23 +1,21 @@
 {
   "name": "mtg-app",
-  "description": "MTG Deck Manager — Gatsby TypeScript frontend",
+  "description": "MTG Deck Manager — Next.js TypeScript frontend",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "develop": "NODE_EXTRA_CA_CERTS=$HOME/.local/share/mkcert/rootCA.pem gatsby develop",
-    "build": "NODE_EXTRA_CA_CERTS=$HOME/.ddev/mkcert/rootCA.pem gatsby build",
-    "serve": "gatsby serve",
-    "clean": "gatsby clean",
+    "dev": "NODE_EXTRA_CA_CERTS=$HOME/.local/share/mkcert/rootCA.pem next dev",
+    "build": "NODE_EXTRA_CA_CERTS=$HOME/.ddev/mkcert/rootCA.pem next build",
+    "start": "next start",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.0.0",
     "axios": "^1.7.0",
-    "gatsby": "^5.0.0",
-    "gatsby-plugin-typescript": "^5.0.0",
     "graphql": "^16.0.0",
     "graphql-request": "^7.0.0",
     "html-react-parser": "^6.1.0",
+    "next": "^15.5.19",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
     "recharts": "^2.12.0",

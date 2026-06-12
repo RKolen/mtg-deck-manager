@@ -1,7 +1,7 @@
 /**
  * Card detail page.
  *
- * Route: /cards/:slug  (Gatsby client-only route via [slug].tsx)
+ * Route: /cards/:slug  (Next.js dynamic route via [slug].tsx)
  *
  * The slug is derived from the card title using the shared slugify utility,
  * e.g. "Monastery Swiftspear" -> /cards/monastery-swiftspear.
@@ -10,21 +10,19 @@
  */
 
 import React from 'react';
-import { Link } from 'gatsby';
+import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
 import { fetchCardBySlug } from '../../services/drupalApi';
 
-interface CardPageProps {
-  params: { slug: string };
-}
-
-const CardPage: React.FC<CardPageProps> = ({ params }) => {
-  const { slug } = params;
+const CardPage: React.FC = () => {
+  const router = useRouter();
+  const slug = typeof router.query.slug === 'string' ? router.query.slug : '';
 
   const { data: card, isLoading, isError } = useQuery({
     queryKey: ['card', slug],
     queryFn: () => fetchCardBySlug(slug),
-    enabled: slug != null && slug !== '',
+    enabled: router.isReady && slug !== '',
     staleTime: 5 * 60_000,
   });
 
@@ -41,7 +39,7 @@ const CardPage: React.FC<CardPageProps> = ({ params }) => {
       <main style={{ padding: '1.5rem' }}>
         <p style={{ color: '#c00' }}>Card not found.</p>
         <p>
-          <Link to="/decks">Back to decks</Link>
+          <Link href="/decks">Back to decks</Link>
         </p>
       </main>
     );
@@ -67,7 +65,7 @@ const CardPage: React.FC<CardPageProps> = ({ params }) => {
   return (
     <main style={{ padding: '1.5rem', maxWidth: 760 }}>
       <p style={{ margin: '0 0 1.25rem' }}>
-        <Link to="/decks">Back to decks</Link>
+        <Link href="/decks">Back to decks</Link>
       </p>
 
       <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
@@ -160,5 +158,7 @@ const CardPage: React.FC<CardPageProps> = ({ params }) => {
     </main>
   );
 };
+
+export const getServerSideProps = async () => ({ props: {} });
 
 export default CardPage;

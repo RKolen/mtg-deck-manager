@@ -11,8 +11,8 @@ Required environment variables (repo-root .env — see /.env.example):
 
 Forge environment variables:
   FORGE_JAR           - Absolute path to the built forge-gui-desktop JAR
-  FORGE_JAVA          - Path to java binary (defaults to "java" on PATH)
-  FORGE_PILOT_TIMEOUT - Sidecar timeout seconds for Forge (default 10)
+  FORGE_JAVA          - Path to java binary
+  FORGE_PILOT_TIMEOUT - Sidecar timeout seconds for Forge LLM pilots
 
 Drupal environment variables:
   DRUPAL_URL     - Drupal backend URL for deck/meta data
@@ -72,15 +72,19 @@ app = FastAPI(
     version="1.0.0",
 )
 
-_allow_origins = [
-    o.strip()
-    for o in os.environ.get("CORS_ORIGINS", "").split(",")
-    if o.strip()
-]
+def _cors_origins() -> list[str]:
+    """Return comma-separated CORS_ORIGINS from the environment."""
+    raw = os.environ.get("CORS_ORIGINS", "").strip()
+    if not raw:
+        raise RuntimeError(
+            "CORS_ORIGINS must be set in the repo-root .env file (comma-separated)."
+        )
+    return [o.strip() for o in raw.split(",") if o.strip()]
+
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_allow_origins,
+    allow_origins=_cors_origins(),
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
 )
@@ -461,7 +465,9 @@ async def game_delete(game_id: str) -> dict:
 if __name__ == "__main__":
     from env_loader import load_project_env
 
+    from env_loader import require_env, require_env_int
+
     load_project_env()
-    host = os.environ.get("SIM_HOST", "")
-    port = int(os.environ.get("SIM_PORT", "0"))
+    host = require_env("SIM_HOST")
+    port = require_env_int("SIM_PORT")
     uvicorn.run("main:app", host=host, port=port)
