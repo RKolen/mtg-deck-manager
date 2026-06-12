@@ -14,6 +14,8 @@ import itertools
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, TypeAlias
 
+from engine.core.sac_cast_flags import SacrificeCastFlags
+
 if TYPE_CHECKING:
     from deck_registry import CardInfo
     from engine.core.game_state import GameState
@@ -429,10 +431,7 @@ class _CostMods:
 class _AlternateModes:
     """Alternate mode payment flags."""
 
-    emerge: bool = False
-    evoke: bool = False
-    mutate: bool = False
-    casualty: bool = False
+    sac: SacrificeCastFlags = field(default_factory=SacrificeCastFlags)
     morph_face_down: bool = False
 
 
@@ -514,42 +513,52 @@ class SpellCastPayment:
     @property
     def emerge(self) -> bool:
         """True when emerge was paid."""
-        return self.modes.emerge
+        return self.modes.sac.emerge
 
     @emerge.setter
     def emerge(self, value: bool) -> None:
         """Set emerge flag."""
-        self.modes.emerge = value
+        self.modes.sac.emerge = value
 
     @property
     def evoke(self) -> bool:
         """True when evoke was paid."""
-        return self.modes.evoke
+        return self.modes.sac.evoke
 
     @evoke.setter
     def evoke(self, value: bool) -> None:
         """Set evoke flag."""
-        self.modes.evoke = value
+        self.modes.sac.evoke = value
 
     @property
     def mutate(self) -> bool:
         """True when mutate was paid."""
-        return self.modes.mutate
+        return self.modes.sac.mutate
 
     @mutate.setter
     def mutate(self, value: bool) -> None:
         """Set mutate flag."""
-        self.modes.mutate = value
+        self.modes.sac.mutate = value
 
     @property
     def casualty(self) -> bool:
         """True when casualty was paid."""
-        return self.modes.casualty
+        return self.modes.sac.casualty
 
     @casualty.setter
     def casualty(self, value: bool) -> None:
         """Set casualty flag."""
-        self.modes.casualty = value
+        self.modes.sac.casualty = value
+
+    @property
+    def bargain(self) -> bool:
+        """True when bargain was paid."""
+        return self.modes.sac.bargain
+
+    @bargain.setter
+    def bargain(self, value: bool) -> None:
+        """Set bargain flag."""
+        self.modes.sac.bargain = value
 
     @property
     def morph_face_down(self) -> bool:

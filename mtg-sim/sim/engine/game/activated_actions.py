@@ -21,6 +21,7 @@ from engine.abilities.keywords.other.boast import (
     boast_mana_needed,
     can_boast,
 )
+from engine.abilities.keywords.other.forecast import can_forecast, forecast_draws_card
 from engine.abilities.keywords.other.encore import (
     apply_encore_from_graveyard,
     can_encore,
@@ -149,6 +150,20 @@ class ActivatedActionsMixin(GameRuntimeMixin):
     def action_cycle(self, hand_idx: int) -> dict:
         """Activate cycling from hand: pay, discard, draw."""
         return run_with_hand_card(self, hand_idx, lambda c, i: self._resolve_cycle(c, i, hand_idx))
+
+    def action_forecast(self, hand_idx: int) -> dict:
+        """Forecast from hand during the draw step (simplified upkeep window)."""
+        _card, card_info, err = load_hand_card_for_action(self, hand_idx)
+        if err is not None:
+            return err
+        assert card_info is not None
+        if not can_forecast(card_info, self.phase, self.state.stack.is_empty):
+            return {**self.to_client(), "error": "Cannot forecast now"}
+        drawn = 0
+        if forecast_draws_card(card_info):
+            drawn = len(self._draw_cards(0, 1))
+        self._log("player", "forecast", f"Forecast {card_info.name} (drew {drawn})")
+        return self.to_client()
 
     def _resolve_cycle(self, _card: CardObject, card_info: CardInfo, hand_idx: int) -> dict:
         if not activated.can_cycle(card_info, self.phase, self.state.stack.is_empty):

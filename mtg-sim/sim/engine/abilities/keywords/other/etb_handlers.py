@@ -12,6 +12,7 @@ from engine.abilities.keywords.other.bloodthirst import apply_bloodthirst_etb
 from engine.abilities.keywords.other.dash import apply_dash_etb
 from engine.abilities.keywords.other.decayed import apply_decayed_etb
 from engine.abilities.keywords.other.devour import apply_devour_etb
+from engine.abilities.keywords.other.echo import apply_echo_etb
 from engine.abilities.keywords.other.encore import apply_encore_etb
 from engine.abilities.keywords.other.evoke import apply_evoke_on_etb
 from engine.abilities.keywords.other.fabricate import apply_fabricate_etb
@@ -63,6 +64,10 @@ def _backup_detail(game: GameState, permanent: Permanent) -> str | None:
     return apply_backup_etb(permanent, game.zones.battlefield)
 
 
+def _echo_detail(_game: GameState, permanent: Permanent) -> str | None:
+    return apply_echo_etb(permanent)
+
+
 def _augment_detail(game: GameState, permanent: Permanent) -> str | None:
     return apply_augment_etb(game.zones, permanent, game.zones.battlefield)
 
@@ -100,6 +105,7 @@ ETB_DETAIL_PRODUCERS: tuple[EtbDetailFn, ...] = (
     _dash_detail,
     _blitz_detail,
     _backup_detail,
+    _echo_detail,
     _augment_detail,
     _riot_detail,
     _encore_detail,

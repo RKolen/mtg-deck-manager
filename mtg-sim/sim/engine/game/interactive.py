@@ -13,7 +13,10 @@ from dataclasses import dataclass, field
 
 from engine.abilities import activated
 from engine.abilities.activated.bloodrush import can_bloodrush
+from engine.abilities.keywords.other.battle_cry import clear_battle_cry_counters
 from engine.abilities.keywords.other.boast import can_boast, clear_boast_turn_counters
+from engine.abilities.keywords.other.echo import resolve_echo_upkeep
+from engine.abilities.keywords.other.forecast import can_forecast
 from engine.abilities.keywords.other.bushido import clear_bushido_combat_markers
 from engine.abilities.keywords.other.craft import has_craft
 from engine.abilities.keywords.casting.delayed_exile_cast import _CastTiming
@@ -284,6 +287,8 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
         self._exile_unearth_at_turn_end(0)
         for detail in self._return_dash_creatures_to_hand(0):
             self._log("rules", "dash", detail)
+        for perm in self._permanents(0):
+            clear_battle_cry_counters(perm)
         self._sacrifice_blitz_at_turn_end(0)
         self._sacrifice_decayed_at_turn_end(0)
         self._sacrifice_encore_at_turn_end(0)
@@ -307,9 +312,7 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
         elif self.phase in ("game_over", "opp_turn"):
             actions = []
         elif self.phase == "draw":
-            actions = ["draw"]
-            if self._graveyard_can_dredge():
-                actions.append("dredge")
+            actions = self._draw_phase_actions()
         elif self.phase == "declare_blockers":
             actions = self._declare_blockers_actions()
         elif self.phase in ("main1", "main2"):
@@ -442,6 +445,25 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
         return any(
             isinstance(c, CardObject)
             and activated.can_cycle(require_card_info(c), self.phase, True)
+            for c in self._zones(0).hand
+        )
+
+    def _draw_phase_actions(self) -> list[str]:
+        """Return legal actions during the draw step."""
+        actions = ["draw"]
+        if self._hand_can_forecast():
+            actions.append("forecast")
+        if self._graveyard_can_dredge():
+            actions.append("dredge")
+        return actions
+
+    def _hand_can_forecast(self) -> bool:
+        """Return True when a hand card can activate forecast."""
+        if not self.state.stack.is_empty:
+            return False
+        return any(
+            isinstance(c, CardObject)
+            and can_forecast(require_card_info(c), self.phase, True)
             for c in self._zones(0).hand
         )
 
@@ -772,6 +794,12 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
         player.permanents_entered_this_turn = 0
         self.state.creature_died_this_turn = False
         self._fire_step_triggers(Step.UPKEEP)
+        for detail in resolve_echo_upkeep(
+            self.state,
+            player_idx,
+            self._tap_lands_for_mana,
+        ):
+            self._log('rules', 'echo', detail)
         self._tick_suspend_upkeep(player_idx)
 
 

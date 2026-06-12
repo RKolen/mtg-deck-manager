@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from engine.abilities.keywords.other.afflict import apply_afflict_on_attack
+from engine.abilities.keywords.other.battle_cry import apply_battle_cry_on_attack
+from engine.abilities.keywords.other.flanking import apply_flanking_on_block
 from engine.abilities.keywords.other.boast import mark_attacked_this_turn
 from engine.abilities.keywords.other.enlist import apply_enlist_on_attack
 from engine.abilities.keywords.other.mobilize import apply_mobilize_on_attack
@@ -173,6 +175,13 @@ class CombatActionsMixin(ActivatedActionsMixin):
             mobilize_detail = apply_mobilize_on_attack(self.state, perm)
             if mobilize_detail:
                 self._log('rules', 'mobilize', mobilize_detail)
+            battle_cry_detail = apply_battle_cry_on_attack(
+                self.state,
+                perm,
+                attacker_ids,
+            )
+            if battle_cry_detail:
+                self._log('rules', 'battle_cry', battle_cry_detail)
 
     def _start_opponent_attack(self) -> None:
         """Declare opponent attackers or finish the opponent turn."""
@@ -240,6 +249,9 @@ class CombatActionsMixin(ActivatedActionsMixin):
             blocker = self._find_permanent(blocker_uid)
             attacker = self._find_permanent(attacker_uid)
             if blocker is not None and attacker is not None:
+                flank_detail = apply_flanking_on_block(attacker, blocker)
+                if flank_detail:
+                    self._log('rules', 'flanking', flank_detail)
                 self.state.fire_block_triggers(blocker, attacker)
         self._auto_pass_stack()
 

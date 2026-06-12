@@ -37,6 +37,8 @@ def announce_cast_detail_suffix(
         tags.append(f'emerge, sacrificed {sacrificed_name}')
     if mods.casualty:
         tags.append(f'casualty, sacrificed {sacrificed_name}')
+    if mods.bargain:
+        tags.append(f'bargain, sacrificed {sacrificed_name}')
     if mods.spree_modes:
         tags.append(f'spree modes {list(mods.spree_modes)}')
     if not tags:

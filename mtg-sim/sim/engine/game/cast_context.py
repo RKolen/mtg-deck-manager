@@ -17,16 +17,56 @@ from engine.game.face_alternate_cast import FaceAlternateCastFlags
 
 
 @dataclass(frozen=True)
+class _RepeatCostChoices:
+    """Integer repeat costs such as kicker and replicate."""
+
+    kicker_times: int = 0
+    replicate_times: int = 0
+
+
+@dataclass(frozen=True)
+class _PaidSacrificeCosts:
+    """Optional sacrifice payments announced with a cast."""
+
+    paid_casualty: bool = False
+    paid_conspire: bool = False
+    paid_bargain: bool = False
+
+
+@dataclass(frozen=True)
 class HandCastCostChoices:
     """Stackable optional costs (kicker, entwine, overload, etc.)."""
 
-    kicker_times: int = 0
     entwined: bool = False
     overloaded: bool = False
-    replicate_times: int = 0
     paid_buyback: bool = False
-    paid_casualty: bool = False
-    paid_conspire: bool = False
+    repeat: _RepeatCostChoices = field(default_factory=_RepeatCostChoices)
+    paid: _PaidSacrificeCosts = field(default_factory=_PaidSacrificeCosts)
+
+    @property
+    def kicker_times(self) -> int:
+        """Number of times kicker was paid."""
+        return self.repeat.kicker_times
+
+    @property
+    def replicate_times(self) -> int:
+        """Number of times replicate was paid."""
+        return self.repeat.replicate_times
+
+    @property
+    def paid_casualty(self) -> bool:
+        """Whether casualty was paid."""
+        return self.paid.paid_casualty
+
+    @property
+    def paid_conspire(self) -> bool:
+        """Whether conspire was paid."""
+        return self.paid.paid_conspire
+
+    @property
+    def paid_bargain(self) -> bool:
+        """Whether bargain was paid."""
+        return self.paid.paid_bargain
 
 
 @dataclass(frozen=True)
@@ -86,15 +126,39 @@ class HandAlternateCastChoices:
 
 
 @dataclass(frozen=True)
+class _SacrificeTargetIds:
+    """Permanent ids sacrificed for emerge, casualty, or bargain."""
+
+    emerge_sacrifice_ids: tuple[int, ...] = ()
+    casualty_sacrifice_ids: tuple[int, ...] = ()
+    bargain_sacrifice_ids: tuple[int, ...] = ()
+
+
+@dataclass(frozen=True)
 class CastTargetingIds:
     """Target and mode indices for optional costs."""
 
     bestow_target_uid: str | None = None
     mutate_target_uid: str | None = None
-    emerge_sacrifice_ids: tuple[int, ...] = ()
-    casualty_sacrifice_ids: tuple[int, ...] = ()
     spree_mode_indices: tuple[int, ...] = ()
     harmonize_creature_ids: tuple[int, ...] = ()
+    escalate_extra_targets: int = 0
+    sacrifices: _SacrificeTargetIds = field(default_factory=_SacrificeTargetIds)
+
+    @property
+    def emerge_sacrifice_ids(self) -> tuple[int, ...]:
+        """Permanent ids sacrificed for emerge."""
+        return self.sacrifices.emerge_sacrifice_ids
+
+    @property
+    def casualty_sacrifice_ids(self) -> tuple[int, ...]:
+        """Permanent ids sacrificed for casualty."""
+        return self.sacrifices.casualty_sacrifice_ids
+
+    @property
+    def bargain_sacrifice_ids(self) -> tuple[int, ...]:
+        """Permanent ids sacrificed for bargain."""
+        return self.sacrifices.bargain_sacrifice_ids
 
 
 @dataclass(frozen=True)

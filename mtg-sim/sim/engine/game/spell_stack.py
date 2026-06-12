@@ -5,6 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from deck_registry import CardInfo
+from engine.abilities.keywords.casting.bargain import (
+    bargain_draw_on_cast,
+    sacrifice_for_bargain,
+)
 from engine.abilities.keywords.casting.casualty import sacrifice_for_casualty
 from engine.abilities.keywords.casting import (
     can_cast_via_madness,
@@ -40,6 +44,7 @@ from engine.game.cast_flow import (
     _TargetRef,
     announce_mana_options,
 )
+from engine.core.sac_cast_flags import SacrificeCastFlags
 from engine.core.game_object import (
     CardObject,
     SpellAlternateCast,
@@ -176,6 +181,12 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
                 paid.casualty_sacrifice_id,
             )
             return sacrificed.name
+        if paid.bargain_sacrifice_id is not None:
+            sacrificed = sacrifice_for_bargain(
+                self.state.zones,
+                paid.bargain_sacrifice_id,
+            )
+            return sacrificed.name
         return ""
 
     def _place_validated_hand_cast(self, placement: HandCastPlacement) -> dict:
@@ -210,10 +221,13 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
                     paid_buyback=mods.buyback,
                 ),
                 modes=_AlternateModes(
-                    emerge=mods.emerge,
-                    evoke=mods.evoke,
-                    mutate=mods.mutate,
-                    casualty=mods.casualty,
+                    sac=SacrificeCastFlags(
+                        emerge=mods.emerge,
+                        evoke=mods.evoke,
+                        mutate=mods.mutate,
+                        casualty=mods.casualty,
+                        bargain=mods.bargain,
+                    ),
                     morph_face_down=mods.morph,
                 ),
                 keywords=_KeywordPays(
@@ -240,6 +254,10 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
             adjustments,
         )
         self._log("player", "cast", cast_detail)
+        if bargain_draw_on_cast(placement.card_info, mods.bargain):
+            drawn = self._draw_cards(0, 1)
+            if drawn:
+                self._log("player", "draw", f"Bargain drew {require_card_info(drawn[0]).name}")
         self.state.fire_spell_cast_triggers(placement.card, tuple(targets))
         for word_detail in apply_spell_hosted_ability_words(
             self.state, placement.card_info, 0

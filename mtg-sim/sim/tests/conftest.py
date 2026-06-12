@@ -20,9 +20,12 @@ from engine.game.cast_context import (
     CastManaReductionIds,
     CastModifierIds,
     CastTargetingIds,
+    _SacrificeTargetIds,
     HandAlternateCastChoices,
     HandCastCostChoices,
     _CostConditionAlts,
+    _PaidSacrificeCosts,
+    _RepeatCostChoices,
 )
 from engine.game.face_alternate_cast import FaceAlternateCastFlags
 from engine.rules.combat import resolve_combat_damage
@@ -44,6 +47,8 @@ _MODIFIER_KW_KEYS = frozenset({
     "improvise_artifact_ids",
     "sneak_land_hand_indices",
     "assist_mana",
+    "bargain_sacrifice_ids",
+    "escalate_extra_targets",
 })
 
 
@@ -56,9 +61,13 @@ def _modifier_ids_from_kw(modifier_kw: dict[str, Any]) -> CastModifierIds:
         targeting=CastTargetingIds(
             bestow_target_uid=modifier_kw.get("bestow_target_uid"),
             mutate_target_uid=modifier_kw.get("mutate_target_uid"),
-            emerge_sacrifice_ids=_as_tuple(modifier_kw.get("emerge_sacrifice_ids", ())),
-            casualty_sacrifice_ids=_as_tuple(modifier_kw.get("casualty_sacrifice_ids", ())),
+            escalate_extra_targets=int(modifier_kw.get("escalate_extra_targets", 0)),
             spree_mode_indices=_as_tuple(modifier_kw.get("spree_mode_indices", ())),
+            sacrifices=_SacrificeTargetIds(
+                emerge_sacrifice_ids=_as_tuple(modifier_kw.get("emerge_sacrifice_ids", ())),
+                casualty_sacrifice_ids=_as_tuple(modifier_kw.get("casualty_sacrifice_ids", ())),
+                bargain_sacrifice_ids=_as_tuple(modifier_kw.get("bargain_sacrifice_ids", ())),
+            ),
         ),
         reductions=CastManaReductionIds(
             convoke_creature_ids=_as_tuple(modifier_kw.get("convoke_creature_ids", ())),
@@ -76,13 +85,18 @@ def cast_announce_options(**kwargs: Any) -> CastAnnounceOptions:
     modifier_kw = {key: flat.pop(key) for key in list(flat) if key in _MODIFIER_KW_KEYS}
     return CastAnnounceOptions(
         costs=HandCastCostChoices(
-            kicker_times=int(flat.get("kicker_times", 0)),
             entwined=bool(flat.get("entwined", False)),
             overloaded=bool(flat.get("overloaded", False)),
-            replicate_times=int(flat.get("replicate_times", 0)),
             paid_buyback=bool(flat.get("paid_buyback", False)),
-            paid_casualty=bool(flat.get("paid_casualty", False)),
-            paid_conspire=bool(flat.get("paid_conspire", False)),
+            paid=_PaidSacrificeCosts(
+                paid_casualty=bool(flat.get("paid_casualty", False)),
+                paid_conspire=bool(flat.get("paid_conspire", False)),
+                paid_bargain=bool(flat.get("paid_bargain", False)),
+            ),
+            repeat=_RepeatCostChoices(
+                kicker_times=int(flat.get("kicker_times", 0)),
+                replicate_times=int(flat.get("replicate_times", 0)),
+            ),
         ),
         alternate=HandAlternateCastChoices(
             cast_for_emerge=bool(flat.get("cast_for_emerge", False)),

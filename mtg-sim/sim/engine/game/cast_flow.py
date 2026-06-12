@@ -187,6 +187,7 @@ def cast_modifiers_for_announce(
 
 def cast_timing_for_announce(
     paid: PaidAnnounceCast,
+    opts: CastAnnounceOptions,
     state: GameState,
     controller_idx: int,
 ) -> CastManaTiming:
@@ -201,6 +202,7 @@ def cast_timing_for_announce(
         available=_TimingAvailability(
             freerunning_available=state.players[controller_idx].combat_damage_dealt_this_turn,
             spectacle_available=spectacle_available(state, controller_idx),
+            escalate_extra_targets=opts.modifiers.targeting.escalate_extra_targets,
         ),
     )
 
@@ -214,7 +216,7 @@ def announce_mana_options(
     """Build announce-cast mana options from validated hand cast state."""
     return AnnounceCastManaOptions(
         modifiers=cast_modifiers_for_announce(paid, opts),
-        timing=cast_timing_for_announce(paid, state, controller_idx),
+        timing=cast_timing_for_announce(paid, opts, state, controller_idx),
         zones=state.zones,
         controller_idx=controller_idx,
     )

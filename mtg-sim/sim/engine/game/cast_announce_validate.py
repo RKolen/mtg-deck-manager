@@ -31,8 +31,14 @@ from engine.abilities.keywords.casting.spectacle import (
     normalize_spectacle_cast,
     spectacle_available,
 )
+from engine.abilities.keywords.casting.bargain import (
+    bargain_sacrifice_error,
+    normalize_bargain_sacrifice_id,
+    normalize_paid_bargain,
+)
 from engine.abilities.keywords.casting.blitz import normalize_blitz_cast
 from engine.abilities.keywords.casting.cleave import normalize_cleave_cast
+from engine.abilities.keywords.casting.escalate import has_escalate
 from engine.abilities.keywords.casting.conspire import (
     conspire_error,
     normalize_paid_conspire,
@@ -54,6 +60,7 @@ from engine.core.game_object import CardObject
 from engine.core.game_state import GameState
 from engine.core.zones import ZoneManager
 from engine.game.helpers import CastAnnounceOptions
+from engine.core.sac_cast_flags import SacrificeCastFlags as _SacCastFlags
 
 
 @dataclass(frozen=True)
@@ -64,16 +71,6 @@ class _FaceCastFlags:
     disguise: bool = False
     dash: bool = False
     blitz: bool = False
-
-
-@dataclass(frozen=True)
-class _SacCastFlags:
-    """Sacrifice-based alternate cast flags."""
-
-    emerge: bool = False
-    evoke: bool = False
-    mutate: bool = False
-    casualty: bool = False
 
 
 @dataclass(frozen=True)
@@ -211,6 +208,11 @@ class PaidCastModifiers:
         """Whether casualty was used."""
         return self.sac.casualty
 
+    @property
+    def bargain(self) -> bool:
+        """Whether bargain was paid."""
+        return self.sac.bargain
+
 
 @dataclass(frozen=True)
 class PaidAnnounceCast:
@@ -219,6 +221,7 @@ class PaidAnnounceCast:
     modifiers: PaidCastModifiers
     emerge_sacrifice_id: int | None
     casualty_sacrifice_id: int | None
+    bargain_sacrifice_id: int | None
     cast_target_uid: str | None
 
 
@@ -329,6 +332,7 @@ def _normalized_paid_flags(
                 opts.modifiers.targeting.mutate_target_uid,
             ),
             casualty=normalize_paid_casualty(card_info, opts.costs.paid_casualty),
+            bargain=normalize_paid_bargain(card_info, opts.costs.paid_bargain),
         ),
         conditions=_ConditionCastFlags(
             miracle=normalize_miracle_cast(card_info, opts.alternate.cast_for_miracle),
@@ -452,6 +456,20 @@ def validate_announce_cast(
             opts.costs.paid_casualty,
             list(opts.modifiers.targeting.casualty_sacrifice_ids),
         ),
+        lambda: _reject_keyword(opts.costs.paid_bargain, paid.bargain, name, "bargain"),
+        lambda: bargain_sacrifice_error(
+            ctx.zones,
+            ctx.player_idx,
+            card_info,
+            opts.costs.paid_bargain,
+            list(opts.modifiers.targeting.bargain_sacrifice_ids),
+        ),
+        lambda: (
+            f"{name} does not have escalate"
+            if opts.modifiers.targeting.escalate_extra_targets > 0
+            and not has_escalate(card_info)
+            else None
+        ),
     ])
     if err:
         return None, err
@@ -466,6 +484,11 @@ def validate_announce_cast(
         opts.costs.paid_casualty,
         list(opts.modifiers.targeting.casualty_sacrifice_ids),
     )
+    bargain_sacrifice_id = normalize_bargain_sacrifice_id(
+        card_info,
+        opts.costs.paid_bargain,
+        list(opts.modifiers.targeting.bargain_sacrifice_ids),
+    )
     cast_target_uid = (
         opts.modifiers.targeting.mutate_target_uid
         or opts.modifiers.targeting.bestow_target_uid
@@ -475,5 +498,6 @@ def validate_announce_cast(
         modifiers=paid,
         emerge_sacrifice_id=emerge_sacrifice_id,
         casualty_sacrifice_id=casualty_sacrifice_id,
+        bargain_sacrifice_id=bargain_sacrifice_id,
         cast_target_uid=cast_target_uid,
     ), None

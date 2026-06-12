@@ -327,6 +327,9 @@ class GameActionRequest(BaseModel):
     paidBuyback: bool = False
     paidCasualty: bool = False
     paidConspire: bool = False
+    paidBargain: bool = False
+    escalateExtraTargets: int = 0
+    bargainSacrificeIds: list[str] = []
     castForCleave: bool = False
     assistMana: int = 0
     craftArtifactIds: list[str] = []

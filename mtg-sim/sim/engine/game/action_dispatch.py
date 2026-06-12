@@ -10,9 +10,12 @@ from engine.game.cast_context import (
     CastManaReductionIds,
     CastModifierIds,
     CastTargetingIds,
+    _SacrificeTargetIds,
     HandAlternateCastChoices,
     HandCastCostChoices,
     _CostConditionAlts,
+    _PaidSacrificeCosts,
+    _RepeatCostChoices,
 )
 from engine.game.face_alternate_cast import FaceAlternateCastFlags
 
@@ -26,21 +29,28 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
     improvise_ids = tuple(int(uid) for uid in req.improviseArtifactIds)
     emerge_ids = tuple(int(uid) for uid in req.emergeSacrificeIds)
     casualty_ids = tuple(int(uid) for uid in req.casualtySacrificeIds)
+    bargain_ids = tuple(int(uid) for uid in req.bargainSacrificeIds)
     harmonize_ids = tuple(int(uid) for uid in req.harmonizeCreatureIds)
     return CastAnnounceOptions(
         costs=HandCastCostChoices(
-            kicker_times=req.kickerTimes,
             entwined=req.entwined,
             overloaded=req.overloaded,
-            replicate_times=req.replicateTimes,
             paid_buyback=req.paidBuyback,
-            paid_casualty=req.paidCasualty,
-            paid_conspire=req.paidConspire,
+            paid=_PaidSacrificeCosts(
+                paid_casualty=req.paidCasualty,
+                paid_conspire=req.paidConspire,
+                paid_bargain=req.paidBargain,
+            ),
+            repeat=_RepeatCostChoices(
+                kicker_times=req.kickerTimes,
+                replicate_times=req.replicateTimes,
+            ),
         ),
         alternate=HandAlternateCastChoices(
             cast_for_emerge=req.castForEmerge,
             cast_for_evoke=req.castForEvoke,
             cast_for_mutate=req.castForMutate,
+            cast_for_cleave=req.castForCleave,
             conditions=_CostConditionAlts(
                 cast_for_miracle=req.castForMiracle,
                 cast_for_freerunning=req.castForFreerunning,
@@ -57,10 +67,14 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
             targeting=CastTargetingIds(
                 bestow_target_uid=req.bestowTargetUid,
                 mutate_target_uid=req.mutateTargetUid,
-                emerge_sacrifice_ids=emerge_ids,
-                casualty_sacrifice_ids=casualty_ids,
+                escalate_extra_targets=req.escalateExtraTargets,
                 spree_mode_indices=tuple(req.spreeModeIndices),
                 harmonize_creature_ids=harmonize_ids,
+                sacrifices=_SacrificeTargetIds(
+                    emerge_sacrifice_ids=emerge_ids,
+                    casualty_sacrifice_ids=casualty_ids,
+                    bargain_sacrifice_ids=bargain_ids,
+                ),
             ),
             reductions=CastManaReductionIds(
                 convoke_creature_ids=convoke_ids,
@@ -103,6 +117,7 @@ def _dispatch_hand_actions(game: InteractiveGame, req) -> dict | None:
         ),
         "suspend": lambda: game.action_suspend(req.handIdx),
         "cycle": lambda: game.action_cycle(req.handIdx),
+        "forecast": lambda: game.action_forecast(req.handIdx),
         "channel": lambda: game.action_channel(req.handIdx, req.targetPlayer),
         "bloodrush": lambda: game.action_bloodrush(
             req.handIdx,
