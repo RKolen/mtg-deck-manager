@@ -41,6 +41,8 @@ async def _proxy_request(request: Request, upstream_path: str) -> Response:
     """Forward a request to the host Ollama process."""
     base = _ollama_base()
     url = f"{base}/{upstream_path}"
+    if request.url.query:
+        url = f"{url}?{request.url.query}"
     body = await request.body()
     try:
         async with httpx.AsyncClient(timeout=600.0) as client:
@@ -49,7 +51,6 @@ async def _proxy_request(request: Request, upstream_path: str) -> Response:
                 url,
                 content=body,
                 headers=_forward_headers(request),
-                params=request.query_params.multi_items(),
             )
     except httpx.RequestError as exc:
         raise HTTPException(status_code=502, detail=f"Ollama proxy failed: {exc}") from exc
