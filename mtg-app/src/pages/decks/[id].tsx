@@ -1265,7 +1265,7 @@ const DeckSuggestions: React.FC<{ deckNid: number }> = ({ deckNid }) => {
   const [limit, setLimit] = useState(10);
   const [modalCard, setModalCard] = useState<{ name: string; imageUri: string } | null>(null);
 
-  const { data: suggestions = [], isFetching, isError, refetch } = useQuery<CardSuggestion[]>({
+  const { data: suggestions = [], isFetching, isError, isFetched, refetch } = useQuery<CardSuggestion[]>({
     queryKey: ['deckSuggestions', deckNid, limit],
     queryFn: () => fetchCardSuggestions(deckNid, limit),
     enabled: false,
@@ -1338,10 +1338,15 @@ const DeckSuggestions: React.FC<{ deckNid: number }> = ({ deckNid }) => {
 
       {isError && (
         <p style={{ color: '#c00' }}>
-          Could not load suggestions. Make sure the Milvus index has items and Ollama is running.
+          Could not load suggestions. Check that the AI sidecar is running and Drupal can reach it.
         </p>
       )}
-      {suggestions.length === 0 && !isFetching && !isError && (
+      {!isFetching && isFetched && suggestions.length === 0 && !isError && (
+        <p style={{ color: '#777', fontStyle: 'italic' }}>
+          No suggestions returned. Make sure the Milvus index has cards and the sidecar can reach Ollama.
+        </p>
+      )}
+      {!isFetched && !isFetching && !isError && (
         <p style={{ color: '#777', fontStyle: 'italic' }}>Click 'Get Suggestions' to start.</p>
       )}
 

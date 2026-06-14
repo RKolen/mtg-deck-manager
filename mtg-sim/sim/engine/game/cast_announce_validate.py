@@ -43,6 +43,7 @@ from engine.abilities.keywords.casting.conspire import (
     conspire_error,
     normalize_paid_conspire,
 )
+from engine.abilities.keywords.casting.demonstrate import normalize_paid_demonstrate
 from engine.abilities.keywords.casting.dash import normalize_dash_cast
 from engine.abilities.keywords.other.disguise import normalize_disguise_cast
 from engine.abilities.keywords.other.morph import normalize_morph_cast
@@ -91,6 +92,15 @@ class _RepeatCostCounts:
 
 
 @dataclass(frozen=True)
+class _CopyOnCastFlags:
+    """Optional costs that put a copy of the spell onto the stack."""
+
+    cleave: bool = False
+    conspire: bool = False
+    demonstrate: bool = False
+
+
+@dataclass(frozen=True)
 class _FlatCostFlags:
     """Flat boolean optional cost flags."""
 
@@ -98,8 +108,7 @@ class _FlatCostFlags:
     overloaded: bool = False
     bestow: bool = False
     buyback: bool = False
-    cleave: bool = False
-    conspire: bool = False
+    copy_casts: _CopyOnCastFlags = field(default_factory=_CopyOnCastFlags)
     counts: _RepeatCostCounts = field(default_factory=_RepeatCostCounts)
 
 
@@ -144,14 +153,9 @@ class PaidCastModifiers:
         return self.flat.buyback
 
     @property
-    def cleave(self) -> bool:
-        """Whether cleave was paid."""
-        return self.flat.cleave
-
-    @property
-    def conspire(self) -> bool:
-        """Whether conspire was paid."""
-        return self.flat.conspire
+    def copy_casts(self) -> _CopyOnCastFlags:
+        """Copy-on-cast optional costs (cleave, conspire, demonstrate)."""
+        return self.flat.copy_casts
 
     @property
     def miracle(self) -> bool:
@@ -310,8 +314,11 @@ def _normalized_paid_flags(
             overloaded=normalize_overloaded(card_info, opts.costs.overloaded),
             bestow=normalize_bestow(card_info, opts.modifiers.targeting.bestow_target_uid),
             buyback=normalize_buyback(card_info, opts.costs.paid_buyback),
-            cleave=normalize_cleave_cast(card_info, opts.alternate.cast_for_cleave),
-            conspire=normalize_paid_conspire(card_info, opts.costs.paid_conspire),
+            copy_casts=_CopyOnCastFlags(
+                cleave=normalize_cleave_cast(card_info, opts.alternate.cast_for_cleave),
+                conspire=normalize_paid_conspire(card_info, opts.costs.paid_conspire),
+                demonstrate=normalize_paid_demonstrate(card_info, opts.costs.paid_demonstrate),
+            ),
             counts=_RepeatCostCounts(
                 kicker_times=normalize_kicker_times(card_info, opts.costs.kicker_times),
                 replicate_times=normalize_replicate_times(card_info, opts.costs.replicate_times),
@@ -408,13 +415,29 @@ def validate_announce_cast(
         lambda: _reject_keyword(opts.alternate.cast_for_disguise, paid.disguise, name, "disguise"),
         lambda: _reject_keyword(opts.alternate.cast_for_dash, paid.dash, name, "dash"),
         lambda: _reject_keyword(opts.alternate.cast_for_blitz, paid.blitz, name, "blitz"),
-        lambda: _reject_keyword(opts.alternate.cast_for_cleave, paid.cleave, name, "cleave"),
-        lambda: _reject_keyword(opts.costs.paid_conspire, paid.conspire, name, "conspire"),
+        lambda: _reject_keyword(
+            opts.alternate.cast_for_cleave,
+            paid.copy_casts.cleave,
+            name,
+            "cleave",
+        ),
+        lambda: _reject_keyword(
+            opts.costs.paid_conspire,
+            paid.copy_casts.conspire,
+            name,
+            "conspire",
+        ),
         lambda: conspire_error(
             card_info,
             opts.costs.paid_conspire,
             ctx.zones,
             ctx.player_idx,
+        ),
+        lambda: _reject_keyword(
+            opts.costs.paid_demonstrate,
+            paid.copy_casts.demonstrate,
+            name,
+            "demonstrate",
         ),
         lambda: (
             f"{name} cannot use freerunning"

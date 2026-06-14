@@ -7,6 +7,7 @@ namespace Drupal\mtg_card_suggestions\Service;
 use Drupal\Core\Entity\EntityStorageInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Logger\LoggerChannelInterface;
+use Drupal\mtg_card_suggestions\Support\SidecarUrl;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\GuzzleException;
 
@@ -471,15 +472,12 @@ class CardSuggester {
    *   Ranked suggestions.
    */
   private function rankWithOllama(array $deckCards, array $candidates, int $limit, array $archetype = []): array {
-    $host  = getenv('OLLAMA_HOST');
-    $port  = getenv('OLLAMA_PORT');
     $model = getenv('OLLAMA_CHAT_MODEL');
+    $url = SidecarUrl::chatEndpoint();
 
-    if (!$host || !$port || !$model) {
+    if (!$url || !$model) {
       return $this->buildFallbackSuggestions($candidates, $limit);
     }
-
-    $url = rtrim($host, '/') . ':' . $port . '/api/chat';
 
     try {
       $response = $this->httpClient->request('POST', $url, [

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from engine.abilities.keywords._core import has_keyword
 from engine.abilities.keywords.actions.counters import put_plus_counters
+from engine.abilities.keywords.other.host_creature import other_controlled_creatures
 from engine.core.game_object import Permanent, effective_power
 from engine.core.zones import Zone
 
@@ -35,13 +36,7 @@ def apply_devour_etb(game: GameState, permanent: Permanent) -> str | None:
     if not has_devour(permanent):
         return None
     amount = devour_amount(permanent.oracle_text)
-    candidates = [
-        perm
-        for perm in game.zones.battlefield
-        if perm.controller_idx == permanent.controller_idx
-        and perm.obj_id != permanent.obj_id
-        and 'Creature' in perm.type_line
-    ]
+    candidates = other_controlled_creatures(permanent, game.zones.battlefield)
     candidates.sort(key=effective_power)
     sacrificed = 0
     for victim in candidates[:amount]:

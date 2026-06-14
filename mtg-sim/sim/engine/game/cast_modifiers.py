@@ -13,6 +13,7 @@ from engine.abilities.keywords.casting.cascade import (
 )
 from engine.abilities.keywords.casting.cleave import supports_cleave_copies
 from engine.abilities.keywords.casting.conspire import supports_conspire_copies
+from engine.abilities.keywords.casting.demonstrate import supports_demonstrate_copies
 from engine.abilities.keywords.casting.replicate import supports_replicate_copies
 from engine.abilities.keywords.casting.storm import storm_copy_count, supports_storm_copies
 from engine.core.game_object import CardObject, SpellStackCopyFlags, Target, _SpellCopy
@@ -47,6 +48,8 @@ def apply_post_cast_modifiers(
         logs.append(f"{card_info.name} + cleave copy")
     if _push_conspire_copy(game, player_idx, card, targets, context):
         logs.append(f"{card_info.name} + conspire copy")
+    if _push_demonstrate_copy(game, player_idx, card, targets, context):
+        logs.append(f"{card_info.name} + demonstrate copy")
     cascade_name = _push_cascade_cast(game, player_idx, card, targets)
     if cascade_name:
         logs.append(f"cascade cast {cascade_name}")
@@ -135,6 +138,28 @@ def _push_conspire_copy(
     if not context.payment.conspire or not supports_conspire_copies(card_info):
         return False
     flags = SpellStackCopyFlags(conspire=True)
+    game.stack.push(spell_on_stack_from_context(
+        player_idx,
+        card,
+        list(targets),
+        context,
+        copy_flags=flags,
+    ))
+    return True
+
+
+def _push_demonstrate_copy(
+    game: GameState,
+    player_idx: int,
+    card: CardObject,
+    targets: list[Target],
+    context: SpellCastContext,
+) -> bool:
+    """Put one demonstrate copy on the stack above the spell that created it."""
+    card_info = require_card_info(card)
+    if not context.payment.demonstrate or not supports_demonstrate_copies(card_info):
+        return False
+    flags = SpellStackCopyFlags(demonstrate=True)
     game.stack.push(spell_on_stack_from_context(
         player_idx,
         card,

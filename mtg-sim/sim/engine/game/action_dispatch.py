@@ -40,6 +40,7 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
                 paid_casualty=req.paidCasualty,
                 paid_conspire=req.paidConspire,
                 paid_bargain=req.paidBargain,
+                paid_demonstrate=req.paidDemonstrate,
             ),
             repeat=_RepeatCostChoices(
                 kicker_times=req.kickerTimes,

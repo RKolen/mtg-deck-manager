@@ -35,6 +35,7 @@ type PendingAlt =
   | 'bloodrush'
   | 'ninjutsu'
   | 'casualty'
+  | 'bargain'
   | 'boast'
   | 'outlast'
   | 'craft_host'
@@ -205,6 +206,10 @@ const PlayPage: React.FC = () => {
   const [castForFreerunning, setCastForFreerunning] = useState(false);
   const [castForCleave, setCastForCleave] = useState(false);
   const [paidConspire, setPaidConspire] = useState(false);
+  const [paidBargain, setPaidBargain] = useState(false);
+  const [paidDemonstrate, setPaidDemonstrate] = useState(false);
+  const [escalateExtraTargets, setEscalateExtraTargets] = useState(0);
+  const [bargainSacrificeUid, setBargainSacrificeUid] = useState<string | null>(null);
   const [assistMana, setAssistMana] = useState(0);
   const [sneakLandHandIndices, setSneakLandHandIndices] = useState<number[]>([]);
   const [castForMiracle, setCastForMiracle] = useState(false);
@@ -262,6 +267,10 @@ const PlayPage: React.FC = () => {
     setCastForFreerunning(false);
     setCastForCleave(false);
     setPaidConspire(false);
+    setPaidBargain(false);
+    setPaidDemonstrate(false);
+    setEscalateExtraTargets(0);
+    setBargainSacrificeUid(null);
     setAssistMana(0);
     setSneakLandHandIndices([]);
     setCastForMiracle(false);
@@ -317,6 +326,7 @@ const PlayPage: React.FC = () => {
   const canForetell = gs?.availableActions.includes('foretell');
   const canPlot = gs?.availableActions.includes('plot');
   const canCastMadness = gs?.availableActions.includes('cast_madness');
+  const canForecast = gs?.availableActions.includes('forecast');
   const canCastForetell = gs?.availableActions.includes('cast_foretell');
   const canCastPlot = gs?.availableActions.includes('cast_plot');
   const canJumpStart = gs?.availableActions.includes('cast_jump_start');
@@ -399,6 +409,10 @@ const PlayPage: React.FC = () => {
     setCastForFreerunning(false);
     setCastForCleave(false);
     setPaidConspire(false);
+    setPaidBargain(false);
+    setPaidDemonstrate(false);
+    setEscalateExtraTargets(0);
+    setBargainSacrificeUid(null);
     setAssistMana(0);
     setSneakLandHandIndices([]);
     setCastForMiracle(false);
@@ -435,6 +449,9 @@ const PlayPage: React.FC = () => {
       || card.hasCleave
       || card.hasConspire
       || card.hasAssist
+      || card.hasBargain
+      || card.hasEscalate
+      || card.hasDemonstrate
     ) {
       // Wait for Cast / options before sending to server
     } else {
@@ -464,6 +481,12 @@ const PlayPage: React.FC = () => {
       setTargetMode('self');
       return;
     }
+    if (paidBargain && !bargainSacrificeUid) {
+      setPendingAlt('bargain');
+      setWaitingTarget(true);
+      setTargetMode('self');
+      return;
+    }
     if (castForEmerge && !emergeSacrificeUid) {
       setPendingCastModifier('emerge');
       return;
@@ -482,6 +505,10 @@ const PlayPage: React.FC = () => {
       castForFreerunning,
       castForCleave,
       paidConspire,
+      paidBargain,
+      paidDemonstrate,
+      escalateExtraTargets,
+      bargainSacrificeIds: bargainSacrificeUid ? [bargainSacrificeUid] : [],
       assistMana,
       sneakLandHandIndices,
       castForMiracle,
@@ -518,6 +545,14 @@ const PlayPage: React.FC = () => {
     }
     if (pendingAlt === 'casualty') {
       setCasualtySacrificeUid(perm.uid);
+      setPendingAlt(null);
+      setWaitingTarget(false);
+      setTargetMode('none');
+      return;
+    }
+    if (pendingAlt === 'bargain') {
+      if (!perm.type.includes('Artifact')) return;
+      setBargainSacrificeUid(perm.uid);
       setPendingAlt(null);
       setWaitingTarget(false);
       setTargetMode('none');
@@ -648,6 +683,14 @@ const PlayPage: React.FC = () => {
       void act('ninjutsu', { handIdx: selectedHandIdx, targetUid: perm.uid });
       return;
     }
+    if (pendingAlt === 'bargain' && !isOppBoard) {
+      if (!perm.type.includes('Artifact')) return;
+      setBargainSacrificeUid(perm.uid);
+      setPendingAlt(null);
+      setWaitingTarget(false);
+      setTargetMode('none');
+      return;
+    }
     if (pendingAlt === 'casualty' && !isOppBoard) {
       setCasualtySacrificeUid(perm.uid);
       setPendingAlt(null);
@@ -675,6 +718,10 @@ const PlayPage: React.FC = () => {
     setCastForFreerunning(false);
     setCastForCleave(false);
     setPaidConspire(false);
+    setPaidBargain(false);
+    setPaidDemonstrate(false);
+    setEscalateExtraTargets(0);
+    setBargainSacrificeUid(null);
     setAssistMana(0);
     setSneakLandHandIndices([]);
     setCastForMiracle(false);
@@ -812,6 +859,7 @@ const PlayPage: React.FC = () => {
               {pendingAlt === 'bloodrush' && 'Bloodrush: click your creature to pump'}
               {pendingAlt === 'ninjutsu' && 'Ninjutsu: click your attacker to replace'}
               {pendingAlt === 'casualty' && 'Casualty: click a creature to sacrifice'}
+              {pendingAlt === 'bargain' && 'Bargain: click an artifact to sacrifice'}
               {pendingAlt === 'boast' && 'Boast: click an attacking creature'}
               {pendingAlt === 'outlast' && 'Outlast: click a creature with outlast'}
               {pendingAlt === 'craft_host' && 'Craft: click the permanent to craft'}
@@ -1142,6 +1190,46 @@ const PlayPage: React.FC = () => {
                     />
                   </label>
                 )}
+                {canCast && selectedCard.hasBargain && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', color: '#ddd' }}>
+                    <input
+                      type="checkbox"
+                      checked={paidBargain}
+                      onChange={e => {
+                        setPaidBargain(e.target.checked);
+                        if (!e.target.checked) setBargainSacrificeUid(null);
+                      }}
+                    />
+                    Pay Bargain
+                    {bargainSacrificeUid && ' (artifact selected)'}
+                  </label>
+                )}
+                {canCast && selectedCard.hasEscalate && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem', color: '#ddd' }}>
+                    Escalate extra targets
+                    <input
+                      type="number"
+                      min={0}
+                      max={4}
+                      value={escalateExtraTargets}
+                      onChange={e => {
+                        const next = Math.max(0, Math.min(4, Number(e.target.value) || 0));
+                        setEscalateExtraTargets(next);
+                      }}
+                      style={{ width: 48, padding: '2px 4px' }}
+                    />
+                  </label>
+                )}
+                {canCast && selectedCard.hasDemonstrate && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', color: '#ddd' }}>
+                    <input
+                      type="checkbox"
+                      checked={paidDemonstrate}
+                      onChange={e => setPaidDemonstrate(e.target.checked)}
+                    />
+                    Demonstrate (copy on stack)
+                  </label>
+                )}
                 {canCast && selectedCard.hasConvoke && (
                   <button
                     type="button"
@@ -1215,6 +1303,15 @@ const PlayPage: React.FC = () => {
                     style={btnStyle('#7f8c8d')}
                   >
                     Cycle
+                  </button>
+                )}
+                {selectedCard.canForecast && canForecast && (
+                  <button
+                    type="button"
+                    onClick={() => void act('forecast', { handIdx: selectedHandIdx! })}
+                    style={btnStyle('#1f618d')}
+                  >
+                    Forecast
                   </button>
                 )}
                 {selectedCard.hasEmbalm && canEmbalm && selectedHandIdx !== null && (

@@ -269,7 +269,8 @@ Forge LLM pilot work (rules + decision hooks) lives in the sibling clone
 `../forge` on branch `mtg/llm-pilot`. See [docs/forge-llm-pilots.md](docs/forge-llm-pilots.md) (git-ignored).
 | **`mtg-app/.env.local`** | Next.js-only (`NEXT_PUBLIC_*`). `NEXT_PUBLIC_SIM_URL` / `NEXT_PUBLIC_CLASSIFIER_URL` ports must match root `SIM_PORT` / `CLASSIFIER_PORT`. |
 | **`drupal/.ddev/config.yaml`** | Committed DDEV config with **empty** `web_environment` placeholders only. |
-| **`drupal/.ddev/config.local.yaml`** | Local DDEV overrides (gitignored). Copy from `config.local.yaml.example`; set `MTG_SIM_SERVICE_URL`, `OLLAMA_*` from root `.env`. |
+| **`drupal/.ddev/config.local.yaml`** | Local DDEV overrides (gitignored). Set `MTG_SIM_SERVICE_URL`, `MTG_AI_SIDECAR_URL`, `OLLAMA_CHAT_MODEL` from root `.env`. |
+| **Ollama provider host/port** | Not in config sync. Set `MTG_AI_SIDECAR_URL` in DDEV `web_environment`; `settings.mtg.php` applies it at runtime (`config_export_blacklist` prevents re-export). |
 
 Template: copy `/.env.example` to `/.env`. If a port is already in use locally,
 pick a free one and keep `NEXT_PUBLIC_SIM_URL`, `MTG_SIM_SERVICE_URL`, `SIM_PORT`,
@@ -294,9 +295,11 @@ Simulation pilots:
 - **Gauntlet opponent** — `field_pilot_prompt` on the `meta_deck` node, with built-in
   fallbacks in `mtg-sim/sim/pilot_prompts.py` when the Drupal field is empty.
 
-Drupal reaches host Ollama via `host.docker.internal` (not the deprecated DDEV
-Ollama container). `MTG_SIM_SERVICE_URL` must match root `.env` `SIM_PORT` in
-DDEV `web_environment`.
+Drupal reaches host Ollama only through the AI sidecar (`MTG_AI_SIDECAR_URL` /
+`host.docker.internal:$SIDECAR_PORT`), which proxies `/api/*` and `/v1/*` to
+`127.0.0.1:$OLLAMA_PORT` on the host. Bind the sidecar with `SIDECAR_HOST=0.0.0.0`
+(like `SIM_HOST`) so DDEV can reach it. `MTG_SIM_SERVICE_URL` must match root
+`.env` `SIM_PORT` in DDEV `web_environment`.
 
 **Before running simulations:** `./start.sh` must have started the host sim
 service. Drupal proxies `/api/simulate` to that service; if it is not running
@@ -304,7 +307,9 @@ you get a network or 503 error. Verify with:
 
 ```bash
 curl http://localhost:$SIM_PORT/health
+curl http://localhost:$SIDECAR_PORT/health
 ddev exec curl -s http://host.docker.internal:$SIM_PORT/health
+ddev exec curl -s http://host.docker.internal:$SIDECAR_PORT/health
 ```
 
 ## Quick Reference

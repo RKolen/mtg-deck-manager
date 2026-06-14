@@ -328,6 +328,7 @@ class GameActionRequest(BaseModel):
     paidCasualty: bool = False
     paidConspire: bool = False
     paidBargain: bool = False
+    paidDemonstrate: bool = False
     escalateExtraTargets: int = 0
     bargainSacrificeIds: list[str] = []
     castForCleave: bool = False

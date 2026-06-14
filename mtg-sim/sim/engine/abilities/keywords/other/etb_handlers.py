@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from engine.abilities.keywords.other.ascend import update_ascend_status
+from engine.abilities.keywords.other.amplify import apply_amplify_etb
 from engine.abilities.keywords.other.augment import apply_augment_etb
 from engine.abilities.keywords.other.backup import apply_backup_etb
 from engine.abilities.keywords.other.blitz import apply_blitz_etb
@@ -16,6 +17,7 @@ from engine.abilities.keywords.other.echo import apply_echo_etb
 from engine.abilities.keywords.other.encore import apply_encore_etb
 from engine.abilities.keywords.other.evoke import apply_evoke_on_etb
 from engine.abilities.keywords.other.fabricate import apply_fabricate_etb
+from engine.abilities.keywords.other.graft import apply_graft_etb
 from engine.abilities.keywords.other.living_weapon import (
     apply_living_weapon,
     has_living_weapon,
@@ -96,6 +98,14 @@ def _decayed_detail(_game: GameState, permanent: Permanent) -> str | None:
     return apply_decayed_etb(permanent)
 
 
+def _graft_detail(game: GameState, permanent: Permanent) -> str | None:
+    return apply_graft_etb(game, permanent)
+
+
+def _amplify_detail(game: GameState, permanent: Permanent) -> str | None:
+    return apply_amplify_etb(game, permanent)
+
+
 ETB_DETAIL_PRODUCERS: tuple[EtbDetailFn, ...] = (
     _living_weapon_detail,
     _modular_detail,
@@ -113,4 +123,6 @@ ETB_DETAIL_PRODUCERS: tuple[EtbDetailFn, ...] = (
     _evoke_detail,
     _offspring_detail,
     _decayed_detail,
+    _graft_detail,
+    _amplify_detail,
 )

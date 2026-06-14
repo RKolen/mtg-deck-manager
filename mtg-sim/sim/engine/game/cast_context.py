@@ -31,6 +31,7 @@ class _PaidSacrificeCosts:
     paid_casualty: bool = False
     paid_conspire: bool = False
     paid_bargain: bool = False
+    paid_demonstrate: bool = False
 
 
 @dataclass(frozen=True)
@@ -67,6 +68,11 @@ class HandCastCostChoices:
     def paid_bargain(self) -> bool:
         """Whether bargain was paid."""
         return self.paid.paid_bargain
+
+    @property
+    def paid_demonstrate(self) -> bool:
+        """Whether demonstrate was paid."""
+        return self.paid.paid_demonstrate
 
 
 @dataclass(frozen=True)

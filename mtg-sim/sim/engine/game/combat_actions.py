@@ -13,6 +13,7 @@ from engine.abilities.keywords.other.mobilize import apply_mobilize_on_attack
 from engine.abilities.keywords.other.myriad import apply_myriad_on_attack
 from engine.abilities.keywords.other.annihilator import apply_annihilator_on_attack
 from engine.abilities.keywords.other.exalted import apply_exalted_on_attack
+from engine.abilities.keywords.other.frenzy import apply_frenzy_on_unblocked_attack
 from engine.abilities.keywords.other.mentor import apply_mentor_on_attack
 from engine.core.turn_structure import Step
 from engine.game.activated_actions import ActivatedActionsMixin
@@ -79,6 +80,19 @@ class CombatActionsMixin(ActivatedActionsMixin):
             attacker_ids=self.pending_attackers,
             blocker_assignments={},
         )
+        for attacker_id in self.pending_attackers:
+            perm = self._find_permanent(attacker_id)
+            if perm is None:
+                continue
+            frenzy_detail = apply_frenzy_on_unblocked_attack(
+                self.state,
+                perm,
+                blocked=False,
+            )
+            if frenzy_detail:
+                self._log('rules', 'frenzy', frenzy_detail)
+                if 'draw' in frenzy_detail:
+                    self._draw_cards(perm.controller_idx, 1)
         if result.damage_to_player:
             self._log("player", "attack", f"Attacked for {result.damage_to_player} damage")
         self.pending_attackers = []

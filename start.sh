@@ -248,7 +248,7 @@ else
   cd "$SIM_DIR"
   OLLAMA_URL="http://127.0.0.1:$OLLAMA_PORT" \
   OLLAMA_MODEL="$OLLAMA_MODEL" \
-  SIDECAR_HOST="127.0.0.1" \
+  SIDECAR_HOST="${SIDECAR_HOST:-0.0.0.0}" \
   SIDECAR_PORT="$SIDECAR_PORT" \
   PYTHONPATH="$SIM_DIR" \
   "$SIM_DIR/.venv/bin/python" -m sidecar.main \

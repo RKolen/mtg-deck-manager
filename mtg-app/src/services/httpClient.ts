@@ -8,9 +8,9 @@
 import axios, { type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
 
 function applyDrupalAuth(config: InternalAxiosRequestConfig): InternalAxiosRequestConfig {
-  const url = process.env.NEXT_PUBLIC_DRUPAL_URL;
-  const user = process.env.NEXT_PUBLIC_DRUPAL_USER;
-  const pass = process.env.NEXT_PUBLIC_DRUPAL_PASS;
+  const url = process.env.NEXT_PUBLIC_DRUPAL_URL ?? process.env.GATSBY_DRUPAL_URL;
+  const user = process.env.NEXT_PUBLIC_DRUPAL_USER ?? process.env.GATSBY_DRUPAL_USER;
+  const pass = process.env.NEXT_PUBLIC_DRUPAL_PASS ?? process.env.GATSBY_DRUPAL_PASS;
 
   if (!url || !user || !pass) {
     throw new Error(

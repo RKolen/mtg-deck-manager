@@ -444,6 +444,7 @@ class _KeywordPays:
     blitz: bool = False
     cleave: bool = False
     conspire: bool = False
+    demonstrate: bool = False
 
 
 class SpellCastPayment:
@@ -620,6 +621,16 @@ class SpellCastPayment:
         """Set conspire flag."""
         self.keywords.conspire = value
 
+    @property
+    def demonstrate(self) -> bool:
+        """True when demonstrate was paid."""
+        return self.keywords.demonstrate
+
+    @demonstrate.setter
+    def demonstrate(self, value: bool) -> None:
+        """Set demonstrate flag."""
+        self.keywords.demonstrate = value
+
 
 @dataclass
 class _SpellCopy:
@@ -638,6 +649,7 @@ class SpellStackCopyFlags:
     casualty: bool = False
     cleave: bool = False
     conspire: bool = False
+    demonstrate: bool = False
 
     @property
     def storm(self) -> bool:
@@ -704,6 +716,7 @@ def spell_is_ephemeral_copy(spell: SpellOnStack) -> bool:
         or spell.copies.casualty
         or spell.copies.cleave
         or spell.copies.conspire
+        or spell.copies.demonstrate
     )
 
 

@@ -12,15 +12,18 @@ from sidecar.models import (
     PilotPickResponse,
 )
 from sidecar.ollama_backend import OLLAMA_MODEL, generate_text, is_configured, pilot_pick
+from sidecar.ollama_proxy import router as ollama_proxy_router
 
 app = FastAPI(
     title="MTG AI Sidecar",
     description=(
-        "Host-side LLM boundary for simulation pilots and optional Drupal AI calls. "
-        "Runs outside DDEV and proxies to host Ollama."
+        "Host-side LLM boundary for simulation pilots, Drupal AI calls, and "
+        "Milvus embeddings. Runs outside DDEV and proxies to host Ollama."
     ),
     version="1.0.0",
 )
+
+app.include_router(ollama_proxy_router)
 
 
 @app.get("/")
@@ -31,6 +34,8 @@ def root() -> dict:
         "health": "/health",
         "pilot_pick": "/pilot-pick",
         "generate": "/generate",
+        "ollama_api": "/api/*",
+        "ollama_openai": "/v1/*",
         "docs": "/docs",
     }
 

@@ -92,6 +92,7 @@ def cast_announce_options(**kwargs: Any) -> CastAnnounceOptions:
                 paid_casualty=bool(flat.get("paid_casualty", False)),
                 paid_conspire=bool(flat.get("paid_conspire", False)),
                 paid_bargain=bool(flat.get("paid_bargain", False)),
+                paid_demonstrate=bool(flat.get("paid_demonstrate", False)),
             ),
             repeat=_RepeatCostChoices(
                 kicker_times=int(flat.get("kicker_times", 0)),

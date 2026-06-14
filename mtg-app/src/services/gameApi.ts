@@ -49,8 +49,13 @@ export interface CardInHand {
   madnessAffordable?: boolean;
   hasConvoke?: boolean;
   hasAssist?: boolean;
+  hasBargain?: boolean;
+  hasEscalate?: boolean;
+  hasForecast?: boolean;
+  canForecast?: boolean;
   hasCleave?: boolean;
   hasConspire?: boolean;
+  hasDemonstrate?: boolean;
   conspireAvailable?: boolean;
   hasDelve?: boolean;
   hasImprovise?: boolean;
@@ -152,6 +157,10 @@ export interface GameActionOpts {
   castForFreerunning?: boolean;
   castForCleave?: boolean;
   paidConspire?: boolean;
+  paidBargain?: boolean;
+  paidDemonstrate?: boolean;
+  escalateExtraTargets?: number;
+  bargainSacrificeIds?: string[];
   assistMana?: number;
   sneakLandHandIndices?: number[];
   craftArtifactIds?: string[];
@@ -205,6 +214,10 @@ export async function gameAction(
     castForFreerunning: opts.castForFreerunning ?? false,
     castForCleave: opts.castForCleave ?? false,
     paidConspire: opts.paidConspire ?? false,
+    paidBargain: opts.paidBargain ?? false,
+    paidDemonstrate: opts.paidDemonstrate ?? false,
+    escalateExtraTargets: opts.escalateExtraTargets ?? 0,
+    bargainSacrificeIds: opts.bargainSacrificeIds ?? [],
     assistMana: opts.assistMana ?? 0,
     sneakLandHandIndices: opts.sneakLandHandIndices ?? [],
     craftArtifactIds: opts.craftArtifactIds ?? [],

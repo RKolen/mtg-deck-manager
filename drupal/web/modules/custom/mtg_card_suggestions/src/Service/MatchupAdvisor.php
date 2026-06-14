@@ -8,6 +8,7 @@ use Drupal\Core\Entity\EntityStorageInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Logger\LoggerChannelInterface;
 use Drupal\node\NodeInterface;
+use Drupal\mtg_card_suggestions\Support\SidecarUrl;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\GuzzleException;
 
@@ -261,20 +262,17 @@ PROMPT;
   /**
    * Sends the prompt to Ollama via direct HTTP and parses the JSON response.
    *
-   * Requires OLLAMA_HOST, OLLAMA_PORT, and OLLAMA_CHAT_MODEL env vars.
+   * Requires MTG_AI_SIDECAR_URL and OLLAMA_CHAT_MODEL env vars.
    *
    * @return array{dynamic: string, threats: list<string>, sideboard: array{in: list<string>, out: list<string>}, keyPlay: string}
    */
   private function runOllama(string $prompt): array {
-    $host  = getenv('OLLAMA_HOST');
-    $port  = getenv('OLLAMA_PORT');
     $model = getenv('OLLAMA_CHAT_MODEL');
+    $url = SidecarUrl::chatEndpoint();
 
-    if (!$host || !$port || !$model) {
-      return $this->errorAdvice('Ollama not configured: set OLLAMA_HOST, OLLAMA_PORT, and OLLAMA_CHAT_MODEL env vars.');
+    if (!$url || !$model) {
+      return $this->errorAdvice('AI sidecar not configured: set MTG_AI_SIDECAR_URL and OLLAMA_CHAT_MODEL env vars.');
     }
-
-    $url = rtrim($host, '/') . ':' . $port . '/api/chat';
 
     try {
       $response = $this->httpClient->request('POST', $url, [

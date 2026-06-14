@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from deck_registry import CardInfo
+from engine.abilities.keywords.casting.devoid import spell_is_colorless_for_effects
 from engine.abilities.keywords.registry import has_registered_keyword
 from engine.core.mana import ManaCost
 from engine.core.game_object import Permanent, TokenObject
@@ -51,6 +52,8 @@ _COLOR_SYMBOL_RE = re.compile(r'\{([WUBRG])\}', re.IGNORECASE)
 
 def spell_color_set(card: CardInfo) -> set[str]:
     """Return colors parsed from the spell's mana cost (simplified)."""
+    if spell_is_colorless_for_effects(card):
+        return set()
     text = card.mana_cost or ''
     return {match.group(1).upper() for match in _COLOR_SYMBOL_RE.finditer(text)}
 
