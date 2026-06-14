@@ -14,6 +14,8 @@ from engine.abilities.keywords.other.dash import apply_dash_etb
 from engine.abilities.keywords.other.decayed import apply_decayed_etb
 from engine.abilities.keywords.other.devour import apply_devour_etb
 from engine.abilities.keywords.other.echo import apply_echo_etb
+from engine.abilities.keywords.other.fading import apply_fading_etb
+from engine.abilities.keywords.other.cumulative_upkeep import apply_cumulative_upkeep_etb
 from engine.abilities.keywords.other.encore import apply_encore_etb
 from engine.abilities.keywords.other.evoke import apply_evoke_on_etb
 from engine.abilities.keywords.other.fabricate import apply_fabricate_etb
@@ -71,6 +73,14 @@ def _backup_detail(game: GameState, permanent: Permanent) -> str | None:
 
 def _echo_detail(_game: GameState, permanent: Permanent) -> str | None:
     return apply_echo_etb(permanent)
+
+
+def _fading_detail(_game: GameState, permanent: Permanent) -> str | None:
+    return apply_fading_etb(permanent)
+
+
+def _cumulative_upkeep_detail(_game: GameState, permanent: Permanent) -> str | None:
+    return apply_cumulative_upkeep_etb(permanent)
 
 
 def _augment_detail(game: GameState, permanent: Permanent) -> str | None:
@@ -131,6 +141,8 @@ ETB_DETAIL_PRODUCERS: tuple[EtbDetailFn, ...] = (
     _blitz_detail,
     _backup_detail,
     _echo_detail,
+    _fading_detail,
+    _cumulative_upkeep_detail,
     _augment_detail,
     _riot_detail,
     _encore_detail,

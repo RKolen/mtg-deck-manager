@@ -9,6 +9,7 @@ from engine.abilities.keywords.other.battle_cry import apply_battle_cry_on_attac
 from engine.abilities.keywords.other.flanking import apply_flanking_on_block
 from engine.abilities.keywords.other.boast import mark_attacked_this_turn
 from engine.abilities.keywords.other.enlist import apply_enlist_on_attack
+from engine.abilities.keywords.other.melee import apply_melee_on_mass_attack
 from engine.abilities.keywords.other.mobilize import apply_mobilize_on_attack
 from engine.abilities.keywords.other.myriad import apply_myriad_on_attack
 from engine.abilities.keywords.other.annihilator import apply_annihilator_on_attack
@@ -244,11 +245,19 @@ class CombatActionsMixin(ActivatedActionsMixin):
             if (perm := self._find_permanent(attacker_id)) is not None
         ]
         if attackers:
+            controller_idx = attackers[0].controller_idx
+            attacker_count = len(attackers)
             self.state.fire_mass_attack_triggers(
-                attackers[0].controller_idx,
-                len(attackers),
+                controller_idx,
+                attacker_count,
             )
-            defending_player_idx = 1 - attackers[0].controller_idx
+            for detail in apply_melee_on_mass_attack(
+                self.state,
+                controller_idx,
+                attacker_count,
+            ):
+                self._log('rules', 'melee', detail)
+            defending_player_idx = 1 - controller_idx
             self._apply_attack_keywords(
                 attacker_ids,
                 defending_player_idx=defending_player_idx,

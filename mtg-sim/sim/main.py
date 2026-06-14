@@ -332,6 +332,8 @@ class GameActionRequest(BaseModel):
     paidGift: bool = False
     paidFuse: bool = False
     paidAwaken: bool = False
+    paidImpending: bool = False
+    paidForMirrodin: bool = False
     awakenLandHandIdx: int | None = None
     escalateExtraTargets: int = 0
     bargainSacrificeIds: list[str] = []
@@ -339,8 +341,11 @@ class GameActionRequest(BaseModel):
     assistMana: int = 0
     craftArtifactIds: list[str] = []
     castForEmerge: bool = False
+    castForOffering: bool = False
     castForEvoke: bool = False
     emergeSacrificeIds: list[str] = []
+    offeringSacrificeIds: list[str] = []
+    forMirrodinSacrificeIds: list[str] = []
     casualtySacrificeIds: list[str] = []
     castForMutate: bool = False
     mutateTargetUid: str | None = None

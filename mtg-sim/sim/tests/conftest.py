@@ -20,6 +20,7 @@ from engine.game.cast_context import (
     CastManaReductionIds,
     CastModifierIds,
     CastTargetingIds,
+    _PaidCastExtras,
     _SacrificeTargetIds,
     HandAlternateCastChoices,
     HandCastCostChoices,
@@ -48,6 +49,8 @@ _MODIFIER_KW_KEYS = frozenset({
     "sneak_land_hand_indices",
     "assist_mana",
     "bargain_sacrifice_ids",
+    "offering_sacrifice_ids",
+    "for_mirrodin_sacrifice_ids",
     "escalate_extra_targets",
     "awaken_land_hand_idx",
 })
@@ -68,6 +71,10 @@ def _modifier_ids_from_kw(modifier_kw: dict[str, Any]) -> CastModifierIds:
                 emerge_sacrifice_ids=_as_tuple(modifier_kw.get("emerge_sacrifice_ids", ())),
                 casualty_sacrifice_ids=_as_tuple(modifier_kw.get("casualty_sacrifice_ids", ())),
                 bargain_sacrifice_ids=_as_tuple(modifier_kw.get("bargain_sacrifice_ids", ())),
+                offering_sacrifice_ids=_as_tuple(modifier_kw.get("offering_sacrifice_ids", ())),
+                for_mirrodin_sacrifice_ids=_as_tuple(
+                    modifier_kw.get("for_mirrodin_sacrifice_ids", ()),
+                ),
             ),
         ),
         reductions=CastManaReductionIds(
@@ -97,7 +104,11 @@ def cast_announce_options(**kwargs: Any) -> CastAnnounceOptions:
                 paid_demonstrate=bool(flat.get("paid_demonstrate", False)),
                 paid_gift=bool(flat.get("paid_gift", False)),
                 paid_fuse=bool(flat.get("paid_fuse", False)),
-                paid_awaken=bool(flat.get("paid_awaken", False)),
+                cast_extras=_PaidCastExtras(
+                    paid_awaken=bool(flat.get("paid_awaken", False)),
+                    paid_impending=bool(flat.get("paid_impending", False)),
+                    paid_for_mirrodin=bool(flat.get("paid_for_mirrodin", False)),
+                ),
             ),
             repeat=_RepeatCostChoices(
                 kicker_times=int(flat.get("kicker_times", 0)),
@@ -106,6 +117,7 @@ def cast_announce_options(**kwargs: Any) -> CastAnnounceOptions:
         ),
         alternate=HandAlternateCastChoices(
             cast_for_emerge=bool(flat.get("cast_for_emerge", False)),
+            cast_for_offering=bool(flat.get("cast_for_offering", False)),
             cast_for_evoke=bool(flat.get("cast_for_evoke", False)),
             cast_for_mutate=bool(flat.get("cast_for_mutate", False)),
             cast_for_cleave=bool(flat.get("cast_for_cleave", False)),

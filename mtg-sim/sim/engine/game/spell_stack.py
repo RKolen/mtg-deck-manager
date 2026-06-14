@@ -11,6 +11,8 @@ from engine.abilities.keywords.casting.bargain import (
 )
 from engine.abilities.keywords.casting.gift import gift_opponent_draws
 from engine.abilities.keywords.casting.casualty import sacrifice_for_casualty
+from engine.abilities.keywords.casting.for_mirrodin import sacrifice_for_for_mirrodin
+from engine.abilities.keywords.casting.offering import sacrifice_for_offering
 from engine.abilities.keywords.casting import (
     can_cast_via_madness,
     exile_for_suspend,
@@ -45,7 +47,7 @@ from engine.game.cast_flow import (
     _TargetRef,
     announce_mana_options,
 )
-from engine.core.sac_cast_flags import SacrificeCastFlags
+from engine.core.sac_cast_flags import SacrificeCastFlags, _ArtifactCastSacFlags
 from engine.core.game_object import (
     CardObject,
     SpellAlternateCast,
@@ -168,7 +170,7 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
         )
 
     def _apply_emerge_casualty_sacrifice(self, paid: PaidAnnounceCast) -> str:
-        """Sacrifice for emerge or casualty and return the sacrificed card name."""
+        """Sacrifice for emerge, casualty, bargain, offering, or For Mirrodin!."""
         if paid.emerge_sacrifice_id is not None:
             sacrificed = sacrifice_for_emerge(
                 self.state.zones,
@@ -187,6 +189,20 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
             sacrificed = sacrifice_for_bargain(
                 self.state.zones,
                 paid.bargain_sacrifice_id,
+            )
+            return sacrificed.name
+        if paid.offering_sacrifice_id is not None:
+            sacrificed = sacrifice_for_offering(
+                self.state.zones,
+                self.state,
+                paid.offering_sacrifice_id,
+            )
+            return sacrificed.name
+        if paid.for_mirrodin_sacrifice_id is not None:
+            sacrificed = sacrifice_for_for_mirrodin(
+                self.state.zones,
+                self.state,
+                paid.for_mirrodin_sacrifice_id,
             )
             return sacrificed.name
         return ""
@@ -230,6 +246,10 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
                         casualty=mods.casualty,
                         bargain=mods.bargain,
                         gift=mods.gift,
+                        artifact=_ArtifactCastSacFlags(
+                            offering=mods.sac.artifact.offering,
+                            for_mirrodin=mods.sac.artifact.for_mirrodin,
+                        ),
                     ),
                     morph_face_down=mods.morph,
                 ),
@@ -248,6 +268,7 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
             extras=_HandCastExtras(
                 awaken_land_hand_idx=placement.opts.modifiers.reductions.awaken_land_hand_idx,
                 fuse=mods.copy_casts.fuse,
+                impending=mods.copy_casts.impending,
             ),
         )
         targets = self._put_spell_on_stack(

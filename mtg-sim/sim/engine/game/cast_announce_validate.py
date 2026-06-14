@@ -50,6 +50,17 @@ from engine.abilities.keywords.casting.awaken import (
     awaken_land_error,
     normalize_paid_awaken,
 )
+from engine.abilities.keywords.casting.impending import normalize_paid_impending
+from engine.abilities.keywords.casting.offering import (
+    normalize_offering_cast,
+    offering_sacrifice_error,
+    normalize_offering_sacrifice_id,
+)
+from engine.abilities.keywords.casting.for_mirrodin import (
+    for_mirrodin_sacrifice_error,
+    normalize_for_mirrodin_sacrifice_id,
+    normalize_paid_for_mirrodin,
+)
 from engine.abilities.keywords.casting.dash import normalize_dash_cast
 from engine.abilities.keywords.other.disguise import normalize_disguise_cast
 from engine.abilities.keywords.other.morph import normalize_morph_cast
@@ -68,6 +79,7 @@ from engine.core.game_state import GameState
 from engine.core.zones import ZoneManager
 from engine.game.helpers import CastAnnounceOptions
 from engine.core.sac_cast_flags import SacrificeCastFlags as _SacCastFlags
+from engine.core.sac_cast_flags import _ArtifactCastSacFlags
 
 
 @dataclass(frozen=True)
@@ -106,6 +118,7 @@ class _CopyOnCastFlags:
     demonstrate: bool = False
     fuse: bool = False
     awaken: bool = False
+    impending: bool = False
 
 
 @dataclass(frozen=True)
@@ -239,6 +252,8 @@ class PaidAnnounceCast:
     emerge_sacrifice_id: int | None
     casualty_sacrifice_id: int | None
     bargain_sacrifice_id: int | None
+    offering_sacrifice_id: int | None
+    for_mirrodin_sacrifice_id: int | None
     cast_target_uid: str | None
 
 
@@ -333,6 +348,7 @@ def _normalized_paid_flags(
                 demonstrate=normalize_paid_demonstrate(card_info, opts.costs.paid_demonstrate),
                 fuse=normalize_paid_fuse(card_info, opts.costs.paid_fuse),
                 awaken=normalize_paid_awaken(card_info, opts.costs.paid_awaken),
+                impending=normalize_paid_impending(card_info, opts.costs.paid_impending),
             ),
             counts=_RepeatCostCounts(
                 kicker_times=normalize_kicker_times(card_info, opts.costs.kicker_times),
@@ -356,6 +372,13 @@ def _normalized_paid_flags(
             casualty=normalize_paid_casualty(card_info, opts.costs.paid_casualty),
             bargain=normalize_paid_bargain(card_info, opts.costs.paid_bargain),
             gift=normalize_paid_gift(card_info, opts.costs.paid_gift),
+            artifact=_ArtifactCastSacFlags(
+                offering=normalize_offering_cast(card_info, opts.alternate.cast_for_offering),
+                for_mirrodin=normalize_paid_for_mirrodin(
+                    card_info,
+                    opts.costs.paid_for_mirrodin,
+                ),
+            ),
         ),
         conditions=_ConditionCastFlags(
             miracle=normalize_miracle_cast(card_info, opts.alternate.cast_for_miracle),
@@ -519,6 +542,38 @@ def validate_announce_cast(
             opts.costs.paid_awaken,
             opts.modifiers.reductions.awaken_land_hand_idx,
         ),
+        lambda: _reject_keyword(
+            opts.alternate.cast_for_offering,
+            paid.sac.artifact.offering,
+            name,
+            "offering",
+        ),
+        lambda: offering_sacrifice_error(
+            ctx.zones,
+            ctx.player_idx,
+            card_info,
+            opts.alternate.cast_for_offering,
+            list(opts.modifiers.targeting.offering_sacrifice_ids),
+        ),
+        lambda: _reject_keyword(
+            opts.costs.paid_for_mirrodin,
+            paid.sac.artifact.for_mirrodin,
+            name,
+            "For Mirrodin!",
+        ),
+        lambda: for_mirrodin_sacrifice_error(
+            ctx.zones,
+            ctx.player_idx,
+            card_info,
+            opts.costs.paid_for_mirrodin,
+            list(opts.modifiers.targeting.for_mirrodin_sacrifice_ids),
+        ),
+        lambda: _reject_keyword(
+            opts.costs.paid_impending,
+            paid.copy_casts.impending,
+            name,
+            "impending",
+        ),
     ])
     if err:
         return None, err
@@ -538,6 +593,16 @@ def validate_announce_cast(
         opts.costs.paid_bargain,
         list(opts.modifiers.targeting.bargain_sacrifice_ids),
     )
+    offering_sacrifice_id = normalize_offering_sacrifice_id(
+        card_info,
+        opts.alternate.cast_for_offering,
+        list(opts.modifiers.targeting.offering_sacrifice_ids),
+    )
+    for_mirrodin_sacrifice_id = normalize_for_mirrodin_sacrifice_id(
+        card_info,
+        opts.costs.paid_for_mirrodin,
+        list(opts.modifiers.targeting.for_mirrodin_sacrifice_ids),
+    )
     cast_target_uid = (
         opts.modifiers.targeting.mutate_target_uid
         or opts.modifiers.targeting.bestow_target_uid
@@ -548,5 +613,7 @@ def validate_announce_cast(
         emerge_sacrifice_id=emerge_sacrifice_id,
         casualty_sacrifice_id=casualty_sacrifice_id,
         bargain_sacrifice_id=bargain_sacrifice_id,
+        offering_sacrifice_id=offering_sacrifice_id,
+        for_mirrodin_sacrifice_id=for_mirrodin_sacrifice_id,
         cast_target_uid=cast_target_uid,
     ), None

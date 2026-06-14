@@ -25,6 +25,15 @@ class _RepeatCostChoices:
 
 
 @dataclass(frozen=True)
+class _PaidCastExtras:
+    """Optional spell payments that do not fit other sacrifice groups."""
+
+    paid_awaken: bool = False
+    paid_impending: bool = False
+    paid_for_mirrodin: bool = False
+
+
+@dataclass(frozen=True)
 class _PaidSacrificeCosts:
     """Optional sacrifice payments announced with a cast."""
 
@@ -34,7 +43,7 @@ class _PaidSacrificeCosts:
     paid_demonstrate: bool = False
     paid_gift: bool = False
     paid_fuse: bool = False
-    paid_awaken: bool = False
+    cast_extras: _PaidCastExtras = field(default_factory=_PaidCastExtras)
 
 
 @dataclass(frozen=True)
@@ -80,7 +89,7 @@ class HandCastCostChoices:
     @property
     def paid_awaken(self) -> bool:
         """Whether awaken was paid."""
-        return self.paid.paid_awaken
+        return self.paid.cast_extras.paid_awaken
 
     @property
     def paid_gift(self) -> bool:
@@ -91,6 +100,16 @@ class HandCastCostChoices:
     def paid_fuse(self) -> bool:
         """Whether fuse was paid."""
         return self.paid.paid_fuse
+
+    @property
+    def paid_impending(self) -> bool:
+        """Whether impending was paid."""
+        return self.paid.cast_extras.paid_impending
+
+    @property
+    def paid_for_mirrodin(self) -> bool:
+        """Whether For Mirrodin! was paid."""
+        return self.paid.cast_extras.paid_for_mirrodin
 
 
 @dataclass(frozen=True)
@@ -110,6 +129,7 @@ class HandAlternateCastChoices:
     cast_for_evoke: bool = False
     cast_for_mutate: bool = False
     cast_for_cleave: bool = False
+    cast_for_offering: bool = False
     face: FaceAlternateCastFlags = field(default_factory=FaceAlternateCastFlags)
     conditions: _CostConditionAlts = field(default_factory=_CostConditionAlts)
 
@@ -156,6 +176,8 @@ class _SacrificeTargetIds:
     emerge_sacrifice_ids: tuple[int, ...] = ()
     casualty_sacrifice_ids: tuple[int, ...] = ()
     bargain_sacrifice_ids: tuple[int, ...] = ()
+    offering_sacrifice_ids: tuple[int, ...] = ()
+    for_mirrodin_sacrifice_ids: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -183,6 +205,16 @@ class CastTargetingIds:
     def bargain_sacrifice_ids(self) -> tuple[int, ...]:
         """Permanent ids sacrificed for bargain."""
         return self.sacrifices.bargain_sacrifice_ids
+
+    @property
+    def offering_sacrifice_ids(self) -> tuple[int, ...]:
+        """Permanent ids sacrificed for offering."""
+        return self.sacrifices.offering_sacrifice_ids
+
+    @property
+    def for_mirrodin_sacrifice_ids(self) -> tuple[int, ...]:
+        """Permanent ids sacrificed for For Mirrodin!."""
+        return self.sacrifices.for_mirrodin_sacrifice_ids
 
 
 @dataclass(frozen=True)
@@ -220,6 +252,7 @@ class _HandCastExtras:
 
     awaken_land_hand_idx: int | None = None
     fuse: bool = False
+    impending: bool = False
 
 
 @dataclass(frozen=True)
@@ -244,6 +277,11 @@ class SpellCastContext:
         """Whether fuse was paid."""
         return self.extras.fuse
 
+    @property
+    def impending(self) -> bool:
+        """Whether impending was paid."""
+        return self.extras.impending
+
 
 def spell_on_stack_from_context(
     controller_idx: int,
@@ -265,5 +303,6 @@ def spell_on_stack_from_context(
             payment=context.payment,
             copies=copy_flags or SpellStackCopyFlags(),
             awaken_land_hand_idx=context.awaken_land_hand_idx,
+            impending=context.impending,
         ),
     )

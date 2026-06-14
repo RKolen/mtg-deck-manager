@@ -47,6 +47,8 @@ from engine.abilities.keywords.casting.cleave import (
 from engine.abilities.keywords.casting.conspire import conspire_extra_mana
 from engine.abilities.keywords.casting.escalate import escalate_extra_mana
 from engine.abilities.keywords.casting.awaken import awaken_mana_extra
+from engine.abilities.keywords.casting.impending import impending_mana_extra
+from engine.abilities.keywords.casting.offering import offering_mana_reduction
 from engine.abilities.keywords.casting.dash import (
     dash_mana_needed,
     normalize_dash_cast,
@@ -89,6 +91,7 @@ class _SacManaModifiers:
     cast_for_emerge: bool = False
     cast_for_evoke: bool = False
     cast_for_mutate: bool = False
+    cast_for_offering: bool = False
     mutate_target_uid: str | None = None
 
 
@@ -135,6 +138,11 @@ class CastManaModifiers:
         return self.sac.cast_for_mutate
 
     @property
+    def cast_for_offering(self) -> bool:
+        """Whether casting for offering."""
+        return self.sac.cast_for_offering
+
+    @property
     def mutate_target_uid(self) -> str | None:
         """Mutate target UID."""
         return self.sac.mutate_target_uid
@@ -148,6 +156,7 @@ class _TimingAvailability:
     spectacle_available: bool = False
     escalate_extra_targets: int = 0
     paid_awaken: bool = False
+    paid_impending: bool = False
 
 
 @dataclass(frozen=True)
@@ -268,6 +277,11 @@ def resolve_announce_cast_mana(
     mana_needed += conspire_extra_mana(card, timing.paid_conspire)
     mana_needed += escalate_extra_mana(card, timing.available.escalate_extra_targets)
     mana_needed += awaken_mana_extra(card, timing.available.paid_awaken)
+    mana_needed += impending_mana_extra(card, timing.available.paid_impending)
+    mana_needed = max(
+        0,
+        mana_needed - offering_mana_reduction(card, mods.cast_for_offering),
+    )
     if opts.zones is not None:
         mana_needed = max(
             0,

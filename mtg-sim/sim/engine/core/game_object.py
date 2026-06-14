@@ -704,6 +704,7 @@ class _SpellCasting:
     payment: SpellCastPayment = field(default_factory=SpellCastPayment)
     copies: SpellStackCopyFlags = field(default_factory=SpellStackCopyFlags)
     awaken_land_hand_idx: int | None = None
+    impending: bool = False
 
 
 @dataclass

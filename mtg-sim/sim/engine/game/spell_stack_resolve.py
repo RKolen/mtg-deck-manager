@@ -30,6 +30,7 @@ from engine.abilities.keywords.casting import (
     spree_modes,
 )
 from engine.abilities.keywords.casting.awaken import apply_awaken_on_resolve
+from engine.abilities.keywords.casting.impending import apply_impending_on_resolve
 from engine.abilities.keywords.other.etb import apply_etb_other_abilities
 from engine.abilities.keywords.other.evoke import mark_evoked_cast
 from engine.abilities.keywords.other.register import register_permanent_other_keywords
@@ -110,6 +111,15 @@ class SpellResolveMixin(SpellStackPlacementMixin):
         card = spell.source
         assert card is not None
         card_info = require_card_info(card)
+        if spell.casting.impending:
+            detail = apply_impending_on_resolve(
+                self.state.zones,
+                spell.controller_idx,
+                card,
+            )
+            if detail:
+                self._register_permanent_triggers(self.state.zones.battlefield[-1])
+                return detail
         if spell.modes and has_spree(card_info):
             return self._resolve_spree_spell(spell)
         category = spell_category(card_info)

@@ -174,6 +174,7 @@ def cast_modifiers_for_announce(
             cast_for_emerge=paid.modifiers.emerge,
             cast_for_evoke=paid.modifiers.evoke,
             cast_for_mutate=paid.modifiers.mutate,
+            cast_for_offering=paid.modifiers.sac.artifact.offering,
             mutate_target_uid=opts.modifiers.targeting.mutate_target_uid,
         ),
         face=FaceAlternateCastFlags(
@@ -204,6 +205,7 @@ def cast_timing_for_announce(
             spectacle_available=spectacle_available(state, controller_idx),
             escalate_extra_targets=opts.modifiers.targeting.escalate_extra_targets,
             paid_awaken=paid.modifiers.copy_casts.awaken,
+            paid_impending=paid.modifiers.copy_casts.impending,
         ),
     )
 

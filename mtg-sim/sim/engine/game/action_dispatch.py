@@ -10,6 +10,7 @@ from engine.game.cast_context import (
     CastManaReductionIds,
     CastModifierIds,
     CastTargetingIds,
+    _PaidCastExtras,
     _SacrificeTargetIds,
     HandAlternateCastChoices,
     HandCastCostChoices,
@@ -28,6 +29,8 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
     convoke_ids = tuple(int(uid) for uid in req.convokeCreatureIds)
     improvise_ids = tuple(int(uid) for uid in req.improviseArtifactIds)
     emerge_ids = tuple(int(uid) for uid in req.emergeSacrificeIds)
+    offering_ids = tuple(int(uid) for uid in req.offeringSacrificeIds)
+    for_mirrodin_ids = tuple(int(uid) for uid in req.forMirrodinSacrificeIds)
     casualty_ids = tuple(int(uid) for uid in req.casualtySacrificeIds)
     bargain_ids = tuple(int(uid) for uid in req.bargainSacrificeIds)
     harmonize_ids = tuple(int(uid) for uid in req.harmonizeCreatureIds)
@@ -43,7 +46,11 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
                 paid_demonstrate=req.paidDemonstrate,
                 paid_gift=req.paidGift,
                 paid_fuse=req.paidFuse,
-                paid_awaken=req.paidAwaken,
+                cast_extras=_PaidCastExtras(
+                    paid_awaken=req.paidAwaken,
+                    paid_impending=req.paidImpending,
+                    paid_for_mirrodin=req.paidForMirrodin,
+                ),
             ),
             repeat=_RepeatCostChoices(
                 kicker_times=req.kickerTimes,
@@ -52,6 +59,7 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
         ),
         alternate=HandAlternateCastChoices(
             cast_for_emerge=req.castForEmerge,
+            cast_for_offering=req.castForOffering,
             cast_for_evoke=req.castForEvoke,
             cast_for_mutate=req.castForMutate,
             cast_for_cleave=req.castForCleave,
@@ -78,6 +86,8 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
                     emerge_sacrifice_ids=emerge_ids,
                     casualty_sacrifice_ids=casualty_ids,
                     bargain_sacrifice_ids=bargain_ids,
+                    offering_sacrifice_ids=offering_ids,
+                    for_mirrodin_sacrifice_ids=for_mirrodin_ids,
                 ),
             ),
             reductions=CastManaReductionIds(
