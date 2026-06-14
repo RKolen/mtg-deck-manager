@@ -14,6 +14,7 @@ from engine.abilities.keywords.casting.cascade import (
 from engine.abilities.keywords.casting.cleave import supports_cleave_copies
 from engine.abilities.keywords.casting.conspire import supports_conspire_copies
 from engine.abilities.keywords.casting.demonstrate import supports_demonstrate_copies
+from engine.abilities.keywords.casting.fuse import supports_fuse_copies
 from engine.abilities.keywords.casting.gravestorm import (
     gravestorm_copy_count,
     supports_gravestorm_copies,
@@ -54,6 +55,8 @@ def apply_post_cast_modifiers(
         logs.append(f"{card_info.name} + conspire copy")
     if _push_demonstrate_copy(game, player_idx, card, targets, context):
         logs.append(f"{card_info.name} + demonstrate copy")
+    if _push_fuse_copy(game, player_idx, card, targets, context):
+        logs.append(f"{card_info.name} + fuse copy")
     gravestorm = _push_gravestorm_copies(game, player_idx, card, targets, context)
     if gravestorm:
         logs.append(f"{card_info.name} + {gravestorm} gravestorm copy/copies")
@@ -167,6 +170,28 @@ def _push_demonstrate_copy(
     if not context.payment.demonstrate or not supports_demonstrate_copies(card_info):
         return False
     flags = SpellStackCopyFlags(demonstrate=True)
+    game.stack.push(spell_on_stack_from_context(
+        player_idx,
+        card,
+        list(targets),
+        context,
+        copy_flags=flags,
+    ))
+    return True
+
+
+def _push_fuse_copy(
+    game: GameState,
+    player_idx: int,
+    card: CardObject,
+    targets: list[Target],
+    context: SpellCastContext,
+) -> bool:
+    """Put one fuse copy on the stack above the spell that created it."""
+    card_info = require_card_info(card)
+    if not context.fuse or not supports_fuse_copies(card_info):
+        return False
+    flags = SpellStackCopyFlags(fuse=True)
     game.stack.push(spell_on_stack_from_context(
         player_idx,
         card,

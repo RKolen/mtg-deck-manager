@@ -32,6 +32,8 @@ class _PaidSacrificeCosts:
     paid_conspire: bool = False
     paid_bargain: bool = False
     paid_demonstrate: bool = False
+    paid_gift: bool = False
+    paid_fuse: bool = False
     paid_awaken: bool = False
 
 
@@ -79,6 +81,16 @@ class HandCastCostChoices:
     def paid_awaken(self) -> bool:
         """Whether awaken was paid."""
         return self.paid.paid_awaken
+
+    @property
+    def paid_gift(self) -> bool:
+        """Whether gift was paid."""
+        return self.paid.paid_gift
+
+    @property
+    def paid_fuse(self) -> bool:
+        """Whether fuse was paid."""
+        return self.paid.paid_fuse
 
 
 @dataclass(frozen=True)
@@ -203,6 +215,14 @@ class CastAnnounceOptions:
 
 
 @dataclass(frozen=True)
+class _HandCastExtras:
+    """Extra hand-cast options that do not fit payment flags."""
+
+    awaken_land_hand_idx: int | None = None
+    fuse: bool = False
+
+
+@dataclass(frozen=True)
 class SpellCastContext:
     """Options when placing a spell on the stack."""
 
@@ -212,7 +232,17 @@ class SpellCastContext:
     payment: SpellCastPayment = field(default_factory=SpellCastPayment)
     replicate_times: int = 0
     spree_mode_indices: tuple[int, ...] = ()
-    awaken_land_hand_idx: int | None = None
+    extras: _HandCastExtras = field(default_factory=_HandCastExtras)
+
+    @property
+    def awaken_land_hand_idx(self) -> int | None:
+        """Hand index of the land chosen for awaken."""
+        return self.extras.awaken_land_hand_idx
+
+    @property
+    def fuse(self) -> bool:
+        """Whether fuse was paid."""
+        return self.extras.fuse
 
 
 def spell_on_stack_from_context(

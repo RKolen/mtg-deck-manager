@@ -563,6 +563,16 @@ class SpellCastPayment:
         self.modes.sac.bargain = value
 
     @property
+    def gift(self) -> bool:
+        """True when gift was paid."""
+        return self.modes.sac.gift
+
+    @gift.setter
+    def gift(self, value: bool) -> None:
+        """Set gift flag."""
+        self.modes.sac.gift = value
+
+    @property
     def morph_face_down(self) -> bool:
         """True when cast face-down via morph."""
         return self.modes.morph_face_down
@@ -662,6 +672,8 @@ class SpellStackCopyFlags:
     cleave: bool = False
     conspire: bool = False
     demonstrate: bool = False
+    fuse: bool = False
+
 
     @property
     def storm(self) -> bool:

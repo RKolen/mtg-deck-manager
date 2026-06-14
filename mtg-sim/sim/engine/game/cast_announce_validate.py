@@ -44,6 +44,8 @@ from engine.abilities.keywords.casting.conspire import (
     normalize_paid_conspire,
 )
 from engine.abilities.keywords.casting.demonstrate import normalize_paid_demonstrate
+from engine.abilities.keywords.casting.fuse import normalize_paid_fuse
+from engine.abilities.keywords.casting.gift import normalize_paid_gift
 from engine.abilities.keywords.casting.awaken import (
     awaken_land_error,
     normalize_paid_awaken,
@@ -102,6 +104,7 @@ class _CopyOnCastFlags:
     cleave: bool = False
     conspire: bool = False
     demonstrate: bool = False
+    fuse: bool = False
     awaken: bool = False
 
 
@@ -222,6 +225,11 @@ class PaidCastModifiers:
         """Whether bargain was paid."""
         return self.sac.bargain
 
+    @property
+    def gift(self) -> bool:
+        """Whether gift was paid."""
+        return self.sac.gift
+
 
 @dataclass(frozen=True)
 class PaidAnnounceCast:
@@ -323,6 +331,7 @@ def _normalized_paid_flags(
                 cleave=normalize_cleave_cast(card_info, opts.alternate.cast_for_cleave),
                 conspire=normalize_paid_conspire(card_info, opts.costs.paid_conspire),
                 demonstrate=normalize_paid_demonstrate(card_info, opts.costs.paid_demonstrate),
+                fuse=normalize_paid_fuse(card_info, opts.costs.paid_fuse),
                 awaken=normalize_paid_awaken(card_info, opts.costs.paid_awaken),
             ),
             counts=_RepeatCostCounts(
@@ -346,6 +355,7 @@ def _normalized_paid_flags(
             ),
             casualty=normalize_paid_casualty(card_info, opts.costs.paid_casualty),
             bargain=normalize_paid_bargain(card_info, opts.costs.paid_bargain),
+            gift=normalize_paid_gift(card_info, opts.costs.paid_gift),
         ),
         conditions=_ConditionCastFlags(
             miracle=normalize_miracle_cast(card_info, opts.alternate.cast_for_miracle),
@@ -486,6 +496,8 @@ def validate_announce_cast(
             list(opts.modifiers.targeting.casualty_sacrifice_ids),
         ),
         lambda: _reject_keyword(opts.costs.paid_bargain, paid.bargain, name, "bargain"),
+        lambda: _reject_keyword(opts.costs.paid_gift, paid.sac.gift, name, "gift"),
+        lambda: _reject_keyword(opts.costs.paid_fuse, paid.copy_casts.fuse, name, "fuse"),
         lambda: bargain_sacrifice_error(
             ctx.zones,
             ctx.player_idx,

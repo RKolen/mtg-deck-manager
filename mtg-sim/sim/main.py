@@ -329,6 +329,8 @@ class GameActionRequest(BaseModel):
     paidConspire: bool = False
     paidBargain: bool = False
     paidDemonstrate: bool = False
+    paidGift: bool = False
+    paidFuse: bool = False
     paidAwaken: bool = False
     awakenLandHandIdx: int | None = None
     escalateExtraTargets: int = 0

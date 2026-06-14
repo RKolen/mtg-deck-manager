@@ -16,6 +16,7 @@ from engine.abilities.activated.bloodrush import can_bloodrush
 from engine.abilities.keywords.other.battle_cry import clear_battle_cry_counters
 from engine.abilities.keywords.other.boast import can_boast, clear_boast_turn_counters
 from engine.abilities.keywords.other.echo import resolve_echo_upkeep
+from engine.abilities.keywords.other.epic import resolve_epic_upkeep
 from engine.abilities.keywords.other.forecast import can_forecast
 from engine.abilities.keywords.other.bushido import clear_bushido_combat_markers
 from engine.abilities.keywords.other.craft import has_craft
@@ -801,6 +802,8 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
             self._tap_lands_for_mana,
         ):
             self._log('rules', 'echo', detail)
+        for detail in resolve_epic_upkeep(self.state, player_idx):
+            self._log('rules', 'epic', detail)
         self._tick_suspend_upkeep(player_idx)
 
 

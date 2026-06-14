@@ -95,6 +95,8 @@ def cast_announce_options(**kwargs: Any) -> CastAnnounceOptions:
                 paid_conspire=bool(flat.get("paid_conspire", False)),
                 paid_bargain=bool(flat.get("paid_bargain", False)),
                 paid_demonstrate=bool(flat.get("paid_demonstrate", False)),
+                paid_gift=bool(flat.get("paid_gift", False)),
+                paid_fuse=bool(flat.get("paid_fuse", False)),
                 paid_awaken=bool(flat.get("paid_awaken", False)),
             ),
             repeat=_RepeatCostChoices(

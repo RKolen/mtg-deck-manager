@@ -55,6 +55,8 @@ def _evasion_allows_block(blocker: Permanent, attacker: Permanent) -> bool:
     """Return False when evasion prevents this blocker from blocking the attacker."""
     if has_keyword(attacker, 'Flying'):
         return has_keyword(blocker, 'Flying') or has_keyword(blocker, 'Reach')
+    if has_keyword(attacker, 'Horsemanship'):
+        return has_keyword(blocker, 'Horsemanship')
     if has_keyword(attacker, 'Shadow'):
         return has_keyword(blocker, 'Shadow')
     if has_keyword(attacker, 'Fear') or has_keyword(attacker, 'Intimidate'):

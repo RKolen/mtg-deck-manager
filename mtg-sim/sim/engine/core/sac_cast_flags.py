@@ -14,3 +14,4 @@ class SacrificeCastFlags:
     mutate: bool = False
     casualty: bool = False
     bargain: bool = False
+    gift: bool = False

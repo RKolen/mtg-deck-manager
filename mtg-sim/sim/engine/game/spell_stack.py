@@ -9,6 +9,7 @@ from engine.abilities.keywords.casting.bargain import (
     bargain_draw_on_cast,
     sacrifice_for_bargain,
 )
+from engine.abilities.keywords.casting.gift import gift_opponent_draws
 from engine.abilities.keywords.casting.casualty import sacrifice_for_casualty
 from engine.abilities.keywords.casting import (
     can_cast_via_madness,
@@ -54,6 +55,7 @@ from engine.core.game_object import (
     _AlternateModes,
     _KeywordPays,
 )
+from engine.game.cast_context import _HandCastExtras
 from engine.game.helpers import (
     CastAnnounceOptions,
     SpellCastContext,
@@ -227,6 +229,7 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
                         mutate=mods.mutate,
                         casualty=mods.casualty,
                         bargain=mods.bargain,
+                        gift=mods.gift,
                     ),
                     morph_face_down=mods.morph,
                 ),
@@ -242,7 +245,10 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
             ),
             replicate_times=mods.replicate_times,
             spree_mode_indices=mods.spree_modes,
-            awaken_land_hand_idx=placement.opts.modifiers.reductions.awaken_land_hand_idx,
+            extras=_HandCastExtras(
+                awaken_land_hand_idx=placement.opts.modifiers.reductions.awaken_land_hand_idx,
+                fuse=mods.copy_casts.fuse,
+            ),
         )
         targets = self._put_spell_on_stack(
             player_idx=0,
@@ -261,6 +267,14 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
             drawn = self._draw_cards(0, 1)
             if drawn:
                 self._log("player", "draw", f"Bargain drew {require_card_info(drawn[0]).name}")
+        if gift_opponent_draws(placement.card_info, mods.gift):
+            drawn = self._draw_cards(1, 1)
+            if drawn:
+                self._log(
+                    "player",
+                    "draw",
+                    f"Gift drew {require_card_info(drawn[0]).name} for opponent",
+                )
         self.state.fire_spell_cast_triggers(placement.card, tuple(targets))
         for word_detail in apply_spell_hosted_ability_words(
             self.state, placement.card_info, 0
