@@ -49,6 +49,7 @@ _MODIFIER_KW_KEYS = frozenset({
     "assist_mana",
     "bargain_sacrifice_ids",
     "escalate_extra_targets",
+    "awaken_land_hand_idx",
 })
 
 
@@ -75,6 +76,7 @@ def _modifier_ids_from_kw(modifier_kw: dict[str, Any]) -> CastModifierIds:
             improvise_artifact_ids=_as_tuple(modifier_kw.get("improvise_artifact_ids", ())),
             sneak_land_hand_indices=_as_tuple(modifier_kw.get("sneak_land_hand_indices", ())),
             assist_mana=int(modifier_kw.get("assist_mana", 0)),
+            awaken_land_hand_idx=modifier_kw.get("awaken_land_hand_idx"),
         ),
     )
 
@@ -93,6 +95,7 @@ def cast_announce_options(**kwargs: Any) -> CastAnnounceOptions:
                 paid_conspire=bool(flat.get("paid_conspire", False)),
                 paid_bargain=bool(flat.get("paid_bargain", False)),
                 paid_demonstrate=bool(flat.get("paid_demonstrate", False)),
+                paid_awaken=bool(flat.get("paid_awaken", False)),
             ),
             repeat=_RepeatCostChoices(
                 kicker_times=int(flat.get("kicker_times", 0)),

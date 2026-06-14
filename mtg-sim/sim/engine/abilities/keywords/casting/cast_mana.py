@@ -46,6 +46,7 @@ from engine.abilities.keywords.casting.cleave import (
 )
 from engine.abilities.keywords.casting.conspire import conspire_extra_mana
 from engine.abilities.keywords.casting.escalate import escalate_extra_mana
+from engine.abilities.keywords.casting.awaken import awaken_mana_extra
 from engine.abilities.keywords.casting.dash import (
     dash_mana_needed,
     normalize_dash_cast,
@@ -146,6 +147,7 @@ class _TimingAvailability:
     freerunning_available: bool = False
     spectacle_available: bool = False
     escalate_extra_targets: int = 0
+    paid_awaken: bool = False
 
 
 @dataclass(frozen=True)
@@ -265,6 +267,7 @@ def resolve_announce_cast_mana(
     mana_needed += spree_extra_mana(card, mods.spree_mode_indices)
     mana_needed += conspire_extra_mana(card, timing.paid_conspire)
     mana_needed += escalate_extra_mana(card, timing.available.escalate_extra_targets)
+    mana_needed += awaken_mana_extra(card, timing.available.paid_awaken)
     if opts.zones is not None:
         mana_needed = max(
             0,

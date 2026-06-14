@@ -237,10 +237,12 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
                     cleave=mods.copy_casts.cleave,
                     conspire=mods.copy_casts.conspire,
                     demonstrate=mods.copy_casts.demonstrate,
+                    awaken=mods.copy_casts.awaken,
                 ),
             ),
             replicate_times=mods.replicate_times,
             spree_mode_indices=mods.spree_modes,
+            awaken_land_hand_idx=placement.opts.modifiers.reductions.awaken_land_hand_idx,
         )
         targets = self._put_spell_on_stack(
             player_idx=0,

@@ -32,6 +32,7 @@ class _PaidSacrificeCosts:
     paid_conspire: bool = False
     paid_bargain: bool = False
     paid_demonstrate: bool = False
+    paid_awaken: bool = False
 
 
 @dataclass(frozen=True)
@@ -73,6 +74,11 @@ class HandCastCostChoices:
     def paid_demonstrate(self) -> bool:
         """Whether demonstrate was paid."""
         return self.paid.paid_demonstrate
+
+    @property
+    def paid_awaken(self) -> bool:
+        """Whether awaken was paid."""
+        return self.paid.paid_awaken
 
 
 @dataclass(frozen=True)
@@ -176,6 +182,7 @@ class CastManaReductionIds:
     improvise_artifact_ids: tuple[int, ...] = ()
     sneak_land_hand_indices: tuple[int, ...] = ()
     assist_mana: int = 0
+    awaken_land_hand_idx: int | None = None
 
 
 @dataclass(frozen=True)
@@ -205,6 +212,7 @@ class SpellCastContext:
     payment: SpellCastPayment = field(default_factory=SpellCastPayment)
     replicate_times: int = 0
     spree_mode_indices: tuple[int, ...] = ()
+    awaken_land_hand_idx: int | None = None
 
 
 def spell_on_stack_from_context(
@@ -226,5 +234,6 @@ def spell_on_stack_from_context(
             alternate=context.alternate,
             payment=context.payment,
             copies=copy_flags or SpellStackCopyFlags(),
+            awaken_land_hand_idx=context.awaken_land_hand_idx,
         ),
     )

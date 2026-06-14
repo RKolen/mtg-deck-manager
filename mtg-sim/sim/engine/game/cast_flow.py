@@ -203,6 +203,7 @@ def cast_timing_for_announce(
             freerunning_available=state.players[controller_idx].combat_damage_dealt_this_turn,
             spectacle_available=spectacle_available(state, controller_idx),
             escalate_extra_targets=opts.modifiers.targeting.escalate_extra_targets,
+            paid_awaken=paid.modifiers.copy_casts.awaken,
         ),
     )
 

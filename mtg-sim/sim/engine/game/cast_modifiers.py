@@ -14,6 +14,10 @@ from engine.abilities.keywords.casting.cascade import (
 from engine.abilities.keywords.casting.cleave import supports_cleave_copies
 from engine.abilities.keywords.casting.conspire import supports_conspire_copies
 from engine.abilities.keywords.casting.demonstrate import supports_demonstrate_copies
+from engine.abilities.keywords.casting.gravestorm import (
+    gravestorm_copy_count,
+    supports_gravestorm_copies,
+)
 from engine.abilities.keywords.casting.replicate import supports_replicate_copies
 from engine.abilities.keywords.casting.storm import storm_copy_count, supports_storm_copies
 from engine.core.game_object import CardObject, SpellStackCopyFlags, Target, _SpellCopy
@@ -50,6 +54,9 @@ def apply_post_cast_modifiers(
         logs.append(f"{card_info.name} + conspire copy")
     if _push_demonstrate_copy(game, player_idx, card, targets, context):
         logs.append(f"{card_info.name} + demonstrate copy")
+    gravestorm = _push_gravestorm_copies(game, player_idx, card, targets, context)
+    if gravestorm:
+        logs.append(f"{card_info.name} + {gravestorm} gravestorm copy/copies")
     cascade_name = _push_cascade_cast(game, player_idx, card, targets)
     if cascade_name:
         logs.append(f"cascade cast {cascade_name}")
@@ -168,6 +175,30 @@ def _push_demonstrate_copy(
         copy_flags=flags,
     ))
     return True
+
+
+def _push_gravestorm_copies(
+    game: GameState,
+    player_idx: int,
+    card: CardObject,
+    targets: list[Target],
+    context: SpellCastContext,
+) -> int:
+    """Put gravestorm copies on the stack above the spell that created them."""
+    card_info = require_card_info(card)
+    if not supports_gravestorm_copies(card_info):
+        return 0
+    copies = gravestorm_copy_count(game.meta.deaths.permanents_died)
+    flags = SpellStackCopyFlags(copy_source=_SpellCopy(gravestorm=True))
+    for _ in range(copies):
+        game.stack.push(spell_on_stack_from_context(
+            player_idx,
+            card,
+            list(targets),
+            context,
+            copy_flags=flags,
+        ))
+    return copies
 
 
 def _push_casualty_copy(

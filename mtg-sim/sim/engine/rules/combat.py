@@ -10,6 +10,7 @@ from engine.abilities.keywords.other.bushido import (
     apply_bushido_when_engaged,
 )
 from engine.abilities.keywords.other.dethrone import apply_dethrone_on_combat_damage_to_player
+from engine.abilities.keywords.other.ingest import apply_ingest_on_player_damage
 from engine.abilities.keywords.other.renown import apply_renown_on_combat_damage_to_player
 from engine.core.game_object import Permanent, effective_power
 from engine.core.game_state import GameState
@@ -163,6 +164,12 @@ def _assign_combat_damage(
                 damaged_player_idx=context.defending_player_idx,
             )
             apply_renown_on_combat_damage_to_player(attacker, damage)
+            apply_ingest_on_player_damage(
+                context.game,
+                attacker,
+                damage,
+                context.defending_player_idx,
+            )
             apply_dethrone_on_combat_damage_to_player(
                 context.game,
                 attacker,
@@ -192,6 +199,12 @@ def _assign_combat_damage(
             damaged_player_idx=context.defending_player_idx,
         )
         apply_renown_on_combat_damage_to_player(attacker, player_damage)
+        apply_ingest_on_player_damage(
+            context.game,
+            attacker,
+            player_damage,
+            context.defending_player_idx,
+        )
         apply_dethrone_on_combat_damage_to_player(
             context.game,
             attacker,

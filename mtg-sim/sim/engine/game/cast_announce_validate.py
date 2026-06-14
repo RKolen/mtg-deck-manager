@@ -44,6 +44,10 @@ from engine.abilities.keywords.casting.conspire import (
     normalize_paid_conspire,
 )
 from engine.abilities.keywords.casting.demonstrate import normalize_paid_demonstrate
+from engine.abilities.keywords.casting.awaken import (
+    awaken_land_error,
+    normalize_paid_awaken,
+)
 from engine.abilities.keywords.casting.dash import normalize_dash_cast
 from engine.abilities.keywords.other.disguise import normalize_disguise_cast
 from engine.abilities.keywords.other.morph import normalize_morph_cast
@@ -98,6 +102,7 @@ class _CopyOnCastFlags:
     cleave: bool = False
     conspire: bool = False
     demonstrate: bool = False
+    awaken: bool = False
 
 
 @dataclass(frozen=True)
@@ -318,6 +323,7 @@ def _normalized_paid_flags(
                 cleave=normalize_cleave_cast(card_info, opts.alternate.cast_for_cleave),
                 conspire=normalize_paid_conspire(card_info, opts.costs.paid_conspire),
                 demonstrate=normalize_paid_demonstrate(card_info, opts.costs.paid_demonstrate),
+                awaken=normalize_paid_awaken(card_info, opts.costs.paid_awaken),
             ),
             counts=_RepeatCostCounts(
                 kicker_times=normalize_kicker_times(card_info, opts.costs.kicker_times),
@@ -492,6 +498,14 @@ def validate_announce_cast(
             if opts.modifiers.targeting.escalate_extra_targets > 0
             and not has_escalate(card_info)
             else None
+        ),
+        lambda: _reject_keyword(opts.costs.paid_awaken, paid.copy_casts.awaken, name, "awaken"),
+        lambda: awaken_land_error(
+            ctx.zones,
+            ctx.player_idx,
+            card_info,
+            opts.costs.paid_awaken,
+            opts.modifiers.reductions.awaken_land_hand_idx,
         ),
     ])
     if err:

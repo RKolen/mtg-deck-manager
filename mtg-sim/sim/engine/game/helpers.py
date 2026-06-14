@@ -28,6 +28,7 @@ from engine.abilities.keywords.casting.conspire import (
     has_conspire,
 )
 from engine.abilities.keywords.casting.demonstrate import has_demonstrate
+from engine.abilities.keywords.casting.awaken import has_awaken
 from engine.abilities.keywords.casting.escalate import has_escalate
 from engine.abilities.keywords.other.forecast import can_forecast, has_forecast
 from engine.abilities.keywords.casting.convoke import has_convoke
@@ -183,6 +184,7 @@ def card_to_client(
         "hasForecast": has_forecast(card),
         "hasConspire": has_conspire(card),
         "hasDemonstrate": has_demonstrate(card),
+        "hasAwaken": has_awaken(card),
         "conspireAvailable": (
             conspire_color_match(card, ctx.game.zones, controller_idx)
             if ctx.game is not None and has_conspire(card)

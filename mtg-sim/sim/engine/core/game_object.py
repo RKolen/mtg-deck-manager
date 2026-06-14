@@ -445,6 +445,7 @@ class _KeywordPays:
     cleave: bool = False
     conspire: bool = False
     demonstrate: bool = False
+    awaken: bool = False
 
 
 class SpellCastPayment:
@@ -631,6 +632,16 @@ class SpellCastPayment:
         """Set demonstrate flag."""
         self.keywords.demonstrate = value
 
+    @property
+    def awaken(self) -> bool:
+        """True when awaken was paid."""
+        return self.keywords.awaken
+
+    @awaken.setter
+    def awaken(self, value: bool) -> None:
+        """Set awaken flag."""
+        self.keywords.awaken = value
+
 
 @dataclass
 class _SpellCopy:
@@ -638,6 +649,7 @@ class _SpellCopy:
 
     storm: bool = False
     replicate: bool = False
+    gravestorm: bool = False
 
 
 @dataclass
@@ -679,6 +691,7 @@ class _SpellCasting:
     alternate: SpellAlternateCast = field(default_factory=SpellAlternateCast)
     payment: SpellCastPayment = field(default_factory=SpellCastPayment)
     copies: SpellStackCopyFlags = field(default_factory=SpellStackCopyFlags)
+    awaken_land_hand_idx: int | None = None
 
 
 @dataclass

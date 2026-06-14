@@ -793,6 +793,7 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
         player.revolt_this_turn = False
         player.permanents_entered_this_turn = 0
         self.state.creature_died_this_turn = False
+        self.state.meta.deaths.permanents_died = 0
         self._fire_step_triggers(Step.UPKEEP)
         for detail in resolve_echo_upkeep(
             self.state,

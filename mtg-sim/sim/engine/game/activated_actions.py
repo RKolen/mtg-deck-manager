@@ -21,6 +21,11 @@ from engine.abilities.keywords.other.boast import (
     boast_mana_needed,
     can_boast,
 )
+from engine.abilities.keywords.other.exhaust import (
+    can_use_exhaust_ability,
+    has_exhaust,
+    mark_exhaust_used,
+)
 from engine.abilities.keywords.other.forecast import can_forecast, forecast_draws_card
 from engine.abilities.keywords.other.encore import (
     apply_encore_from_graveyard,
@@ -239,12 +244,16 @@ class ActivatedActionsMixin(GameRuntimeMixin):
         is_attacking = permanent_uid in self.pending_attackers
         if not can_boast(perm, self.phase, is_attacking=is_attacking):
             return self._client_error("Cannot boast now")
+        if has_exhaust(perm) and not can_use_exhaust_ability(perm):
+            return self._client_error("Exhaust ability already used")
         mana_needed = boast_mana_needed(perm)
         if mana_needed and not self._tap_lands_for_mana(0, mana_needed):
             return self._client_error(f"Need {mana_needed} mana to boast")
         detail = apply_boast(perm, 0, self._draw_cards)
         if detail is None:
             return self._client_error("Boast failed")
+        if has_exhaust(perm):
+            mark_exhaust_used(perm)
         self._log("player", "boast", detail)
         return self.to_client()
 
@@ -324,12 +333,16 @@ class ActivatedActionsMixin(GameRuntimeMixin):
             return self._client_error("Permanent not found")
         if not can_outlast(perm, self.state, 0, self.phase):
             return self._client_error("Cannot outlast now")
+        if has_exhaust(perm) and not can_use_exhaust_ability(perm):
+            return self._client_error("Exhaust ability already used")
         mana_needed = outlast_mana_needed(perm)
         if mana_needed and not self._tap_lands_for_mana(0, mana_needed):
             return self._client_error(f"Need {mana_needed} mana to outlast")
         detail = apply_outlast(perm)
         if detail is None:
             return self._client_error("Outlast failed")
+        if has_exhaust(perm):
+            mark_exhaust_used(perm)
         self._log("player", "outlast", detail)
         return self.to_client()
 

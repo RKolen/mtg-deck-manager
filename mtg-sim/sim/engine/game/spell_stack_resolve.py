@@ -29,6 +29,7 @@ from engine.abilities.keywords.casting import (
     spree_mode_is_destroy,
     spree_modes,
 )
+from engine.abilities.keywords.casting.awaken import apply_awaken_on_resolve
 from engine.abilities.keywords.other.etb import apply_etb_other_abilities
 from engine.abilities.keywords.other.evoke import mark_evoked_cast
 from engine.abilities.keywords.other.register import register_permanent_other_keywords
@@ -125,9 +126,15 @@ class SpellResolveMixin(SpellStackPlacementMixin):
             skip_actions = frozenset({'Connive'})
         if handler is not None:
             primary = handler(spell)
+            awaken_detail = self._apply_awaken_on_resolve(spell)
             extras = self._spell_keyword_action_detail(spell, skip_actions=skip_actions)
+            parts = [primary]
+            if awaken_detail:
+                parts.append(awaken_detail)
             if extras:
-                return f"{primary}; {extras}"
+                parts.append(extras)
+            if len(parts) > 1:
+                return "; ".join(parts)
             return primary
         if keyword_actions_in_oracle(card_info.oracle_text):
             extras = self._spell_keyword_action_detail(spell)
@@ -136,6 +143,18 @@ class SpellResolveMixin(SpellStackPlacementMixin):
                 return f"{card_info.name}: {extras}"
         self._relocate_resolved_spell(spell, card)
         return f"Cast {card_info.name}"
+
+    def _apply_awaken_on_resolve(self, spell: SpellOnStack) -> str | None:
+        """Animate a land when awaken was paid."""
+        card = spell.source
+        if card is None or card.card_info is None or not spell.payment.awaken:
+            return None
+        return apply_awaken_on_resolve(
+            self.state.zones,
+            spell.controller_idx,
+            card.card_info,
+            spell.casting.awaken_land_hand_idx,
+        )
 
     def _apply_spree_mode(
         self,

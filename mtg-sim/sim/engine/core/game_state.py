@@ -20,9 +20,18 @@ from engine.core.turn_structure import TurnRunner
 from engine.core.turn_structure import Step
 from engine.core.zones import Zone, ZoneManager, ZoneMoveEvent
 from engine.abilities.keywords import enters_ready, has_persist, has_undying
-from engine.abilities.keywords.other.extort import apply_extort_on_spell_cast
 from engine.abilities.keywords.other.afterlife import apply_afterlife_on_die
 from engine.abilities.keywords.other.ascend import update_ascend_status
+from engine.abilities.keywords.other.champion import (
+    has_champion,
+    release_championed_creature,
+)
+from engine.abilities.keywords.other.extort import apply_extort_on_spell_cast
+from engine.abilities.keywords.other.haunt import (
+    apply_haunt_on_creature_death,
+    clear_haunt_on_leave_battlefield,
+    has_haunt,
+)
 from engine.abilities.keywords.other.modular import apply_modular_on_die
 from engine.rules.state_based import check_sbas
 from engine.rules.stack import Stack
@@ -168,13 +177,21 @@ class LogEntry:
 
 
 @dataclass
+class _DeathTurnFlags:
+    """Per-turn death counters for gravestorm and morbid."""
+
+    creature_died: bool = False
+    permanents_died: int = 0
+
+
+@dataclass
 class _GameMeta:
     """Auxiliary game-level state for one session."""
 
     trigger_registry: TriggerRegistry = field(default_factory=TriggerRegistry)
     log: list[LogEntry] = field(default_factory=list)
     winner: int | None = None
-    creature_died_this_turn: bool = False
+    deaths: _DeathTurnFlags = field(default_factory=_DeathTurnFlags)
 
 
 @dataclass
@@ -216,12 +233,12 @@ class GameState:
     @property
     def creature_died_this_turn(self) -> bool:
         """True when a creature died this turn."""
-        return self.meta.creature_died_this_turn
+        return self.meta.deaths.creature_died
 
     @creature_died_this_turn.setter
     def creature_died_this_turn(self, value: bool) -> None:
         """Set creature-died flag."""
-        self.meta.creature_died_this_turn = value
+        self.meta.deaths.creature_died = value
 
     def __post_init__(self) -> None:
         """Subscribe the trigger registry to zone movement events."""
@@ -276,22 +293,29 @@ class GameState:
                 self.log_event('rules', 'ascend', ascend_detail)
         if not isinstance(event.obj, Permanent):
             return
+        if event.from_zone == Zone.BATTLEFIELD:
+            self.players[event.obj.controller_idx].revolt_this_turn = True
+            clear_haunt_on_leave_battlefield(event.obj)
+            if has_champion(event.obj):
+                release_detail = release_championed_creature(self, event.obj)
+                if release_detail:
+                    self.log_event('rules', 'champion', release_detail)
         if (
             event.from_zone == Zone.BATTLEFIELD
             and event.to_zone == Zone.GRAVEYARD
         ):
+            self.meta.deaths.permanents_died += 1
             modular_detail = apply_modular_on_die(self, event.obj)
             if modular_detail:
                 self.log_event('rules', 'modular', modular_detail)
             afterlife_detail = apply_afterlife_on_die(self, event.obj)
             if afterlife_detail:
                 self.log_event('rules', 'afterlife', afterlife_detail)
-        if event.from_zone == Zone.BATTLEFIELD:
-            self.players[event.obj.controller_idx].revolt_this_turn = True
-            if (
-                event.to_zone == Zone.GRAVEYARD
-                and 'Creature' in event.obj.type_line
-            ):
+            if has_haunt(event.obj):
+                haunt_detail = apply_haunt_on_creature_death(self, event.obj)
+                if haunt_detail:
+                    self.log_event('rules', 'haunt', haunt_detail)
+            if 'Creature' in event.obj.type_line:
                 self.creature_died_this_turn = True
 
     def _handle_zone_move(self, event: ZoneMoveEvent) -> None:

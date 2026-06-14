@@ -41,6 +41,7 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
                 paid_conspire=req.paidConspire,
                 paid_bargain=req.paidBargain,
                 paid_demonstrate=req.paidDemonstrate,
+                paid_awaken=req.paidAwaken,
             ),
             repeat=_RepeatCostChoices(
                 kicker_times=req.kickerTimes,
@@ -83,6 +84,7 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
                 improvise_artifact_ids=improvise_ids,
                 sneak_land_hand_indices=tuple(req.sneakLandHandIndices),
                 assist_mana=req.assistMana,
+                awaken_land_hand_idx=req.awakenLandHandIdx,
             ),
         ),
     )

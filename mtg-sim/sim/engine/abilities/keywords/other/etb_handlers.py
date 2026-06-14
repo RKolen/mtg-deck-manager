@@ -18,6 +18,8 @@ from engine.abilities.keywords.other.encore import apply_encore_etb
 from engine.abilities.keywords.other.evoke import apply_evoke_on_etb
 from engine.abilities.keywords.other.fabricate import apply_fabricate_etb
 from engine.abilities.keywords.other.graft import apply_graft_etb
+from engine.abilities.keywords.other.champion import apply_champion_etb
+from engine.abilities.keywords.other.hideaway import apply_hideaway_etb
 from engine.abilities.keywords.other.living_weapon import (
     apply_living_weapon,
     has_living_weapon,
@@ -106,6 +108,14 @@ def _amplify_detail(game: GameState, permanent: Permanent) -> str | None:
     return apply_amplify_etb(game, permanent)
 
 
+def _champion_detail(game: GameState, permanent: Permanent) -> str | None:
+    return apply_champion_etb(game, permanent)
+
+
+def _hideaway_detail(game: GameState, permanent: Permanent) -> str | None:
+    return apply_hideaway_etb(game, permanent)
+
+
 ETB_DETAIL_PRODUCERS: tuple[EtbDetailFn, ...] = (
     _living_weapon_detail,
     _modular_detail,
@@ -125,4 +135,6 @@ ETB_DETAIL_PRODUCERS: tuple[EtbDetailFn, ...] = (
     _decayed_detail,
     _graft_detail,
     _amplify_detail,
+    _champion_detail,
+    _hideaway_detail,
 )
