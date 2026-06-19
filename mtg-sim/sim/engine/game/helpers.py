@@ -34,6 +34,7 @@ from engine.abilities.keywords.casting.awaken import has_awaken
 from engine.abilities.keywords.casting.for_mirrodin import has_for_mirrodin
 from engine.abilities.keywords.casting.impending import has_impending
 from engine.abilities.keywords.casting.offering import has_offering
+from engine.abilities.keywords.casting.ripple import has_ripple
 from engine.abilities.keywords.casting.escalate import has_escalate
 from engine.abilities.keywords.other.forecast import can_forecast, has_forecast
 from engine.abilities.keywords.casting.convoke import has_convoke
@@ -196,6 +197,7 @@ def card_to_client(
         "hasOffering": has_offering(card),
         "hasImpending": has_impending(card),
         "hasForMirrodin": has_for_mirrodin(card),
+        "hasRipple": has_ripple(card),
         "conspireAvailable": (
             conspire_color_match(card, ctx.game.zones, controller_idx)
             if ctx.game is not None and has_conspire(card)

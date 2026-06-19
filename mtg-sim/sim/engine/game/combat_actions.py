@@ -16,6 +16,10 @@ from engine.abilities.keywords.other.annihilator import apply_annihilator_on_att
 from engine.abilities.keywords.other.exalted import apply_exalted_on_attack
 from engine.abilities.keywords.other.frenzy import apply_frenzy_on_unblocked_attack
 from engine.abilities.keywords.other.mentor import apply_mentor_on_attack
+from engine.abilities.keywords.other.living_metal import (
+    activate_living_metal_for_combat,
+    deactivate_living_metal_after_combat,
+)
 from engine.abilities.keywords.other.provoke import assign_provoke_blocks
 from engine.abilities.keywords.other.rampage import apply_rampage_on_block
 from engine.core.turn_structure import Step
@@ -53,6 +57,8 @@ class CombatActionsMixin(ActivatedActionsMixin):
         """Move from first main phase to declare attackers."""
         assert self.phase == "main1"
         self._fire_step_triggers(Step.BEGIN_COMBAT)
+        for detail in activate_living_metal_for_combat(self.state, 0):
+            self._log('rules', 'living_metal', detail)
         self.phase = "attack"
         self.pending_attackers = []
         return self.to_client()
@@ -98,6 +104,8 @@ class CombatActionsMixin(ActivatedActionsMixin):
                     self._draw_cards(perm.controller_idx, 1)
         if result.damage_to_player:
             self._log("player", "attack", f"Attacked for {result.damage_to_player} damage")
+        for detail in deactivate_living_metal_after_combat(self.state, 0):
+            self._log('rules', 'living_metal', detail)
         self.pending_attackers = []
         self.phase = "main2"
         self._check_game_over()
@@ -106,6 +114,8 @@ class CombatActionsMixin(ActivatedActionsMixin):
     def action_skip_attack(self) -> dict:
         """Skip combat and move to the second main phase."""
         assert self.phase == "attack"
+        for detail in deactivate_living_metal_after_combat(self.state, 0):
+            self._log('rules', 'living_metal', detail)
         self.pending_attackers = []
         self._log("player", "skip_attack", "Skipped combat")
         self.phase = "main2"

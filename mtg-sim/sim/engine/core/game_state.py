@@ -27,6 +27,7 @@ from engine.abilities.keywords.other.champion import (
     release_championed_creature,
 )
 from engine.abilities.keywords.other.extort import apply_extort_on_spell_cast
+from engine.abilities.keywords.other.intensity import apply_intensity_on_spell_cast
 from engine.abilities.keywords.other.haunt import (
     apply_haunt_on_creature_death,
     clear_haunt_on_leave_battlefield,
@@ -377,6 +378,9 @@ class GameState:
         extort_detail = apply_extort_on_spell_cast(self, spell.controller_idx)
         if extort_detail:
             self.log_event('rules', 'extort', extort_detail)
+        card_info = spell.card_info
+        for detail in apply_intensity_on_spell_cast(self, spell.controller_idx, card_info):
+            self.log_event('rules', 'intensity', detail)
 
     def mark_player_was_dealt_damage(self, player_idx: int) -> None:
         """Record that a player was dealt damage this turn (Raid and similar)."""

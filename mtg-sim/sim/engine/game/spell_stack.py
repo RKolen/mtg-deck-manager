@@ -10,6 +10,7 @@ from engine.abilities.keywords.casting.bargain import (
     sacrifice_for_bargain,
 )
 from engine.abilities.keywords.casting.gift import gift_opponent_draws
+from engine.abilities.keywords.casting.ripple import apply_ripple_on_cast
 from engine.abilities.keywords.casting.casualty import sacrifice_for_casualty
 from engine.abilities.keywords.casting.for_mirrodin import sacrifice_for_for_mirrodin
 from engine.abilities.keywords.casting.offering import sacrifice_for_offering
@@ -297,6 +298,9 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
                     f"Gift drew {require_card_info(drawn[0]).name} for opponent",
                 )
         self.state.fire_spell_cast_triggers(placement.card, tuple(targets))
+        ripple_detail = apply_ripple_on_cast(self.state, 0, placement.card_info)
+        if ripple_detail:
+            self._log('rules', 'ripple', ripple_detail)
         for word_detail in apply_spell_hosted_ability_words(
             self.state, placement.card_info, 0
         ):

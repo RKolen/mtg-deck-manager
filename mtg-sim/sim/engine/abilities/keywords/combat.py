@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING
 
 from engine.abilities.keywords._core import has_keyword, is_artifact_creature, is_creature
 from engine.abilities.keywords.other.decayed import blocks_attack
+from engine.abilities.keywords.other.living_metal import is_living_metal_creature
+from engine.abilities.keywords.other.phasing import is_phased_out
 from engine.abilities.keywords.other.prowl import prowl_unblockable
 from engine.abilities.keywords.other.skulk import skulk_allows_block
 from engine.abilities.keywords.registry import detect_keywords
@@ -38,8 +40,15 @@ def _is_awakened_creature(perm: Permanent) -> bool:
 
 def can_attack(perm: Permanent) -> bool:
     """Return whether a permanent can be declared as an attacker."""
+    if is_phased_out(perm):
+        return False
     return (
-        (is_creature(perm) or _is_crewed_vehicle(perm) or _is_awakened_creature(perm))
+        (
+            is_creature(perm)
+            or _is_crewed_vehicle(perm)
+            or _is_awakened_creature(perm)
+            or is_living_metal_creature(perm)
+        )
         and not perm.tapped
         and not perm.sick
         and not has_keyword(perm, 'Defender')
@@ -49,7 +58,7 @@ def can_attack(perm: Permanent) -> bool:
 
 def can_block(perm: Permanent) -> bool:
     """Return whether a permanent can be declared as a blocker."""
-    if not is_creature(perm) or perm.tapped:
+    if is_phased_out(perm) or not is_creature(perm) or perm.tapped:
         return False
     return perm.counters.get('unleash_no_block', 0) <= 0
 

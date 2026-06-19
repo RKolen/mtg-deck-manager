@@ -21,6 +21,8 @@ from engine.abilities.keywords.other.unleash import apply_unleash_etb
 from engine.abilities.keywords.other.vanishing import apply_vanishing_etb
 from engine.abilities.keywords.other.tribute import apply_tribute_etb
 from engine.abilities.keywords.other.soulshift import apply_soulshift_etb
+from engine.abilities.keywords.other.ravenous import apply_ravenous_etb
+from engine.abilities.keywords.other.soulbond import apply_soulbond_etb
 from engine.abilities.keywords.other.encore import apply_encore_etb
 from engine.abilities.keywords.other.evoke import apply_evoke_on_etb
 from engine.abilities.keywords.other.fabricate import apply_fabricate_etb
@@ -108,6 +110,14 @@ def _soulshift_detail(game: GameState, permanent: Permanent) -> str | None:
     return apply_soulshift_etb(game, permanent)
 
 
+def _ravenous_detail(game: GameState, permanent: Permanent) -> str | None:
+    return apply_ravenous_etb(game, permanent)
+
+
+def _soulbond_detail(game: GameState, permanent: Permanent) -> str | None:
+    return apply_soulbond_etb(game, permanent)
+
+
 def _augment_detail(game: GameState, permanent: Permanent) -> str | None:
     return apply_augment_etb(game.zones, permanent, game.zones.battlefield)
 
@@ -173,6 +183,8 @@ ETB_DETAIL_PRODUCERS: tuple[EtbDetailFn, ...] = (
     _vanishing_detail,
     _tribute_detail,
     _soulshift_detail,
+    _ravenous_detail,
+    _soulbond_detail,
     _augment_detail,
     _riot_detail,
     _encore_detail,
