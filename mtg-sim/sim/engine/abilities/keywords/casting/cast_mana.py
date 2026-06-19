@@ -36,6 +36,10 @@ from engine.abilities.keywords.casting.spectacle import (
     normalize_spectacle_cast,
     spectacle_mana_needed,
 )
+from engine.abilities.keywords.casting.surge import (
+    normalize_surge_cast,
+    surge_mana_needed,
+)
 from engine.abilities.keywords.casting.blitz import (
     blitz_mana_needed,
     normalize_blitz_cast,
@@ -154,9 +158,18 @@ class _TimingAvailability:
 
     freerunning_available: bool = False
     spectacle_available: bool = False
+    surge_available: bool = False
     escalate_extra_targets: int = 0
     paid_awaken: bool = False
     paid_impending: bool = False
+
+
+@dataclass(frozen=True)
+class _OpponentDamageCasts:
+    """Alternate costs gated on opponent damage or life loss."""
+
+    spectacle: bool = False
+    surge: bool = False
 
 
 @dataclass(frozen=True)
@@ -165,11 +178,21 @@ class CastManaTiming:
 
     cast_for_miracle: bool = False
     cast_for_freerunning: bool = False
-    cast_for_spectacle: bool = False
+    opponent_damage: _OpponentDamageCasts = field(default_factory=_OpponentDamageCasts)
     cast_for_cleave: bool = False
     cast_for_morph: bool = False
     paid_conspire: bool = False
     available: _TimingAvailability = field(default_factory=_TimingAvailability)
+
+    @property
+    def cast_for_spectacle(self) -> bool:
+        """Whether spectacle was announced."""
+        return self.opponent_damage.spectacle
+
+    @property
+    def cast_for_surge(self) -> bool:
+        """Whether surge was announced."""
+        return self.opponent_damage.surge
 
     @property
     def freerunning_available(self) -> bool:
@@ -180,6 +203,11 @@ class CastManaTiming:
     def spectacle_available(self) -> bool:
         """Whether spectacle is available."""
         return self.available.spectacle_available
+
+    @property
+    def surge_available(self) -> bool:
+        """Whether surge is available."""
+        return self.available.surge_available
 
 
 @dataclass(frozen=True)
@@ -210,6 +238,10 @@ def _resolve_timing_alternate_mana(
         card, timing.cast_for_spectacle, available=timing.spectacle_available
     ):
         return spectacle_mana_needed(card)
+    if normalize_surge_cast(
+        card, timing.cast_for_surge, available=timing.surge_available
+    ):
+        return surge_mana_needed(card)
     if normalize_cleave_cast(card, timing.cast_for_cleave):
         return cleave_mana_needed(card)
     if normalize_freerunning_cast(card, timing.cast_for_freerunning, timing.freerunning_available):

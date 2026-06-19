@@ -353,6 +353,7 @@ class GameActionRequest(BaseModel):
     sneakLandHandIndices: list[int] = []
     castForFreerunning: bool = False
     castForSpectacle: bool = False
+    castForSurge: bool = False
     castForMorph: bool = False
     castForDisguise: bool = False
     castForDash: bool = False

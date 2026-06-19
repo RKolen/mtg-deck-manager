@@ -31,6 +31,11 @@ from engine.abilities.keywords.casting.spectacle import (
     normalize_spectacle_cast,
     spectacle_available,
 )
+from engine.abilities.keywords.casting.surge import (
+    has_surge,
+    normalize_surge_cast,
+    surge_available,
+)
 from engine.abilities.keywords.casting.bargain import (
     bargain_sacrifice_error,
     normalize_bargain_sacrifice_id,
@@ -99,6 +104,7 @@ class _ConditionCastFlags:
     miracle: bool = False
     freerunning: bool = False
     spectacle: bool = False
+    surge: bool = False
 
 
 @dataclass(frozen=True)
@@ -392,6 +398,11 @@ def _normalized_paid_flags(
                 opts.alternate.cast_for_spectacle,
                 available=spectacle_available(game, player_idx),
             ),
+            surge=normalize_surge_cast(
+                card_info,
+                opts.alternate.cast_for_surge,
+                available=surge_available(game, player_idx),
+            ),
         ),
     )
 
@@ -448,6 +459,19 @@ def validate_announce_cast(
             if opts.alternate.cast_for_spectacle
             and has_spectacle(card_info)
             and not spectacle_available(ctx.game, ctx.player_idx)
+            else None
+        ),
+        lambda: _reject_keyword(
+            opts.alternate.cast_for_surge,
+            paid.conditions.surge,
+            name,
+            "surge",
+        ),
+        lambda: (
+            "Surge requires an opponent to have been dealt damage this turn"
+            if opts.alternate.cast_for_surge
+            and has_surge(card_info)
+            and not surge_available(ctx.game, ctx.player_idx)
             else None
         ),
         lambda: _reject_keyword(opts.alternate.cast_for_morph, paid.morph, name, "morph"),

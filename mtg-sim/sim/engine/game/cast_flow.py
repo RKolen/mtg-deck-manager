@@ -13,10 +13,12 @@ from engine.abilities.keywords.casting.cast_mana import (
     CastManaModifiers,
     CastManaTiming,
     _FlatBoolMods,
+    _OpponentDamageCasts,
     _SacManaModifiers,
     _TimingAvailability,
 )
 from engine.abilities.keywords.casting.spectacle import spectacle_available
+from engine.abilities.keywords.casting.surge import surge_available
 from engine.core.game_state import GameState
 from engine.game.cast_announce_validate import PaidAnnounceCast
 from engine.game.cast_context import CastAnnounceOptions, SpellCastContext
@@ -196,13 +198,17 @@ def cast_timing_for_announce(
     return CastManaTiming(
         cast_for_miracle=paid.modifiers.miracle,
         cast_for_freerunning=paid.modifiers.freerunning,
-        cast_for_spectacle=paid.modifiers.spectacle,
+        opponent_damage=_OpponentDamageCasts(
+            spectacle=paid.modifiers.spectacle,
+            surge=paid.modifiers.conditions.surge,
+        ),
         cast_for_cleave=paid.modifiers.copy_casts.cleave,
         cast_for_morph=paid.modifiers.morph,
         paid_conspire=paid.modifiers.copy_casts.conspire,
         available=_TimingAvailability(
             freerunning_available=state.players[controller_idx].combat_damage_dealt_this_turn,
             spectacle_available=spectacle_available(state, controller_idx),
+            surge_available=surge_available(state, controller_idx),
             escalate_extra_targets=opts.modifiers.targeting.escalate_extra_targets,
             paid_awaken=paid.modifiers.copy_casts.awaken,
             paid_impending=paid.modifiers.copy_casts.impending,

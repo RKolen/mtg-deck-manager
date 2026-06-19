@@ -47,6 +47,7 @@ from engine.abilities.keywords.casting.embalm import has_embalm
 from engine.abilities.keywords.casting.freerunning import has_freerunning
 from engine.abilities.keywords.casting.sneak import has_sneak
 from engine.abilities.keywords.casting.spectacle import has_spectacle, spectacle_available
+from engine.abilities.keywords.casting.surge import has_surge, surge_available
 from engine.abilities.keywords.other.disguise import has_disguise
 from engine.abilities.keywords.other.morph import has_morph
 from engine.abilities.keywords.other.ninjutsu import (
@@ -207,6 +208,12 @@ def card_to_client(
         "spectacleAvailable": (
             spectacle_available(ctx.game, controller_idx)
             if ctx.game is not None and has_spectacle(card)
+            else False
+        ),
+        "hasSurge": has_surge(card),
+        "surgeAvailable": (
+            surge_available(ctx.game, controller_idx)
+            if ctx.game is not None and has_surge(card)
             else False
         ),
         "hasMorph": has_morph(card) and card.is_creature,

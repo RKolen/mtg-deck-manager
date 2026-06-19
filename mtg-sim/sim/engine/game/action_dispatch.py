@@ -67,6 +67,7 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
                 cast_for_miracle=req.castForMiracle,
                 cast_for_freerunning=req.castForFreerunning,
                 cast_for_spectacle=req.castForSpectacle,
+                cast_for_surge=req.castForSurge,
             ),
             face=FaceAlternateCastFlags(
                 cast_for_morph=req.castForMorph,

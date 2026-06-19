@@ -125,6 +125,7 @@ def cast_announce_options(**kwargs: Any) -> CastAnnounceOptions:
                 cast_for_miracle=bool(flat.get("cast_for_miracle", False)),
                 cast_for_freerunning=bool(flat.get("cast_for_freerunning", False)),
                 cast_for_spectacle=bool(flat.get("cast_for_spectacle", False)),
+                cast_for_surge=bool(flat.get("cast_for_surge", False)),
             ),
             face=FaceAlternateCastFlags(
                 cast_for_morph=bool(flat.get("cast_for_morph", False)),

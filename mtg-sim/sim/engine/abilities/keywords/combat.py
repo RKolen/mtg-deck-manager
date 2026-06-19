@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from engine.abilities.keywords._core import has_keyword, is_artifact_creature, is_creature
 from engine.abilities.keywords.other.decayed import blocks_attack
 from engine.abilities.keywords.other.prowl import prowl_unblockable
+from engine.abilities.keywords.other.skulk import skulk_allows_block
 from engine.abilities.keywords.registry import detect_keywords
 
 if TYPE_CHECKING:
@@ -48,7 +49,9 @@ def can_attack(perm: Permanent) -> bool:
 
 def can_block(perm: Permanent) -> bool:
     """Return whether a permanent can be declared as a blocker."""
-    return is_creature(perm) and not perm.tapped
+    if not is_creature(perm) or perm.tapped:
+        return False
+    return perm.counters.get('unleash_no_block', 0) <= 0
 
 
 def _evasion_allows_block(blocker: Permanent, attacker: Permanent) -> bool:
@@ -61,6 +64,8 @@ def _evasion_allows_block(blocker: Permanent, attacker: Permanent) -> bool:
         return has_keyword(blocker, 'Shadow')
     if has_keyword(attacker, 'Fear') or has_keyword(attacker, 'Intimidate'):
         return is_artifact_creature(blocker)
+    if not skulk_allows_block(blocker, attacker):
+        return False
     return True
 
 

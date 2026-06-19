@@ -16,6 +16,7 @@ from engine.abilities.keywords.other.annihilator import apply_annihilator_on_att
 from engine.abilities.keywords.other.exalted import apply_exalted_on_attack
 from engine.abilities.keywords.other.frenzy import apply_frenzy_on_unblocked_attack
 from engine.abilities.keywords.other.mentor import apply_mentor_on_attack
+from engine.abilities.keywords.other.rampage import apply_rampage_on_block
 from engine.core.turn_structure import Step
 from engine.game.activated_actions import ActivatedActionsMixin
 from engine.game.helpers import perm_names
@@ -268,6 +269,7 @@ class CombatActionsMixin(ActivatedActionsMixin):
 
     def _fire_block_triggers(self) -> None:
         """Put declared-blocker triggers on the stack and resolve them."""
+        blockers_by_attacker: dict[str, list] = {}
         for blocker_uid, attacker_uid in self.pending_blockers.items():
             blocker = self._find_permanent(blocker_uid)
             attacker = self._find_permanent(attacker_uid)
@@ -276,6 +278,13 @@ class CombatActionsMixin(ActivatedActionsMixin):
                 if flank_detail:
                     self._log('rules', 'flanking', flank_detail)
                 self.state.fire_block_triggers(blocker, attacker)
+                blockers_by_attacker.setdefault(attacker_uid, []).append(blocker)
+        for attacker_uid, blockers in blockers_by_attacker.items():
+            attacker = self._find_permanent(attacker_uid)
+            if attacker is not None:
+                rampage_detail = apply_rampage_on_block(attacker, blockers)
+                if rampage_detail:
+                    self._log('rules', 'rampage', rampage_detail)
         self._auto_pass_stack()
 
     def _check_game_over(self) -> bool:

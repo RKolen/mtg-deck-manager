@@ -6,6 +6,7 @@ from engine.abilities.keywords.casting.cast_mana import (
     AnnounceCastManaOptions,
     CastManaModifiers,
     CastManaTiming,
+    _OpponentDamageCasts,
     _TimingAvailability,
     resolve_announce_cast_mana,
 )
@@ -151,7 +152,7 @@ def test_spectacle_and_morph_announce_mana():
         spec_card,
         AnnounceCastManaOptions(
             timing=CastManaTiming(
-                cast_for_spectacle=True,
+                opponent_damage=_OpponentDamageCasts(spectacle=True),
                 available=_TimingAvailability(spectacle_available=True),
             ),
         ),

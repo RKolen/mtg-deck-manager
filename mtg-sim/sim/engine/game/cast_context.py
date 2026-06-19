@@ -119,6 +119,7 @@ class _CostConditionAlts:
     cast_for_miracle: bool = False
     cast_for_freerunning: bool = False
     cast_for_spectacle: bool = False
+    cast_for_surge: bool = False
 
 
 @dataclass(frozen=True)
@@ -147,6 +148,11 @@ class HandAlternateCastChoices:
     def cast_for_spectacle(self) -> bool:
         """Whether this cast uses spectacle."""
         return self.conditions.cast_for_spectacle
+
+    @property
+    def cast_for_surge(self) -> bool:
+        """Whether this cast uses surge."""
+        return self.conditions.cast_for_surge
 
     @property
     def cast_for_morph(self) -> bool:
