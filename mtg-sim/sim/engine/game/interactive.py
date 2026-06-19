@@ -19,6 +19,8 @@ from engine.abilities.keywords.other.echo import resolve_echo_upkeep
 from engine.abilities.keywords.other.epic import resolve_epic_upkeep
 from engine.abilities.keywords.other.fading import resolve_fading_upkeep
 from engine.abilities.keywords.other.cumulative_upkeep import resolve_cumulative_upkeep
+from engine.abilities.keywords.casting.rebound import resolve_rebound_upkeep
+from engine.abilities.keywords.other.recover import resolve_recover_upkeep
 from engine.abilities.keywords.other.vanishing import resolve_vanishing_upkeep
 from engine.abilities.keywords.other.forecast import can_forecast
 from engine.abilities.keywords.other.bushido import clear_bushido_combat_markers
@@ -817,6 +819,10 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
             self._log('rules', 'cumulative_upkeep', detail)
         for detail in resolve_vanishing_upkeep(self.state, player_idx):
             self._log('rules', 'vanishing', detail)
+        for detail in resolve_rebound_upkeep(self.state.zones, player_idx):
+            self._log('rules', 'rebound', detail)
+        for detail in resolve_recover_upkeep(self.state, player_idx):
+            self._log('rules', 'recover', detail)
         self._tick_suspend_upkeep(player_idx)
 
 

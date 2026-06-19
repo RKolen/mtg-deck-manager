@@ -16,6 +16,7 @@ from engine.abilities.keywords.other.annihilator import apply_annihilator_on_att
 from engine.abilities.keywords.other.exalted import apply_exalted_on_attack
 from engine.abilities.keywords.other.frenzy import apply_frenzy_on_unblocked_attack
 from engine.abilities.keywords.other.mentor import apply_mentor_on_attack
+from engine.abilities.keywords.other.provoke import assign_provoke_blocks
 from engine.abilities.keywords.other.rampage import apply_rampage_on_block
 from engine.core.turn_structure import Step
 from engine.game.activated_actions import ActivatedActionsMixin
@@ -134,6 +135,13 @@ class CombatActionsMixin(ActivatedActionsMixin):
     def action_confirm_blocks(self) -> dict:
         """Resolve opponent combat after blocker assignment."""
         assert self.phase == "declare_blockers"
+        for detail in assign_provoke_blocks(
+            self.state,
+            self.pending_blockers,
+            self.pending_opp_attackers,
+            defending_player_idx=0,
+        ):
+            self._log('rules', 'provoke', detail)
         self._fire_block_triggers()
         self._resolve_opponent_combat()
         self._finish_opponent_turn()

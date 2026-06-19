@@ -19,6 +19,10 @@ from engine.game._hand_card import (
     graveyard_card_or_error,
     hand_card_or_error,
 )
+from engine.abilities.keywords.casting.rebound import (
+    exile_for_rebound,
+    should_exile_for_rebound,
+)
 from engine.game.helpers import (
     HandCastContext,
     card_to_client,
@@ -280,7 +284,13 @@ class GameRuntimeMixin:
         """Exile alt-cast spells, return buyback spells to hand, else graveyard."""
         if spell_is_ephemeral_copy(spell):
             return
-        if spell_exiles_from_graveyard_cast(spell):
+        card_info = card.card_info
+        if (
+            card_info is not None
+            and should_exile_for_rebound(spell, card_info)
+        ):
+            exile_for_rebound(self.state.zones, card)
+        elif spell_exiles_from_graveyard_cast(spell):
             self.state.zones.player_zones[card.owner_idx].exile.append(card)
         elif spell_returns_to_hand_on_resolve(spell):
             self._zones(card.owner_idx).hand.append(card)
