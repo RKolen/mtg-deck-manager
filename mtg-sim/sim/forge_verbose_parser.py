@@ -46,6 +46,8 @@ class _ForgeVerboseParser:
     _PILOT_LEGACY_ACTIVE = re.compile(r"^\[Pilot\] (Ai\(\d+\)-[^:]+): active$")
     _PILOT_UNTAGGED_ACTIVE = re.compile(r"^\[Pilot\] active$")
     _PILOT_MULLIGAN_CHOICE = re.compile(r"^mulligan: (Keep|Mulligan)\b", re.I)
+    _PILOT_MULLIGAN_BOTTOM = re.compile(r"^mulligan-bottom:\s*(.+?)(?:\s+—\s+.*)?$", re.I)
+    _PILOT_OPENING_HAND = re.compile(r"^opening-hand:\s*(.+)$", re.I)
     _PILOT_SPELL = re.compile(
         r"^(?:\[Pilot\] (?:Ai\(\d+\)-[^:]+): )?T(\d+) spell: (.+?)(?: — (.+))?$"
     )
@@ -117,6 +119,9 @@ class _ForgeVerboseParser:
         self._results: list[SimResult] = []
         self._st = _GameState()
         self._mull_pending = [0, 0]
+        self._mull_bottomed: list[list[str]] = [[], []]
+        # Kept opening hand per side (0=player, 1=opponent), pre-London-bottom.
+        self._opening_hand: list[list[str]] = [[], []]
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -165,13 +170,19 @@ class _ForgeVerboseParser:
             [c for c, _ in self._st.extras.opp_dmg.most_common(5)] if winner == 1 else []
         )
         final_turn = self._st.meta.turn_num or self._st.meta.game_turn
+        # Player opening hand: the kept hand minus any London-bottomed cards
+        # (subtraction is order-independent — a bottomed card not present is skipped).
+        opening_hand = list(self._opening_hand[0])
+        for bottomed in self._mull_bottomed[0]:
+            if bottomed in opening_hand:
+                opening_hand.remove(bottomed)
         log = GameLog(
             setup=GameLogSetup(game_index=game_num - 1, on_the_play=on_play),
             mulligans=GameLogMulligans(
                 player=self._st.mulls[0],
                 opponent=self._st.mulls[1],
             ),
-            player_opening_hand=[],
+            player_opening_hand=opening_hand,
             turns=list(self._st.turn_events),
             outcome=GameLogOutcome(
                 winner=winner,
@@ -202,6 +213,8 @@ class _ForgeVerboseParser:
         ))
         self._st = _GameState()
         self._mull_pending = [0, 0]
+        self._mull_bottomed = [[], []]
+        self._opening_hand = [[], []]
 
     # ------------------------------------------------------------------
     # Per-prefix handlers (return True when the line was consumed)
@@ -216,10 +229,22 @@ class _ForgeVerboseParser:
         return bool(self._MULLIGAN.match(s))
 
     def _record_pilot_mulligan(self, side: int | None, detail: str) -> None:
-        """Update mulligan counts from a pilot keep/mulligan decision."""
+        """Update mulligan counts, bottomed cards, and opening hand from a pilot
+        mulligan/opening-hand line."""
         if side is None:
             return
-        match = self._PILOT_MULLIGAN_CHOICE.match(detail.strip())
+        detail = detail.strip()
+        opening = self._PILOT_OPENING_HAND.match(detail)
+        if opening:
+            self._opening_hand[side] = [
+                card.strip() for card in opening.group(1).split(" | ") if card.strip()
+            ]
+            return
+        bottom = self._PILOT_MULLIGAN_BOTTOM.match(detail)
+        if bottom:
+            self._mull_bottomed[side].append(bottom.group(1).strip())
+            return
+        match = self._PILOT_MULLIGAN_CHOICE.match(detail)
         if not match:
             return
         choice = match.group(1).lower()
