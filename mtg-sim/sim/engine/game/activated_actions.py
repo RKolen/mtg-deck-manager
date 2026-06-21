@@ -59,6 +59,23 @@ from engine.abilities.keywords.other.outlast import (
     can_outlast,
     outlast_mana_needed,
 )
+from engine.abilities.keywords.other.transmute import (
+    apply_transmute,
+    can_transmute,
+    transmute_mana_needed,
+)
+from engine.abilities.keywords.other.transfigure import (
+    apply_transfigure,
+    can_transfigure,
+    transfigure_mana_needed,
+)
+from engine.abilities.keywords.other.reconfigure import apply_reconfigure, can_reconfigure
+from engine.abilities.keywords.other.station import (
+    apply_station,
+    can_station,
+    station_cost,
+    station_power_error,
+)
 from engine.abilities.keywords.other.ninjutsu import (
     apply_ninjutsu,
     can_ninjutsu,
@@ -76,7 +93,7 @@ from engine.game.helpers import require_card_info
 from engine.game.runtime import GameRuntimeMixin
 
 
-class ActivatedActionsMixin(GameRuntimeMixin):
+class ActivatedActionsMixin(GameRuntimeMixin):  # pylint: disable=too-many-public-methods
     """Cycling, channel, crew, unearth, level up, and permanent activations."""
 
     def _resolve_equip_activation(
@@ -346,6 +363,51 @@ class ActivatedActionsMixin(GameRuntimeMixin):
         self._log("player", "outlast", detail)
         return self.to_client()
 
+    def action_transmute(self, permanent_uid: str) -> dict:
+        """Activate transmute on a permanent."""
+        perm = self._find_permanent(permanent_uid)
+        if perm is None:
+            return self._client_error("Permanent not found")
+        if not can_transmute(perm, self.state, 0, self.phase):
+            return self._client_error("Cannot transmute now")
+        mana_needed = transmute_mana_needed(perm)
+        if mana_needed and not self._tap_lands_for_mana(0, mana_needed):
+            return self._client_error(f"Need {mana_needed} mana to transmute")
+        detail = apply_transmute(self.state, perm)
+        if detail is None:
+            return self._client_error("Transmute failed")
+        self._log("player", "transmute", detail)
+        return self.to_client()
+
+    def action_transfigure(self, permanent_uid: str) -> dict:
+        """Activate transfigure on a creature."""
+        perm = self._find_permanent(permanent_uid)
+        if perm is None:
+            return self._client_error("Permanent not found")
+        if not can_transfigure(perm, self.state, 0, self.phase):
+            return self._client_error("Cannot transfigure now")
+        mana_needed = transfigure_mana_needed(perm)
+        if mana_needed and not self._tap_lands_for_mana(0, mana_needed):
+            return self._client_error(f"Need {mana_needed} mana to transfigure")
+        detail = apply_transfigure(self.state, perm)
+        if detail is None:
+            return self._client_error("Transfigure failed")
+        self._log("player", "transfigure", detail)
+        return self.to_client()
+
+    def action_reconfigure(self, permanent_uid: str) -> dict:
+        """Toggle reconfigure on a permanent."""
+        perm = self._find_permanent(permanent_uid)
+        if perm is None:
+            return self._client_error("Permanent not found")
+        if not can_reconfigure(perm, self.state, 0, self.phase):
+            return self._client_error("Cannot reconfigure now")
+        detail = apply_reconfigure(perm)
+        if detail is None:
+            return self._client_error("Reconfigure failed")
+        self._log("player", "reconfigure", detail)
+        return self.to_client()
+
     def _apply_turn_up(
         self, perm: Permanent, card_info: CardInfo
     ) -> tuple[str, str] | str:
@@ -504,6 +566,25 @@ class ActivatedActionsMixin(GameRuntimeMixin):
             return {**self.to_client(), "error": err}
         activated.apply_crew(self.state, vehicle, crewer_uids)
         self._log("player", "crew", f"Crewed {vehicle.name} ({required})")
+        return self.to_client()
+
+    def action_station(
+        self,
+        spacecraft_uid: str,
+        crewer_uids: list[str],
+    ) -> dict:
+        """Station a spacecraft by tapping creatures with enough total power."""
+        spacecraft = self._find_permanent(spacecraft_uid)
+        if spacecraft is None:
+            return {**self.to_client(), "error": "Spacecraft not found"}
+        if not can_station(spacecraft, self.state, 0, self.phase):
+            return {**self.to_client(), "error": "Cannot station now"}
+        required = station_cost(spacecraft) or 1
+        err = station_power_error(self.state, 0, crewer_uids, required)
+        if err:
+            return {**self.to_client(), "error": err}
+        apply_station(self.state, spacecraft, crewer_uids)
+        self._log("player", "station", f"Stationed {spacecraft.name} ({required})")
         return self.to_client()
 
     def action_mount(

@@ -20,6 +20,7 @@ from engine.core.turn_structure import TurnRunner
 from engine.core.turn_structure import Step
 from engine.core.zones import Zone, ZoneManager, ZoneMoveEvent
 from engine.abilities.keywords import enters_ready, has_persist, has_undying
+from engine.abilities.keywords.other.umbra_armor import try_umbra_armor_replacement
 from engine.abilities.keywords.other.afterlife import apply_afterlife_on_die
 from engine.abilities.keywords.other.ascend import update_ascend_status
 from engine.abilities.keywords.other.champion import (
@@ -269,7 +270,9 @@ class GameState:
         return check_sbas(self)
 
     def try_keyword_death_replacement(self, perm: Permanent) -> bool:
-        """Apply persist/undying instead of destroying a creature; return True if replaced."""
+        """Apply persist/undying/umbra instead of destroying a creature."""
+        if try_umbra_armor_replacement(self, perm):
+            return True
         if 'Creature' not in perm.type_line or perm.is_token:
             return False
         if has_persist(perm) and perm.counters.get('-1/-1', 0) == 0:

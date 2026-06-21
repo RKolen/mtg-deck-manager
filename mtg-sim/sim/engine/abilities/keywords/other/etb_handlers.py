@@ -23,6 +23,12 @@ from engine.abilities.keywords.other.tribute import apply_tribute_etb
 from engine.abilities.keywords.other.soulshift import apply_soulshift_etb
 from engine.abilities.keywords.other.ravenous import apply_ravenous_etb
 from engine.abilities.keywords.other.soulbond import apply_soulbond_etb
+from engine.abilities.keywords.other.read_ahead import apply_read_ahead_etb
+from engine.abilities.keywords.other.reinforce import apply_reinforce_etb
+from engine.abilities.keywords.other.daybound import (
+    apply_daybound_etb,
+    apply_nightbound_etb,
+)
 from engine.abilities.keywords.other.encore import apply_encore_etb
 from engine.abilities.keywords.other.evoke import apply_evoke_on_etb
 from engine.abilities.keywords.other.fabricate import apply_fabricate_etb
@@ -118,6 +124,18 @@ def _soulbond_detail(game: GameState, permanent: Permanent) -> str | None:
     return apply_soulbond_etb(game, permanent)
 
 
+def _reinforce_detail(_game: GameState, permanent: Permanent) -> str | None:
+    return apply_reinforce_etb(permanent)
+
+
+def _read_ahead_detail(_game: GameState, permanent: Permanent) -> str | None:
+    return apply_read_ahead_etb(permanent)
+
+
+def _daybound_detail(_game: GameState, permanent: Permanent) -> str | None:
+    return apply_daybound_etb(permanent) or apply_nightbound_etb(permanent)
+
+
 def _augment_detail(game: GameState, permanent: Permanent) -> str | None:
     return apply_augment_etb(game.zones, permanent, game.zones.battlefield)
 
@@ -185,6 +203,9 @@ ETB_DETAIL_PRODUCERS: tuple[EtbDetailFn, ...] = (
     _soulshift_detail,
     _ravenous_detail,
     _soulbond_detail,
+    _reinforce_detail,
+    _daybound_detail,
+    _read_ahead_detail,
     _augment_detail,
     _riot_detail,
     _encore_detail,

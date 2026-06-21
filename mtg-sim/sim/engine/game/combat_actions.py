@@ -16,6 +16,7 @@ from engine.abilities.keywords.other.annihilator import apply_annihilator_on_att
 from engine.abilities.keywords.other.exalted import apply_exalted_on_attack
 from engine.abilities.keywords.other.frenzy import apply_frenzy_on_unblocked_attack
 from engine.abilities.keywords.other.mentor import apply_mentor_on_attack
+from engine.abilities.keywords.other.training import apply_training_on_attack
 from engine.abilities.keywords.other.living_metal import (
     activate_living_metal_for_combat,
     deactivate_living_metal_after_combat,
@@ -157,7 +158,7 @@ class CombatActionsMixin(ActivatedActionsMixin):
         self._finish_opponent_turn()
         return self.to_client()
 
-    def _apply_attack_keywords(
+    def _apply_attack_keywords(  # pylint: disable=too-many-locals
         self,
         attacker_ids: list[str],
         *,
@@ -188,8 +189,13 @@ class CombatActionsMixin(ActivatedActionsMixin):
                 perm,
                 attacker_ids,
             )
-            if mentor_detail:
-                self._log('rules', 'mentor', mentor_detail)
+            training_detail = apply_training_on_attack(self.state, perm, attacker_ids)
+            for detail, tag in (
+                (mentor_detail, 'mentor'),
+                (training_detail, 'training'),
+            ):
+                if detail:
+                    self._log('rules', tag, detail)
             myriad_detail = apply_myriad_on_attack(
                 self.state,
                 perm,

@@ -33,6 +33,13 @@ from engine.abilities.keywords.casting.gift import has_gift
 from engine.abilities.keywords.casting.awaken import has_awaken
 from engine.abilities.keywords.casting.for_mirrodin import has_for_mirrodin
 from engine.abilities.keywords.casting.impending import has_impending
+from engine.abilities.keywords.casting.mayhem import has_mayhem
+from engine.abilities.keywords.casting.prototype import has_prototype
+from engine.abilities.keywords.casting.splice import has_splice
+from engine.abilities.keywords.casting.compleated import has_compleated
+from engine.abilities.keywords.casting.specialize import has_specialize
+from engine.abilities.keywords.casting.warp import has_warp
+from engine.abilities.keywords.casting.squad import has_squad
 from engine.abilities.keywords.casting.offering import has_offering
 from engine.abilities.keywords.casting.ripple import has_ripple
 from engine.abilities.keywords.casting.escalate import has_escalate
@@ -198,6 +205,13 @@ def card_to_client(
         "hasImpending": has_impending(card),
         "hasForMirrodin": has_for_mirrodin(card),
         "hasRipple": has_ripple(card),
+        "hasPrototype": has_prototype(card),
+        "hasSplice": has_splice(card),
+        "hasMayhem": has_mayhem(card),
+        "hasSquad": has_squad(card),
+        "hasWarp": has_warp(card),
+        "hasSpecialize": has_specialize(card),
+        "hasCompleated": has_compleated(card),
         "conspireAvailable": (
             conspire_color_match(card, ctx.game.zones, controller_idx)
             if ctx.game is not None and has_conspire(card)

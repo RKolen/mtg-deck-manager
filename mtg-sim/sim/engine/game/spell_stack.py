@@ -11,6 +11,8 @@ from engine.abilities.keywords.casting.bargain import (
 )
 from engine.abilities.keywords.casting.gift import gift_opponent_draws
 from engine.abilities.keywords.casting.ripple import apply_ripple_on_cast
+from engine.abilities.keywords.casting.specialize import discard_for_specialize
+from engine.abilities.keywords.casting.splice import discard_for_splice
 from engine.abilities.keywords.casting.casualty import sacrifice_for_casualty
 from engine.abilities.keywords.casting.for_mirrodin import sacrifice_for_for_mirrodin
 from engine.abilities.keywords.casting.offering import sacrifice_for_offering
@@ -58,7 +60,7 @@ from engine.core.game_object import (
     _AlternateModes,
     _KeywordPays,
 )
-from engine.game.cast_context import _HandCastExtras
+from engine.game.cast_context import _HandCastExtras, _StackRepeatCosts
 from engine.game.helpers import (
     CastAnnounceOptions,
     SpellCastContext,
@@ -208,7 +210,10 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
             return sacrificed.name
         return ""
 
-    def _place_validated_hand_cast(self, placement: HandCastPlacement) -> dict:
+    def _place_validated_hand_cast(  # pylint: disable=too-many-branches
+        self,
+        placement: HandCastPlacement,
+    ) -> dict:
         """Pay adjustments, put the spell on the stack, and optionally auto-pass."""
         opts = placement.opts
         adjustments = resolve_cast_adjustments(
@@ -234,6 +239,7 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
             payment=SpellCastPayment(
                 costs=_CostMods(
                     kicker_times=mods.kicker_times,
+                    squad_times=mods.squad_times,
                     entwined=mods.entwined,
                     overloaded=mods.overloaded,
                     bestow=mods.bestow,
@@ -264,12 +270,17 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
                     awaken=mods.copy_casts.awaken,
                 ),
             ),
-            replicate_times=mods.replicate_times,
+            repeat=_StackRepeatCosts(
+                replicate_times=mods.replicate_times,
+                squad_times=mods.squad_times,
+            ),
             spree_mode_indices=mods.spree_modes,
             extras=_HandCastExtras(
                 awaken_land_hand_idx=placement.opts.modifiers.reductions.awaken_land_hand_idx,
                 fuse=mods.copy_casts.fuse,
                 impending=mods.copy_casts.impending,
+                prototype=mods.prototype,
+                warp=mods.conditions.warp,
             ),
         )
         targets = self._put_spell_on_stack(
@@ -301,6 +312,22 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
         ripple_detail = apply_ripple_on_cast(self.state, 0, placement.card_info)
         if ripple_detail:
             self._log('rules', 'ripple', ripple_detail)
+        if placement.paid.modifiers.conditions.specialize:
+            specialized = discard_for_specialize(
+                self.state.zones,
+                0,
+                placement.opts.modifiers.reductions.specialize_hand_idx,
+            )
+            if specialized:
+                self._log('rules', 'specialize', f"specialized (discarded {specialized})")
+        if placement.paid.modifiers.copy_casts.paid_splice:
+            spliced = discard_for_splice(
+                self.state.zones,
+                0,
+                placement.opts.modifiers.reductions.splice_hand_idx,
+            )
+            if spliced:
+                self._log('rules', 'splice', f"spliced {spliced}")
         for word_detail in apply_spell_hosted_ability_words(
             self.state, placement.card_info, 0
         ):

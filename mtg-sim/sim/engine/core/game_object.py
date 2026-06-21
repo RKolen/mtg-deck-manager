@@ -421,6 +421,7 @@ class _CostMods:
     """Cost modification payment flags."""
 
     kicker_times: int = 0
+    squad_times: int = 0
     entwined: bool = False
     overloaded: bool = False
     bestow: bool = False
@@ -471,6 +472,16 @@ class SpellCastPayment:
     def kicker_times(self, value: int) -> None:
         """Set kicker count."""
         self.costs.kicker_times = value
+
+    @property
+    def squad_times(self) -> int:
+        """Number of times squad was paid."""
+        return self.costs.squad_times
+
+    @squad_times.setter
+    def squad_times(self, value: int) -> None:
+        """Set squad count."""
+        self.costs.squad_times = value
 
     @property
     def entwined(self) -> bool:
@@ -697,6 +708,17 @@ class SpellStackCopyFlags:
 
 
 @dataclass
+class _CastModeFlags:
+    """Cast-mode flags that do not fit payment or alternate groups."""
+
+    impending: bool = False
+    prototype: bool = False
+    split_second: bool = False
+    mayhem: bool = False
+    warp: bool = False
+
+
+@dataclass
 class _SpellCasting:
     """Cast mode and copy flags for a spell on the stack."""
 
@@ -704,7 +726,32 @@ class _SpellCasting:
     payment: SpellCastPayment = field(default_factory=SpellCastPayment)
     copies: SpellStackCopyFlags = field(default_factory=SpellStackCopyFlags)
     awaken_land_hand_idx: int | None = None
-    impending: bool = False
+    modes: _CastModeFlags = field(default_factory=_CastModeFlags)
+
+    @property
+    def impending(self) -> bool:
+        """Whether impending was paid."""
+        return self.modes.impending
+
+    @property
+    def prototype(self) -> bool:
+        """Whether prototype was paid."""
+        return self.modes.prototype
+
+    @property
+    def split_second(self) -> bool:
+        """Whether this spell has split second."""
+        return self.modes.split_second
+
+    @property
+    def mayhem(self) -> bool:
+        """Whether this spell was cast for mayhem."""
+        return self.modes.mayhem
+
+    @property
+    def warp(self) -> bool:
+        """Whether this spell was cast for warp."""
+        return self.modes.warp
 
 
 @dataclass
@@ -756,6 +803,7 @@ def spell_exiles_from_graveyard_cast(spell: SpellOnStack) -> bool:
         or alt.aftermath
         or alt.disturb
         or alt.harmonize
+        or spell.casting.mayhem
     )
 
 
@@ -791,6 +839,11 @@ def _power_toughness(perm: Permanent) -> tuple[int, int]:
     """Return printed/token power and toughness without continuous effects."""
     if perm.face_down:
         return 2, 2
+    if 'prototype_power' in perm.counters:
+        return (
+            int(perm.counters['prototype_power']),
+            int(perm.counters['prototype_toughness']),
+        )
     if perm.card_info is not None:
         return perm.card_info.numeric_power, perm.card_info.numeric_toughness
     if isinstance(perm.source, TokenObject):

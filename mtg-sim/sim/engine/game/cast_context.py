@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from engine.abilities.keywords.casting.split_second import has_split_second
 from engine.core.game_object import (
     CardObject,
     SpellAlternateCast,
@@ -11,6 +12,7 @@ from engine.core.game_object import (
     SpellOnStack,
     SpellStackCopyFlags,
     Target,
+    _CastModeFlags,
     _SpellCasting,
 )
 from engine.game.face_alternate_cast import FaceAlternateCastFlags
@@ -22,6 +24,7 @@ class _RepeatCostChoices:
 
     kicker_times: int = 0
     replicate_times: int = 0
+    squad_times: int = 0
 
 
 @dataclass(frozen=True)
@@ -31,6 +34,8 @@ class _PaidCastExtras:
     paid_awaken: bool = False
     paid_impending: bool = False
     paid_for_mirrodin: bool = False
+    paid_splice: bool = False
+    paid_compleated: bool = False
 
 
 @dataclass(frozen=True)
@@ -65,6 +70,11 @@ class HandCastCostChoices:
     def replicate_times(self) -> int:
         """Number of times replicate was paid."""
         return self.repeat.replicate_times
+
+    @property
+    def squad_times(self) -> int:
+        """Number of times squad was paid."""
+        return self.repeat.squad_times
 
     @property
     def paid_casualty(self) -> bool:
@@ -111,15 +121,29 @@ class HandCastCostChoices:
         """Whether For Mirrodin! was paid."""
         return self.paid.cast_extras.paid_for_mirrodin
 
+    @property
+    def paid_compleated(self) -> bool:
+        """Whether compleated was paid."""
+        return self.paid.cast_extras.paid_compleated
+
+    @property
+    def paid_splice(self) -> bool:
+        """Whether splice was paid."""
+        return self.paid.cast_extras.paid_splice
+
 
 @dataclass(frozen=True)
-class _CostConditionAlts:
+class _CostConditionAlts:  # pylint: disable=too-many-instance-attributes
     """Alternate cast modes that modify cost based on a condition."""
 
     cast_for_miracle: bool = False
     cast_for_freerunning: bool = False
     cast_for_spectacle: bool = False
     cast_for_surge: bool = False
+    cast_for_prototype: bool = False
+    cast_for_splice: bool = False
+    cast_for_warp: bool = False
+    cast_for_specialize: bool = False
 
 
 @dataclass(frozen=True)
@@ -153,6 +177,26 @@ class HandAlternateCastChoices:
     def cast_for_surge(self) -> bool:
         """Whether this cast uses surge."""
         return self.conditions.cast_for_surge
+
+    @property
+    def cast_for_prototype(self) -> bool:
+        """Whether this cast uses prototype."""
+        return self.conditions.cast_for_prototype
+
+    @property
+    def cast_for_splice(self) -> bool:
+        """Whether this cast uses splice."""
+        return self.conditions.cast_for_splice
+
+    @property
+    def cast_for_warp(self) -> bool:
+        """Whether this cast uses warp."""
+        return self.conditions.cast_for_warp
+
+    @property
+    def cast_for_specialize(self) -> bool:
+        """Whether this cast uses specialize."""
+        return self.conditions.cast_for_specialize
 
     @property
     def cast_for_morph(self) -> bool:
@@ -224,7 +268,7 @@ class CastTargetingIds:
 
 
 @dataclass(frozen=True)
-class CastManaReductionIds:
+class CastManaReductionIds:  # pylint: disable=too-many-instance-attributes
     """Ids for convoke, delve, improvise, and similar reductions."""
 
     convoke_creature_ids: tuple[int, ...] = ()
@@ -233,6 +277,8 @@ class CastManaReductionIds:
     sneak_land_hand_indices: tuple[int, ...] = ()
     assist_mana: int = 0
     awaken_land_hand_idx: int | None = None
+    splice_hand_idx: int | None = None
+    specialize_hand_idx: int | None = None
 
 
 @dataclass(frozen=True)
@@ -259,6 +305,17 @@ class _HandCastExtras:
     awaken_land_hand_idx: int | None = None
     fuse: bool = False
     impending: bool = False
+    prototype: bool = False
+    mayhem: bool = False
+    warp: bool = False
+
+
+@dataclass(frozen=True)
+class _StackRepeatCosts:
+    """Repeat optional costs stored on the stack context."""
+
+    replicate_times: int = 0
+    squad_times: int = 0
 
 
 @dataclass(frozen=True)
@@ -269,9 +326,19 @@ class SpellCastContext:
     from_exile: bool = False
     alternate: SpellAlternateCast = field(default_factory=SpellAlternateCast)
     payment: SpellCastPayment = field(default_factory=SpellCastPayment)
-    replicate_times: int = 0
+    repeat: _StackRepeatCosts = field(default_factory=_StackRepeatCosts)
     spree_mode_indices: tuple[int, ...] = ()
     extras: _HandCastExtras = field(default_factory=_HandCastExtras)
+
+    @property
+    def replicate_times(self) -> int:
+        """Number of times replicate was paid."""
+        return self.repeat.replicate_times
+
+    @property
+    def squad_times(self) -> int:
+        """Number of times squad was paid."""
+        return self.repeat.squad_times
 
     @property
     def awaken_land_hand_idx(self) -> int | None:
@@ -288,6 +355,21 @@ class SpellCastContext:
         """Whether impending was paid."""
         return self.extras.impending
 
+    @property
+    def prototype(self) -> bool:
+        """Whether prototype was paid."""
+        return self.extras.prototype
+
+    @property
+    def mayhem(self) -> bool:
+        """Whether this spell was cast for mayhem."""
+        return self.extras.mayhem
+
+    @property
+    def warp(self) -> bool:
+        """Whether this spell was cast for warp."""
+        return self.extras.warp
+
 
 def spell_on_stack_from_context(
     controller_idx: int,
@@ -298,6 +380,11 @@ def spell_on_stack_from_context(
     copy_flags: SpellStackCopyFlags | None = None,
 ) -> SpellOnStack:
     """Build a SpellOnStack from announce/stack placement context."""
+    split_second = (
+        has_split_second(card.card_info)
+        if card.card_info is not None
+        else False
+    )
     return SpellOnStack(
         controller_idx=controller_idx,
         owner_idx=card.owner_idx,
@@ -309,6 +396,12 @@ def spell_on_stack_from_context(
             payment=context.payment,
             copies=copy_flags or SpellStackCopyFlags(),
             awaken_land_hand_idx=context.awaken_land_hand_idx,
-            impending=context.impending,
+            modes=_CastModeFlags(
+                impending=context.impending,
+                prototype=context.prototype,
+                split_second=split_second,
+                mayhem=context.mayhem,
+                warp=context.warp,
+            ),
         ),
     )

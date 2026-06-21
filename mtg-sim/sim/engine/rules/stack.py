@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from engine.abilities.keywords import can_target_permanent, pay_ward_for_target
+from engine.abilities.keywords.registry import has_registered_keyword
 from engine.core.game_object import (
     spell_exiles_from_graveyard_cast,
     spell_is_ephemeral_copy,
@@ -99,6 +100,9 @@ class Stack:
         """
         if not self.objects:
             return None
+        obj = self.objects[-1]
+        if not _can_counter_stack_object(obj):
+            return None
         obj = self.objects.pop()
         _move_spell_card_to_graveyard(obj, zones)
         return obj
@@ -122,6 +126,20 @@ class Stack:
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+def _can_counter_stack_object(obj: StackObject) -> bool:
+    """Return True when the stack object may be countered."""
+    if not isinstance(obj, SpellOnStack):
+        return True
+    if obj.casting.split_second:
+        return False
+    if obj.source is not None and obj.source.card_info is not None:
+        return not has_registered_keyword(
+            obj.source.card_info.oracle_text,
+            'Split second',
+        )
+    return True
+
 
 def _get_targets(obj: StackObject) -> list[Target]:
     """Return the target list for any stack object type."""

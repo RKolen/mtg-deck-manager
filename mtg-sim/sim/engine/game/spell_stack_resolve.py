@@ -31,6 +31,9 @@ from engine.abilities.keywords.casting import (
 )
 from engine.abilities.keywords.casting.awaken import apply_awaken_on_resolve
 from engine.abilities.keywords.casting.impending import apply_impending_on_resolve
+from engine.abilities.keywords.casting.prototype import apply_prototype_on_etb
+from engine.abilities.keywords.casting.warp import apply_warp_on_resolve
+from engine.abilities.keywords.casting.squad import apply_squad_on_etb
 from engine.abilities.keywords.other.etb import apply_etb_other_abilities
 from engine.abilities.keywords.other.evoke import mark_evoked_cast
 from engine.abilities.keywords.other.register import register_permanent_other_keywords
@@ -251,7 +254,7 @@ class SpellResolveMixin(SpellStackPlacementMixin):
         self._move_card_to_graveyard(card)
         return f"Cast {card_info.name} (mutate target not found)"
 
-    def _resolve_creature_spell(self, spell: SpellOnStack) -> str:
+    def _resolve_creature_spell(self, spell: SpellOnStack) -> str:  # pylint: disable=too-many-branches
         """Resolve a creature spell onto the battlefield."""
         card = spell.source
         assert card is not None
@@ -285,9 +288,24 @@ class SpellResolveMixin(SpellStackPlacementMixin):
         counters = kicked_counter_count(card_info, spell.payment.kicker_times)
         if counters:
             permanent.counters["+1/+1"] = permanent.counters.get("+1/+1", 0) + counters
-        self._apply_creature_counters(permanent, spell)
-        self._register_permanent_triggers(permanent)
         detail = f"Cast creature {card_info.name}"
+        if spell.casting.prototype:
+            proto_detail = apply_prototype_on_etb(permanent)
+            if proto_detail:
+                detail = proto_detail
+        if spell.casting.warp:
+            warp_detail = apply_warp_on_resolve(permanent)
+            if warp_detail:
+                detail = f"{detail}; {warp_detail}"
+        self._apply_creature_counters(permanent, spell)
+        squad_detail = apply_squad_on_etb(
+            self.state.zones,
+            permanent,
+            spell.payment.squad_times,
+        )
+        if squad_detail:
+            detail = f"{detail}; {squad_detail}"
+        self._register_permanent_triggers(permanent)
         if counters:
             detail = f"{detail} with {counters} +1/+1 counter(s)"
         return detail

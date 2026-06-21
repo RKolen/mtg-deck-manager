@@ -56,6 +56,15 @@ from engine.abilities.keywords.casting.awaken import (
     normalize_paid_awaken,
 )
 from engine.abilities.keywords.casting.impending import normalize_paid_impending
+from engine.abilities.keywords.casting.prototype import normalize_prototype_cast
+from engine.abilities.keywords.casting.compleated import normalize_paid_compleated
+from engine.abilities.keywords.casting.specialize import normalize_specialize_cast
+from engine.abilities.keywords.casting.warp import normalize_warp_cast
+from engine.abilities.keywords.casting.splice import (
+    normalize_paid_splice,
+    splice_hand_error,
+)
+from engine.abilities.keywords.casting.specialize import specialize_discard_error
 from engine.abilities.keywords.casting.offering import (
     normalize_offering_cast,
     offering_sacrifice_error,
@@ -75,6 +84,7 @@ from engine.abilities.keywords.casting.mutate import (
 )
 from engine.abilities.keywords.casting.overload import normalize_overloaded
 from engine.abilities.keywords.casting.replicate import normalize_replicate_times
+from engine.abilities.keywords.casting.squad import normalize_squad_times
 from engine.abilities.keywords.casting.spree import (
     normalize_spree_modes,
     spree_selection_error,
@@ -98,13 +108,16 @@ class _FaceCastFlags:
 
 
 @dataclass(frozen=True)
-class _ConditionCastFlags:
+class _ConditionCastFlags:  # pylint: disable=too-many-instance-attributes
     """Condition-gated alternate cast flags."""
 
     miracle: bool = False
     freerunning: bool = False
     spectacle: bool = False
     surge: bool = False
+    prototype: bool = False
+    warp: bool = False
+    specialize: bool = False
 
 
 @dataclass(frozen=True)
@@ -113,10 +126,11 @@ class _RepeatCostCounts:
 
     kicker_times: int = 0
     replicate_times: int = 0
+    squad_times: int = 0
 
 
 @dataclass(frozen=True)
-class _CopyOnCastFlags:
+class _CopyOnCastFlags:  # pylint: disable=too-many-instance-attributes
     """Optional costs that put a copy of the spell onto the stack."""
 
     cleave: bool = False
@@ -125,6 +139,8 @@ class _CopyOnCastFlags:
     fuse: bool = False
     awaken: bool = False
     impending: bool = False
+    paid_splice: bool = False
+    paid_compleated: bool = False
 
 
 @dataclass(frozen=True)
@@ -140,7 +156,7 @@ class _FlatCostFlags:
 
 
 @dataclass(frozen=True)
-class PaidCastModifiers:
+class PaidCastModifiers:  # pylint: disable=too-many-public-methods
     """Normalized optional cost flags after validation."""
 
     spree_modes: tuple[int, ...]
@@ -175,6 +191,11 @@ class PaidCastModifiers:
         return self.flat.counts.replicate_times
 
     @property
+    def squad_times(self) -> int:
+        """Number of times squad was paid."""
+        return self.flat.counts.squad_times
+
+    @property
     def buyback(self) -> bool:
         """Whether buyback was paid."""
         return self.flat.buyback
@@ -198,6 +219,11 @@ class PaidCastModifiers:
     def spectacle(self) -> bool:
         """Whether spectacle was used."""
         return self.conditions.spectacle
+
+    @property
+    def surge(self) -> bool:
+        """Whether surge was used."""
+        return self.conditions.surge
 
     @property
     def morph(self) -> bool:
@@ -248,6 +274,11 @@ class PaidCastModifiers:
     def gift(self) -> bool:
         """Whether gift was paid."""
         return self.sac.gift
+
+    @property
+    def prototype(self) -> bool:
+        """Whether prototype was used."""
+        return self.conditions.prototype
 
 
 @dataclass(frozen=True)
@@ -355,10 +386,16 @@ def _normalized_paid_flags(
                 fuse=normalize_paid_fuse(card_info, opts.costs.paid_fuse),
                 awaken=normalize_paid_awaken(card_info, opts.costs.paid_awaken),
                 impending=normalize_paid_impending(card_info, opts.costs.paid_impending),
+                paid_splice=normalize_paid_splice(card_info, opts.costs.paid_splice),
+                paid_compleated=normalize_paid_compleated(
+                    card_info,
+                    opts.costs.paid_compleated,
+                ),
             ),
             counts=_RepeatCostCounts(
                 kicker_times=normalize_kicker_times(card_info, opts.costs.kicker_times),
                 replicate_times=normalize_replicate_times(card_info, opts.costs.replicate_times),
+                squad_times=normalize_squad_times(card_info, opts.costs.squad_times),
             ),
         ),
         face=_FaceCastFlags(
@@ -402,6 +439,15 @@ def _normalized_paid_flags(
                 card_info,
                 opts.alternate.cast_for_surge,
                 available=surge_available(game, player_idx),
+            ),
+            prototype=normalize_prototype_cast(
+                card_info,
+                opts.alternate.cast_for_prototype,
+            ),
+            warp=normalize_warp_cast(card_info, opts.alternate.cast_for_warp),
+            specialize=normalize_specialize_cast(
+                card_info,
+                opts.alternate.cast_for_specialize,
             ),
         ),
     )
@@ -513,6 +559,12 @@ def validate_announce_cast(
             name,
             "replicate",
         ),
+        lambda: _reject_keyword(
+            opts.costs.squad_times > 0,
+            paid.squad_times > 0,
+            name,
+            "squad",
+        ),
         lambda: _reject_keyword(opts.costs.paid_buyback, paid.buyback, name, "buyback"),
         lambda: _reject_keyword(opts.alternate.cast_for_emerge, paid.emerge, name, "emerge"),
         lambda: _reject_keyword(opts.alternate.cast_for_evoke, paid.evoke, name, "evoke"),
@@ -597,6 +649,48 @@ def validate_announce_cast(
             paid.copy_casts.impending,
             name,
             "impending",
+        ),
+        lambda: _reject_keyword(
+            opts.alternate.cast_for_prototype,
+            paid.conditions.prototype,
+            name,
+            "prototype",
+        ),
+        lambda: _reject_keyword(
+            opts.costs.paid_splice,
+            paid.copy_casts.paid_splice,
+            name,
+            "splice",
+        ),
+        lambda: splice_hand_error(
+            ctx.zones,
+            ctx.player_idx,
+            opts.modifiers.reductions.splice_hand_idx,
+            paid=paid.copy_casts.paid_splice,
+        ),
+        lambda: _reject_keyword(
+            opts.alternate.cast_for_warp,
+            paid.conditions.warp,
+            name,
+            "warp",
+        ),
+        lambda: _reject_keyword(
+            opts.alternate.cast_for_specialize,
+            paid.conditions.specialize,
+            name,
+            "specialize",
+        ),
+        lambda: specialize_discard_error(
+            ctx.zones,
+            ctx.player_idx,
+            opts.modifiers.reductions.specialize_hand_idx,
+            paid=paid.conditions.specialize,
+        ),
+        lambda: _reject_keyword(
+            opts.costs.paid_compleated,
+            paid.copy_casts.paid_compleated,
+            name,
+            "compleated",
         ),
     ])
     if err:

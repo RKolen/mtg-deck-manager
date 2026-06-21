@@ -53,6 +53,17 @@ from engine.abilities.keywords.casting.escalate import escalate_extra_mana
 from engine.abilities.keywords.casting.awaken import awaken_mana_extra
 from engine.abilities.keywords.casting.impending import impending_mana_extra
 from engine.abilities.keywords.casting.offering import offering_mana_reduction
+from engine.abilities.keywords.casting.prototype import (
+    normalize_prototype_cast,
+    prototype_mana_needed,
+)
+from engine.abilities.keywords.casting.compleated import compleated_life_extra
+from engine.abilities.keywords.casting.specialize import (
+    normalize_specialize_cast,
+    specialize_mana_needed,
+)
+from engine.abilities.keywords.casting.warp import normalize_warp_cast, warp_mana_needed
+from engine.abilities.keywords.casting.splice import splice_mana_extra
 from engine.abilities.keywords.casting.dash import (
     dash_mana_needed,
     normalize_dash_cast,
@@ -71,6 +82,7 @@ from engine.abilities.keywords.casting.overload import (
 )
 from engine.abilities.keywords.casting.buyback import buyback_extra_mana
 from engine.abilities.keywords.casting.replicate import replicate_extra_mana
+from engine.abilities.keywords.casting.squad import squad_extra_mana
 from engine.abilities.keywords.casting.spree import spree_extra_mana
 from engine.abilities.keywords.other.affinity import affinity_reduction
 from engine.game.face_alternate_cast import FaceAlternateCastFlags
@@ -100,16 +112,34 @@ class _SacManaModifiers:
 
 
 @dataclass(frozen=True)
+class _RepeatCastCounts:
+    """Integer repeat costs such as replicate and squad."""
+
+    replicate_times: int = 0
+    squad_times: int = 0
+
+
+@dataclass(frozen=True)
 class CastManaModifiers:
     """Optional cost modifiers for announce-cast mana."""
 
     kicker_times: int = 0
     bestow_target_uid: str | None = None
-    replicate_times: int = 0
+    repeat: _RepeatCastCounts = field(default_factory=_RepeatCastCounts)
     spree_mode_indices: tuple[int, ...] = ()
     bools: _FlatBoolMods = field(default_factory=_FlatBoolMods)
     sac: _SacManaModifiers = field(default_factory=_SacManaModifiers)
     face: FaceAlternateCastFlags = field(default_factory=FaceAlternateCastFlags)
+
+    @property
+    def replicate_times(self) -> int:
+        """Number of times replicate was paid."""
+        return self.repeat.replicate_times
+
+    @property
+    def squad_times(self) -> int:
+        """Number of times squad was paid."""
+        return self.repeat.squad_times
 
     @property
     def entwined(self) -> bool:
@@ -153,7 +183,7 @@ class CastManaModifiers:
 
 
 @dataclass(frozen=True)
-class _TimingAvailability:
+class _TimingAvailability:  # pylint: disable=too-many-instance-attributes
     """Alternate cost availability for timing-sensitive casts."""
 
     freerunning_available: bool = False
@@ -162,6 +192,8 @@ class _TimingAvailability:
     escalate_extra_targets: int = 0
     paid_awaken: bool = False
     paid_impending: bool = False
+    paid_splice: bool = False
+    paid_compleated: bool = False
 
 
 @dataclass(frozen=True)
@@ -173,16 +205,36 @@ class _OpponentDamageCasts:
 
 
 @dataclass(frozen=True)
-class CastManaTiming:
+class _FaceCastTiming:
+    """Face-down and prototype alternate cast timing."""
+
+    morph: bool = False
+    prototype: bool = False
+
+
+@dataclass(frozen=True)
+class CastManaTiming:  # pylint: disable=too-many-instance-attributes
     """Timing-sensitive alternate costs for announce-cast mana."""
 
     cast_for_miracle: bool = False
     cast_for_freerunning: bool = False
     opponent_damage: _OpponentDamageCasts = field(default_factory=_OpponentDamageCasts)
     cast_for_cleave: bool = False
-    cast_for_morph: bool = False
+    cast_for_warp: bool = False
+    cast_for_specialize: bool = False
+    face: _FaceCastTiming = field(default_factory=_FaceCastTiming)
     paid_conspire: bool = False
     available: _TimingAvailability = field(default_factory=_TimingAvailability)
+
+    @property
+    def cast_for_morph(self) -> bool:
+        """Whether morph was announced."""
+        return self.face.morph
+
+    @property
+    def cast_for_prototype(self) -> bool:
+        """Whether prototype was announced."""
+        return self.face.prototype
 
     @property
     def cast_for_spectacle(self) -> bool:
@@ -227,7 +279,7 @@ def _payment_requirements(card: CardInfo) -> tuple[int, int]:
     return max(0, total_cmc - phyrexian_pips), phyrexian_pips * 2
 
 
-def _resolve_timing_alternate_mana(
+def _resolve_timing_alternate_mana(  # pylint: disable=too-many-return-statements
     card: CardInfo,
     timing: CastManaTiming,
 ) -> tuple[int, int] | None:
@@ -242,10 +294,16 @@ def _resolve_timing_alternate_mana(
         card, timing.cast_for_surge, available=timing.surge_available
     ):
         return surge_mana_needed(card)
+    if normalize_prototype_cast(card, timing.cast_for_prototype):
+        return prototype_mana_needed(card)
     if normalize_cleave_cast(card, timing.cast_for_cleave):
         return cleave_mana_needed(card)
     if normalize_freerunning_cast(card, timing.cast_for_freerunning, timing.freerunning_available):
         return freerunning_mana_needed(card)
+    if normalize_warp_cast(card, timing.cast_for_warp):
+        return warp_mana_needed(card)
+    if normalize_specialize_cast(card, timing.cast_for_specialize):
+        return specialize_mana_needed(card)
     return None
 
 
@@ -304,12 +362,14 @@ def resolve_announce_cast_mana(
         mana_needed, life_cost = _payment_requirements(card)
     mana_needed, life_cost = cast_mana_with_entwine(card, mana_needed, life_cost, mods.entwined)
     mana_needed += replicate_extra_mana(card, mods.replicate_times)
+    mana_needed += squad_extra_mana(card, mods.squad_times)
     mana_needed += buyback_extra_mana(card, mods.paid_buyback)
     mana_needed += spree_extra_mana(card, mods.spree_mode_indices)
     mana_needed += conspire_extra_mana(card, timing.paid_conspire)
     mana_needed += escalate_extra_mana(card, timing.available.escalate_extra_targets)
     mana_needed += awaken_mana_extra(card, timing.available.paid_awaken)
     mana_needed += impending_mana_extra(card, timing.available.paid_impending)
+    mana_needed += splice_mana_extra(card, timing.available.paid_splice)
     mana_needed = max(
         0,
         mana_needed - offering_mana_reduction(card, mods.cast_for_offering),
@@ -319,4 +379,5 @@ def resolve_announce_cast_mana(
             0,
             mana_needed - affinity_reduction(card, opts.zones, opts.controller_idx),
         )
+    life_cost += compleated_life_extra(card, timing.available.paid_compleated)
     return mana_needed, life_cost

@@ -9,6 +9,8 @@ from engine.abilities.keywords.other.decayed import blocks_attack
 from engine.abilities.keywords.other.living_metal import is_living_metal_creature
 from engine.abilities.keywords.other.phasing import is_phased_out
 from engine.abilities.keywords.other.prowl import prowl_unblockable
+from engine.abilities.keywords.other.reconfigure import is_reconfigure_creature
+from engine.abilities.keywords.other.station import is_stationed
 from engine.abilities.keywords.other.skulk import skulk_allows_block
 from engine.abilities.keywords.registry import detect_keywords
 
@@ -33,6 +35,13 @@ def _is_crewed_vehicle(perm: Permanent) -> bool:
     return "Vehicle" in perm.type_line and perm.counters.get("crewed", 0) > 0
 
 
+def _is_mounted_creature(perm: Permanent) -> bool:
+    """Return True when a mount has been saddled this turn."""
+    if "Mount" not in perm.type_line:
+        return False
+    return perm.counters.get("crewed", 0) > 0
+
+
 def _is_awakened_creature(perm: Permanent) -> bool:
     """Return True when a land was animated via awaken."""
     return perm.counters.get('awaken', 0) > 0
@@ -46,6 +55,9 @@ def can_attack(perm: Permanent) -> bool:
         (
             is_creature(perm)
             or _is_crewed_vehicle(perm)
+            or _is_mounted_creature(perm)
+            or is_stationed(perm)
+            or is_reconfigure_creature(perm)
             or _is_awakened_creature(perm)
             or is_living_metal_creature(perm)
         )

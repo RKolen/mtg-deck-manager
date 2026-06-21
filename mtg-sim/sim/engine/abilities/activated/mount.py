@@ -6,7 +6,7 @@ import re
 
 from engine.abilities.activated.crew import (
     _CREWED_COUNTER,
-    apply_crew,
+    _find_perm,
     crew_power_error,
 )
 from engine.abilities.keywords.registry import has_registered_keyword
@@ -67,4 +67,10 @@ def apply_mount(
     mount_creature_ids: list[str],
 ) -> None:
     """Tap creatures and mark the mount as mounted."""
-    apply_crew(game, mount_perm, mount_creature_ids)
+    required = mount_cost(mount_perm) or 1
+    for uid in mount_creature_ids:
+        perm = _find_perm(game, uid)
+        assert perm is not None
+        perm.tapped = True
+    mount_perm.counters[_CREWED_COUNTER] = required
+    mount_perm.sick = False

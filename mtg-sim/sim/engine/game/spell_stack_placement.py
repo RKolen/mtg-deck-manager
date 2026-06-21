@@ -19,6 +19,7 @@ from engine.game.helpers import (
     spell_on_stack_from_context,
     targets_from_request,
 )
+from engine.game.cast_context import _HandCastExtras
 from engine.game.runtime import GameRuntimeMixin
 
 
@@ -148,6 +149,7 @@ class SpellStackPlacementMixin(GameRuntimeMixin):
                 context=SpellCastContext(
                     alternate=request.alternate,
                     from_graveyard=True,
+                    extras=_HandCastExtras(mayhem=request.log_action == 'mayhem'),
                 ),
                 log_opts=_CastLog(
                     log_action=request.log_action,

@@ -32,6 +32,8 @@ def announce_cast_detail_suffix(
             tags.append(label)
     if mods.replicate_times:
         tags.append(f'replicate x{mods.replicate_times}')
+    if mods.squad_times:
+        tags.append(f'squad x{mods.squad_times}')
     if mods.kicker_times:
         tags.append(f'kicked x{mods.kicker_times}')
     if mods.emerge:

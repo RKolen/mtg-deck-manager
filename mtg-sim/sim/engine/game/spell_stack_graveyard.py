@@ -15,6 +15,11 @@ from engine.abilities.keywords.casting.harmonize import (
     normalize_harmonize_creature_id,
     resolve_harmonize_mana,
 )
+from engine.abilities.keywords.casting.mayhem import (
+    can_cast_via_mayhem,
+    has_mayhem,
+    mayhem_mana_needed,
+)
 from engine.abilities.keywords.casting import (
     FORETELL_SETUP_MANA,
     aftermath_mana_needed,
@@ -119,6 +124,40 @@ class GraveyardCastMixin(SpellStackPlacementMixin):
                 alternate=SpellAlternateCast(graveyard=_GraveyardAlts(flashback=True)),
                 log_action="flashback",
                 log_detail=lambda c: f"{c.name} on stack",
+            ),
+        )
+
+    def _announce_mayhem_cast(
+        self,
+        graveyard_idx: int,
+        target_uid_str: str | None,
+        target_player_idx: int | None,
+        auto_resolve: bool,
+    ) -> dict:
+        """Pay mayhem cost and cast a card from the graveyard."""
+        player_idx = 0
+        land_played = self.state.players[player_idx].land_played
+        return self._announce_graveyard_spell(
+            graveyard_idx,
+            _TargetRef(target_uid_str, target_player_idx),
+            auto_resolve,
+            GraveyardCastRequest(
+                player_idx=player_idx,
+                check=_GraveyardCheck(
+                    has_keyword=has_mayhem,
+                    keyword_error=lambda c: f"{c.name} does not have mayhem",
+                    can_cast=lambda c: can_cast_via_mayhem(
+                        c,
+                        self.phase,
+                        self.state.stack.is_empty,
+                        land_played=land_played,
+                    ),
+                    timing_error="Cannot cast mayhem now (play a land first)",
+                ),
+                mana_cost=mayhem_mana_needed,
+                alternate=SpellAlternateCast(),
+                log_action="mayhem",
+                log_detail=lambda c: f"{c.name} on stack (mayhem)",
             ),
         )
 
@@ -551,6 +590,20 @@ class GraveyardCastMixin(SpellStackPlacementMixin):
     ) -> dict:
         """Cast a card from the graveyard for its flashback cost."""
         return self._announce_flashback_cast(
+            graveyard_idx,
+            target_uid,
+            target_player,
+            auto_resolve=True,
+        )
+
+    def action_cast_mayhem(
+        self,
+        graveyard_idx: int,
+        target_uid: str | None = None,
+        target_player: int | None = None,
+    ) -> dict:
+        """Cast a card from the graveyard for its mayhem cost."""
+        return self._announce_mayhem_cast(
             graveyard_idx,
             target_uid,
             target_player,

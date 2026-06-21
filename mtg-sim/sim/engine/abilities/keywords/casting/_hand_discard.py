@@ -41,3 +41,18 @@ def pop_hand_to_graveyard(
     assert isinstance(card, CardObject)
     zones.player_zones[player_idx].graveyard.append(card)
     return card
+
+
+def discard_hand_card_name(
+    zones: ZoneManager,
+    player_idx: int,
+    hand_idx: int | None,
+) -> str | None:
+    """Discard a hand card to the graveyard and return its name."""
+    if hand_idx is None:
+        return None
+    hand = zones.player_zones[player_idx].hand
+    if hand_idx < 0 or hand_idx >= len(hand):
+        return None
+    card = pop_hand_to_graveyard(zones, player_idx, hand_idx)
+    return card.card_info.name if card.card_info is not None else '?'

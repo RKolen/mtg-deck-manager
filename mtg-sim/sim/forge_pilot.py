@@ -14,6 +14,10 @@ from env_loader import require_env, require_env_int
 logger = logging.getLogger(__name__)
 
 FORGE_JAR: str = os.environ.get("FORGE_JAR", "")
+# JVM max heap for the Forge sim subprocess. Forge otherwise defaults to ~1/4 of
+# system RAM (~7.8 GB here), which stacks with the desktop/IDE and risks OOM; sim
+# mode runs comfortably in a few GB. Override with FORGE_MAX_HEAP (e.g. "2g").
+FORGE_MAX_HEAP: str = os.environ.get("FORGE_MAX_HEAP", "4g")
 
 _COMBO_ARCHETYPE_KEYWORDS = (
     "storm", "belcher", "ad nauseam", "amulet", "living end", "grinding",
@@ -112,7 +116,7 @@ def build_forge_cmd(
 ) -> list[str]:
     """Assemble the java -jar forge sim command line."""
     cmd = [
-        require_env("FORGE_JAVA"), "-jar", FORGE_JAR,
+        require_env("FORGE_JAVA"), f"-Xmx{FORGE_MAX_HEAP}", "-jar", FORGE_JAR,
         "sim",
         "-d", f"{p_name}.dck", f"{o_name}.dck",
         "-n", str(n_games),
@@ -126,6 +130,25 @@ def build_forge_cmd(
     return cmd
 
 
+def _forge_work_dir() -> str:
+    """Directory to run Forge from — must contain Forge's res/ (card DB, languages).
+
+    Forge resolves res/ relative to its working directory and fails its static
+    initialization without it. The JAR lives in forge-gui-desktop/target/, which
+    `mvn clean` wipes and which holds no res/, so locate the res-bearing dir
+    (typically forge-gui/) by walking up from the JAR. Falls back to the JAR's
+    own directory when no res/ is found.
+    """
+    jar = pathlib.Path(FORGE_JAR).resolve()
+    for ancestor in jar.parents:
+        if (ancestor / "res").is_dir():
+            return str(ancestor)
+        gui_res = ancestor / "forge-gui" / "res"
+        if gui_res.is_dir():
+            return str(gui_res.parent)
+    return str(jar.parent)
+
+
 def invoke_forge(cmd: list[str], n_games: int) -> str:
     """Run Forge subprocess; return stdout or empty string on failure."""
     try:
@@ -135,7 +158,7 @@ def invoke_forge(cmd: list[str], n_games: int) -> str:
             text=True,
             timeout=n_games * 90,
             check=False,
-            cwd=str(pathlib.Path(FORGE_JAR).parent),
+            cwd=_forge_work_dir(),
         )
     except subprocess.TimeoutExpired:
         logger.error("Forge simulation timed out after %d games", n_games)

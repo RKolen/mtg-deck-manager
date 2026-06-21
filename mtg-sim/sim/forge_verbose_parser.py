@@ -285,10 +285,16 @@ class _ForgeVerboseParser:
         amount = int(m.group(2))
         dmg_type = (m.group(3) or "").lower()
         target = m.group(4)
-        if self._p_forge in target:
+        target_is_player = self._p_forge in target
+        # Track which opponent cards damage the player (for key_cards_on_loss).
+        if target_is_player:
             card_name = re.sub(r"\s*\(\d+\)\s*$", "", source_raw).strip()
             self._st.extras.opp_dmg[card_name] += amount
-        elif self._st.meta.half_player == 0 and self._p_forge not in target:
+        # Per-turn damage is what the active player deals to the defending
+        # player, regardless of which side is active. Self-damage (fetch lands,
+        # Phyrexian mana) is excluded because active and target are the same side.
+        active_is_player = self._st.meta.half_player == 0
+        if self._st.meta.half_player >= 0 and active_is_player != target_is_player:
             self._st.accum.dmg += amount
             if dmg_type == "combat":
                 self._st.accum.combat_dmg += amount

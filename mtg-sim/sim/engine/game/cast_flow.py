@@ -12,8 +12,10 @@ from engine.abilities.keywords.casting.cast_mana import (
     AnnounceCastManaOptions,
     CastManaModifiers,
     CastManaTiming,
+    _FaceCastTiming,
     _FlatBoolMods,
     _OpponentDamageCasts,
+    _RepeatCastCounts,
     _SacManaModifiers,
     _TimingAvailability,
 )
@@ -165,7 +167,10 @@ def cast_modifiers_for_announce(
     return CastManaModifiers(
         kicker_times=paid.modifiers.kicker_times,
         bestow_target_uid=opts.modifiers.targeting.bestow_target_uid,
-        replicate_times=paid.modifiers.replicate_times,
+        repeat=_RepeatCastCounts(
+            replicate_times=paid.modifiers.replicate_times,
+            squad_times=paid.modifiers.squad_times,
+        ),
         spree_mode_indices=paid.modifiers.spree_modes,
         bools=_FlatBoolMods(
             entwined=paid.modifiers.entwined,
@@ -203,7 +208,12 @@ def cast_timing_for_announce(
             surge=paid.modifiers.conditions.surge,
         ),
         cast_for_cleave=paid.modifiers.copy_casts.cleave,
-        cast_for_morph=paid.modifiers.morph,
+        cast_for_warp=paid.modifiers.conditions.warp,
+        cast_for_specialize=paid.modifiers.conditions.specialize,
+        face=_FaceCastTiming(
+            morph=paid.modifiers.morph,
+            prototype=paid.modifiers.prototype,
+        ),
         paid_conspire=paid.modifiers.copy_casts.conspire,
         available=_TimingAvailability(
             freerunning_available=state.players[controller_idx].combat_damage_dealt_this_turn,
@@ -212,6 +222,8 @@ def cast_timing_for_announce(
             escalate_extra_targets=opts.modifiers.targeting.escalate_extra_targets,
             paid_awaken=paid.modifiers.copy_casts.awaken,
             paid_impending=paid.modifiers.copy_casts.impending,
+            paid_splice=paid.modifiers.copy_casts.paid_splice,
+            paid_compleated=paid.modifiers.copy_casts.paid_compleated,
         ),
     )
 

@@ -277,6 +277,27 @@ async def simulate(req: SimulateRequest) -> dict:
             detail="Simulation returned no results. Check sim service logs.",
         )
 
+    # Report the engine that actually produced results, not the requested one:
+    # Forge can fail and fall back to the mock, which ignores the pilot prompts.
+    engine_used = adapter.last_engine if engine == "forge" else engine
+    fell_back_to_mock = engine == "forge" and engine_used == "mock"
+    if fell_back_to_mock:
+        logger.warning(
+            "engineUsed=mock: Forge failed and the built-in mock engine ran "
+            "instead. LLM pilot prompts were NOT applied — check the Forge error above."
+        )
+        pilot_info = {
+            **pilot_info,
+            "engineUsed": "mock",
+            "opponentPilotActive": False,
+            "playerPilotActive": False,
+            "message": (
+                "Mock engine (Forge unavailable) — heuristic AI only; the LLM "
+                "pilot prompts were NOT used. See sim logs for the Forge error."
+            ),
+            "fellBackToMock": True,
+        }
+
     emit_game_logs(results, matchup.deck_title, req.opponentArchetype)
 
     stats = await asyncio.to_thread(
@@ -289,7 +310,9 @@ async def simulate(req: SimulateRequest) -> dict:
             generate_moments=req.useLlm,
         ),
     )
-    stats["engineUsed"] = engine
+    stats["engineUsed"] = engine_used
+    stats["engineRequested"] = engine
+    stats["fellBackToMock"] = fell_back_to_mock
     stats["pilotInfo"] = pilot_info
     return stats
 
@@ -324,6 +347,7 @@ class GameActionRequest(BaseModel):
     bestowTargetUid: str | None = None
     castForMiracle: bool = False
     replicateTimes: int = 0
+    squadTimes: int = 0
     paidBuyback: bool = False
     paidCasualty: bool = False
     paidConspire: bool = False
@@ -354,6 +378,13 @@ class GameActionRequest(BaseModel):
     castForFreerunning: bool = False
     castForSpectacle: bool = False
     castForSurge: bool = False
+    castForPrototype: bool = False
+    paidSplice: bool = False
+    paidCompleated: bool = False
+    spliceHandIdx: int | None = None
+    specializeHandIdx: int | None = None
+    castForWarp: bool = False
+    castForSpecialize: bool = False
     castForMorph: bool = False
     castForDisguise: bool = False
     castForDash: bool = False

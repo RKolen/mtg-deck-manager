@@ -49,10 +49,20 @@ from engine.abilities.keywords.casting.suspend import can_suspend
 from engine.abilities.keywords.casting.jump_start import can_cast_via_jump_start, has_jump_start
 from engine.abilities.keywords.casting.retrace import can_cast_via_retrace, has_retrace
 from engine.abilities.keywords.casting.aftermath import can_cast_aftermath, has_aftermath
+from engine.game.graveyard_gates import (
+    battlefield_can_reconfigure,
+    battlefield_can_transfigure,
+    battlefield_can_transmute,
+    graveyard_can_mayhem,
+)
+from engine.abilities.keywords.casting.warp import exile_warp_permanents
+from engine.abilities.keywords.other.daybound import resolve_daybound_upkeep
 from engine.abilities.keywords.other.dredge import apply_dredge, can_dredge_instead_of_draw
 from engine.abilities.keywords.other.encore import can_encore
 from engine.abilities.keywords.other.eternalize import can_eternalize
 from engine.abilities.keywords.other.outlast import can_outlast, clear_outlast_turn_marker
+from engine.abilities.keywords.other.station import can_station
+from engine.abilities.keywords.other.transmute import clear_transmute_turn_marker
 from engine.abilities.keywords.other.ninjutsu import can_ninjutsu
 from engine.cards.oracle_parse import is_affordable, spell_category
 from engine.core.game_object import CardObject
@@ -81,7 +91,7 @@ class _GameSetup:
 
 
 @dataclass
-class InteractiveGame(SpellStackMixin, CombatActionsMixin):
+class InteractiveGame(SpellStackMixin, CombatActionsMixin):  # pylint: disable=too-many-lines
     """Playable two-player game session backed by GameState."""
 
     state: GameState
@@ -299,6 +309,8 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
         self._sacrifice_blitz_at_turn_end(0)
         self._sacrifice_decayed_at_turn_end(0)
         self._sacrifice_encore_at_turn_end(0)
+        for detail in exile_warp_permanents(self.state.zones, 0):
+            self._log('rules', 'warp', detail)
         self._log("player", "end_turn", f"End of turn {self.turn}")
         self.phase = "opp_turn"
         self._opponent_main_phase()
@@ -402,6 +414,14 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
             actions.append("activate")
         if self._battlefield_can_outlast():
             actions.append("outlast")
+        if self._battlefield_can_transmute():
+            actions.append("transmute")
+        if self._battlefield_can_transfigure():
+            actions.append("transfigure")
+        if self._battlefield_can_reconfigure():
+            actions.append("reconfigure")
+        if self._battlefield_can_station():
+            actions.append("station")
         if self._battlefield_can_turn_up_morph():
             actions.append("turn_up_morph")
 
@@ -442,6 +462,8 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
             actions.append("cast_retrace")
         if self._graveyard_can_aftermath():
             actions.append("cast_aftermath")
+        if self._graveyard_can_mayhem():
+            actions.append("cast_mayhem")
         if self._graveyard_can_harmonize():
             actions.append("cast_harmonize")
 
@@ -727,6 +749,33 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
             return False
         return any(can_outlast(perm, self.state, 0, self.phase) for perm in self._permanents(0))
 
+    def _battlefield_can_transmute(self) -> bool:
+        """Return True when a permanent can activate transmute."""
+        return battlefield_can_transmute(self.state, self._permanents(0), 0, self.phase)
+
+    def _battlefield_can_transfigure(self) -> bool:
+        """Return True when a permanent can activate transfigure."""
+        return battlefield_can_transfigure(self.state, self._permanents(0), 0, self.phase)
+
+    def _battlefield_can_reconfigure(self) -> bool:
+        """Return True when a permanent can activate reconfigure."""
+        return battlefield_can_reconfigure(self.state, self._permanents(0), 0, self.phase)
+
+    def _battlefield_can_station(self) -> bool:
+        """Return True when a spacecraft can be stationed."""
+        if not self.state.stack.is_empty:
+            return False
+        return any(can_station(perm, self.state, 0, self.phase) for perm in self._permanents(0))
+
+    def _graveyard_can_mayhem(self) -> bool:
+        """Return True when a graveyard card can be cast for mayhem."""
+        return graveyard_can_mayhem(
+            self._zones(0).graveyard,
+            phase=self.phase,
+            stack_is_empty=self.state.stack.is_empty,
+            land_played=self.state.players[0].land_played,
+        )
+
     def _battlefield_can_turn_up_morph(self) -> bool:
         """Return True when a face-down morph or disguise creature can turn face up."""
         if not self.state.stack.is_empty:
@@ -785,6 +834,7 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
             clear_boast_turn_counters(perm)
             clear_bushido_combat_markers(perm)
             clear_outlast_turn_marker(perm)
+            clear_transmute_turn_marker(perm)
             perm.counters.pop('valiant_this_turn', None)
             if perm.counters.pop('exerted', 0) or perm.counters.pop('detained', 0):
                 continue
@@ -826,6 +876,8 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
             self._log('rules', 'recover', detail)
         for detail in resolve_phasing_upkeep(self.state, player_idx):
             self._log('rules', 'phasing', detail)
+        for detail in resolve_daybound_upkeep(self.state, player_idx):
+            self._log('rules', 'daybound', detail)
         self._tick_suspend_upkeep(player_idx)
 
 

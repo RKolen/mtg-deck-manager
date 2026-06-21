@@ -568,6 +568,10 @@ class ForgeAdapter:
         self._mock_engine = MockGameEngine()
         self._mock_decks: dict[str, tuple[list, list]] = {}
         self._game_counter: int = 0
+        # Engine that actually produced the most recent run's results. Distinct
+        # from the requested/resolved engine: Forge can fail and fall back to the
+        # mock, and callers must report the engine that truly ran.
+        self._last_engine: str = "mock" if self._mock else "forge"
 
         if self._mock:
             logger.info(
@@ -581,6 +585,11 @@ class ForgeAdapter:
     def is_mock(self) -> bool:
         """True when running without the Forge JAR."""
         return self._mock
+
+    @property
+    def last_engine(self) -> str:
+        """Engine that produced the most recent run's results: "forge" or "mock"."""
+        return self._last_engine
 
     def run_simulation(
         self,
@@ -615,9 +624,11 @@ class ForgeAdapter:
                 after_batch=after_batch,
             )
             if results:
+                self._last_engine = "forge"
                 return results
             logger.warning("Forge returned no results — falling back to mock engine")
 
+        self._last_engine = "mock"
         return run_chunked_simulation(
             n_games,
             lambda chunk, start: [

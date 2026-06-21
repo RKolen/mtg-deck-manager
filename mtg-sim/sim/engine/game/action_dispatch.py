@@ -50,11 +50,14 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
                     paid_awaken=req.paidAwaken,
                     paid_impending=req.paidImpending,
                     paid_for_mirrodin=req.paidForMirrodin,
+                    paid_splice=req.paidSplice,
+                    paid_compleated=req.paidCompleated,
                 ),
             ),
             repeat=_RepeatCostChoices(
                 kicker_times=req.kickerTimes,
                 replicate_times=req.replicateTimes,
+                squad_times=req.squadTimes,
             ),
         ),
         alternate=HandAlternateCastChoices(
@@ -68,6 +71,9 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
                 cast_for_freerunning=req.castForFreerunning,
                 cast_for_spectacle=req.castForSpectacle,
                 cast_for_surge=req.castForSurge,
+                cast_for_prototype=req.castForPrototype,
+                cast_for_warp=req.castForWarp,
+                cast_for_specialize=req.castForSpecialize,
             ),
             face=FaceAlternateCastFlags(
                 cast_for_morph=req.castForMorph,
@@ -98,6 +104,8 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
                 sneak_land_hand_indices=tuple(req.sneakLandHandIndices),
                 assist_mana=req.assistMana,
                 awaken_land_hand_idx=req.awakenLandHandIdx,
+                splice_hand_idx=req.spliceHandIdx,
+                specialize_hand_idx=req.specializeHandIdx,
             ),
         ),
     )
@@ -171,6 +179,10 @@ def _dispatch_permanent_actions(game: InteractiveGame, req) -> dict | None:
             uid,
             [str(cid) for cid in (req.convokeCreatureIds or [])],
         ),
+        "station": lambda: game.action_station(
+            uid,
+            [str(cid) for cid in (req.convokeCreatureIds or [])],
+        ),
         "level_up": lambda: game.action_level_up(uid),
         "activate": lambda: game.action_activate(
             uid,
@@ -178,6 +190,9 @@ def _dispatch_permanent_actions(game: InteractiveGame, req) -> dict | None:
             host_uid=req.targetUid,
         ),
         "outlast": lambda: game.action_outlast(uid),
+        "transmute": lambda: game.action_transmute(uid),
+        "transfigure": lambda: game.action_transfigure(uid),
+        "reconfigure": lambda: game.action_reconfigure(uid),
         "turn_up_morph": lambda: game.action_turn_up_morph(uid),
         "boast": lambda: game.action_boast(uid),
         "craft": lambda: game.action_craft(
@@ -200,6 +215,11 @@ def _dispatch_alt_cast(game: InteractiveGame, req) -> dict | None:
             req.targetPlayer,
         ),
         "cast_flashback": lambda: game.action_cast_flashback(
+            req.handIdx,
+            req.targetUid,
+            req.targetPlayer,
+        ),
+        "cast_mayhem": lambda: game.action_cast_mayhem(
             req.handIdx,
             req.targetUid,
             req.targetPlayer,
