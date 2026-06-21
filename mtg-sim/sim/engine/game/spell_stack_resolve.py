@@ -16,6 +16,7 @@ from engine.abilities.keywords.casting import (
     entwined_extra_draw,
     extra_draw_from_kicker,
     has_spree,
+    has_tiered,
     kicked_counter_count,
     mutate_bonus_counters,
     overload_creature_targets,
@@ -32,6 +33,7 @@ from engine.abilities.keywords.casting import (
 from engine.abilities.keywords.casting.awaken import apply_awaken_on_resolve
 from engine.abilities.keywords.casting.impending import apply_impending_on_resolve
 from engine.abilities.keywords.casting.prototype import apply_prototype_on_etb
+from engine.abilities.keywords.casting.tiered import tiered_modes
 from engine.abilities.keywords.casting.warp import apply_warp_on_resolve
 from engine.abilities.keywords.casting.squad import apply_squad_on_etb
 from engine.abilities.keywords.other.etb import apply_etb_other_abilities
@@ -109,7 +111,7 @@ class SpellResolveMixin(SpellStackPlacementMixin):
             return resolve_ability_effect(obj, self.state)
         return "Resolved ability"
 
-    def _apply_spell(self, spell: SpellOnStack) -> str:
+    def _apply_spell(self, spell: SpellOnStack) -> str:  # pylint: disable=too-many-return-statements
         """Apply a resolved spell's effect."""
         card = spell.source
         assert card is not None
@@ -123,6 +125,8 @@ class SpellResolveMixin(SpellStackPlacementMixin):
             if detail:
                 self._register_permanent_triggers(self.state.zones.battlefield[-1])
                 return detail
+        if spell.modes and has_tiered(card_info):
+            return self._resolve_tiered_spell(spell)
         if spell.modes and has_spree(card_info):
             return self._resolve_spree_spell(spell)
         category = spell_category(card_info)
@@ -220,6 +224,22 @@ class SpellResolveMixin(SpellStackPlacementMixin):
         self._relocate_resolved_spell(spell, card)
         detail = ", ".join(parts) if parts else "no effect"
         return f"{card_info.name} spree ({detail})"
+
+    def _resolve_tiered_spell(self, spell: SpellOnStack) -> str:
+        """Resolve a tiered spell by applying the chosen mode."""
+        card = spell.source
+        assert card is not None
+        card_info = require_card_info(card)
+        options = tiered_modes(card_info)
+        parts: list[str] = []
+        if spell.modes:
+            idx = spell.modes[0]
+            if idx < len(options):
+                self._apply_spree_mode(options[idx].effect, spell, parts)
+            self.state.check_sbas()
+        self._relocate_resolved_spell(spell, card)
+        detail = ", ".join(parts) if parts else "no effect"
+        return f"{card_info.name} tiered ({detail})"
 
     def _apply_creature_counters(self, permanent: Permanent, spell: SpellOnStack) -> None:
         """Apply face-down state and keyword counters after a creature enters."""

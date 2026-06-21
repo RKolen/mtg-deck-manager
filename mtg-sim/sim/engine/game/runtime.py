@@ -19,6 +19,10 @@ from engine.game._hand_card import (
     graveyard_card_or_error,
     hand_card_or_error,
 )
+from engine.abilities.keywords.casting.paradigm import (
+    exile_for_paradigm,
+    should_exile_for_paradigm,
+)
 from engine.abilities.keywords.casting.rebound import (
     exile_for_rebound,
     should_exile_for_rebound,
@@ -286,6 +290,11 @@ class GameRuntimeMixin:
             return
         card_info = card.card_info
         if (
+            card_info is not None
+            and should_exile_for_paradigm(spell, card_info)
+        ):
+            exile_for_paradigm(self.state.zones, card, self.state)
+        elif (
             card_info is not None
             and should_exile_for_rebound(spell, card_info)
         ):

@@ -58,6 +58,8 @@ from engine.abilities.keywords.casting.prototype import (
     prototype_mana_needed,
 )
 from engine.abilities.keywords.casting.compleated import compleated_life_extra
+from engine.abilities.keywords.casting.tiered import tiered_extra_mana
+from engine.abilities.keywords.casting.undaunted import undaunted_reduction
 from engine.abilities.keywords.casting.specialize import (
     normalize_specialize_cast,
     specialize_mana_needed,
@@ -88,6 +90,7 @@ from engine.abilities.keywords.other.affinity import affinity_reduction
 from engine.game.face_alternate_cast import FaceAlternateCastFlags
 
 if TYPE_CHECKING:
+    from engine.core.game_state import GameState
     from engine.core.zones import ZoneManager
 
 
@@ -120,13 +123,14 @@ class _RepeatCastCounts:
 
 
 @dataclass(frozen=True)
-class CastManaModifiers:
+class CastManaModifiers:  # pylint: disable=too-many-instance-attributes
     """Optional cost modifiers for announce-cast mana."""
 
     kicker_times: int = 0
     bestow_target_uid: str | None = None
     repeat: _RepeatCastCounts = field(default_factory=_RepeatCastCounts)
     spree_mode_indices: tuple[int, ...] = ()
+    tiered_mode_index: int | None = None
     bools: _FlatBoolMods = field(default_factory=_FlatBoolMods)
     sac: _SacManaModifiers = field(default_factory=_SacManaModifiers)
     face: FaceAlternateCastFlags = field(default_factory=FaceAlternateCastFlags)
@@ -269,6 +273,7 @@ class AnnounceCastManaOptions:
     modifiers: CastManaModifiers = field(default_factory=CastManaModifiers)
     timing: CastManaTiming = field(default_factory=CastManaTiming)
     zones: ZoneManager | None = None
+    game: GameState | None = None
     controller_idx: int = 0
 
 
@@ -365,6 +370,7 @@ def resolve_announce_cast_mana(
     mana_needed += squad_extra_mana(card, mods.squad_times)
     mana_needed += buyback_extra_mana(card, mods.paid_buyback)
     mana_needed += spree_extra_mana(card, mods.spree_mode_indices)
+    mana_needed += tiered_extra_mana(card, mods.tiered_mode_index)
     mana_needed += conspire_extra_mana(card, timing.paid_conspire)
     mana_needed += escalate_extra_mana(card, timing.available.escalate_extra_targets)
     mana_needed += awaken_mana_extra(card, timing.available.paid_awaken)
@@ -378,6 +384,11 @@ def resolve_announce_cast_mana(
         mana_needed = max(
             0,
             mana_needed - affinity_reduction(card, opts.zones, opts.controller_idx),
+        )
+    if opts.game is not None:
+        mana_needed = max(
+            0,
+            mana_needed - undaunted_reduction(opts.game, card, opts.controller_idx),
         )
     life_cost += compleated_life_extra(card, timing.available.paid_compleated)
     return mana_needed, life_cost

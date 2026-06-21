@@ -88,6 +88,7 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
                 mutate_target_uid=req.mutateTargetUid,
                 escalate_extra_targets=req.escalateExtraTargets,
                 spree_mode_indices=tuple(req.spreeModeIndices),
+                tiered_mode_index=req.tieredModeIndex,
                 harmonize_creature_ids=harmonize_ids,
                 sacrifices=_SacrificeTargetIds(
                     emerge_sacrifice_ids=emerge_ids,

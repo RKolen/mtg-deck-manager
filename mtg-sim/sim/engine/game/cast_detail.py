@@ -44,6 +44,8 @@ def announce_cast_detail_suffix(
         tags.append(f'bargain, sacrificed {sacrificed_name}')
     if mods.spree_modes:
         tags.append(f'spree modes {list(mods.spree_modes)}')
+    if mods.tiered_mode is not None:
+        tags.append(f'tiered mode {mods.tiered_mode}')
     if not tags:
         return ''
     return f" ({', '.join(tags)})"

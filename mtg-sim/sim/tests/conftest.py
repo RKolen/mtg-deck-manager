@@ -43,6 +43,7 @@ _MODIFIER_KW_KEYS = frozenset({
     "emerge_sacrifice_ids",
     "casualty_sacrifice_ids",
     "spree_mode_indices",
+    "tiered_mode_index",
     "convoke_creature_ids",
     "delve_graveyard_indices",
     "improvise_artifact_ids",
@@ -67,6 +68,7 @@ def _modifier_ids_from_kw(modifier_kw: dict[str, Any]) -> CastModifierIds:
             mutate_target_uid=modifier_kw.get("mutate_target_uid"),
             escalate_extra_targets=int(modifier_kw.get("escalate_extra_targets", 0)),
             spree_mode_indices=_as_tuple(modifier_kw.get("spree_mode_indices", ())),
+            tiered_mode_index=modifier_kw.get("tiered_mode_index"),
             sacrifices=_SacrificeTargetIds(
                 emerge_sacrifice_ids=_as_tuple(modifier_kw.get("emerge_sacrifice_ids", ())),
                 casualty_sacrifice_ids=_as_tuple(modifier_kw.get("casualty_sacrifice_ids", ())),

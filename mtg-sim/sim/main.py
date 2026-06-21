@@ -374,6 +374,7 @@ class GameActionRequest(BaseModel):
     castForMutate: bool = False
     mutateTargetUid: str | None = None
     spreeModeIndices: list[int] = []
+    tieredModeIndex: int | None = None
     sneakLandHandIndices: list[int] = []
     castForFreerunning: bool = False
     castForSpectacle: bool = False

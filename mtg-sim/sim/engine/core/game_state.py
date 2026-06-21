@@ -28,6 +28,7 @@ from engine.abilities.keywords.other.champion import (
     release_championed_creature,
 )
 from engine.abilities.keywords.other.extort import apply_extort_on_spell_cast
+from engine.abilities.keywords.other.increment import apply_increment_on_spell_cast
 from engine.abilities.keywords.other.intensity import apply_intensity_on_spell_cast
 from engine.abilities.keywords.other.haunt import (
     apply_haunt_on_creature_death,
@@ -66,7 +67,7 @@ class _TurnFlags:
 
 
 @dataclass
-class PlayerInfo:
+class PlayerInfo:  # pylint: disable=too-many-instance-attributes
     """Per-player state that lives outside the zone system."""
 
     name: str
@@ -76,6 +77,8 @@ class PlayerInfo:
     dungeon_room: int = 0
     attractions: int = 0
     has_lost: bool = False
+    speed: int = 0
+    paradigm_spell_names: list[str] = field(default_factory=list)
 
     @property
     def life(self) -> int:
@@ -372,6 +375,8 @@ class GameState:
         self,
         spell: CardObject,
         targets: tuple[Target, ...] = (),
+        *,
+        mana_spent: int = 0,
     ) -> None:
         """Put triggered abilities for a cast spell on the stack."""
         self.trigger_registry.put_triggers_on_stack(
@@ -384,6 +389,13 @@ class GameState:
         card_info = spell.card_info
         for detail in apply_intensity_on_spell_cast(self, spell.controller_idx, card_info):
             self.log_event('rules', 'intensity', detail)
+        for detail in apply_increment_on_spell_cast(
+            self,
+            spell.controller_idx,
+            card_info,
+            mana_spent=mana_spent,
+        ):
+            self.log_event('rules', 'increment', detail)
 
     def mark_player_was_dealt_damage(self, player_idx: int) -> None:
         """Record that a player was dealt damage this turn (Raid and similar)."""

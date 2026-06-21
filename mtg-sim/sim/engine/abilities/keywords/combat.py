@@ -10,6 +10,10 @@ from engine.abilities.keywords.other.living_metal import is_living_metal_creatur
 from engine.abilities.keywords.other.phasing import is_phased_out
 from engine.abilities.keywords.other.prowl import prowl_unblockable
 from engine.abilities.keywords.other.reconfigure import is_reconfigure_creature
+from engine.abilities.keywords.other.max_speed import (
+    max_speed_blocks_attack,
+    max_speed_grants_haste,
+)
 from engine.abilities.keywords.other.station import is_stationed
 from engine.abilities.keywords.other.skulk import skulk_allows_block
 from engine.abilities.keywords.registry import detect_keywords
@@ -47,10 +51,13 @@ def _is_awakened_creature(perm: Permanent) -> bool:
     return perm.counters.get('awaken', 0) > 0
 
 
-def can_attack(perm: Permanent) -> bool:
+def can_attack(perm: Permanent, game: GameState | None = None) -> bool:
     """Return whether a permanent can be declared as an attacker."""
     if is_phased_out(perm):
         return False
+    if max_speed_blocks_attack(perm, game):
+        return False
+    sick = perm.sick and not (game is not None and max_speed_grants_haste(perm, game))
     return (
         (
             is_creature(perm)
@@ -62,7 +69,7 @@ def can_attack(perm: Permanent) -> bool:
             or is_living_metal_creature(perm)
         )
         and not perm.tapped
-        and not perm.sick
+        and not sick
         and not has_keyword(perm, 'Defender')
         and not blocks_attack(perm)
     )

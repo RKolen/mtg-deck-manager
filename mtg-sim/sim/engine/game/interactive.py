@@ -21,6 +21,7 @@ from engine.abilities.keywords.other.fading import resolve_fading_upkeep
 from engine.abilities.keywords.other.cumulative_upkeep import resolve_cumulative_upkeep
 from engine.abilities.keywords.other.vanishing import resolve_vanishing_upkeep
 from engine.abilities.keywords.casting.rebound import resolve_rebound_upkeep
+from engine.abilities.keywords.casting.paradigm import resolve_paradigm_upkeep
 from engine.abilities.keywords.other.recover import resolve_recover_upkeep
 from engine.abilities.keywords.other.phasing import resolve_phasing_upkeep
 from engine.abilities.keywords.other.forecast import can_forecast
@@ -55,6 +56,7 @@ from engine.game.graveyard_gates import (
     battlefield_can_transmute,
     graveyard_can_mayhem,
 )
+from engine.abilities.keywords.other.solved import resolve_to_solve_end_step
 from engine.abilities.keywords.casting.warp import exile_warp_permanents
 from engine.abilities.keywords.other.daybound import resolve_daybound_upkeep
 from engine.abilities.keywords.other.dredge import apply_dredge, can_dredge_instead_of_draw
@@ -301,6 +303,8 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):  # pylint: disable=t
         """End the player's turn, run a simple opponent turn, then pass back."""
         assert self.phase in ("main1", "main2", "attack")
         self._fire_step_triggers(Step.END_STEP)
+        for detail in resolve_to_solve_end_step(self.state, 0):
+            self._log('rules', 'solved', detail)
         self._exile_unearth_at_turn_end(0)
         for detail in self._return_dash_creatures_to_hand(0):
             self._log("rules", "dash", detail)
@@ -870,6 +874,8 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):  # pylint: disable=t
             self._log('rules', 'cumulative_upkeep', detail)
         for detail in resolve_vanishing_upkeep(self.state, player_idx):
             self._log('rules', 'vanishing', detail)
+        for detail in resolve_paradigm_upkeep(self.state, player_idx):
+            self._log('rules', 'paradigm', detail)
         for detail in resolve_rebound_upkeep(self.state.zones, player_idx):
             self._log('rules', 'rebound', detail)
         for detail in resolve_recover_upkeep(self.state, player_idx):

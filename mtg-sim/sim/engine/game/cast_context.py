@@ -237,6 +237,7 @@ class CastTargetingIds:
     bestow_target_uid: str | None = None
     mutate_target_uid: str | None = None
     spree_mode_indices: tuple[int, ...] = ()
+    tiered_mode_index: int | None = None
     harmonize_creature_ids: tuple[int, ...] = ()
     escalate_extra_targets: int = 0
     sacrifices: _SacrificeTargetIds = field(default_factory=_SacrificeTargetIds)

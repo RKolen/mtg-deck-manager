@@ -89,6 +89,10 @@ from engine.abilities.keywords.casting.spree import (
     normalize_spree_modes,
     spree_selection_error,
 )
+from engine.abilities.keywords.casting.tiered import (
+    normalize_tiered_mode,
+    tiered_selection_error,
+)
 from engine.core.game_object import CardObject
 from engine.core.game_state import GameState
 from engine.core.zones import ZoneManager
@@ -160,6 +164,7 @@ class PaidCastModifiers:  # pylint: disable=too-many-public-methods
     """Normalized optional cost flags after validation."""
 
     spree_modes: tuple[int, ...]
+    tiered_mode: int | None = None
     flat: _FlatCostFlags = field(default_factory=_FlatCostFlags)
     face: _FaceCastFlags = field(default_factory=_FaceCastFlags)
     sac: _SacCastFlags = field(default_factory=_SacCastFlags)
@@ -374,6 +379,10 @@ def _normalized_paid_flags(
             card_info,
             list(opts.modifiers.targeting.spree_mode_indices),
         ),
+        tiered_mode=normalize_tiered_mode(
+            card_info,
+            opts.modifiers.targeting.tiered_mode_index,
+        ),
         flat=_FlatCostFlags(
             entwined=normalize_entwined(card_info, opts.costs.entwined),
             overloaded=normalize_overloaded(card_info, opts.costs.overloaded),
@@ -585,6 +594,10 @@ def validate_announce_cast(
         lambda: spree_selection_error(
             card_info,
             list(opts.modifiers.targeting.spree_mode_indices),
+        ),
+        lambda: tiered_selection_error(
+            card_info,
+            opts.modifiers.targeting.tiered_mode_index,
         ),
         lambda: _reject_keyword(opts.costs.paid_casualty, paid.casualty, name, "casualty"),
         lambda: casualty_sacrifice_error(

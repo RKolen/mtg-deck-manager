@@ -210,7 +210,7 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
             return sacrificed.name
         return ""
 
-    def _place_validated_hand_cast(  # pylint: disable=too-many-branches
+    def _place_validated_hand_cast(  # pylint: disable=too-many-branches,too-many-locals
         self,
         placement: HandCastPlacement,
     ) -> dict:
@@ -235,6 +235,11 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
         self._pay_phyrexian(0, placement.life_cost, placement.card_info.name)
         sacrificed_name = self._apply_emerge_casualty_sacrifice(placement.paid)
         mods = placement.paid.modifiers
+        stack_modes = (
+            (mods.tiered_mode,)
+            if mods.tiered_mode is not None
+            else mods.spree_modes
+        )
         stack_context = SpellCastContext(
             payment=SpellCastPayment(
                 costs=_CostMods(
@@ -274,7 +279,7 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
                 replicate_times=mods.replicate_times,
                 squad_times=mods.squad_times,
             ),
-            spree_mode_indices=mods.spree_modes,
+            spree_mode_indices=stack_modes,
             extras=_HandCastExtras(
                 awaken_land_hand_idx=placement.opts.modifiers.reductions.awaken_land_hand_idx,
                 fuse=mods.copy_casts.fuse,
@@ -308,7 +313,11 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
                     "draw",
                     f"Gift drew {require_card_info(drawn[0]).name} for opponent",
                 )
-        self.state.fire_spell_cast_triggers(placement.card, tuple(targets))
+        self.state.fire_spell_cast_triggers(
+            placement.card,
+            tuple(targets),
+            mana_spent=adjustments.mana_needed,
+        )
         ripple_detail = apply_ripple_on_cast(self.state, 0, placement.card_info)
         if ripple_detail:
             self._log('rules', 'ripple', ripple_detail)

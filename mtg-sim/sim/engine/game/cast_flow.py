@@ -172,6 +172,7 @@ def cast_modifiers_for_announce(
             squad_times=paid.modifiers.squad_times,
         ),
         spree_mode_indices=paid.modifiers.spree_modes,
+        tiered_mode_index=paid.modifiers.tiered_mode,
         bools=_FlatBoolMods(
             entwined=paid.modifiers.entwined,
             overloaded=paid.modifiers.overloaded,
@@ -239,5 +240,6 @@ def announce_mana_options(
         modifiers=cast_modifiers_for_announce(paid, opts),
         timing=cast_timing_for_announce(paid, opts, state, controller_idx),
         zones=state.zones,
+        game=state,
         controller_idx=controller_idx,
     )
