@@ -73,6 +73,7 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
                 cast_for_surge=req.castForSurge,
                 cast_for_prototype=req.castForPrototype,
                 cast_for_warp=req.castForWarp,
+                cast_for_web_slinging=req.castForWebSlinging,
                 cast_for_specialize=req.castForSpecialize,
             ),
             face=FaceAlternateCastFlags(
@@ -107,6 +108,7 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
                 awaken_land_hand_idx=req.awakenLandHandIdx,
                 splice_hand_idx=req.spliceHandIdx,
                 specialize_hand_idx=req.specializeHandIdx,
+                web_sling_creature_uid=req.webSlingCreatureUid,
             ),
         ),
     )
@@ -193,6 +195,7 @@ def _dispatch_permanent_actions(game: InteractiveGame, req) -> dict | None:
         "outlast": lambda: game.action_outlast(uid),
         "transmute": lambda: game.action_transmute(uid),
         "transfigure": lambda: game.action_transfigure(uid),
+        "aura_swap": lambda: game.action_aura_swap(uid, req.auraSwapHandIdx or 0),
         "reconfigure": lambda: game.action_reconfigure(uid),
         "turn_up_morph": lambda: game.action_turn_up_morph(uid),
         "boast": lambda: game.action_boast(uid),

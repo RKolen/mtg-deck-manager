@@ -210,6 +210,7 @@ def cast_timing_for_announce(
         ),
         cast_for_cleave=paid.modifiers.copy_casts.cleave,
         cast_for_warp=paid.modifiers.conditions.warp,
+        cast_for_web_slinging=paid.modifiers.conditions.web_slinging,
         cast_for_specialize=paid.modifiers.conditions.specialize,
         face=_FaceCastTiming(
             morph=paid.modifiers.morph,

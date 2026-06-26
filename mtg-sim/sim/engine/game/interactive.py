@@ -51,6 +51,7 @@ from engine.abilities.keywords.casting.jump_start import can_cast_via_jump_start
 from engine.abilities.keywords.casting.retrace import can_cast_via_retrace, has_retrace
 from engine.abilities.keywords.casting.aftermath import can_cast_aftermath, has_aftermath
 from engine.game.graveyard_gates import (
+    battlefield_can_aura_swap,
     battlefield_can_reconfigure,
     battlefield_can_transfigure,
     battlefield_can_transmute,
@@ -422,6 +423,8 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):  # pylint: disable=t
             actions.append("transmute")
         if self._battlefield_can_transfigure():
             actions.append("transfigure")
+        if self._battlefield_can_aura_swap():
+            actions.append("aura_swap")
         if self._battlefield_can_reconfigure():
             actions.append("reconfigure")
         if self._battlefield_can_station():
@@ -760,6 +763,10 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):  # pylint: disable=t
     def _battlefield_can_transfigure(self) -> bool:
         """Return True when a permanent can activate transfigure."""
         return battlefield_can_transfigure(self.state, self._permanents(0), 0, self.phase)
+
+    def _battlefield_can_aura_swap(self) -> bool:
+        """Return True when a permanent can activate aura swap."""
+        return battlefield_can_aura_swap(self.state, self._permanents(0), 0, self.phase)
 
     def _battlefield_can_reconfigure(self) -> bool:
         """Return True when a permanent can activate reconfigure."""

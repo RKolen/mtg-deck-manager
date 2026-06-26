@@ -12,6 +12,7 @@ from engine.abilities.keywords.casting.bargain import (
 from engine.abilities.keywords.casting.gift import gift_opponent_draws
 from engine.abilities.keywords.casting.ripple import apply_ripple_on_cast
 from engine.abilities.keywords.casting.specialize import discard_for_specialize
+from engine.abilities.keywords.casting.web_slinging import return_creature_for_web_sling
 from engine.abilities.keywords.casting.splice import discard_for_splice
 from engine.abilities.keywords.casting.casualty import sacrifice_for_casualty
 from engine.abilities.keywords.casting.for_mirrodin import sacrifice_for_for_mirrodin
@@ -337,6 +338,14 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
             )
             if spliced:
                 self._log('rules', 'splice', f"spliced {spliced}")
+        if placement.paid.modifiers.conditions.web_slinging:
+            slung = return_creature_for_web_sling(
+                self.state.zones,
+                0,
+                placement.opts.modifiers.reductions.web_sling_creature_uid,
+            )
+            if slung:
+                self._log('rules', 'web-slinging', f"returned {slung}")
         for word_detail in apply_spell_hosted_ability_words(
             self.state, placement.card_info, 0
         ):

@@ -65,6 +65,10 @@ from engine.abilities.keywords.casting.specialize import (
     specialize_mana_needed,
 )
 from engine.abilities.keywords.casting.warp import normalize_warp_cast, warp_mana_needed
+from engine.abilities.keywords.casting.web_slinging import (
+    normalize_web_slinging_cast,
+    web_slinging_mana_needed,
+)
 from engine.abilities.keywords.casting.splice import splice_mana_extra
 from engine.abilities.keywords.casting.dash import (
     dash_mana_needed,
@@ -225,6 +229,7 @@ class CastManaTiming:  # pylint: disable=too-many-instance-attributes
     opponent_damage: _OpponentDamageCasts = field(default_factory=_OpponentDamageCasts)
     cast_for_cleave: bool = False
     cast_for_warp: bool = False
+    cast_for_web_slinging: bool = False
     cast_for_specialize: bool = False
     face: _FaceCastTiming = field(default_factory=_FaceCastTiming)
     paid_conspire: bool = False
@@ -307,6 +312,8 @@ def _resolve_timing_alternate_mana(  # pylint: disable=too-many-return-statement
         return freerunning_mana_needed(card)
     if normalize_warp_cast(card, timing.cast_for_warp):
         return warp_mana_needed(card)
+    if normalize_web_slinging_cast(card, timing.cast_for_web_slinging):
+        return web_slinging_mana_needed(card)
     if normalize_specialize_cast(card, timing.cast_for_specialize):
         return specialize_mana_needed(card)
     return None

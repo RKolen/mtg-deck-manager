@@ -69,6 +69,11 @@ from engine.abilities.keywords.other.transfigure import (
     can_transfigure,
     transfigure_mana_needed,
 )
+from engine.abilities.keywords.other.aura_swap import (
+    apply_aura_swap,
+    aura_swap_mana_needed,
+    can_aura_swap,
+)
 from engine.abilities.keywords.other.reconfigure import apply_reconfigure, can_reconfigure
 from engine.abilities.keywords.other.station import (
     apply_station,
@@ -393,6 +398,22 @@ class ActivatedActionsMixin(GameRuntimeMixin):  # pylint: disable=too-many-publi
         if detail is None:
             return self._client_error("Transfigure failed")
         self._log("player", "transfigure", detail)
+        return self.to_client()
+
+    def action_aura_swap(self, permanent_uid: str, hand_idx: int) -> dict:
+        """Activate aura swap on an Aura."""
+        perm = self._find_permanent(permanent_uid)
+        if perm is None:
+            return self._client_error("Permanent not found")
+        if not can_aura_swap(perm, self.state, 0, self.phase):
+            return self._client_error("Cannot aura swap now")
+        mana_needed = aura_swap_mana_needed(perm)
+        if mana_needed and not self._tap_lands_for_mana(0, mana_needed):
+            return self._client_error(f"Need {mana_needed} mana to aura swap")
+        detail = apply_aura_swap(self.state, perm, hand_idx)
+        if detail is None:
+            return self._client_error("Aura swap failed")
+        self._log("player", "aura_swap", detail)
         return self.to_client()
 
     def action_reconfigure(self, permanent_uid: str) -> dict:

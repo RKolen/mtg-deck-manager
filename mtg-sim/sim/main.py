@@ -384,7 +384,10 @@ class GameActionRequest(BaseModel):
     paidCompleated: bool = False
     spliceHandIdx: int | None = None
     specializeHandIdx: int | None = None
+    webSlingCreatureUid: str | None = None
+    auraSwapHandIdx: int | None = None
     castForWarp: bool = False
+    castForWebSlinging: bool = False
     castForSpecialize: bool = False
     castForMorph: bool = False
     castForDisguise: bool = False

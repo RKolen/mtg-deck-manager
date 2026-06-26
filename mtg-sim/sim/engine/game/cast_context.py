@@ -143,6 +143,7 @@ class _CostConditionAlts:  # pylint: disable=too-many-instance-attributes
     cast_for_prototype: bool = False
     cast_for_splice: bool = False
     cast_for_warp: bool = False
+    cast_for_web_slinging: bool = False
     cast_for_specialize: bool = False
 
 
@@ -192,6 +193,11 @@ class HandAlternateCastChoices:
     def cast_for_warp(self) -> bool:
         """Whether this cast uses warp."""
         return self.conditions.cast_for_warp
+
+    @property
+    def cast_for_web_slinging(self) -> bool:
+        """Whether this cast uses web-slinging."""
+        return self.conditions.cast_for_web_slinging
 
     @property
     def cast_for_specialize(self) -> bool:
@@ -280,6 +286,7 @@ class CastManaReductionIds:  # pylint: disable=too-many-instance-attributes
     awaken_land_hand_idx: int | None = None
     splice_hand_idx: int | None = None
     specialize_hand_idx: int | None = None
+    web_sling_creature_uid: str | None = None
 
 
 @dataclass(frozen=True)

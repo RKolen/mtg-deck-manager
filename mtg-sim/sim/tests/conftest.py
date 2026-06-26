@@ -43,6 +43,8 @@ _MODIFIER_KW_KEYS = frozenset({
     "emerge_sacrifice_ids",
     "casualty_sacrifice_ids",
     "spree_mode_indices",
+    "specialize_hand_idx",
+    "web_sling_creature_uid",
     "tiered_mode_index",
     "convoke_creature_ids",
     "delve_graveyard_indices",

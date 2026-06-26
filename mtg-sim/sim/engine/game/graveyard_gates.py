@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from engine.abilities.keywords.casting.mayhem import can_cast_via_mayhem, has_mayhem
+from engine.abilities.keywords.other.aura_swap import can_aura_swap
 from engine.abilities.keywords.other.transmute import can_transmute
 from engine.abilities.keywords.other.transfigure import can_transfigure
 from engine.abilities.keywords.other.reconfigure import can_reconfigure
@@ -68,3 +69,15 @@ def battlefield_can_reconfigure(
     if not game.stack.is_empty:
         return False
     return any(can_reconfigure(perm, game, controller_idx, phase) for perm in permanents)
+
+
+def battlefield_can_aura_swap(
+    game: GameState,
+    permanents: list[Permanent],
+    controller_idx: int,
+    phase: str,
+) -> bool:
+    """Return True when a permanent can activate aura swap."""
+    if not game.stack.is_empty:
+        return False
+    return any(can_aura_swap(perm, game, controller_idx, phase) for perm in permanents)

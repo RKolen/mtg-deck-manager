@@ -64,6 +64,7 @@ class _TurnFlags:
     was_dealt_damage: bool = False
     revolt: bool = False
     permanents_entered: int = 0
+    firebending_red: int = 0
 
 
 @dataclass
@@ -169,6 +170,16 @@ class PlayerInfo:  # pylint: disable=too-many-instance-attributes
     def permanents_entered_this_turn(self, value: int) -> None:
         """Set permanents entered count."""
         self.turn_flags.permanents_entered = value
+
+    @property
+    def firebending_red(self) -> int:
+        """Red mana from firebending that lasts until end of combat."""
+        return self.turn_flags.firebending_red
+
+    @firebending_red.setter
+    def firebending_red(self, value: int) -> None:
+        """Set firebending red mana tracker."""
+        self.turn_flags.firebending_red = value
 
 
 @dataclass

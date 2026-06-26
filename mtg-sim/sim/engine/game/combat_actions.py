@@ -5,6 +5,15 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from engine.abilities.keywords.other.afflict import apply_afflict_on_attack
+from engine.abilities.keywords.other.banding import (
+    attacking_band_size,
+    banding_block_detail,
+)
+from engine.abilities.keywords.other.double_team import apply_double_team_on_attack
+from engine.abilities.keywords.other.firebending import (
+    apply_firebending_on_attack,
+    clear_firebending_mana,
+)
 from engine.abilities.keywords.other.battle_cry import apply_battle_cry_on_attack
 from engine.abilities.keywords.other.flanking import apply_flanking_on_block
 from engine.abilities.keywords.other.boast import mark_attacked_this_turn
@@ -105,6 +114,8 @@ class CombatActionsMixin(ActivatedActionsMixin):
                     self._draw_cards(perm.controller_idx, 1)
         if result.damage_to_player:
             self._log("player", "attack", f"Attacked for {result.damage_to_player} damage")
+        for detail in clear_firebending_mana(self.state, 0):
+            self._log('rules', 'firebending', detail)
         for detail in deactivate_living_metal_after_combat(self.state, 0):
             self._log('rules', 'living_metal', detail)
         self.pending_attackers = []
@@ -117,6 +128,8 @@ class CombatActionsMixin(ActivatedActionsMixin):
         assert self.phase == "attack"
         for detail in deactivate_living_metal_after_combat(self.state, 0):
             self._log('rules', 'living_metal', detail)
+        for detail in clear_firebending_mana(self.state, 0):
+            self._log('rules', 'firebending', detail)
         self.pending_attackers = []
         self._log("player", "skip_attack", "Skipped combat")
         self.phase = "main2"
@@ -173,6 +186,8 @@ class CombatActionsMixin(ActivatedActionsMixin):
             for apply_fn, tag in (
                 (apply_annihilator_on_attack, 'annihilator'),
                 (apply_afflict_on_attack, 'afflict'),
+                (apply_firebending_on_attack, 'firebending'),
+                (apply_double_team_on_attack, 'double team'),
             ):
                 detail = apply_fn(self.state, perm)
                 if detail:
@@ -246,6 +261,8 @@ class CombatActionsMixin(ActivatedActionsMixin):
             blocker_assignments=self.pending_blockers,
         )
         self._log("opponent", "attack", f"Dealt {result.damage_to_player} damage")
+        for detail in clear_firebending_mana(self.state, 1):
+            self._log('rules', 'firebending', detail)
         self._check_game_over()
 
     def _finish_opponent_turn(self) -> None:
@@ -272,6 +289,9 @@ class CombatActionsMixin(ActivatedActionsMixin):
         if attackers:
             controller_idx = attackers[0].controller_idx
             attacker_count = len(attackers)
+            band_count = attacking_band_size(attackers)
+            if band_count >= 2:
+                self._log('rules', 'banding', f"band of {band_count} attackers")
             self.state.fire_mass_attack_triggers(
                 controller_idx,
                 attacker_count,
@@ -301,6 +321,9 @@ class CombatActionsMixin(ActivatedActionsMixin):
                 flank_detail = apply_flanking_on_block(attacker, blocker)
                 if flank_detail:
                     self._log('rules', 'flanking', flank_detail)
+                band_detail = banding_block_detail(blocker, attacker)
+                if band_detail:
+                    self._log('rules', 'banding', band_detail)
                 self.state.fire_block_triggers(blocker, attacker)
                 blockers_by_attacker.setdefault(attacker_uid, []).append(blocker)
         for attacker_uid, blockers in blockers_by_attacker.items():
