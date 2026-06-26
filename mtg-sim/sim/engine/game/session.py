@@ -10,7 +10,10 @@ from deck_registry import CardInfo
 from engine.core.game_state import GameState, LogEntry, PlayerInfo
 from engine.core.turn_structure import TurnRunner
 from engine.core.zones import ZoneManager
+from engine.abilities.keywords.other.choose_a_background import validate_choose_a_background_deck
 from engine.abilities.keywords.other.companion import validate_companion_deck
+from engine.abilities.keywords.other.doctors_companion import validate_doctors_companion_deck
+from engine.abilities.keywords.other.friends_forever import validate_friends_forever_deck
 from engine.abilities.keywords.other.partner import validate_partner_deck
 from engine.game.helpers import expand_deck
 from engine.game.interactive import InteractiveGame, _GameSetup
@@ -32,6 +35,17 @@ class _GameConfig:
     pilot_prompt_resolved: bool = False
 
 
+def _commander_deck_validation_errors(deck: list[CardInfo]) -> list[tuple[str, str | None]]:
+    """Return commander-variant deck validation (action, error) pairs."""
+    return [
+        ('companion', validate_companion_deck(deck)),
+        ('partner', validate_partner_deck(deck)),
+        ('background', validate_choose_a_background_deck(deck)),
+        ('doctors_companion', validate_doctors_companion_deck(deck)),
+        ('friends_forever', validate_friends_forever_deck(deck)),
+    ]
+
+
 def create_game(
     player_cards: list[CardInfo],
     opponent_cards: list[CardInfo],
@@ -39,8 +53,7 @@ def create_game(
 ) -> InteractiveGame:
     """Create and register a new interactive game session."""
     cfg = config or _GameConfig()
-    companion_err = validate_companion_deck(player_cards)
-    partner_err = validate_partner_deck(player_cards)
+    deck_errors = _commander_deck_validation_errors(player_cards)
     zones = ZoneManager()
     zones.player_zones[0].library.extend(expand_deck(player_cards, 0))
     zones.player_zones[1].library.extend(expand_deck(opponent_cards, 1))
@@ -69,10 +82,7 @@ def create_game(
         ),
     )
     game.deal_opening_hands()
-    for action, detail in (
-        ('companion', companion_err),
-        ('partner', partner_err),
-    ):
+    for action, detail in deck_errors:
         if detail:
             state.log.append(
                 LogEntry(

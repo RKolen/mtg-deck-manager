@@ -716,6 +716,7 @@ class _CastModeFlags:
     split_second: bool = False
     mayhem: bool = False
     warp: bool = False
+    converted: bool = False
 
 
 @dataclass
@@ -752,6 +753,11 @@ class _SpellCasting:
     def warp(self) -> bool:
         """Whether this spell was cast for warp."""
         return self.modes.warp
+
+    @property
+    def converted(self) -> bool:
+        """Whether this spell was cast converted."""
+        return self.modes.converted
 
 
 @dataclass

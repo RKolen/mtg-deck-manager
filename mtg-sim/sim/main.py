@@ -388,6 +388,7 @@ class GameActionRequest(BaseModel):
     auraSwapHandIdx: int | None = None
     castForWarp: bool = False
     castForWebSlinging: bool = False
+    castForConverted: bool = False
     castForSpecialize: bool = False
     castForMorph: bool = False
     castForDisguise: bool = False

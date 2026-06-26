@@ -287,6 +287,7 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
                 impending=mods.copy_casts.impending,
                 prototype=mods.prototype,
                 warp=mods.conditions.warp,
+                converted=mods.conditions.converted,
             ),
         )
         targets = self._put_spell_on_stack(

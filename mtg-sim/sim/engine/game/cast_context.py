@@ -144,6 +144,7 @@ class _CostConditionAlts:  # pylint: disable=too-many-instance-attributes
     cast_for_splice: bool = False
     cast_for_warp: bool = False
     cast_for_web_slinging: bool = False
+    cast_for_converted: bool = False
     cast_for_specialize: bool = False
 
 
@@ -198,6 +199,11 @@ class HandAlternateCastChoices:
     def cast_for_web_slinging(self) -> bool:
         """Whether this cast uses web-slinging."""
         return self.conditions.cast_for_web_slinging
+
+    @property
+    def cast_for_converted(self) -> bool:
+        """Whether this cast uses More Than Meets the Eye."""
+        return self.conditions.cast_for_converted
 
     @property
     def cast_for_specialize(self) -> bool:
@@ -316,6 +322,7 @@ class _HandCastExtras:
     prototype: bool = False
     mayhem: bool = False
     warp: bool = False
+    converted: bool = False
 
 
 @dataclass(frozen=True)
@@ -374,6 +381,11 @@ class SpellCastContext:
         return self.extras.mayhem
 
     @property
+    def converted(self) -> bool:
+        """Whether More Than Meets the Eye was paid."""
+        return self.extras.converted
+
+    @property
     def warp(self) -> bool:
         """Whether this spell was cast for warp."""
         return self.extras.warp
@@ -410,6 +422,7 @@ def spell_on_stack_from_context(
                 split_second=split_second,
                 mayhem=context.mayhem,
                 warp=context.warp,
+                converted=context.converted,
             ),
         ),
     )

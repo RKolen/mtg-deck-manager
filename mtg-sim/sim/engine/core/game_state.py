@@ -28,6 +28,7 @@ from engine.abilities.keywords.other.champion import (
     release_championed_creature,
 )
 from engine.abilities.keywords.other.extort import apply_extort_on_spell_cast
+from engine.abilities.keywords.other.hidden_agenda import apply_hidden_agenda_on_spell_cast
 from engine.abilities.keywords.other.increment import apply_increment_on_spell_cast
 from engine.abilities.keywords.other.intensity import apply_intensity_on_spell_cast
 from engine.abilities.keywords.other.haunt import (
@@ -80,6 +81,9 @@ class PlayerInfo:  # pylint: disable=too-many-instance-attributes
     has_lost: bool = False
     speed: int = 0
     paradigm_spell_names: list[str] = field(default_factory=list)
+    hidden_agenda_name: str | None = None
+    double_agenda_names: tuple[str, str] | None = None
+    hidden_agenda_revealed: bool = False
 
     @property
     def life(self) -> int:
@@ -407,6 +411,13 @@ class GameState:
             mana_spent=mana_spent,
         ):
             self.log_event('rules', 'increment', detail)
+        if card_info is not None:
+            for detail in apply_hidden_agenda_on_spell_cast(
+                self,
+                spell.controller_idx,
+                card_info.name,
+            ):
+                self.log_event('rules', 'hidden_agenda', detail)
 
     def mark_player_was_dealt_damage(self, player_idx: int) -> None:
         """Record that a player was dealt damage this turn (Raid and similar)."""

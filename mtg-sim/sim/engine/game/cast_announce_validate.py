@@ -60,6 +60,9 @@ from engine.abilities.keywords.casting.prototype import normalize_prototype_cast
 from engine.abilities.keywords.casting.compleated import normalize_paid_compleated
 from engine.abilities.keywords.casting.specialize import normalize_specialize_cast
 from engine.abilities.keywords.casting.warp import normalize_warp_cast
+from engine.abilities.keywords.casting.more_than_meets_the_eye import (
+    normalize_more_than_meets_the_eye_cast,
+)
 from engine.abilities.keywords.casting.web_slinging import (
     normalize_web_slinging_cast,
     web_sling_creature_error,
@@ -126,6 +129,7 @@ class _ConditionCastFlags:  # pylint: disable=too-many-instance-attributes
     prototype: bool = False
     warp: bool = False
     web_slinging: bool = False
+    converted: bool = False
     specialize: bool = False
 
 
@@ -463,6 +467,10 @@ def _normalized_paid_flags(
                 card_info,
                 opts.alternate.cast_for_web_slinging,
             ),
+            converted=normalize_more_than_meets_the_eye_cast(
+                card_info,
+                opts.alternate.cast_for_converted,
+            ),
             specialize=normalize_specialize_cast(
                 card_info,
                 opts.alternate.cast_for_specialize,
@@ -707,6 +715,12 @@ def validate_announce_cast(
             ctx.player_idx,
             opts.modifiers.reductions.web_sling_creature_uid,
             paid=paid.conditions.web_slinging,
+        ),
+        lambda: _reject_keyword(
+            opts.alternate.cast_for_converted,
+            paid.conditions.converted,
+            name,
+            "More Than Meets the Eye",
         ),
         lambda: _reject_keyword(
             opts.alternate.cast_for_specialize,

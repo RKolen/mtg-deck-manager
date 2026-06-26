@@ -32,6 +32,7 @@ from engine.abilities.keywords.casting import (
 )
 from engine.abilities.keywords.casting.awaken import apply_awaken_on_resolve
 from engine.abilities.keywords.casting.impending import apply_impending_on_resolve
+from engine.abilities.keywords.casting.more_than_meets_the_eye import apply_converted_on_etb
 from engine.abilities.keywords.casting.prototype import apply_prototype_on_etb
 from engine.abilities.keywords.casting.tiered import tiered_modes
 from engine.abilities.keywords.casting.warp import apply_warp_on_resolve
@@ -309,6 +310,10 @@ class SpellResolveMixin(SpellStackPlacementMixin):
         if counters:
             permanent.counters["+1/+1"] = permanent.counters.get("+1/+1", 0) + counters
         detail = f"Cast creature {card_info.name}"
+        if spell.casting.converted:
+            converted_detail = apply_converted_on_etb(permanent)
+            if converted_detail:
+                detail = converted_detail
         if spell.casting.prototype:
             proto_detail = apply_prototype_on_etb(permanent)
             if proto_detail:

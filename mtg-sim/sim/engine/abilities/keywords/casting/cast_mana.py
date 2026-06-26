@@ -69,6 +69,10 @@ from engine.abilities.keywords.casting.web_slinging import (
     normalize_web_slinging_cast,
     web_slinging_mana_needed,
 )
+from engine.abilities.keywords.casting.more_than_meets_the_eye import (
+    more_than_meets_the_eye_mana_needed,
+    normalize_more_than_meets_the_eye_cast,
+)
 from engine.abilities.keywords.casting.splice import splice_mana_extra
 from engine.abilities.keywords.casting.dash import (
     dash_mana_needed,
@@ -230,6 +234,7 @@ class CastManaTiming:  # pylint: disable=too-many-instance-attributes
     cast_for_cleave: bool = False
     cast_for_warp: bool = False
     cast_for_web_slinging: bool = False
+    cast_for_converted: bool = False
     cast_for_specialize: bool = False
     face: _FaceCastTiming = field(default_factory=_FaceCastTiming)
     paid_conspire: bool = False
@@ -314,6 +319,8 @@ def _resolve_timing_alternate_mana(  # pylint: disable=too-many-return-statement
         return warp_mana_needed(card)
     if normalize_web_slinging_cast(card, timing.cast_for_web_slinging):
         return web_slinging_mana_needed(card)
+    if normalize_more_than_meets_the_eye_cast(card, timing.cast_for_converted):
+        return more_than_meets_the_eye_mana_needed(card)
     if normalize_specialize_cast(card, timing.cast_for_specialize):
         return specialize_mana_needed(card)
     return None

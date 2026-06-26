@@ -36,6 +36,7 @@ from engine.abilities.keywords.other.fortify import apply_fortify_etb
 from engine.abilities.keywords.other.graft import apply_graft_etb
 from engine.abilities.keywords.other.champion import apply_champion_etb
 from engine.abilities.keywords.other.hideaway import apply_hideaway_etb
+from engine.abilities.keywords.other.job_select import apply_job_select, has_job_select
 from engine.abilities.keywords.other.living_weapon import (
     apply_living_weapon,
     has_living_weapon,
@@ -184,6 +185,12 @@ def _fortify_detail(game: GameState, permanent: Permanent) -> str | None:
     return apply_fortify_etb(game, permanent)
 
 
+def _job_select_detail(game: GameState, permanent: Permanent) -> str | None:
+    if has_job_select(permanent) and 'Equipment' in permanent.type_line:
+        return apply_job_select(game.zones, permanent)
+    return None
+
+
 ETB_DETAIL_PRODUCERS: tuple[EtbDetailFn, ...] = (
     _living_weapon_detail,
     _modular_detail,
@@ -218,4 +225,5 @@ ETB_DETAIL_PRODUCERS: tuple[EtbDetailFn, ...] = (
     _champion_detail,
     _hideaway_detail,
     _fortify_detail,
+    _job_select_detail,
 )

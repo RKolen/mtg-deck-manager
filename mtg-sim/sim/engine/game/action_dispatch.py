@@ -74,6 +74,7 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
                 cast_for_prototype=req.castForPrototype,
                 cast_for_warp=req.castForWarp,
                 cast_for_web_slinging=req.castForWebSlinging,
+                cast_for_converted=req.castForConverted,
                 cast_for_specialize=req.castForSpecialize,
             ),
             face=FaceAlternateCastFlags(
