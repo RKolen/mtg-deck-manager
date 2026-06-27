@@ -18,6 +18,11 @@ def has_partner(card: CardInfo) -> bool:
     return has_partner_with(card)
 
 
+def has_partner_card(card: CardInfo) -> bool:
+    """Return True when the card has partner or partner with."""
+    return has_partner(card)
+
+
 def validate_partner_deck(deck: list[CardInfo]) -> str | None:
     """Return an error when partner deck requirements are not met."""
     partner_with_err = validate_partner_with_deck(deck)

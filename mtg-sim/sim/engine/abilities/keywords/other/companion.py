@@ -19,6 +19,11 @@ def has_companion(card: CardInfo) -> bool:
     return has_registered_keyword(text, 'Companion') or bool(_COMPANION_RE.search(text))
 
 
+def has_companion_card(card: CardInfo) -> bool:
+    """Return True when the card is a companion."""
+    return has_companion(card)
+
+
 def companion_restriction(card: CardInfo) -> str | None:
     """Return the companion deck-building rule text."""
     match = _COMPANION_RE.search(card.oracle_text or '')

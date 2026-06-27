@@ -58,11 +58,14 @@ from engine.abilities.keywords.other.battle_cry import has_battle_cry_card
 from engine.abilities.keywords.other.boast import has_boast_card
 from engine.abilities.keywords.other.bushido import has_bushido_card
 from engine.abilities.keywords.other.cipher import has_cipher_card
+from engine.abilities.keywords.other.companion import has_companion_card
 from engine.abilities.keywords.other.craft import has_craft_card
 from engine.abilities.keywords.other.decayed import has_decayed_card
 from engine.abilities.keywords.other.dethrone import has_dethrone_card
 from engine.abilities.keywords.other.dredge import has_dredge_card
 from engine.abilities.keywords.other.echo import has_echo_card
+from engine.abilities.keywords.other.encore import has_encore_card
+from engine.abilities.keywords.other.eternalize import has_eternalize_card
 from engine.abilities.keywords.other.enlist import has_enlist_card
 from engine.abilities.keywords.other.exalted import has_exalted_card
 from engine.abilities.keywords.other.exhaust import has_exhaust_card
@@ -81,6 +84,7 @@ from engine.abilities.keywords.other.prowl import has_prowl_card
 from engine.abilities.keywords.other.renown import has_renown_card
 from engine.abilities.keywords.other.prowess import has_prowess_card
 from engine.abilities.keywords.other.nightbound import has_nightbound_card
+from engine.abilities.keywords.other.partner import has_partner_card
 from engine.abilities.keywords.other.partner_with import has_partner_with
 from engine.abilities.keywords.casting.warp import has_warp
 from engine.abilities.keywords.casting.squad import has_squad
@@ -101,10 +105,11 @@ from engine.abilities.keywords.casting.sneak import has_sneak
 from engine.abilities.keywords.casting.spectacle import has_spectacle, spectacle_available
 from engine.abilities.keywords.casting.surge import has_surge, surge_available
 from engine.abilities.keywords.other.disguise import has_disguise
-from engine.abilities.keywords.other.morph import has_morph
+from engine.abilities.keywords.other.morph import has_morph_card
 from engine.abilities.keywords.other.ninjutsu import (
     can_ninjutsu,
     has_ninjutsu,
+    has_ninjutsu_card,
     ninjutsu_mana_needed,
 )
 from engine.cards.oracle_parse import is_affordable, spell_category
@@ -300,6 +305,10 @@ def card_to_client(
         "hasAugment": has_augment_card(card),
         "hasProwl": has_prowl_card(card),
         "hasExhaust": has_exhaust_card(card),
+        "hasEncore": has_encore_card(card),
+        "hasEternalize": has_eternalize_card(card),
+        "hasPartner": has_partner_card(card),
+        "hasCompanion": has_companion_card(card),
         "conspireAvailable": (
             conspire_color_match(card, ctx.game.zones, controller_idx)
             if ctx.game is not None and has_conspire(card)
@@ -320,8 +329,9 @@ def card_to_client(
             if ctx.game is not None and has_surge(card)
             else False
         ),
-        "hasMorph": has_morph(card) and card.is_creature,
+        "hasMorph": has_morph_card(card) and card.is_creature,
         "hasDisguise": has_disguise(card) and card.is_creature,
+        "hasNinjutsu": has_ninjutsu_card(card),
         "hasSneak": has_sneak(card),
         "hasDash": has_dash(card),
         "hasBlitz": has_blitz(card),

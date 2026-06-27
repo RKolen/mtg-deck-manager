@@ -35,6 +35,11 @@ def has_morph(card: CardInfo) -> bool:
     )
 
 
+def has_morph_card(card: CardInfo) -> bool:
+    """Return True when the card has morph or megamorph."""
+    return has_morph(card)
+
+
 def has_megamorph(card: CardInfo) -> bool:
     """Return True when the card has megamorph."""
     oracle = card.oracle_text or ''

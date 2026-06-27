@@ -30,6 +30,11 @@ def has_ninjutsu(card: CardInfo) -> bool:
     return card.is_creature and has_cost_keyword(card, 'Ninjutsu', _NINJUTSU_RE)
 
 
+def has_ninjutsu_card(card: CardInfo) -> bool:
+    """Return True when the card has ninjutsu."""
+    return has_ninjutsu(card)
+
+
 def ninjutsu_mana_needed(card: CardInfo) -> int:
     """Return generic mana to pay ninjutsu."""
     if parse_alt_cost(card, _NINJUTSU_RE) is None:
