@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from deck_registry import CardInfo
 from engine.abilities.keywords._core import has_keyword
+from engine.abilities.keywords.registry import has_registered_keyword
 from engine.core.game_object import CardObject, Permanent
 
 if TYPE_CHECKING:
@@ -14,6 +16,11 @@ if TYPE_CHECKING:
 def has_prowl(perm: Permanent) -> bool:
     """Return True when the permanent has prowl."""
     return has_keyword(perm, 'Prowl')
+
+
+def has_prowl_card(card: CardInfo) -> bool:
+    """Return True when the card has prowl."""
+    return has_registered_keyword(card.oracle_text, 'Prowl')
 
 
 def _creature_types(type_line: str) -> set[str]:

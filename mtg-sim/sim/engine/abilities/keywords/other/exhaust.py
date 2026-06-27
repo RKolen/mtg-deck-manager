@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from deck_registry import CardInfo
 from engine.abilities.keywords._core import has_keyword
+from engine.abilities.keywords.registry import has_registered_keyword
 from engine.core.game_object import Permanent
 
 _EXHAUSTED_COUNTER = 'exhausted'
@@ -11,6 +13,11 @@ _EXHAUSTED_COUNTER = 'exhausted'
 def has_exhaust(perm: Permanent) -> bool:
     """Return True when the permanent has exhaust on an activated ability."""
     return has_keyword(perm, 'Exhaust')
+
+
+def has_exhaust_card(card: CardInfo) -> bool:
+    """Return True when the card has exhaust."""
+    return has_registered_keyword(card.oracle_text, 'Exhaust')
 
 
 def can_use_exhaust_ability(perm: Permanent) -> bool:

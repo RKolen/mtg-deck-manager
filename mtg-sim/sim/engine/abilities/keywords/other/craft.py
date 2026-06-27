@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import re
 
+from deck_registry import CardInfo
 from engine.abilities.activated.core import activation_mana_value
 from engine.abilities.keywords._core import has_keyword
+from engine.abilities.keywords.registry import has_registered_keyword
 from engine.core.game_object import Permanent
 from engine.core.game_state import GameState
 from engine.core.zones import Zone
@@ -19,6 +21,11 @@ _CRAFT_ACTIVATION_RE = re.compile(
 def has_craft(perm: Permanent) -> bool:
     """Return True when the permanent has craft."""
     return has_keyword(perm, 'Craft')
+
+
+def has_craft_card(card: CardInfo) -> bool:
+    """Return True when the card has craft."""
+    return has_registered_keyword(card.oracle_text, 'Craft')
 
 
 def craft_mana_needed(perm: Permanent) -> int:

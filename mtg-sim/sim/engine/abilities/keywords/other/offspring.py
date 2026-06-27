@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from deck_registry import CardInfo
 from engine.abilities.keywords._core import has_keyword
+from engine.abilities.keywords.registry import has_registered_keyword
 from engine.abilities.keywords._token_factory import enter_token_from_blueprint
 from engine.cards.oracle_parse import TokenBlueprint
 from engine.core.game_object import Permanent
@@ -12,6 +14,11 @@ from engine.core.zones import ZoneManager
 def has_offspring(perm: Permanent) -> bool:
     """Return True when the permanent has offspring."""
     return has_keyword(perm, 'Offspring')
+
+
+def has_offspring_card(card: CardInfo) -> bool:
+    """Return True when the card has offspring."""
+    return has_registered_keyword(card.oracle_text, 'Offspring')
 
 
 def apply_offspring_etb(zones: ZoneManager, permanent: Permanent) -> str | None:

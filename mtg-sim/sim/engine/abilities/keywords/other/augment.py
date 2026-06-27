@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from deck_registry import CardInfo
 from engine.abilities.keywords._core import has_keyword
+from engine.abilities.keywords.registry import has_registered_keyword
 from engine.abilities.keywords.actions.counters import put_plus_counters
 from engine.abilities.keywords.other.host_creature import find_host_creature
 from engine.core.game_object import CardObject, Permanent
@@ -12,6 +14,11 @@ from engine.core.zones import ZoneManager
 def has_augment(perm: Permanent) -> bool:
     """Return True when the permanent has augment."""
     return has_keyword(perm, 'Augment')
+
+
+def has_augment_card(card: CardInfo) -> bool:
+    """Return True when the card has augment."""
+    return has_registered_keyword(card.oracle_text, 'Augment')
 
 
 def _augment_stats(permanent: Permanent) -> tuple[int, int]:

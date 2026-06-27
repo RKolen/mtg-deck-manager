@@ -21,6 +21,11 @@ def has_dredge(card: CardInfo) -> bool:
     )
 
 
+def has_dredge_card(card: CardInfo) -> bool:
+    """Return True when the card has dredge."""
+    return has_dredge(card)
+
+
 def dredge_amount(card: CardInfo) -> int:
     """Return how many cards to mill for this card's dredge ability."""
     match = _DREDGE_RE.search(card.oracle_text or '')
