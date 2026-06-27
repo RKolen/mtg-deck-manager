@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from deck_registry import CardInfo
 from engine.abilities.keywords._core import has_keyword
+from engine.abilities.keywords.casting.blitz import has_blitz as _has_blitz_on_card
 from engine.core.game_object import Permanent
 from engine.core.zones import Zone
 
@@ -15,6 +17,11 @@ if TYPE_CHECKING:
 def has_blitz(perm: Permanent) -> bool:
     """Return True when the permanent has blitz."""
     return has_keyword(perm, 'Blitz') or perm.counters.get('blitz', 0) > 0
+
+
+def has_blitz_card(card: CardInfo) -> bool:
+    """Return True when the card may be cast for blitz."""
+    return _has_blitz_on_card(card)
 
 
 def apply_blitz_etb(permanent: Permanent) -> str | None:

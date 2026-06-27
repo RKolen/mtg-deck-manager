@@ -20,6 +20,11 @@ def has_forecast(card: CardInfo) -> bool:
     )
 
 
+def has_forecast_card(card: CardInfo) -> bool:
+    """Return True when the card has forecast."""
+    return has_forecast(card)
+
+
 def can_forecast(card: CardInfo, phase: str, stack_is_empty: bool) -> bool:
     """Return True when forecast may be activated from hand (draw step proxy)."""
     return has_forecast(card) and phase == 'draw' and stack_is_empty

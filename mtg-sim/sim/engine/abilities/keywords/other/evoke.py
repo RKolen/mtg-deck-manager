@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from deck_registry import CardInfo
 from engine.abilities.keywords._core import has_keyword
+from engine.abilities.keywords.casting.evoke import has_evoke as _has_evoke_on_card
 from engine.core.game_object import Permanent
 from engine.core.zones import Zone
 
@@ -15,6 +17,11 @@ if TYPE_CHECKING:
 def has_evoke(perm: Permanent) -> bool:
     """Return True when the permanent has evoke."""
     return has_keyword(perm, 'Evoke')
+
+
+def has_evoke_card(card: CardInfo) -> bool:
+    """Return True when the card may be cast for evoke."""
+    return _has_evoke_on_card(card)
 
 
 def apply_evoke_on_etb(game: GameState, permanent: Permanent) -> str | None:

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from deck_registry import CardInfo
 from engine.abilities.keywords._core import has_keyword
+from engine.abilities.keywords.casting.dash import has_dash as _has_dash_on_card
 from engine.core.game_object import CardObject, Permanent
 if TYPE_CHECKING:
     from engine.core.game_state import GameState
@@ -13,6 +15,11 @@ if TYPE_CHECKING:
 def has_dash(perm: Permanent) -> bool:
     """Return True when the permanent was cast for dash."""
     return has_keyword(perm, 'Dash') or perm.counters.get('dash', 0) > 0
+
+
+def has_dash_card(card: CardInfo) -> bool:
+    """Return True when the card may be cast for dash."""
+    return _has_dash_on_card(card)
 
 
 def apply_dash_etb(permanent: Permanent) -> str | None:

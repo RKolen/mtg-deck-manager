@@ -56,10 +56,12 @@ from engine.abilities.keywords.other.ascend import has_ascend_card
 from engine.abilities.keywords.other.augment import has_augment_card
 from engine.abilities.keywords.other.battle_cry import has_battle_cry_card
 from engine.abilities.keywords.other.boast import has_boast_card
+from engine.abilities.keywords.other.blitz import has_blitz_card
 from engine.abilities.keywords.other.bushido import has_bushido_card
 from engine.abilities.keywords.other.cipher import has_cipher_card
 from engine.abilities.keywords.other.companion import has_companion_card
 from engine.abilities.keywords.other.craft import has_craft_card
+from engine.abilities.keywords.other.dash import has_dash_card
 from engine.abilities.keywords.other.decayed import has_decayed_card
 from engine.abilities.keywords.other.dethrone import has_dethrone_card
 from engine.abilities.keywords.other.dredge import has_dredge_card
@@ -91,20 +93,19 @@ from engine.abilities.keywords.casting.squad import has_squad
 from engine.abilities.keywords.casting.offering import has_offering
 from engine.abilities.keywords.casting.ripple import has_ripple
 from engine.abilities.keywords.casting.escalate import has_escalate
-from engine.abilities.keywords.other.forecast import can_forecast, has_forecast
+from engine.abilities.keywords.other.disguise import has_disguise_card
+from engine.abilities.keywords.other.embalm import has_embalm_card
+from engine.abilities.keywords.other.evoke import has_evoke_card
+from engine.abilities.keywords.other.forecast import can_forecast, has_forecast_card
 from engine.abilities.keywords.casting.convoke import has_convoke
 from engine.abilities.keywords.casting.delve import has_delve
 from engine.abilities.keywords.casting.emerge import has_emerge
-from engine.abilities.keywords.casting.evoke import evoke_mana_needed, has_evoke
+from engine.abilities.keywords.casting.evoke import evoke_mana_needed
 from engine.abilities.keywords.casting.improvise import has_improvise
-from engine.abilities.keywords.casting.blitz import has_blitz
-from engine.abilities.keywords.casting.dash import has_dash
-from engine.abilities.keywords.casting.embalm import has_embalm
 from engine.abilities.keywords.casting.freerunning import has_freerunning
 from engine.abilities.keywords.casting.sneak import has_sneak
 from engine.abilities.keywords.casting.spectacle import has_spectacle, spectacle_available
 from engine.abilities.keywords.casting.surge import has_surge, surge_available
-from engine.abilities.keywords.other.disguise import has_disguise
 from engine.abilities.keywords.other.morph import has_morph_card
 from engine.abilities.keywords.other.ninjutsu import (
     can_ninjutsu,
@@ -213,7 +214,7 @@ def card_to_client(
         zones=zones,
         controller_idx=controller_idx,
     )
-    has_evoke_kw = has_evoke(card)
+    has_evoke_kw = has_evoke_card(card)
     evoke_mana = evoke_mana_needed(card)[0] if has_evoke_kw else 0
     bloodrush = has_bloodrush(card)
     bloodrush_ok = bloodrush and can_bloodrush(card, ctx.phase, ctx.stack_is_empty)
@@ -244,7 +245,7 @@ def card_to_client(
         "hasEscalate": has_escalate(card),
         "hasCleave": has_cleave(card),
         "canForecast": can_forecast(card, ctx.phase, ctx.stack_is_empty),
-        "hasForecast": has_forecast(card),
+        "hasForecast": has_forecast_card(card),
         "hasConspire": has_conspire(card),
         "hasDemonstrate": has_demonstrate(card),
         "hasGift": has_gift(card),
@@ -330,12 +331,12 @@ def card_to_client(
             else False
         ),
         "hasMorph": has_morph_card(card) and card.is_creature,
-        "hasDisguise": has_disguise(card) and card.is_creature,
+        "hasDisguise": has_disguise_card(card) and card.is_creature,
         "hasNinjutsu": has_ninjutsu_card(card),
         "hasSneak": has_sneak(card),
-        "hasDash": has_dash(card),
-        "hasBlitz": has_blitz(card),
-        "hasEmbalm": has_embalm(card),
+        "hasDash": has_dash_card(card),
+        "hasBlitz": has_blitz_card(card),
+        "hasEmbalm": has_embalm_card(card),
         "hasFreerunning": has_freerunning(card),
         "freerunningAvailable": (
             ctx.game is not None

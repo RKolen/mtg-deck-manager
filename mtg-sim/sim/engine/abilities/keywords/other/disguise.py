@@ -27,6 +27,11 @@ def has_disguise(card: CardInfo) -> bool:
     )
 
 
+def has_disguise_card(card: CardInfo) -> bool:
+    """Return True when the card has disguise."""
+    return has_disguise(card)
+
+
 def disguise_turn_up_cost(card: CardInfo) -> ManaCost | None:
     """Parse the disguise cost to turn the card face up."""
     match = _DISGUISE_COST_RE.search(card.oracle_text or '')
