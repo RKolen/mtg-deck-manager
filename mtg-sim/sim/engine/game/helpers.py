@@ -50,8 +50,12 @@ from engine.abilities.keywords.other.multikicker import has_multikicker
 from engine.abilities.keywords.other.daybound import has_daybound_card
 from engine.abilities.keywords.other.affinity import has_affinity_for_artifacts
 from engine.abilities.keywords.other.afflict import has_afflict_card
+from engine.abilities.keywords.other.amplify import has_amplify_card
 from engine.abilities.keywords.other.annihilator import has_annihilator_card
+from engine.abilities.keywords.other.battle_cry import has_battle_cry_card
+from engine.abilities.keywords.other.bushido import has_bushido_card
 from engine.abilities.keywords.other.cipher import has_cipher_card
+from engine.abilities.keywords.other.dethrone import has_dethrone_card
 from engine.abilities.keywords.other.enlist import has_enlist_card
 from engine.abilities.keywords.other.exalted import has_exalted_card
 from engine.abilities.keywords.other.extort import has_extort_card
@@ -59,8 +63,10 @@ from engine.abilities.keywords.other.fabricate import has_fabricate_card
 from engine.abilities.keywords.other.flanking import has_flanking_card
 from engine.abilities.keywords.other.frenzy import has_frenzy_card
 from engine.abilities.keywords.other.devour import has_devour_card
+from engine.abilities.keywords.other.graft import has_graft_card
 from engine.abilities.keywords.other.mentor import has_mentor_card
 from engine.abilities.keywords.other.mobilize import has_mobilize_card
+from engine.abilities.keywords.other.renown import has_renown_card
 from engine.abilities.keywords.other.prowess import has_prowess_card
 from engine.abilities.keywords.other.nightbound import has_nightbound_card
 from engine.abilities.keywords.other.partner_with import has_partner_with
@@ -264,6 +270,12 @@ def card_to_client(
         "hasFabricate": has_fabricate_card(card),
         "hasExtort": has_extort_card(card),
         "hasMentor": has_mentor_card(card),
+        "hasDethrone": has_dethrone_card(card),
+        "hasBattleCry": has_battle_cry_card(card),
+        "hasBushido": has_bushido_card(card),
+        "hasRenown": has_renown_card(card),
+        "hasAmplify": has_amplify_card(card),
+        "hasGraft": has_graft_card(card),
         "conspireAvailable": (
             conspire_color_match(card, ctx.game.zones, controller_idx)
             if ctx.game is not None and has_conspire(card)

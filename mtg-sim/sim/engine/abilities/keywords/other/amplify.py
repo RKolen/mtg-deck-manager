@@ -5,8 +5,10 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from deck_registry import CardInfo
 from engine.abilities.keywords.other.changeling import CreatureTypeRef, shares_creature_type
 from engine.abilities.keywords._core import has_keyword
+from engine.abilities.keywords.registry import has_registered_keyword
 from engine.abilities.keywords.actions.counters import put_plus_counters
 from engine.core.game_object import CardObject, Permanent
 
@@ -19,6 +21,11 @@ _AMPLIFY_RE = re.compile(r'amplify\s+(\w+|\d+)', re.IGNORECASE)
 def has_amplify(perm: Permanent) -> bool:
     """Return True when the permanent has amplify."""
     return has_keyword(perm, 'Amplify')
+
+
+def has_amplify_card(card: CardInfo) -> bool:
+    """Return True when the card has amplify."""
+    return has_registered_keyword(card.oracle_text, 'Amplify')
 
 
 def amplify_amount(oracle_text: str) -> int:

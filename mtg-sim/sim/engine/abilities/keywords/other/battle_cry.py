@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from deck_registry import CardInfo
 from engine.abilities.keywords._core import has_keyword
+from engine.abilities.keywords.registry import has_registered_keyword
 from engine.core.game_object import Permanent
 
 if TYPE_CHECKING:
@@ -16,6 +18,11 @@ _BATTLE_CRY_COUNTER = 'battle_cry'
 def has_battle_cry(perm: Permanent) -> bool:
     """Return True when the permanent has battle cry."""
     return has_keyword(perm, 'Battle cry')
+
+
+def has_battle_cry_card(card: CardInfo) -> bool:
+    """Return True when the card has battle cry."""
+    return has_registered_keyword(card.oracle_text, 'Battle cry')
 
 
 def apply_battle_cry_on_attack(

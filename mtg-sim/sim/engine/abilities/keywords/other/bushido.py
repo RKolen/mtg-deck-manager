@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import re
 
+from deck_registry import CardInfo
 from engine.abilities.keywords._core import has_keyword
+from engine.abilities.keywords.registry import has_registered_keyword
 from engine.abilities.keywords.actions.counters import put_plus_counters
 from engine.core.game_object import Permanent
 
@@ -14,6 +16,11 @@ _BUSHIDO_RE = re.compile(r'bushido\s+(\w+|\d+)', re.IGNORECASE)
 def has_bushido(perm: Permanent) -> bool:
     """Return True when the permanent has bushido."""
     return has_keyword(perm, 'Bushido')
+
+
+def has_bushido_card(card: CardInfo) -> bool:
+    """Return True when the card has bushido."""
+    return has_registered_keyword(card.oracle_text, 'Bushido')
 
 
 def bushido_amount(oracle_text: str) -> int:

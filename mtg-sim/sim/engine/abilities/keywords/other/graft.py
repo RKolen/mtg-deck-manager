@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from deck_registry import CardInfo
 from engine.abilities.keywords._core import has_keyword
+from engine.abilities.keywords.registry import has_registered_keyword
 from engine.abilities.keywords.actions.counters import put_plus_counters
 from engine.abilities.keywords.other.host_creature import find_host_creature
 from engine.core.game_object import Permanent
@@ -16,6 +18,11 @@ if TYPE_CHECKING:
 def has_graft(perm: Permanent) -> bool:
     """Return True when the permanent has graft."""
     return has_keyword(perm, 'Graft')
+
+
+def has_graft_card(card: CardInfo) -> bool:
+    """Return True when the card has graft."""
+    return has_registered_keyword(card.oracle_text, 'Graft')
 
 
 def apply_graft_etb(game: GameState, permanent: Permanent) -> str | None:

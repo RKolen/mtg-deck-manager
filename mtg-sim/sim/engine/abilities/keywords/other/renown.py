@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from deck_registry import CardInfo
 from engine.abilities.keywords._core import has_keyword
+from engine.abilities.keywords.registry import has_registered_keyword
 from engine.abilities.keywords.actions.counters import put_plus_counters
 from engine.core.game_object import Permanent
 
@@ -12,6 +14,11 @@ _RENOWNED_COUNTER = 'renowned'
 def has_renown(perm: Permanent) -> bool:
     """Return True when the permanent has renown."""
     return has_keyword(perm, 'Renown')
+
+
+def has_renown_card(card: CardInfo) -> bool:
+    """Return True when the card has renown."""
+    return has_registered_keyword(card.oracle_text, 'Renown')
 
 
 def is_renowned(perm: Permanent) -> bool:
