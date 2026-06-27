@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from engine.abilities.keywords._core import has_keyword
+from engine.abilities.keywords.other.hexproof_from import hexproof_from_qualities
 from engine.core.game_object import Permanent
 from engine.core.mana import ManaCost
 
@@ -207,9 +208,17 @@ def can_target_permanent(
     hexproof_blocks = (
         has_hexproof(target) and controller_idx != target.controller_idx
     )
+    hexproof_from_blocks = (
+        controller_idx != target.controller_idx
+        and any(
+            _source_matches_protection_quality(resolved, quality)
+            for quality in hexproof_from_qualities(target)
+        )
+    )
     return (
         not has_shroud(target)
         and not hexproof_blocks
+        and not hexproof_from_blocks
         and not has_protection_from(target, resolved)
     )
 

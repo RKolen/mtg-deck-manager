@@ -84,6 +84,8 @@ class PlayerInfo:  # pylint: disable=too-many-instance-attributes
     hidden_agenda_name: str | None = None
     double_agenda_names: tuple[str, str] | None = None
     hidden_agenda_revealed: bool = False
+    double_agenda_revealed: bool = False
+    commander: CardObject | None = None
 
     @property
     def life(self) -> int:

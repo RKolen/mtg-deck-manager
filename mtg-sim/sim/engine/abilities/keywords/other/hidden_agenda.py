@@ -45,6 +45,16 @@ def reveal_hidden_agenda(game: GameState, player_idx: int) -> str | None:
     return f"hidden agenda revealed {player.hidden_agenda_name}"
 
 
+def reveal_double_agenda(game: GameState, player_idx: int) -> str | None:
+    """Reveal a double agenda choice."""
+    player = game.players[player_idx]
+    if player.double_agenda_revealed or not player.double_agenda_names:
+        return None
+    player.double_agenda_revealed = True
+    first, second = player.double_agenda_names
+    return f"double agenda revealed {first} and {second}"
+
+
 def apply_hidden_agenda_on_spell_cast(
     game: GameState,
     controller_idx: int,
@@ -59,6 +69,6 @@ def apply_hidden_agenda_on_spell_cast(
     if player.double_agenda_names:
         first, second = player.double_agenda_names
         if spell_name.lower() in {first.lower(), second.lower()}:
-            if player.hidden_agenda_revealed:
+            if player.double_agenda_revealed:
                 details.append(f"double agenda matched {spell_name}")
     return details

@@ -81,6 +81,15 @@ from engine.abilities.keywords.other.station import (
     station_cost,
     station_power_error,
 )
+from engine.abilities.keywords.other.commander_ninjutsu import (
+    apply_commander_ninjutsu,
+    can_commander_ninjutsu,
+    commander_ninjutsu_mana_needed,
+)
+from engine.abilities.keywords.other.hidden_agenda import (
+    register_double_agenda,
+    reveal_double_agenda,
+)
 from engine.abilities.keywords.other.ninjutsu import (
     apply_ninjutsu,
     can_ninjutsu,
@@ -256,6 +265,49 @@ class ActivatedActionsMixin(GameRuntimeMixin):  # pylint: disable=too-many-publi
         if detail is None:
             return {**self.to_client(), "error": "Ninjutsu failed"}
         self._log("player", "ninjutsu", detail)
+        return self.to_client()
+
+    def action_commander_ninjutsu(self, attacker_uid: str | None) -> dict:
+        """Commander ninjutsu from the command zone during combat."""
+        commander = self.state.players[0].commander
+        if commander is None or commander.card_info is None:
+            return {**self.to_client(), "error": "No commander in command zone"}
+        card_info = commander.card_info
+        if not can_commander_ninjutsu(card_info, self.phase, self.state.stack.is_empty):
+            return {**self.to_client(), "error": "Cannot commander ninjutsu now"}
+        mana_needed = commander_ninjutsu_mana_needed(card_info)
+        if not self._tap_lands_for_mana(0, mana_needed):
+            return {
+                **self.to_client(),
+                "error": f"Need {mana_needed} mana for commander ninjutsu",
+            }
+        detail = apply_commander_ninjutsu(
+            self.state,
+            self.state.zones,
+            0,
+            attacker_uid,
+        )
+        if detail is None:
+            return {**self.to_client(), "error": "Commander ninjutsu failed"}
+        self._log("player", "commander_ninjutsu", detail)
+        return self.to_client()
+
+    def action_register_double_agenda(
+        self,
+        first_name: str,
+        second_name: str,
+    ) -> dict:
+        """Secretly choose two card names for double agenda."""
+        register_double_agenda(self.state, 0, first_name, second_name)
+        self._log("player", "double_agenda", "double agenda registered")
+        return self.to_client()
+
+    def action_reveal_double_agenda(self) -> dict:
+        """Reveal a double agenda choice."""
+        detail = reveal_double_agenda(self.state, 0)
+        if detail is None:
+            return {**self.to_client(), "error": "Cannot reveal double agenda"}
+        self._log("player", "double_agenda", detail)
         return self.to_client()
 
     def action_boast(self, permanent_uid: str) -> dict:

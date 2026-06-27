@@ -389,6 +389,8 @@ class GameActionRequest(BaseModel):
     castForWarp: bool = False
     castForWebSlinging: bool = False
     castForConverted: bool = False
+    firstAgendaName: str = ""
+    secondAgendaName: str = ""
     castForSpecialize: bool = False
     castForMorph: bool = False
     castForDisguise: bool = False

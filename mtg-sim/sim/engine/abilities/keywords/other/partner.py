@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-import re
-
 from deck_registry import CardInfo
-from engine.abilities.keywords.registry import has_registered_keyword
-
-_PARTNER_WITH_RE = re.compile(
-    r'partner\s+with\s+([^\n(]+)',
-    re.IGNORECASE,
+from engine.abilities.keywords.other.partner_with import (
+    has_partner_with,
+    validate_partner_with_deck,
 )
+from engine.abilities.keywords.registry import has_registered_keyword
 
 
 def has_partner(card: CardInfo) -> bool:
@@ -18,26 +15,17 @@ def has_partner(card: CardInfo) -> bool:
     text = card.oracle_text or ''
     if has_registered_keyword(text, 'Partner'):
         return True
-    return bool(_PARTNER_WITH_RE.search(text))
-
-
-def partner_with_name(card: CardInfo) -> str | None:
-    """Return the named partner for Partner with."""
-    match = _PARTNER_WITH_RE.search(card.oracle_text or '')
-    if match is None:
-        return None
-    return match.group(1).strip()
+    return has_partner_with(card)
 
 
 def validate_partner_deck(deck: list[CardInfo]) -> str | None:
     """Return an error when partner deck requirements are not met."""
+    partner_with_err = validate_partner_with_deck(deck)
+    if partner_with_err is not None:
+        return partner_with_err
     partners = [card for card in deck if has_partner(card)]
     if not partners:
         return None
     if len(partners) < 2:
         return "Partner deck must include two partner legendary creatures"
-    named = partner_with_name(partners[0])
-    if named is not None:
-        if not any(named.lower() in card.name.lower() for card in partners[1:]):
-            return f"Partner with {named} requires that creature in the deck"
     return None

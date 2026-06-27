@@ -124,6 +124,14 @@ def _dispatch_simple(game: InteractiveGame, req) -> dict | None:
         "go_to_attack": game.action_go_to_attack,
         "confirm_attack": game.action_confirm_attack,
         "skip_attack": game.action_skip_attack,
+        "commander_ninjutsu": lambda: game.action_commander_ninjutsu(
+            req.targetUid,
+        ),
+        "register_double_agenda": lambda: game.action_register_double_agenda(
+            req.firstAgendaName,
+            req.secondAgendaName,
+        ),
+        "reveal_double_agenda": game.action_reveal_double_agenda,
     }
     handler = simple.get(req.action)
     return handler() if handler is not None else None

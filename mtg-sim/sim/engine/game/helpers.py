@@ -43,6 +43,10 @@ from engine.abilities.keywords.casting.undaunted import has_undaunted
 from engine.abilities.keywords.casting.specialize import has_specialize
 from engine.abilities.keywords.casting.web_slinging import has_web_slinging
 from engine.abilities.keywords.casting.more_than_meets_the_eye import has_more_than_meets_the_eye
+from engine.abilities.keywords.other.commander_ninjutsu import has_commander_ninjutsu
+from engine.abilities.keywords.other.hidden_agenda import has_double_agenda
+from engine.abilities.keywords.other.megamorph import has_megamorph
+from engine.abilities.keywords.other.partner_with import has_partner_with
 from engine.abilities.keywords.casting.warp import has_warp
 from engine.abilities.keywords.casting.squad import has_squad
 from engine.abilities.keywords.casting.offering import has_offering
@@ -222,6 +226,10 @@ def card_to_client(
         "hasParadigm": has_paradigm(card),
         "hasWebSlinging": has_web_slinging(card),
         "hasMoreThanMeetsTheEye": has_more_than_meets_the_eye(card),
+        "hasCommanderNinjutsu": has_commander_ninjutsu(card),
+        "hasMegamorph": has_megamorph(card),
+        "hasPartnerWith": has_partner_with(card),
+        "hasDoubleAgenda": has_double_agenda(card),
         "conspireAvailable": (
             conspire_color_match(card, ctx.game.zones, controller_idx)
             if ctx.game is not None and has_conspire(card)
