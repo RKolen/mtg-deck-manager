@@ -31,6 +31,7 @@ from engine.abilities.keywords.other.daybound import (
 )
 from engine.abilities.keywords.other.encore import apply_encore_etb
 from engine.abilities.keywords.other.evoke import apply_evoke_on_etb
+from engine.abilities.keywords.other.exploit import apply_exploit_etb, has_exploit
 from engine.abilities.keywords.other.fabricate import apply_fabricate_etb
 from engine.abilities.keywords.other.fortify import apply_fortify_etb
 from engine.abilities.keywords.other.graft import apply_graft_etb
@@ -63,6 +64,12 @@ def _modular_detail(_game: GameState, permanent: Permanent) -> str | None:
 
 def _bloodthirst_detail(game: GameState, permanent: Permanent) -> str | None:
     return apply_bloodthirst_etb(game, permanent)
+
+
+def _exploit_detail(game: GameState, permanent: Permanent) -> str | None:
+    if has_exploit(permanent):
+        return apply_exploit_etb(game, permanent)
+    return None
 
 
 def _fabricate_detail(game: GameState, permanent: Permanent) -> str | None:
@@ -196,6 +203,7 @@ ETB_DETAIL_PRODUCERS: tuple[EtbDetailFn, ...] = (
     _modular_detail,
     _bloodthirst_detail,
     _fabricate_detail,
+    _exploit_detail,
     _devour_detail,
     _dash_detail,
     _blitz_detail,
