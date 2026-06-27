@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from deck_registry import CardInfo
 from engine.abilities.keywords._core import has_keyword
+from engine.abilities.keywords.registry import has_registered_keyword
 from engine.core.game_object import Permanent
 from engine.core.zones import Zone
 
@@ -17,6 +19,11 @@ _DECAYED_COUNTER = 'decayed'
 def has_decayed(perm: Permanent) -> bool:
     """Return True when the permanent is decayed."""
     return perm.counters.get(_DECAYED_COUNTER, 0) > 0
+
+
+def has_decayed_card(card: CardInfo) -> bool:
+    """Return True when the card has the decayed keyword."""
+    return has_registered_keyword(card.oracle_text, 'Decayed')
 
 
 def apply_decayed_etb(permanent: Permanent) -> str | None:

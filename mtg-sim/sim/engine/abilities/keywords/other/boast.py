@@ -5,8 +5,10 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 
+from deck_registry import CardInfo
 from engine.abilities.activated.core import activation_mana_value
 from engine.abilities.keywords._core import has_keyword
+from engine.abilities.keywords.registry import has_registered_keyword
 from engine.core.game_object import Permanent
 
 _BOAST_RE = re.compile(
@@ -20,6 +22,13 @@ _BOASTED_COUNTER = 'boasted_this_turn'
 def has_boast(perm: Permanent) -> bool:
     """Return True when the permanent has a boast activated ability."""
     return has_keyword(perm, 'Boast') and _BOAST_RE.search(perm.oracle_text or '') is not None
+
+
+def has_boast_card(card: CardInfo) -> bool:
+    """Return True when the card has a boast activated ability."""
+    return has_registered_keyword(card.oracle_text, 'Boast') and bool(
+        _BOAST_RE.search(card.oracle_text or '')
+    )
 
 
 def boast_mana_needed(perm: Permanent) -> int:

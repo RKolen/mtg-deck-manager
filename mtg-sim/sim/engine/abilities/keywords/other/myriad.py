@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from deck_registry import CardInfo
 from engine.abilities.keywords._core import has_keyword
+from engine.abilities.keywords.registry import has_registered_keyword
 from engine.core.game_object import Permanent, TokenObject, effective_power, effective_toughness
 
 if TYPE_CHECKING:
@@ -14,6 +16,11 @@ if TYPE_CHECKING:
 def has_myriad(perm: Permanent) -> bool:
     """Return True when the permanent has myriad."""
     return has_keyword(perm, 'Myriad')
+
+
+def has_myriad_card(card: CardInfo) -> bool:
+    """Return True when the card has myriad."""
+    return has_registered_keyword(card.oracle_text, 'Myriad')
 
 
 def apply_myriad_on_attack(

@@ -52,10 +52,14 @@ from engine.abilities.keywords.other.affinity import has_affinity_for_artifacts
 from engine.abilities.keywords.other.afflict import has_afflict_card
 from engine.abilities.keywords.other.amplify import has_amplify_card
 from engine.abilities.keywords.other.annihilator import has_annihilator_card
+from engine.abilities.keywords.other.ascend import has_ascend_card
 from engine.abilities.keywords.other.battle_cry import has_battle_cry_card
+from engine.abilities.keywords.other.boast import has_boast_card
 from engine.abilities.keywords.other.bushido import has_bushido_card
 from engine.abilities.keywords.other.cipher import has_cipher_card
+from engine.abilities.keywords.other.decayed import has_decayed_card
 from engine.abilities.keywords.other.dethrone import has_dethrone_card
+from engine.abilities.keywords.other.echo import has_echo_card
 from engine.abilities.keywords.other.enlist import has_enlist_card
 from engine.abilities.keywords.other.exalted import has_exalted_card
 from engine.abilities.keywords.other.extort import has_extort_card
@@ -66,6 +70,8 @@ from engine.abilities.keywords.other.devour import has_devour_card
 from engine.abilities.keywords.other.graft import has_graft_card
 from engine.abilities.keywords.other.mentor import has_mentor_card
 from engine.abilities.keywords.other.mobilize import has_mobilize_card
+from engine.abilities.keywords.other.myriad import has_myriad_card
+from engine.abilities.keywords.other.outlast import has_outlast_card
 from engine.abilities.keywords.other.renown import has_renown_card
 from engine.abilities.keywords.other.prowess import has_prowess_card
 from engine.abilities.keywords.other.nightbound import has_nightbound_card
@@ -276,6 +282,12 @@ def card_to_client(
         "hasRenown": has_renown_card(card),
         "hasAmplify": has_amplify_card(card),
         "hasGraft": has_graft_card(card),
+        "hasEcho": has_echo_card(card),
+        "hasDecayed": has_decayed_card(card),
+        "hasAscend": has_ascend_card(card),
+        "hasBoast": has_boast_card(card),
+        "hasOutlast": has_outlast_card(card),
+        "hasMyriad": has_myriad_card(card),
         "conspireAvailable": (
             conspire_color_match(card, ctx.game.zones, controller_idx)
             if ctx.game is not None and has_conspire(card)

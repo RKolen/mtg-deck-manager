@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 
+from deck_registry import CardInfo
 from engine.abilities.keywords.registry import has_registered_keyword
 from engine.abilities.keywords.actions.counters import put_plus_counters
 from engine.core.game_object import Permanent
@@ -21,6 +22,13 @@ def has_outlast(perm: Permanent) -> bool:
     """Return True when the permanent has outlast."""
     return has_registered_keyword(perm.oracle_text, 'Outlast') or bool(
         _OUTLAST_RE.search(perm.oracle_text or '')
+    )
+
+
+def has_outlast_card(card: CardInfo) -> bool:
+    """Return True when the card has outlast."""
+    return has_registered_keyword(card.oracle_text, 'Outlast') or bool(
+        _OUTLAST_RE.search(card.oracle_text or '')
     )
 
 

@@ -6,7 +6,9 @@ import re
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
+from deck_registry import CardInfo
 from engine.abilities.keywords._core import has_keyword
+from engine.abilities.keywords.registry import has_registered_keyword
 from engine.core.game_object import Permanent
 from engine.core.mana import ManaCost
 from engine.core.zones import Zone
@@ -25,6 +27,11 @@ _ECHO_MANA_COUNTER = 'echo_mana'
 def has_echo(perm: Permanent) -> bool:
     """Return True when the permanent has echo."""
     return has_keyword(perm, 'Echo')
+
+
+def has_echo_card(card: CardInfo) -> bool:
+    """Return True when the card has echo."""
+    return has_registered_keyword(card.oracle_text, 'Echo')
 
 
 def echo_cost(oracle_text: str) -> ManaCost | None:
