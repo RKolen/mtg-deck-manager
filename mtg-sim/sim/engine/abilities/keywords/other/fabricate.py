@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import re
 
+from deck_registry import CardInfo
 from engine.abilities.keywords._core import has_keyword
+from engine.abilities.keywords.registry import has_registered_keyword
 from engine.abilities.keywords._token_factory import enter_token_from_blueprint
 from engine.abilities.keywords.actions.counters import put_plus_counters
 from engine.cards.oracle_parse import TokenBlueprint
@@ -26,6 +28,11 @@ _SERVO = TokenBlueprint(
 def has_fabricate(perm: Permanent) -> bool:
     """Return True when the permanent has fabricate."""
     return has_keyword(perm, 'Fabricate')
+
+
+def has_fabricate_card(card: CardInfo) -> bool:
+    """Return True when the card has fabricate."""
+    return has_registered_keyword(card.oracle_text, 'Fabricate')
 
 
 def fabricate_amount(oracle_text: str) -> int:

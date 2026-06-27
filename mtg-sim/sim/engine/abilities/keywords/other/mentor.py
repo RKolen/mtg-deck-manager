@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from deck_registry import CardInfo
 from engine.abilities.keywords._core import has_keyword
+from engine.abilities.keywords.registry import has_registered_keyword
 from engine.abilities.keywords.actions.counters import put_plus_counters
 from engine.core.game_object import Permanent, effective_power
 
@@ -15,6 +17,11 @@ if TYPE_CHECKING:
 def has_mentor(perm: Permanent) -> bool:
     """Return True when the permanent has mentor."""
     return has_keyword(perm, 'Mentor')
+
+
+def has_mentor_card(card: CardInfo) -> bool:
+    """Return True when the card has mentor."""
+    return has_registered_keyword(card.oracle_text, 'Mentor')
 
 
 def apply_mentor_on_attack(

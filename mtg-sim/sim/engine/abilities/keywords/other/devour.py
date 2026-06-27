@@ -5,7 +5,9 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from deck_registry import CardInfo
 from engine.abilities.keywords._core import has_keyword
+from engine.abilities.keywords.registry import has_registered_keyword
 from engine.abilities.keywords.actions.counters import put_plus_counters
 from engine.abilities.keywords.other.host_creature import other_controlled_creatures
 from engine.core.game_object import Permanent, effective_power
@@ -20,6 +22,11 @@ _DEVOUR_RE = re.compile(r'devour\s+(\w+|\d+)', re.IGNORECASE)
 def has_devour(perm: Permanent) -> bool:
     """Return True when the permanent has devour."""
     return has_keyword(perm, 'Devour')
+
+
+def has_devour_card(card: CardInfo) -> bool:
+    """Return True when the card has devour."""
+    return has_registered_keyword(card.oracle_text, 'Devour')
 
 
 def devour_amount(oracle_text: str) -> int:

@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+from deck_registry import CardInfo
 from engine.abilities.keywords._core import has_keyword
+from engine.abilities.keywords.registry import has_registered_keyword
 from engine.core.game_object import Permanent
 
 
 def has_flanking(perm: Permanent) -> bool:
     """Return True when the permanent has flanking."""
     return has_keyword(perm, 'Flanking')
+
+
+def has_flanking_card(card: CardInfo) -> bool:
+    """Return True when the card has flanking."""
+    return has_registered_keyword(card.oracle_text, 'Flanking')
 
 
 def apply_flanking_on_block(attacker: Permanent, blocker: Permanent) -> str | None:

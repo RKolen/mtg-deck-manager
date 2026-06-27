@@ -54,6 +54,12 @@ from engine.abilities.keywords.other.annihilator import has_annihilator_card
 from engine.abilities.keywords.other.cipher import has_cipher_card
 from engine.abilities.keywords.other.enlist import has_enlist_card
 from engine.abilities.keywords.other.exalted import has_exalted_card
+from engine.abilities.keywords.other.extort import has_extort_card
+from engine.abilities.keywords.other.fabricate import has_fabricate_card
+from engine.abilities.keywords.other.flanking import has_flanking_card
+from engine.abilities.keywords.other.frenzy import has_frenzy_card
+from engine.abilities.keywords.other.devour import has_devour_card
+from engine.abilities.keywords.other.mentor import has_mentor_card
 from engine.abilities.keywords.other.mobilize import has_mobilize_card
 from engine.abilities.keywords.other.prowess import has_prowess_card
 from engine.abilities.keywords.other.nightbound import has_nightbound_card
@@ -252,6 +258,12 @@ def card_to_client(
         "hasExalted": has_exalted_card(card),
         "hasMobilize": has_mobilize_card(card),
         "hasEnlist": has_enlist_card(card),
+        "hasFlanking": has_flanking_card(card),
+        "hasFrenzy": has_frenzy_card(card),
+        "hasDevour": has_devour_card(card),
+        "hasFabricate": has_fabricate_card(card),
+        "hasExtort": has_extort_card(card),
+        "hasMentor": has_mentor_card(card),
         "conspireAvailable": (
             conspire_color_match(card, ctx.game.zones, controller_idx)
             if ctx.game is not None and has_conspire(card)
