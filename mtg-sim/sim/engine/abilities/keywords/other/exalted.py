@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from deck_registry import CardInfo
 from engine.abilities.keywords._core import has_keyword
+from engine.abilities.keywords.registry import has_registered_keyword
 from engine.abilities.keywords.actions.counters import put_plus_counters
 from engine.core.game_object import Permanent
 
@@ -15,6 +17,11 @@ if TYPE_CHECKING:
 def has_exalted(perm: Permanent) -> bool:
     """Return True when the permanent has exalted."""
     return has_keyword(perm, 'Exalted')
+
+
+def has_exalted_card(card: CardInfo) -> bool:
+    """Return True when the card has exalted."""
+    return has_registered_keyword(card.oracle_text, 'Exalted')
 
 
 def apply_exalted_on_attack(

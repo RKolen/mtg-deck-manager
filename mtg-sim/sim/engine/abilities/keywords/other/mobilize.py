@@ -5,7 +5,9 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from deck_registry import CardInfo
 from engine.abilities.keywords._core import has_keyword
+from engine.abilities.keywords.registry import has_registered_keyword
 from engine.abilities.keywords._token_factory import enter_token_from_blueprint
 from engine.cards.oracle_parse import TokenBlueprint
 from engine.core.game_object import Permanent
@@ -28,6 +30,11 @@ _SOLDIER = TokenBlueprint(
 def has_mobilize(perm: Permanent) -> bool:
     """Return True when the permanent has mobilize."""
     return has_keyword(perm, 'Mobilize')
+
+
+def has_mobilize_card(card: CardInfo) -> bool:
+    """Return True when the card has mobilize."""
+    return has_registered_keyword(card.oracle_text, 'Mobilize')
 
 
 def mobilize_amount(oracle_text: str) -> int:

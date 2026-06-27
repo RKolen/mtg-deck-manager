@@ -49,6 +49,12 @@ from engine.abilities.keywords.other.megamorph import has_megamorph
 from engine.abilities.keywords.other.multikicker import has_multikicker
 from engine.abilities.keywords.other.daybound import has_daybound_card
 from engine.abilities.keywords.other.affinity import has_affinity_for_artifacts
+from engine.abilities.keywords.other.afflict import has_afflict_card
+from engine.abilities.keywords.other.annihilator import has_annihilator_card
+from engine.abilities.keywords.other.cipher import has_cipher_card
+from engine.abilities.keywords.other.enlist import has_enlist_card
+from engine.abilities.keywords.other.exalted import has_exalted_card
+from engine.abilities.keywords.other.mobilize import has_mobilize_card
 from engine.abilities.keywords.other.prowess import has_prowess_card
 from engine.abilities.keywords.other.nightbound import has_nightbound_card
 from engine.abilities.keywords.other.partner_with import has_partner_with
@@ -240,6 +246,12 @@ def card_to_client(
         "hasProwess": has_prowess_card(card),
         "hasDaybound": has_daybound_card(card) and card.is_creature,
         "hasNightbound": has_nightbound_card(card) and card.is_creature,
+        "hasAfflict": has_afflict_card(card),
+        "hasAnnihilator": has_annihilator_card(card),
+        "hasCipher": has_cipher_card(card),
+        "hasExalted": has_exalted_card(card),
+        "hasMobilize": has_mobilize_card(card),
+        "hasEnlist": has_enlist_card(card),
         "conspireAvailable": (
             conspire_color_match(card, ctx.game.zones, controller_idx)
             if ctx.game is not None and has_conspire(card)
