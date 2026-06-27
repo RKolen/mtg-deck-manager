@@ -11,7 +11,6 @@ from engine.abilities.keywords.actions import (
 )
 from engine.abilities.keywords.actions.resolve import _ActionExtras, _ActionTargets
 from engine.abilities.keywords.actions.tokens import connive
-from engine.abilities.keywords.ability_words import register_permanent_ability_words
 from engine.abilities.keywords.casting import (
     entwined_extra_draw,
     extra_draw_from_kicker,
@@ -39,7 +38,6 @@ from engine.abilities.keywords.casting.warp import apply_warp_on_resolve
 from engine.abilities.keywords.casting.squad import apply_squad_on_etb
 from engine.abilities.keywords.other.etb import apply_etb_other_abilities
 from engine.abilities.keywords.other.evoke import mark_evoked_cast
-from engine.abilities.keywords.other.register import register_permanent_other_keywords
 from engine.cards.oracle_parse import parse_draw, spell_category
 from engine.core.game_object import (
     ActivatedAbilityOnStack,
@@ -448,8 +446,6 @@ class SpellResolveMixin(SpellStackPlacementMixin):
         """Register parsed triggered abilities from a newly resolved permanent."""
         for detail in apply_etb_other_abilities(self.state, permanent):
             self._log("rules", "ability_other", detail)
-        register_permanent_other_keywords(permanent, self.state.trigger_registry)
-        register_permanent_ability_words(permanent, self.state.trigger_registry)
 
     def _deal_damage_to_player(self, player_idx: int, amount: int) -> None:
         """Deal damage to a player and mark Raid-related flags."""

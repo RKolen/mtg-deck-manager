@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from deck_registry import CardInfo
 from engine.abilities.keywords._core import has_keyword
+from engine.abilities.keywords.registry import has_registered_keyword
 from engine.core.game_object import Permanent
 
 if TYPE_CHECKING:
@@ -21,6 +23,16 @@ def has_daybound(perm: Permanent) -> bool:
 def has_nightbound(perm: Permanent) -> bool:
     """Return True when the permanent has nightbound."""
     return has_keyword(perm, 'Nightbound')
+
+
+def has_daybound_card(card: CardInfo) -> bool:
+    """Return True when the card has daybound."""
+    return has_registered_keyword(card.oracle_text, 'Daybound')
+
+
+def has_nightbound_card(card: CardInfo) -> bool:
+    """Return True when the card has nightbound."""
+    return has_registered_keyword(card.oracle_text, 'Nightbound')
 
 
 def is_daybound_front(perm: Permanent) -> bool:

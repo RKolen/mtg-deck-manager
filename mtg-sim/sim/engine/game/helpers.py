@@ -47,6 +47,9 @@ from engine.abilities.keywords.other.commander_ninjutsu import has_commander_nin
 from engine.abilities.keywords.other.hidden_agenda import has_double_agenda
 from engine.abilities.keywords.other.megamorph import has_megamorph
 from engine.abilities.keywords.other.multikicker import has_multikicker
+from engine.abilities.keywords.other.daybound import has_daybound_card
+from engine.abilities.keywords.other.affinity import has_affinity_for_artifacts
+from engine.abilities.keywords.other.prowess import has_prowess_card
 from engine.abilities.keywords.other.nightbound import has_nightbound_card
 from engine.abilities.keywords.other.partner_with import has_partner_with
 from engine.abilities.keywords.casting.warp import has_warp
@@ -233,6 +236,9 @@ def card_to_client(
         "hasPartnerWith": has_partner_with(card),
         "hasDoubleAgenda": has_double_agenda(card),
         "hasMultikicker": has_multikicker(card),
+        "hasAffinityForArtifacts": has_affinity_for_artifacts(card.oracle_text),
+        "hasProwess": has_prowess_card(card),
+        "hasDaybound": has_daybound_card(card) and card.is_creature,
         "hasNightbound": has_nightbound_card(card) and card.is_creature,
         "conspireAvailable": (
             conspire_color_match(card, ctx.game.zones, controller_idx)
