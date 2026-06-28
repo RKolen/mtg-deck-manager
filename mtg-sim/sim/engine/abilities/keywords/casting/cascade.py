@@ -24,6 +24,11 @@ def has_cascade(card: CardInfo) -> bool:
     return has_registered_keyword(card.oracle_text, 'Cascade')
 
 
+def has_cascade_card(card: CardInfo) -> bool:
+    """Return True when the card has cascade."""
+    return has_cascade(card)
+
+
 def spell_mana_value(card: CardInfo) -> int:
     """Return mana value used for cascade comparison."""
     return int(card.cmc) if card.cmc == int(card.cmc) else int(card.cmc)

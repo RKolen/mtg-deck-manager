@@ -12,6 +12,11 @@ def has_improvise(card: CardInfo) -> bool:
     return has_registered_keyword(card.oracle_text, 'Improvise')
 
 
+def has_improvise_card(card: CardInfo) -> bool:
+    """Return True when the card has improvise."""
+    return has_improvise(card)
+
+
 def normalize_improvise_artifact_ids(
     card: CardInfo,
     artifact_ids: list[int],

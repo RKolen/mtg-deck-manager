@@ -27,6 +27,11 @@ def has_emerge(card: CardInfo) -> bool:
     )
 
 
+def has_emerge_card(card: CardInfo) -> bool:
+    """Return True when the card has emerge."""
+    return has_emerge(card)
+
+
 def emerge_cost(card: CardInfo) -> ManaCost | None:
     """Parse the emerge alternate cost from oracle text."""
     match = _EMERGE_COST_RE.search(card.oracle_text or '')

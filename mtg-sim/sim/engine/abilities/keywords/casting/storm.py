@@ -11,6 +11,11 @@ def has_storm(card: CardInfo) -> bool:
     return has_registered_keyword(card.oracle_text, 'Storm')
 
 
+def has_storm_card(card: CardInfo) -> bool:
+    """Return True when the card has storm."""
+    return has_storm(card)
+
+
 def storm_copy_count(spells_cast_including_this: int) -> int:
     """Return how many storm copies to put on the stack.
 

@@ -34,6 +34,11 @@ def has_foretell(card: CardInfo) -> bool:
     return has_registered_keyword(text, 'Foretell') or bool(_FORETELL_COST_RE.search(text))
 
 
+def has_foretell_card(card: CardInfo) -> bool:
+    """Return True when the card has foretell."""
+    return has_foretell(card)
+
+
 def foretell_cost(card: CardInfo) -> ManaCost | None:
     """Parse the foretell cast cost from oracle text."""
     match = _FORETELL_COST_RE.search(card.oracle_text or '')

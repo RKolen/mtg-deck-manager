@@ -11,7 +11,12 @@ from engine.abilities.activated.bloodrush import (
     has_bloodrush,
 )
 from engine.abilities.activated.card_keyword_abilities import can_channel, can_cycle
-from engine.abilities.keywords.casting.foretell import can_foretell_setup, has_foretell
+from engine.abilities.keywords.casting.cascade import has_cascade_card
+from engine.abilities.keywords.casting.foretell import (
+    can_foretell_setup,
+    has_foretell,
+    has_foretell_card,
+)
 from engine.abilities.keywords.casting.flashback import has_flashback_card
 from engine.abilities.keywords.casting.madness import (
     can_cast_via_madness,
@@ -109,11 +114,12 @@ from engine.abilities.keywords.other.evoke import has_evoke_card
 from engine.abilities.keywords.other.forecast import can_forecast, has_forecast_card
 from engine.abilities.keywords.casting.convoke import has_convoke_card
 from engine.abilities.keywords.casting.delve import has_delve_card
-from engine.abilities.keywords.casting.emerge import has_emerge
+from engine.abilities.keywords.casting.emerge import has_emerge_card
 from engine.abilities.keywords.casting.evoke import evoke_mana_needed
-from engine.abilities.keywords.casting.improvise import has_improvise
+from engine.abilities.keywords.casting.improvise import has_improvise_card
+from engine.abilities.keywords.casting.sneak import has_sneak_card
+from engine.abilities.keywords.casting.storm import has_storm_card
 from engine.abilities.keywords.casting.freerunning import has_freerunning
-from engine.abilities.keywords.casting.sneak import has_sneak
 from engine.abilities.keywords.casting.spectacle import has_spectacle, spectacle_available
 from engine.abilities.keywords.casting.surge import has_surge, surge_available
 from engine.abilities.keywords.other.morph import has_morph_card
@@ -324,14 +330,17 @@ def card_to_client(
         "hasSuspend": has_suspend_card(card),
         "hasPlot": has_plot_card(card),
         "hasMadnessCard": has_madness_card(card),
+        "hasCascade": has_cascade_card(card),
+        "hasStorm": has_storm_card(card),
+        "hasForetellCard": has_foretell_card(card),
         "conspireAvailable": (
             conspire_color_match(card, ctx.game.zones, controller_idx)
             if ctx.game is not None and has_conspire(card)
             else False
         ),
         "hasDelve": has_delve_card(card),
-        "hasImprovise": has_improvise(card),
-        "hasEmerge": has_emerge(card),
+        "hasImprovise": has_improvise_card(card),
+        "hasEmerge": has_emerge_card(card),
         "hasSpectacle": has_spectacle(card),
         "spectacleAvailable": (
             spectacle_available(ctx.game, controller_idx)
@@ -347,7 +356,7 @@ def card_to_client(
         "hasMorph": has_morph_card(card) and card.is_creature,
         "hasDisguise": has_disguise_card(card) and card.is_creature,
         "hasNinjutsu": has_ninjutsu_card(card),
-        "hasSneak": has_sneak(card),
+        "hasSneak": has_sneak_card(card),
         "hasDash": has_dash_card(card),
         "hasBlitz": has_blitz_card(card),
         "hasEmbalm": has_embalm_card(card),

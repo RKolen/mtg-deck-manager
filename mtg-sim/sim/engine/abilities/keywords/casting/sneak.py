@@ -25,6 +25,11 @@ def has_sneak(card: CardInfo) -> bool:
     return has_registered_keyword(card.oracle_text, 'Sneak')
 
 
+def has_sneak_card(card: CardInfo) -> bool:
+    """Return True when the card has sneak."""
+    return has_sneak(card)
+
+
 def normalize_sneak_land_hand_indices(
     card: CardInfo,
     spell_hand_idx: int,
