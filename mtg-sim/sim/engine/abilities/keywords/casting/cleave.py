@@ -22,6 +22,11 @@ def has_cleave(card: CardInfo) -> bool:
     )
 
 
+def has_cleave_card(card: CardInfo) -> bool:
+    """Return True when the card has cleave."""
+    return has_cleave(card)
+
+
 def cleave_cost(card: CardInfo) -> ManaCost | None:
     """Parse the cleave alternate cost from oracle text."""
     match = _CLEAVE_COST_RE.search(card.oracle_text or '')

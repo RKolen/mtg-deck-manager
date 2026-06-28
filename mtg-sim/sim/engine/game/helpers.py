@@ -39,12 +39,15 @@ from engine.abilities.keywords.casting.aftermath import has_aftermath_card
 from engine.abilities.keywords.casting.assist import has_assist_card
 from engine.abilities.keywords.casting.bargain import has_bargain_card
 from engine.abilities.keywords.casting.bestow import has_bestow_card
-from engine.abilities.keywords.casting.cleave import has_cleave
+from engine.abilities.keywords.casting.buyback import has_buyback_card
+from engine.abilities.keywords.casting.casualty import has_casualty_card
+from engine.abilities.keywords.casting.cleave import has_cleave_card
 from engine.abilities.keywords.casting.conspire import (
     conspire_color_match,
-    has_conspire,
+    has_conspire_card,
 )
-from engine.abilities.keywords.casting.demonstrate import has_demonstrate
+from engine.abilities.keywords.casting.demonstrate import has_demonstrate_card
+from engine.abilities.keywords.casting.disturb import has_disturb_card
 from engine.abilities.keywords.casting.fuse import has_fuse
 from engine.abilities.keywords.casting.gift import has_gift
 from engine.abilities.keywords.casting.awaken import has_awaken
@@ -265,11 +268,11 @@ def card_to_client(
         "hasAssist": has_assist_card(card),
         "hasBargain": has_bargain_card(card),
         "hasEscalate": has_escalate(card),
-        "hasCleave": has_cleave(card),
+        "hasCleave": has_cleave_card(card),
         "canForecast": can_forecast(card, ctx.phase, ctx.stack_is_empty),
         "hasForecast": has_forecast_card(card),
-        "hasConspire": has_conspire(card),
-        "hasDemonstrate": has_demonstrate(card),
+        "hasConspire": has_conspire_card(card),
+        "hasDemonstrate": has_demonstrate_card(card),
         "hasGift": has_gift(card),
         "hasFuse": has_fuse(card),
         "hasAwaken": has_awaken(card),
@@ -342,9 +345,12 @@ def card_to_client(
         "hasAftermath": has_aftermath_card(card),
         "hasBestow": has_bestow_card(card),
         "hasEscape": has_escape_card(card),
+        "hasBuyback": has_buyback_card(card),
+        "hasCasualty": has_casualty_card(card),
+        "hasDisturb": has_disturb_card(card),
         "conspireAvailable": (
             conspire_color_match(card, ctx.game.zones, controller_idx)
-            if ctx.game is not None and has_conspire(card)
+            if ctx.game is not None and has_conspire_card(card)
             else False
         ),
         "hasDelve": has_delve_card(card),

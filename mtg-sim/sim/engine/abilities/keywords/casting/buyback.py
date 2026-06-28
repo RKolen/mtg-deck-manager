@@ -21,6 +21,11 @@ def has_buyback(card: CardInfo) -> bool:
     )
 
 
+def has_buyback_card(card: CardInfo) -> bool:
+    """Return True when the card has buyback."""
+    return has_buyback(card)
+
+
 def buyback_cost(card: CardInfo) -> ManaCost | None:
     """Parse the buyback cost from oracle text."""
     match = _BUYBACK_COST_RE.search(card.oracle_text or '')

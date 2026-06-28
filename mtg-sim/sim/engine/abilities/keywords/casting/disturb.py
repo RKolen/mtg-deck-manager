@@ -24,6 +24,11 @@ def has_disturb(card: CardInfo) -> bool:
     )
 
 
+def has_disturb_card(card: CardInfo) -> bool:
+    """Return True when the card has disturb."""
+    return has_disturb(card)
+
+
 def disturb_cost(card: CardInfo) -> ManaCost | None:
     """Parse the disturb alternate cost from oracle text."""
     match = _DISTURB_RE.search(card.oracle_text or '')

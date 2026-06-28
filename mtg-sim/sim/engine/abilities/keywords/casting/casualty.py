@@ -21,6 +21,11 @@ def has_casualty(card: CardInfo) -> bool:
     return has_registered_keyword(text, 'Casualty') or bool(_CASUALTY_RE.search(text))
 
 
+def has_casualty_card(card: CardInfo) -> bool:
+    """Return True when the card has casualty."""
+    return has_casualty(card)
+
+
 def casualty_power_required(card: CardInfo) -> int:
     """Return the minimum power required for the casualty sacrifice."""
     match = _CASUALTY_RE.search(card.oracle_text or '')

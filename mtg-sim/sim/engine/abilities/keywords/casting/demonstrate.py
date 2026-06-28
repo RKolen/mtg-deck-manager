@@ -13,6 +13,11 @@ def has_demonstrate(card: CardInfo) -> bool:
     return has_registered_keyword(card.oracle_text, 'Demonstrate')
 
 
+def has_demonstrate_card(card: CardInfo) -> bool:
+    """Return True when the card has demonstrate."""
+    return has_demonstrate(card)
+
+
 def normalize_paid_demonstrate(card: CardInfo, paid_demonstrate: bool) -> bool:
     """Return whether this cast pays demonstrate."""
     return paid_demonstrate and has_demonstrate(card)

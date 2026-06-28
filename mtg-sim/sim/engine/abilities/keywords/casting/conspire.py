@@ -24,6 +24,11 @@ def has_conspire(card: CardInfo) -> bool:
     )
 
 
+def has_conspire_card(card: CardInfo) -> bool:
+    """Return True when the card has conspire."""
+    return has_conspire(card)
+
+
 def conspire_cost(card: CardInfo) -> ManaCost | None:
     """Parse the conspire payment from oracle reminder text."""
     match = _CONSPIRE_PAY_RE.search(card.oracle_text or '')
