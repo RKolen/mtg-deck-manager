@@ -15,6 +15,11 @@ from engine.core.game_state import GameState
 has_megamorph = _has_megamorph
 
 
+def has_megamorph_card(card: CardInfo) -> bool:
+    """Return True when the card has megamorph."""
+    return has_megamorph(card)
+
+
 def megamorph_turn_up_mana_needed(card: CardInfo) -> int:
     """Return generic mana to turn a megamorph creature face up."""
     if not has_megamorph(card):
@@ -32,6 +37,7 @@ def apply_megamorph_turn_up(_game: GameState, permanent: Permanent) -> str | Non
 __all__ = [
     'apply_megamorph_turn_up',
     'has_megamorph',
+    'has_megamorph_card',
     'megamorph_turn_up_mana_needed',
     'morph_turn_up_cost',
 ]

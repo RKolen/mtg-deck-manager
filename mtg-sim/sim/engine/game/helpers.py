@@ -75,10 +75,10 @@ from engine.abilities.keywords.casting.retrace import has_retrace_card
 from engine.abilities.keywords.casting.spree import has_spree_card
 from engine.abilities.keywords.other.commander_ninjutsu import has_commander_ninjutsu
 from engine.abilities.keywords.other.hidden_agenda import has_double_agenda
-from engine.abilities.keywords.other.megamorph import has_megamorph
-from engine.abilities.keywords.other.multikicker import has_multikicker
+from engine.abilities.keywords.other.megamorph import has_megamorph_card
+from engine.abilities.keywords.other.multikicker import has_multikicker_card
 from engine.abilities.keywords.other.daybound import has_daybound_card
-from engine.abilities.keywords.other.affinity import has_affinity_for_artifacts
+from engine.abilities.keywords.other.affinity import has_affinity_card
 from engine.abilities.keywords.other.afflict import has_afflict_card
 from engine.abilities.keywords.other.amplify import has_amplify_card
 from engine.abilities.keywords.other.annihilator import has_annihilator_card
@@ -303,11 +303,11 @@ def card_to_client(
         "hasWebSlinging": has_web_slinging(card),
         "hasMoreThanMeetsTheEye": has_more_than_meets_the_eye(card),
         "hasCommanderNinjutsu": has_commander_ninjutsu(card),
-        "hasMegamorph": has_megamorph(card),
+        "hasMegamorph": has_megamorph_card(card),
         "hasPartnerWith": has_partner_with(card),
         "hasDoubleAgenda": has_double_agenda(card),
-        "hasMultikicker": has_multikicker(card),
-        "hasAffinityForArtifacts": has_affinity_for_artifacts(card.oracle_text),
+        "hasMultikicker": has_multikicker_card(card),
+        "hasAffinityForArtifacts": has_affinity_card(card),
         "hasProwess": has_prowess_card(card),
         "hasDaybound": has_daybound_card(card) and card.is_creature,
         "hasNightbound": has_nightbound_card(card) and card.is_creature,

@@ -9,3 +9,8 @@ from engine.abilities.keywords.casting.kicker import is_multikicker as _is_multi
 def has_multikicker(card: CardInfo) -> bool:
     """Return True when the card has multikicker."""
     return _is_multikicker(card)
+
+
+def has_multikicker_card(card: CardInfo) -> bool:
+    """Return True when the card has multikicker."""
+    return has_multikicker(card)

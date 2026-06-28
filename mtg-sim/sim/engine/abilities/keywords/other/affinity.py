@@ -23,6 +23,11 @@ def has_affinity_for_artifacts(oracle_text: str | None) -> bool:
     )
 
 
+def has_affinity_card(card: CardInfo) -> bool:
+    """Return True when the card has affinity for artifacts."""
+    return has_affinity_for_artifacts(card.oracle_text)
+
+
 def artifact_count(zones: ZoneManager, controller_idx: int) -> int:
     """Count artifacts controlled by a player."""
     return sum(
