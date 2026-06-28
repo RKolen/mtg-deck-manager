@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 
+from deck_registry import CardInfo
 from engine.abilities.keywords.registry import has_registered_keyword
 from engine.core.game_object import Permanent
 from engine.core.game_state import GameState
@@ -21,6 +22,12 @@ def has_level_up(perm: Permanent) -> bool:
     return has_registered_keyword(perm.oracle_text, "Level Up") or bool(
         _LEVEL_UP_RE.search(perm.oracle_text)
     )
+
+
+def has_level_up_card(card: CardInfo) -> bool:
+    """Return True when the card has level up."""
+    oracle = card.oracle_text or ""
+    return has_registered_keyword(oracle, "Level Up") or bool(_LEVEL_UP_RE.search(oracle))
 
 
 def level_up_cost(perm: Permanent) -> ManaCost | None:

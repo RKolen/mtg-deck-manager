@@ -10,7 +10,17 @@ from engine.abilities.activated.bloodrush import (
     can_bloodrush,
     has_bloodrush,
 )
-from engine.abilities.activated.card_keyword_abilities import can_channel, can_cycle
+from engine.abilities.activated.card_keyword_abilities import (
+    can_channel,
+    can_cycle,
+    can_unearth,
+    has_channel_card,
+    has_cycling_card,
+    has_unearth_card,
+)
+from engine.abilities.activated.crew import has_crew_card
+from engine.abilities.activated.level_up import has_level_up_card
+from engine.abilities.activated.mount import has_mount_card
 from engine.abilities.keywords.casting.cascade import has_cascade_card
 from engine.abilities.keywords.casting.foretell import (
     can_foretell_setup,
@@ -404,6 +414,17 @@ def card_to_client(
         ),
         "canBloodrush": bloodrush_ok,
         "bloodrushAffordable": bloodrush_ok and available_mana >= bloodrush_mana,
+        "hasCycling": has_cycling_card(card),
+        "hasChannel": has_channel_card(card),
+        "hasUnearth": has_unearth_card(card),
+        "canUnearth": (
+            can_unearth(card, ctx.phase, ctx.stack_is_empty)
+            if has_unearth_card(card)
+            else False
+        ),
+        "hasCrew": has_crew_card(card),
+        "hasMount": has_mount_card(card),
+        "hasLevelUp": has_level_up_card(card),
         "canCycle": can_cycle(card, ctx.phase, ctx.stack_is_empty),
         "canChannel": can_channel(card, ctx.phase, ctx.stack_is_empty),
         "canNinjutsu": can_ninjutsu(card, ctx.phase, ctx.stack_is_empty),

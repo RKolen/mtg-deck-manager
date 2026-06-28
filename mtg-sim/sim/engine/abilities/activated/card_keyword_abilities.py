@@ -42,6 +42,11 @@ def has_cycling(card: CardInfo) -> bool:
     return has_cost_keyword(card, "Cycling", _CYCLING_RE)
 
 
+def has_cycling_card(card: CardInfo) -> bool:
+    """Return True when the card has cycling."""
+    return has_cycling(card)
+
+
 def cycling_cost(card: CardInfo) -> ManaCost | None:
     """Parse the cycling cost from oracle text."""
     return parse_alt_cost(card, _CYCLING_RE)
@@ -69,6 +74,11 @@ def cycle_from_hand(
 def has_channel(card: CardInfo) -> bool:
     """Return True when the card has channel."""
     return has_cost_keyword(card, "Channel", _CHANNEL_RE)
+
+
+def has_channel_card(card: CardInfo) -> bool:
+    """Return True when the card has channel."""
+    return has_channel(card)
 
 
 def channel_cost(card: CardInfo) -> ManaCost | None:
@@ -123,6 +133,11 @@ def discard_for_channel(
 def has_unearth(card: CardInfo) -> bool:
     """Return True when the card has unearth."""
     return has_cost_keyword(card, "Unearth", _UNEARTH_RE)
+
+
+def has_unearth_card(card: CardInfo) -> bool:
+    """Return True when the card has unearth."""
+    return has_unearth(card)
 
 
 def unearth_cost(card: CardInfo) -> ManaCost | None:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 
+from deck_registry import CardInfo
 from engine.abilities.activated.crew import (
     _CREWED_COUNTER,
     _find_perm,
@@ -22,6 +23,14 @@ def has_mount(perm: Permanent) -> bool:
         has_registered_keyword(perm.oracle_text, "Mount")
         or bool(_MOUNT_RE.search(perm.oracle_text))
     )
+
+
+def has_mount_card(card: CardInfo) -> bool:
+    """Return True when the card is a mount with mount."""
+    if "Mount" not in (card.type_line or ""):
+        return False
+    oracle = card.oracle_text or ""
+    return has_registered_keyword(oracle, "Mount") or bool(_MOUNT_RE.search(oracle))
 
 
 def mount_cost(perm: Permanent) -> int:

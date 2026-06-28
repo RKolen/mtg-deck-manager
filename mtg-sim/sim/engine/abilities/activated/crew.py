@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from deck_registry import CardInfo
 from engine.abilities.keywords.registry import has_registered_keyword
 from engine.core.game_object import Permanent
 from engine.rules.combat import power
@@ -22,6 +23,14 @@ def has_crew(perm: Permanent) -> bool:
         has_registered_keyword(perm.oracle_text, "Crew")
         or bool(_CREW_RE.search(perm.oracle_text))
     )
+
+
+def has_crew_card(card: CardInfo) -> bool:
+    """Return True when the card is a vehicle with crew."""
+    if "Vehicle" not in (card.type_line or ""):
+        return False
+    oracle = card.oracle_text or ""
+    return has_registered_keyword(oracle, "Crew") or bool(_CREW_RE.search(oracle))
 
 
 def crew_cost(perm: Permanent) -> int:
