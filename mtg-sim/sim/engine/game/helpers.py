@@ -24,6 +24,16 @@ from engine.abilities.activated.core import has_equip_card, has_mana_ability_car
 from engine.abilities.activated.crew import has_crew_card
 from engine.abilities.activated.level_up import has_level_up_card
 from engine.abilities.activated.mount import has_mount_card
+from engine.abilities.activated.typecycling import (
+    has_forestcycling_card,
+    has_islandcycling_card,
+    has_mountaincycling_card,
+    has_plainscycling_card,
+    has_swampcycling_card,
+    has_typecycling_card,
+    has_wizardcycling_card,
+    typecycling_discard_requirement,
+)
 from engine.abilities.keywords.casting.cascade import has_cascade_card
 from engine.abilities.keywords.casting.foretell import (
     can_foretell_setup,
@@ -418,6 +428,14 @@ def card_to_client(
         "canBloodrush": bloodrush_ok,
         "bloodrushAffordable": bloodrush_ok and available_mana >= bloodrush_mana,
         "hasCycling": has_cycling_card(card),
+        "hasTypecycling": has_typecycling_card(card),
+        "hasForestcycling": has_forestcycling_card(card),
+        "hasIslandcycling": has_islandcycling_card(card),
+        "hasSwampcycling": has_swampcycling_card(card),
+        "hasMountaincycling": has_mountaincycling_card(card),
+        "hasPlainscycling": has_plainscycling_card(card),
+        "hasWizardcycling": has_wizardcycling_card(card),
+        "typecyclingDiscard": typecycling_discard_requirement(card),
         "hasChannel": has_channel_card(card),
         "hasUnearth": has_unearth_card(card),
         "canUnearth": (
