@@ -28,6 +28,11 @@ def has_bloodrush(card: CardInfo) -> bool:
     return card.is_creature and has_ability_word(card.oracle_text, 'Bloodrush')
 
 
+def has_bloodrush_card(card: CardInfo) -> bool:
+    """Return True when the card has bloodrush."""
+    return has_bloodrush(card)
+
+
 def bloodrush_cost(card: CardInfo) -> ManaCost | None:
     """Parse the mana cost from a Bloodrush line."""
     match = _BLOODRUSH_COST_RE.search(card.oracle_text or '')

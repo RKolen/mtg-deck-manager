@@ -8,16 +8,19 @@ from deck_registry import CardInfo
 from engine.abilities.activated.bloodrush import (
     bloodrush_mana_needed,
     can_bloodrush,
-    has_bloodrush,
+    has_bloodrush_card,
 )
 from engine.abilities.activated.card_keyword_abilities import (
     can_channel,
     can_cycle,
+    can_scavenge,
     can_unearth,
     has_channel_card,
     has_cycling_card,
+    has_scavenge_card,
     has_unearth_card,
 )
+from engine.abilities.activated.core import has_equip_card, has_mana_ability_card
 from engine.abilities.activated.crew import has_crew_card
 from engine.abilities.activated.level_up import has_level_up_card
 from engine.abilities.activated.mount import has_mount_card
@@ -261,7 +264,7 @@ def card_to_client(
     )
     has_evoke_kw = has_evoke_card(card)
     evoke_mana = evoke_mana_needed(card)[0] if has_evoke_kw else 0
-    bloodrush = has_bloodrush(card)
+    bloodrush = has_bloodrush_card(card)
     bloodrush_ok = bloodrush and can_bloodrush(card, ctx.phase, ctx.stack_is_empty)
     bloodrush_mana = bloodrush_mana_needed(card) if bloodrush else 0
     alt_flags = _hand_alt_activation_flags(
@@ -425,6 +428,15 @@ def card_to_client(
         "hasCrew": has_crew_card(card),
         "hasMount": has_mount_card(card),
         "hasLevelUp": has_level_up_card(card),
+        "hasScavenge": has_scavenge_card(card),
+        "canScavenge": (
+            can_scavenge(card, ctx.phase, ctx.stack_is_empty)
+            if has_scavenge_card(card)
+            else False
+        ),
+        "hasBloodrush": has_bloodrush_card(card),
+        "hasEquip": has_equip_card(card),
+        "hasManaAbility": has_mana_ability_card(card),
         "canCycle": can_cycle(card, ctx.phase, ctx.stack_is_empty),
         "canChannel": can_channel(card, ctx.phase, ctx.stack_is_empty),
         "canNinjutsu": can_ninjutsu(card, ctx.phase, ctx.stack_is_empty),

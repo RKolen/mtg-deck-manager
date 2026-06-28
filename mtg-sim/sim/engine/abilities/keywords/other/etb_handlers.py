@@ -235,3 +235,8 @@ ETB_DETAIL_PRODUCERS: tuple[EtbDetailFn, ...] = (
     _fortify_detail,
     _job_select_detail,
 )
+
+
+def etb_detail_producer_count() -> int:
+    """Return how many ETB detail producers are wired."""
+    return len(ETB_DETAIL_PRODUCERS)

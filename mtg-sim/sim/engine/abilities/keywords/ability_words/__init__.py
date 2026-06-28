@@ -8,6 +8,7 @@ register_permanent_ability_words().
 from engine.abilities.keywords.ability_words.detect import (
     ALL_ABILITY_WORDS,
     has_ability_word,
+    has_ability_word_card,
 )
 from engine.abilities.keywords.ability_words.register import (
     register_permanent_ability_words,
@@ -16,5 +17,6 @@ from engine.abilities.keywords.ability_words.register import (
 __all__ = [
     'ALL_ABILITY_WORDS',
     'has_ability_word',
+    'has_ability_word_card',
     'register_permanent_ability_words',
 ]

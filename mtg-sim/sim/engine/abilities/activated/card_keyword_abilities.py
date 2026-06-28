@@ -180,6 +180,11 @@ def has_scavenge(card: CardInfo) -> bool:
     return card.is_creature and has_cost_keyword(card, "Scavenge", _SCAVENGE_RE)
 
 
+def has_scavenge_card(card: CardInfo) -> bool:
+    """Return True when the card has scavenge."""
+    return has_scavenge(card)
+
+
 def scavenge_cost(card: CardInfo) -> ManaCost | None:
     """Parse the scavenge cost from oracle text."""
     return parse_alt_cost(card, _SCAVENGE_RE)

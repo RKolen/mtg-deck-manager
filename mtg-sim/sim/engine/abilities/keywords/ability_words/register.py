@@ -204,6 +204,12 @@ _WIRED: dict[str, _AbilityWordWire] = {
 }
 
 
+def wired_ability_word_names(oracle_text: str | None) -> tuple[str, ...]:
+    """Return wired ability words present in oracle text."""
+    text = oracle_text or ''
+    return tuple(word for word in _WIRED if has_ability_word(text, word))
+
+
 def register_permanent_ability_words(
     permanent: Permanent,
     registry: TriggerRegistry,

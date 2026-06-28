@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING
 
+from deck_registry import CardInfo
 from engine.abilities.keywords.ability_words.effects import AbilityWordEffect
 from engine.core.game_object import ActivatedAbilityOnStack, Permanent, Target
 from engine.core.mana import ManaCost, mana_of
@@ -95,6 +96,38 @@ def equip_cost(cost_text: str) -> ManaCost | None:
     if match is None:
         return None
     return ManaCost.parse(match.group(1))
+
+
+def has_equip(card: CardInfo) -> bool:
+    """Return True when the card is equipment with an equip ability."""
+    if 'Equipment' not in (card.type_line or ''):
+        return False
+    return any(spec.equip for spec in parse_activated_abilities(card.oracle_text or ''))
+
+
+def has_equip_card(card: CardInfo) -> bool:
+    """Return True when the card has equip."""
+    return has_equip(card)
+
+
+def equip_mana_needed(card: CardInfo) -> int:
+    """Return generic mana to pay the first equip ability on this card."""
+    for spec in parse_activated_abilities(card.oracle_text or ''):
+        if spec.equip:
+            return activation_mana_value(spec.cost_text)
+    return 0
+
+
+def has_mana_ability(card: CardInfo) -> bool:
+    """Return True when the card has a mana activated ability."""
+    return any(
+        spec.mana_ability for spec in parse_activated_abilities(card.oracle_text or '')
+    )
+
+
+def has_mana_ability_card(card: CardInfo) -> bool:
+    """Return True when the card has a mana ability."""
+    return has_mana_ability(card)
 
 
 def can_activate(

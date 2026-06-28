@@ -22,6 +22,16 @@ from engine.core.game_object import Permanent
 from engine.rules.triggers import TriggerKey, TriggerRegistry, TriggerSpec
 
 
+def trigger_registration_count(
+    registry: TriggerRegistry,
+    permanent: Permanent,
+    *,
+    trigger_key: TriggerKey | None = None,
+) -> int:
+    """Return how many triggers are registered for a permanent."""
+    return registry.registration_count(permanent, trigger_key=trigger_key)
+
+
 def register_permanent_other_keywords(
     permanent: Permanent,
     registry: TriggerRegistry,

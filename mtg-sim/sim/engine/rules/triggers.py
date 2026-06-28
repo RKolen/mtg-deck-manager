@@ -158,6 +158,20 @@ class TriggerRegistry:
             )
         )
 
+    def registration_count(
+        self,
+        permanent: Permanent,
+        *,
+        trigger_key: TriggerKey | None = None,
+    ) -> int:
+        """Return how many triggers are registered for a permanent."""
+        return sum(
+            1
+            for definition in self._definitions
+            if definition.source_permanent_id == permanent.obj_id
+            and (trigger_key is None or definition.trigger_key == trigger_key)
+        )
+
     def fire(
         self,
         event: TriggerEvent,
