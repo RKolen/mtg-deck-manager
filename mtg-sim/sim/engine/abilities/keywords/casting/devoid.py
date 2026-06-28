@@ -11,6 +11,11 @@ def has_devoid(card: CardInfo) -> bool:
     return has_registered_keyword(card.oracle_text, 'Devoid')
 
 
+def has_devoid_card(card: CardInfo) -> bool:
+    """Return True when the card has devoid."""
+    return has_devoid(card)
+
+
 def spell_is_colorless_for_effects(card: CardInfo) -> bool:
     """Return True when color-matching effects should treat the spell as colorless."""
     return has_devoid(card)

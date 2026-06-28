@@ -24,6 +24,11 @@ def has_evoke(card: CardInfo) -> bool:
     )
 
 
+def has_evoke_card(card: CardInfo) -> bool:
+    """Return True when the card has evoke."""
+    return has_evoke(card)
+
+
 def evoke_cost(card: CardInfo) -> ManaCost | None:
     """Parse the evoke alternate cost from oracle text."""
     match = _EVOKE_COST_RE.search(card.oracle_text or '')

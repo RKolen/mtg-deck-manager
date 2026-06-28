@@ -21,6 +21,11 @@ def has_escalate(card: CardInfo) -> bool:
     )
 
 
+def has_escalate_card(card: CardInfo) -> bool:
+    """Return True when the card has escalate."""
+    return has_escalate(card)
+
+
 def escalate_cost(card: CardInfo) -> ManaCost | None:
     """Parse the escalate cost from oracle text."""
     match = _ESCALATE_COST_RE.search(card.oracle_text or '')

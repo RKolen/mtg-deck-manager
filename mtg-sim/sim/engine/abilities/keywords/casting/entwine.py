@@ -31,6 +31,11 @@ def has_entwine(card: CardInfo) -> bool:
     )
 
 
+def has_entwine_card(card: CardInfo) -> bool:
+    """Return True when the card has entwine."""
+    return has_entwine(card)
+
+
 def entwine_cost(card: CardInfo) -> ManaCost | None:
     """Parse the entwine additional cost from oracle text."""
     match = _ENTWINE_COST_RE.search(card.oracle_text or '')

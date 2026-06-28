@@ -23,6 +23,11 @@ def has_retrace(card: CardInfo) -> bool:
     return has_registered_keyword(text, 'Retrace') or bool(_RETRACE_RE.search(text))
 
 
+def has_retrace_card(card: CardInfo) -> bool:
+    """Return True when the card has retrace."""
+    return has_retrace(card)
+
+
 def retrace_mana_needed(card: CardInfo) -> int:
     """Return generic mana lands to tap for a retrace cast (normal spell cost)."""
     phyrexian_pips = (card.mana_cost or '').upper().count('/P')

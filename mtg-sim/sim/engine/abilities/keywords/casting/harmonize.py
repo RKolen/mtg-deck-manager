@@ -26,6 +26,11 @@ def has_harmonize(card: CardInfo) -> bool:
     )
 
 
+def has_harmonize_card(card: CardInfo) -> bool:
+    """Return True when the card has harmonize."""
+    return has_harmonize(card)
+
+
 def harmonize_cost(card: CardInfo) -> ManaCost | None:
     """Parse the harmonize alternate cost from oracle text."""
     match = _HARMONIZE_COST_RE.search(card.oracle_text or '')

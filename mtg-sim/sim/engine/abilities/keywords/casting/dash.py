@@ -24,6 +24,11 @@ def has_dash(card: CardInfo) -> bool:
     )
 
 
+def has_dash_card(card: CardInfo) -> bool:
+    """Return True when the card has dash."""
+    return has_dash(card)
+
+
 def dash_cost(card: CardInfo) -> ManaCost | None:
     """Parse the dash alternate cost from oracle text."""
     match = _DASH_COST_RE.search(card.oracle_text or '')

@@ -24,6 +24,11 @@ def has_overload(card: CardInfo) -> bool:
     )
 
 
+def has_overload_card(card: CardInfo) -> bool:
+    """Return True when the card has overload."""
+    return has_overload(card)
+
+
 def overload_cost(card: CardInfo) -> ManaCost | None:
     """Parse the overload alternate cost from oracle text."""
     match = _OVERLOAD_COST_RE.search(card.oracle_text or '')

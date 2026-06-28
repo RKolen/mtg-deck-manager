@@ -24,6 +24,11 @@ def has_blitz(card: CardInfo) -> bool:
     )
 
 
+def has_blitz_card(card: CardInfo) -> bool:
+    """Return True when the card has blitz."""
+    return has_blitz(card)
+
+
 def blitz_cost(card: CardInfo) -> ManaCost | None:
     """Parse the blitz alternate cost from oracle text."""
     match = _BLITZ_COST_RE.search(card.oracle_text or '')

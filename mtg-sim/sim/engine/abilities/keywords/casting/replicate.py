@@ -21,6 +21,11 @@ def has_replicate(card: CardInfo) -> bool:
     )
 
 
+def has_replicate_card(card: CardInfo) -> bool:
+    """Return True when the card has replicate."""
+    return has_replicate(card)
+
+
 def replicate_cost(card: CardInfo) -> ManaCost | None:
     """Parse the replicate cost from oracle text."""
     match = _REPLICATE_COST_RE.search(card.oracle_text or '')

@@ -25,6 +25,11 @@ def has_embalm(card: CardInfo) -> bool:
     )
 
 
+def has_embalm_card(card: CardInfo) -> bool:
+    """Return True when the card has embalm."""
+    return has_embalm(card)
+
+
 def embalm_cost(card: CardInfo) -> ManaCost | None:
     """Parse the embalm cost from oracle text."""
     match = _EMBALM_COST_RE.search(card.oracle_text or '')
@@ -51,4 +56,5 @@ __all__ = [
     'embalm_cost',
     'embalm_mana_needed',
     'has_embalm',
+    'has_embalm_card',
 ]

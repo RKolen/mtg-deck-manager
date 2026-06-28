@@ -28,6 +28,11 @@ def has_jump_start(card: CardInfo) -> bool:
     )
 
 
+def has_jump_start_card(card: CardInfo) -> bool:
+    """Return True when the card has jump-start."""
+    return has_jump_start(card)
+
+
 def jump_start_cost(card: CardInfo) -> ManaCost | None:
     """Parse the jump-start alternate cost from oracle text."""
     match = _JUMP_START_COST_RE.search(card.oracle_text or '')

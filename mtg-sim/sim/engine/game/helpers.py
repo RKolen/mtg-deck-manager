@@ -47,12 +47,17 @@ from engine.abilities.keywords.casting.conspire import (
     has_conspire_card,
 )
 from engine.abilities.keywords.casting.demonstrate import has_demonstrate_card
+from engine.abilities.keywords.casting.devoid import has_devoid_card
 from engine.abilities.keywords.casting.disturb import has_disturb_card
+from engine.abilities.keywords.casting.entwine import has_entwine_card
+from engine.abilities.keywords.casting.escalate import has_escalate_card
 from engine.abilities.keywords.casting.fuse import has_fuse
 from engine.abilities.keywords.casting.gift import has_gift
+from engine.abilities.keywords.casting.harmonize import has_harmonize_card
 from engine.abilities.keywords.casting.awaken import has_awaken
 from engine.abilities.keywords.casting.for_mirrodin import has_for_mirrodin
 from engine.abilities.keywords.casting.impending import has_impending
+from engine.abilities.keywords.casting.jump_start import has_jump_start_card
 from engine.abilities.keywords.casting.mayhem import has_mayhem
 from engine.abilities.keywords.casting.prototype import has_prototype
 from engine.abilities.keywords.casting.splice import has_splice
@@ -62,7 +67,12 @@ from engine.abilities.keywords.casting.tiered import has_tiered
 from engine.abilities.keywords.casting.undaunted import has_undaunted
 from engine.abilities.keywords.casting.specialize import has_specialize
 from engine.abilities.keywords.casting.web_slinging import has_web_slinging
-from engine.abilities.keywords.casting.more_than_meets_the_eye import has_more_than_meets_the_eye
+from engine.abilities.keywords.casting.miracle import has_miracle_card
+from engine.abilities.keywords.casting.mutate import has_mutate_card
+from engine.abilities.keywords.casting.overload import has_overload_card
+from engine.abilities.keywords.casting.replicate import has_replicate_card
+from engine.abilities.keywords.casting.retrace import has_retrace_card
+from engine.abilities.keywords.casting.spree import has_spree_card
 from engine.abilities.keywords.other.commander_ninjutsu import has_commander_ninjutsu
 from engine.abilities.keywords.other.hidden_agenda import has_double_agenda
 from engine.abilities.keywords.other.megamorph import has_megamorph
@@ -112,7 +122,7 @@ from engine.abilities.keywords.casting.warp import has_warp
 from engine.abilities.keywords.casting.squad import has_squad
 from engine.abilities.keywords.casting.offering import has_offering
 from engine.abilities.keywords.casting.ripple import has_ripple
-from engine.abilities.keywords.casting.escalate import has_escalate
+from engine.abilities.keywords.casting.more_than_meets_the_eye import has_more_than_meets_the_eye
 from engine.abilities.keywords.other.disguise import has_disguise_card
 from engine.abilities.keywords.other.embalm import has_embalm_card
 from engine.abilities.keywords.other.evoke import has_evoke_card
@@ -125,7 +135,7 @@ from engine.abilities.keywords.casting.evoke import evoke_mana_needed
 from engine.abilities.keywords.casting.improvise import has_improvise_card
 from engine.abilities.keywords.casting.sneak import has_sneak_card
 from engine.abilities.keywords.casting.storm import has_storm_card
-from engine.abilities.keywords.casting.freerunning import has_freerunning
+from engine.abilities.keywords.casting.freerunning import has_freerunning_card
 from engine.abilities.keywords.casting.spectacle import (
     has_spectacle_card,
     spectacle_available,
@@ -267,7 +277,7 @@ def card_to_client(
         "hasConvoke": has_convoke_card(card),
         "hasAssist": has_assist_card(card),
         "hasBargain": has_bargain_card(card),
-        "hasEscalate": has_escalate(card),
+        "hasEscalate": has_escalate_card(card),
         "hasCleave": has_cleave_card(card),
         "canForecast": can_forecast(card, ctx.phase, ctx.stack_is_empty),
         "hasForecast": has_forecast_card(card),
@@ -348,6 +358,16 @@ def card_to_client(
         "hasBuyback": has_buyback_card(card),
         "hasCasualty": has_casualty_card(card),
         "hasDisturb": has_disturb_card(card),
+        "hasDevoid": has_devoid_card(card),
+        "hasHarmonize": has_harmonize_card(card),
+        "hasJumpStart": has_jump_start_card(card),
+        "hasReplicate": has_replicate_card(card),
+        "hasRetrace": has_retrace_card(card),
+        "hasSpree": has_spree_card(card),
+        "hasEntwine": has_entwine_card(card),
+        "hasMiracle": has_miracle_card(card),
+        "hasMutate": has_mutate_card(card),
+        "hasOverload": has_overload_card(card),
         "conspireAvailable": (
             conspire_color_match(card, ctx.game.zones, controller_idx)
             if ctx.game is not None and has_conspire_card(card)
@@ -375,12 +395,12 @@ def card_to_client(
         "hasDash": has_dash_card(card),
         "hasBlitz": has_blitz_card(card),
         "hasEmbalm": has_embalm_card(card),
-        "hasFreerunning": has_freerunning(card),
+        "hasFreerunning": has_freerunning_card(card),
         "freerunningAvailable": (
             ctx.game is not None
             and ctx.controller_idx == 0
             and ctx.game.players[0].combat_damage_dealt_this_turn
-            and has_freerunning(card)
+            and has_freerunning_card(card)
         ),
         "canBloodrush": bloodrush_ok,
         "bloodrushAffordable": bloodrush_ok and available_mana >= bloodrush_mana,

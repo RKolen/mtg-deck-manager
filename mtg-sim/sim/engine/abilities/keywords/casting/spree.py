@@ -30,6 +30,11 @@ def has_spree(card: CardInfo) -> bool:
     return has_registered_keyword(text, 'Spree') or 'spree' in text.lower()
 
 
+def has_spree_card(card: CardInfo) -> bool:
+    """Return True when the card has spree."""
+    return has_spree(card)
+
+
 def spree_modes(card: CardInfo) -> list[SpreeMode]:
     """Parse spree mode costs and effects from oracle text."""
     if not has_spree(card):

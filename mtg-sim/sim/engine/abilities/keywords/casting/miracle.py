@@ -22,6 +22,11 @@ def has_miracle(card: CardInfo) -> bool:
     )
 
 
+def has_miracle_card(card: CardInfo) -> bool:
+    """Return True when the card has miracle."""
+    return has_miracle(card)
+
+
 def miracle_cost(card: CardInfo) -> ManaCost | None:
     """Parse the miracle alternate cost from oracle text."""
     match = _MIRACLE_COST_RE.search(card.oracle_text or '')

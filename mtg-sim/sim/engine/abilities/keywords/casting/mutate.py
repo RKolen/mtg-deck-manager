@@ -26,6 +26,11 @@ def has_mutate(card: CardInfo) -> bool:
     )
 
 
+def has_mutate_card(card: CardInfo) -> bool:
+    """Return True when the card has mutate."""
+    return has_mutate(card)
+
+
 def mutate_cost(card: CardInfo) -> ManaCost | None:
     """Parse the mutate alternate cost from oracle text."""
     match = _MUTATE_COST_RE.search(card.oracle_text or '')

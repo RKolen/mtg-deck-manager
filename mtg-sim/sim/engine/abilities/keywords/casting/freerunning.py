@@ -23,6 +23,11 @@ def has_freerunning(card: CardInfo) -> bool:
     )
 
 
+def has_freerunning_card(card: CardInfo) -> bool:
+    """Return True when the card has freerunning."""
+    return has_freerunning(card)
+
+
 def freerunning_cost(card: CardInfo) -> ManaCost | None:
     """Parse the freerunning alternate cost from oracle text."""
     match = _FREERUNNING_COST_RE.search(card.oracle_text or '')
