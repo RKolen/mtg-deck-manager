@@ -58,6 +58,26 @@ def has_wizardcycling_card(card: CardInfo) -> bool:
     return _has_typecycling_keyword(card, 'Wizardcycling')
 
 
+def has_basic_landcycling_card(card: CardInfo) -> bool:
+    """Return True when the card has basic landcycling."""
+    return _has_typecycling_keyword(card, 'Basic landcycling')
+
+
+def has_landcycling_card(card: CardInfo) -> bool:
+    """Return True when the card has landcycling."""
+    return _has_typecycling_keyword(card, 'Landcycling')
+
+
+def has_slivercycling_card(card: CardInfo) -> bool:
+    """Return True when the card has slivercycling."""
+    return _has_typecycling_keyword(card, 'Slivercycling')
+
+
+def has_typecycling_keyword_card(card: CardInfo) -> bool:
+    """Return True when the card has the Typecycling keyword."""
+    return _has_typecycling_keyword(card, 'Typecycling')
+
+
 def has_typecycling_card(card: CardInfo) -> bool:
     """Return True when the card has any typecycling variant."""
     return typecycling_discard_requirement(card) is not None

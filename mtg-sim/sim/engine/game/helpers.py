@@ -25,12 +25,16 @@ from engine.abilities.activated.crew import has_crew_card
 from engine.abilities.activated.level_up import has_level_up_card
 from engine.abilities.activated.mount import has_mount_card
 from engine.abilities.activated.typecycling import (
+    has_basic_landcycling_card,
     has_forestcycling_card,
     has_islandcycling_card,
+    has_landcycling_card,
     has_mountaincycling_card,
     has_plainscycling_card,
+    has_slivercycling_card,
     has_swampcycling_card,
     has_typecycling_card,
+    has_typecycling_keyword_card,
     has_wizardcycling_card,
     typecycling_discard_requirement,
 )
@@ -435,6 +439,10 @@ def card_to_client(
         "hasMountaincycling": has_mountaincycling_card(card),
         "hasPlainscycling": has_plainscycling_card(card),
         "hasWizardcycling": has_wizardcycling_card(card),
+        "hasBasicLandcycling": has_basic_landcycling_card(card),
+        "hasLandcycling": has_landcycling_card(card),
+        "hasSlivercycling": has_slivercycling_card(card),
+        "hasTypecyclingKeyword": has_typecycling_keyword_card(card),
         "typecyclingDiscard": typecycling_discard_requirement(card),
         "hasChannel": has_channel_card(card),
         "hasUnearth": has_unearth_card(card),
