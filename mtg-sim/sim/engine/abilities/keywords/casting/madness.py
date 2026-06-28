@@ -24,6 +24,11 @@ def has_madness(card: CardInfo) -> bool:
     )
 
 
+def has_madness_card(card: CardInfo) -> bool:
+    """Return True when the card has madness."""
+    return has_madness(card)
+
+
 def madness_cost(card: CardInfo) -> ManaCost | None:
     """Parse the madness alternate cost from oracle text."""
     match = _MADNESS_COST_RE.search(card.oracle_text or '')

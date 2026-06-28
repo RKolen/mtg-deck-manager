@@ -14,6 +14,11 @@ def has_delve(card: CardInfo) -> bool:
     return has_registered_keyword(card.oracle_text, 'Delve')
 
 
+def has_delve_card(card: CardInfo) -> bool:
+    """Return True when the card has delve."""
+    return has_delve(card)
+
+
 def normalize_delve_graveyard_indices(
     card: CardInfo,
     graveyard_indices: list[int],

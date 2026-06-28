@@ -31,6 +31,11 @@ def has_suspend(card: CardInfo) -> bool:
     )
 
 
+def has_suspend_card(card: CardInfo) -> bool:
+    """Return True when the card has suspend."""
+    return has_suspend(card)
+
+
 def suspend_time_counters(card: CardInfo) -> int:
     """Return the number of time counters placed when suspending."""
     match = _SUSPEND_RE.search(card.oracle_text or '')

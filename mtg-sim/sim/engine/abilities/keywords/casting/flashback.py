@@ -22,6 +22,11 @@ def has_flashback(card: CardInfo) -> bool:
     )
 
 
+def has_flashback_card(card: CardInfo) -> bool:
+    """Return True when the card has flashback."""
+    return has_flashback(card)
+
+
 def flashback_cost(card: CardInfo) -> ManaCost | None:
     """Parse the flashback alternate cost from oracle text."""
     match = _FLASHBACK_COST_RE.search(card.oracle_text or '')

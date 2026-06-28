@@ -12,6 +12,11 @@ def has_convoke(card: CardInfo) -> bool:
     return has_registered_keyword(card.oracle_text, 'Convoke')
 
 
+def has_convoke_card(card: CardInfo) -> bool:
+    """Return True when the card has convoke."""
+    return has_convoke(card)
+
+
 def normalize_convoke_creature_ids(
     card: CardInfo,
     creature_ids: list[int],

@@ -28,6 +28,11 @@ def has_plot(card: CardInfo) -> bool:
     return has_registered_keyword(text, 'Plot') or bool(_PLOT_RE.search(text))
 
 
+def has_plot_card(card: CardInfo) -> bool:
+    """Return True when the card has plot."""
+    return has_plot(card)
+
+
 def is_plottable_sorcery(card: CardInfo) -> bool:
     """Return True when the card is a sorcery that may be plotted."""
     return has_plot(card) and 'Sorcery' in card.type_line and not card.is_land

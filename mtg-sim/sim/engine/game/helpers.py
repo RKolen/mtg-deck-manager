@@ -12,13 +12,23 @@ from engine.abilities.activated.bloodrush import (
 )
 from engine.abilities.activated.card_keyword_abilities import can_channel, can_cycle
 from engine.abilities.keywords.casting.foretell import can_foretell_setup, has_foretell
+from engine.abilities.keywords.casting.flashback import has_flashback_card
 from engine.abilities.keywords.casting.madness import (
     can_cast_via_madness,
     has_madness,
+    has_madness_card,
     madness_mana_needed,
 )
-from engine.abilities.keywords.casting.plot import can_plot_setup, is_plottable_sorcery
-from engine.abilities.keywords.casting.suspend import can_suspend, suspend_mana_needed
+from engine.abilities.keywords.casting.plot import (
+    can_plot_setup,
+    has_plot_card,
+    is_plottable_sorcery,
+)
+from engine.abilities.keywords.casting.suspend import (
+    can_suspend,
+    has_suspend_card,
+    suspend_mana_needed,
+)
 from engine.abilities.keywords import has_flash
 from engine.abilities.keywords.casting.assist import has_assist
 from engine.abilities.keywords.casting.bargain import has_bargain
@@ -97,8 +107,8 @@ from engine.abilities.keywords.other.disguise import has_disguise_card
 from engine.abilities.keywords.other.embalm import has_embalm_card
 from engine.abilities.keywords.other.evoke import has_evoke_card
 from engine.abilities.keywords.other.forecast import can_forecast, has_forecast_card
-from engine.abilities.keywords.casting.convoke import has_convoke
-from engine.abilities.keywords.casting.delve import has_delve
+from engine.abilities.keywords.casting.convoke import has_convoke_card
+from engine.abilities.keywords.casting.delve import has_delve_card
 from engine.abilities.keywords.casting.emerge import has_emerge
 from engine.abilities.keywords.casting.evoke import evoke_mana_needed
 from engine.abilities.keywords.casting.improvise import has_improvise
@@ -239,7 +249,7 @@ def card_to_client(
         "affordable": affordable,
         "hasEvoke": has_evoke_kw,
         "evokeAffordable": has_evoke_kw and available_mana >= evoke_mana,
-        "hasConvoke": has_convoke(card),
+        "hasConvoke": has_convoke_card(card),
         "hasAssist": has_assist(card),
         "hasBargain": has_bargain(card),
         "hasEscalate": has_escalate(card),
@@ -310,12 +320,16 @@ def card_to_client(
         "hasEternalize": has_eternalize_card(card),
         "hasPartner": has_partner_card(card),
         "hasCompanion": has_companion_card(card),
+        "hasFlashback": has_flashback_card(card),
+        "hasSuspend": has_suspend_card(card),
+        "hasPlot": has_plot_card(card),
+        "hasMadnessCard": has_madness_card(card),
         "conspireAvailable": (
             conspire_color_match(card, ctx.game.zones, controller_idx)
             if ctx.game is not None and has_conspire(card)
             else False
         ),
-        "hasDelve": has_delve(card),
+        "hasDelve": has_delve_card(card),
         "hasImprovise": has_improvise(card),
         "hasEmerge": has_emerge(card),
         "hasSpectacle": has_spectacle(card),
