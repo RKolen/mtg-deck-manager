@@ -15,6 +15,11 @@ def has_bargain(card: CardInfo) -> bool:
     return has_registered_keyword(card.oracle_text, 'Bargain')
 
 
+def has_bargain_card(card: CardInfo) -> bool:
+    """Return True when the card has bargain."""
+    return has_bargain(card)
+
+
 def normalize_paid_bargain(card: CardInfo, paid_bargain: bool) -> bool:
     """Return whether this cast pays bargain."""
     return paid_bargain and has_bargain(card)

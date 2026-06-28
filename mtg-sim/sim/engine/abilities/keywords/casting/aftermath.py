@@ -11,6 +11,11 @@ def has_aftermath(card: CardInfo) -> bool:
     return has_registered_keyword(card.oracle_text, 'Aftermath')
 
 
+def has_aftermath_card(card: CardInfo) -> bool:
+    """Return True when the card has aftermath."""
+    return has_aftermath(card)
+
+
 def aftermath_mana_needed(card: CardInfo) -> tuple[int, int]:
     """Return mana and life needed to cast the aftermath half (simplified payment)."""
     phyrexian_pips = (card.mana_cost or '').upper().count('/P')

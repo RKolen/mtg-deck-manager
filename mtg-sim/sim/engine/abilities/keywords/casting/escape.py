@@ -28,6 +28,11 @@ def has_escape(card: CardInfo) -> bool:
     )
 
 
+def has_escape_card(card: CardInfo) -> bool:
+    """Return True when the card has escape."""
+    return has_escape(card)
+
+
 def escape_cost(card: CardInfo) -> ManaCost | None:
     """Parse the escape alternate mana cost from oracle text."""
     match = _ESCAPE_COST_RE.search(card.oracle_text or '')

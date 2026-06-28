@@ -11,6 +11,11 @@ def has_assist(card: CardInfo) -> bool:
     return has_registered_keyword(card.oracle_text, 'Assist')
 
 
+def has_assist_card(card: CardInfo) -> bool:
+    """Return True when the card has assist."""
+    return has_assist(card)
+
+
 def resolve_assist_for_cast(
     card: CardInfo,
     mana_needed: int,

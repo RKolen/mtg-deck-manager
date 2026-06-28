@@ -25,6 +25,11 @@ def has_bestow(card: CardInfo) -> bool:
     )
 
 
+def has_bestow_card(card: CardInfo) -> bool:
+    """Return True when the card has bestow."""
+    return has_bestow(card)
+
+
 def bestow_cost(card: CardInfo) -> ManaCost | None:
     """Parse the bestow alternate cost from oracle text."""
     match = _BESTOW_COST_RE.search(card.oracle_text or '')

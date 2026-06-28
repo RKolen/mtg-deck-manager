@@ -23,6 +23,11 @@ def has_spectacle(card: CardInfo) -> bool:
     )
 
 
+def has_spectacle_card(card: CardInfo) -> bool:
+    """Return True when the card has spectacle."""
+    return has_spectacle(card)
+
+
 def spectacle_cost(card: CardInfo) -> ManaCost | None:
     """Parse the spectacle alternate cost from oracle text."""
     match = _SPECTACLE_COST_RE.search(card.oracle_text or '')

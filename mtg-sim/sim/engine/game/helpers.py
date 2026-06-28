@@ -35,8 +35,10 @@ from engine.abilities.keywords.casting.suspend import (
     suspend_mana_needed,
 )
 from engine.abilities.keywords import has_flash
-from engine.abilities.keywords.casting.assist import has_assist
-from engine.abilities.keywords.casting.bargain import has_bargain
+from engine.abilities.keywords.casting.aftermath import has_aftermath_card
+from engine.abilities.keywords.casting.assist import has_assist_card
+from engine.abilities.keywords.casting.bargain import has_bargain_card
+from engine.abilities.keywords.casting.bestow import has_bestow_card
 from engine.abilities.keywords.casting.cleave import has_cleave
 from engine.abilities.keywords.casting.conspire import (
     conspire_color_match,
@@ -115,12 +117,16 @@ from engine.abilities.keywords.other.forecast import can_forecast, has_forecast_
 from engine.abilities.keywords.casting.convoke import has_convoke_card
 from engine.abilities.keywords.casting.delve import has_delve_card
 from engine.abilities.keywords.casting.emerge import has_emerge_card
+from engine.abilities.keywords.casting.escape import has_escape_card
 from engine.abilities.keywords.casting.evoke import evoke_mana_needed
 from engine.abilities.keywords.casting.improvise import has_improvise_card
 from engine.abilities.keywords.casting.sneak import has_sneak_card
 from engine.abilities.keywords.casting.storm import has_storm_card
 from engine.abilities.keywords.casting.freerunning import has_freerunning
-from engine.abilities.keywords.casting.spectacle import has_spectacle, spectacle_available
+from engine.abilities.keywords.casting.spectacle import (
+    has_spectacle_card,
+    spectacle_available,
+)
 from engine.abilities.keywords.casting.surge import has_surge, surge_available
 from engine.abilities.keywords.other.morph import has_morph_card
 from engine.abilities.keywords.other.ninjutsu import (
@@ -256,8 +262,8 @@ def card_to_client(
         "hasEvoke": has_evoke_kw,
         "evokeAffordable": has_evoke_kw and available_mana >= evoke_mana,
         "hasConvoke": has_convoke_card(card),
-        "hasAssist": has_assist(card),
-        "hasBargain": has_bargain(card),
+        "hasAssist": has_assist_card(card),
+        "hasBargain": has_bargain_card(card),
         "hasEscalate": has_escalate(card),
         "hasCleave": has_cleave(card),
         "canForecast": can_forecast(card, ctx.phase, ctx.stack_is_empty),
@@ -333,6 +339,9 @@ def card_to_client(
         "hasCascade": has_cascade_card(card),
         "hasStorm": has_storm_card(card),
         "hasForetellCard": has_foretell_card(card),
+        "hasAftermath": has_aftermath_card(card),
+        "hasBestow": has_bestow_card(card),
+        "hasEscape": has_escape_card(card),
         "conspireAvailable": (
             conspire_color_match(card, ctx.game.zones, controller_idx)
             if ctx.game is not None and has_conspire(card)
@@ -341,10 +350,10 @@ def card_to_client(
         "hasDelve": has_delve_card(card),
         "hasImprovise": has_improvise_card(card),
         "hasEmerge": has_emerge_card(card),
-        "hasSpectacle": has_spectacle(card),
+        "hasSpectacle": has_spectacle_card(card),
         "spectacleAvailable": (
             spectacle_available(ctx.game, controller_idx)
-            if ctx.game is not None and has_spectacle(card)
+            if ctx.game is not None and has_spectacle_card(card)
             else False
         ),
         "hasSurge": has_surge(card),
