@@ -61,9 +61,11 @@ mtg-app/.env.production.local
 # ============================================================
 # Python sim services
 # ============================================================
+mtg-sim/**/__pycache__/
 mtg-sim/**/.venv/
 mtg-sim/**/model.joblib
-mtg-sim/**/__pycache__/
+# Python sim runtime caches (deck scripts, etc.)
+mtg-sim/data/
 mtg-sim/**/*.pyc
 # ============================================================
 # OS & editor

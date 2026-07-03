@@ -25,6 +25,7 @@ import random
 from dataclasses import dataclass
 
 from deck_registry import CardInfo
+from engine.cards.effects import CardEffect
 from engine.game.interactive import InteractiveGame
 from engine.game.session import _GameConfig, create_game
 from forge_adapter import SimResult, SimResultLife, SimResultMulligans, SimResultOutcome
@@ -49,6 +50,7 @@ class _HeadlessConfig:
     opponent_pilot_prompt: str = ""
     player_pilot_prompt: str = ""
     game_index: int = 0
+    card_scripts: dict[str, tuple[CardEffect, ...]] | None = None
 
 
 @dataclass(frozen=True)
@@ -58,6 +60,7 @@ class _BatchConfig:
     names: tuple[str, str]
     opponent_pilot_prompt: str = ""
     player_pilot_prompt: str = ""
+    card_scripts: dict[str, tuple[CardEffect, ...]] | None = None
 
 
 def _run_player_turn(game: InteractiveGame) -> None:
@@ -100,6 +103,7 @@ def run_one_game(
             pilot_prompt=config.opponent_pilot_prompt,
             player_pilot_prompt=config.player_pilot_prompt,
         ),
+        card_scripts=config.card_scripts,
     )
     opp_mulls = game.auto_opponent_opening_mulligan()
     opening_hand = game.auto_player_opening_mulligan_then_keep()
@@ -170,6 +174,7 @@ def run_simulation(
                         opponent_pilot_prompt=batch.opponent_pilot_prompt,
                         player_pilot_prompt=batch.player_pilot_prompt,
                         game_index=game_index,
+                        card_scripts=batch.card_scripts,
                     ),
                 )
                 results.append(result)

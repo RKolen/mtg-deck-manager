@@ -13,6 +13,7 @@ PlayerInfo tracks per-player mutable state that is not tracked by ZoneManager
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from engine.core.game_object import CardObject, Permanent, Target
 from engine.core.mana import ManaPool
@@ -44,6 +45,9 @@ from engine.rules.triggers import MassAttackTriggerEvent
 from engine.rules.triggers import CombatDamageTriggerEvent
 from engine.rules.triggers import LifeGainedTriggerEvent
 from engine.rules.triggers import StepTriggerEvent, TriggerRegistry, spell_cast_event
+
+if TYPE_CHECKING:
+    from engine.cards.effects import CardEffect
 
 
 @dataclass
@@ -214,6 +218,7 @@ class _GameMeta:
     log: list[LogEntry] = field(default_factory=list)
     winner: int | None = None
     deaths: _DeathTurnFlags = field(default_factory=_DeathTurnFlags)
+    card_scripts: dict[str, tuple[CardEffect, ...]] = field(default_factory=dict)
 
 
 @dataclass
@@ -241,6 +246,15 @@ class GameState:
     def log(self) -> list[LogEntry]:
         """Game event log."""
         return self.meta.log
+
+    @property
+    def card_scripts(self) -> dict[str, tuple[CardEffect, ...]]:
+        """Per-game card scripts synced from deck caches at session start."""
+        return self.meta.card_scripts
+
+    @card_scripts.setter
+    def card_scripts(self, value: dict[str, tuple[CardEffect, ...]]) -> None:
+        self.meta.card_scripts = value
 
     @property
     def winner(self) -> int | None:

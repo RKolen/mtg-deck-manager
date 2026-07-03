@@ -5,6 +5,7 @@ from __future__ import annotations
 import random
 import uuid
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from deck_registry import CardInfo
 from engine.core.game_state import GameState, LogEntry, PlayerInfo
@@ -19,6 +20,9 @@ from engine.game.helpers import expand_deck
 from engine.game.interactive import InteractiveGame, _GameSetup
 from engine.rules.stack import Stack
 from pilot_prompts import get_pilot_prompt
+
+if TYPE_CHECKING:
+    from engine.cards.effects import CardEffect
 
 _sessions: dict[str, InteractiveGame] = {}
 
@@ -50,6 +54,8 @@ def create_game(
     player_cards: list[CardInfo],
     opponent_cards: list[CardInfo],
     config: _GameConfig | None = None,
+    *,
+    card_scripts: dict[str, tuple[CardEffect, ...]] | None = None,
 ) -> InteractiveGame:
     """Create and register a new interactive game session."""
     cfg = config or _GameConfig()
@@ -68,6 +74,8 @@ def create_game(
         turn=runner,
         stack=Stack(),
     )
+    if card_scripts:
+        state.card_scripts = card_scripts
     opp_prompt = (
         cfg.pilot_prompt.strip()
         if cfg.pilot_prompt_resolved

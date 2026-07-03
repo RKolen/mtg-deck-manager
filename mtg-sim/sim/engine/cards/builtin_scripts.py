@@ -1,7 +1,6 @@
-"""Per-card effect scripts (Phase G).
+"""Built-in card effect templates copied into per-deck cache on sync (Phase G).
 
-Keyed by card name. Unscripted cards fall back to oracle regex handlers.
-Add entries as individual cards need structured resolution.
+These are generic public card definitions, not tied to any user's deck list.
 """
 
 from __future__ import annotations
@@ -22,7 +21,7 @@ from engine.cards.effects import (
     TreasureHunt,
 )
 
-CARD_SCRIPTS: dict[str, tuple[CardEffect, ...]] = {
+BUILTIN_CARD_SCRIPTS: dict[str, tuple[CardEffect, ...]] = {
     'Become Immense': (PumpUntilEOT(power=6, toughness=6),),
     'Collective Brutality': (
         Modal(modes=(

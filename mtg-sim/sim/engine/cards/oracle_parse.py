@@ -142,7 +142,7 @@ def spell_category(card: CardInfo) -> str:
     """Classify a card into a broad effect category for simplified resolution.
 
     This is a temporary heuristic used until Phase G (structured scripting).
-    Scripted cards in ``engine/cards/scripts/registry.py`` bypass this path.
+    Scripted cards use per-deck JSON caches synced at game start (Phase G).
     """
     if card.is_land:
         return "land"

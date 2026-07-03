@@ -51,6 +51,7 @@ from deck_registry import (
     fetch_meta_deck,
     fetch_player_deck,
 )
+from engine.cards.deck_script_store import DeckMatchupScripts, prepare_game_card_scripts
 from engine.game import InteractiveGame, _GameConfig, create_game, get_game, remove_game
 from engine.game.action_dispatch import dispatch_game_action
 from engine_sim import _BatchConfig, run_simulation as run_python_simulation
@@ -259,6 +260,17 @@ async def simulate(req: SimulateRequest) -> dict:
             ),
         )
     else:
+        card_scripts = await asyncio.to_thread(
+            prepare_game_card_scripts,
+            DeckMatchupScripts(
+                player_deck_nid=req.playerDeckId,
+                player_cards=matchup.player_deck,
+                player_title=matchup.deck_title,
+                meta_format=req.format,
+                meta_archetype=req.opponentArchetype,
+                opponent_cards=matchup.opponent_deck,
+            ),
+        )
         results = await asyncio.to_thread(
             run_python_simulation,
             matchup.player_deck,
@@ -268,6 +280,7 @@ async def simulate(req: SimulateRequest) -> dict:
                 names=(matchup.deck_title, req.opponentArchetype),
                 opponent_pilot_prompt=matchup.opponent_pilot.text,
                 player_pilot_prompt=matchup.player_pilot.text,
+                card_scripts=card_scripts,
             ),
         )
 
@@ -435,6 +448,19 @@ async def game_start(req: StartGameRequest) -> dict:
         get_pilot_prompt(req.opponentArchetype, opp_pilot_raw),
     )
 
+    deck_title = await asyncio.to_thread(fetch_deck_title, req.playerDeckId)
+    card_scripts = await asyncio.to_thread(
+        prepare_game_card_scripts,
+        DeckMatchupScripts(
+            player_deck_nid=req.playerDeckId,
+            player_cards=player_deck,
+            player_title=deck_title,
+            meta_format=req.format,
+            meta_archetype=req.opponentArchetype,
+            opponent_cards=opponent_deck,
+        ),
+    )
+
     game = create_game(
         player_deck, opponent_deck,
         _GameConfig(
@@ -445,6 +471,7 @@ async def game_start(req: StartGameRequest) -> dict:
             player_pilot_prompt=player_pilot.text,
             pilot_prompt_resolved=True,
         ),
+        card_scripts=card_scripts,
     )
     return game.to_client()
 

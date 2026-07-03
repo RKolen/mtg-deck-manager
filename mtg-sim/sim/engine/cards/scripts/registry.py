@@ -1,7 +1,7 @@
-"""Re-export card script registry for script_loader."""
+"""Re-export built-in card script templates."""
 
 from __future__ import annotations
 
-from engine.cards.scripts.card_scripts import CARD_SCRIPTS
+from engine.cards.builtin_scripts import BUILTIN_CARD_SCRIPTS as CARD_SCRIPTS
 
 __all__ = ['CARD_SCRIPTS']
