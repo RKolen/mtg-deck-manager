@@ -22,6 +22,11 @@ def scripted_effects_for(card: CardInfo) -> tuple[CardEffect, ...] | None:
     return CARD_SCRIPTS.get(card.name)
 
 
+def scripted_card_names() -> frozenset[str]:
+    """Return all card names that have structured scripts."""
+    return frozenset(CARD_SCRIPTS)
+
+
 def resolve_scripted_spell(ctx: CardEffectContext) -> str | None:
     """Apply a card script when one exists; otherwise return None for regex fallback."""
     card_info = ctx.source.card_info

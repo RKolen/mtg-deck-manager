@@ -11,7 +11,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 from engine.abilities.keywords.actions.library import mill_cards, scry_cards
-from engine.core.game_object import CardObject, SpellOnStack
+from engine.abilities.keywords.actions.targets import find_creature_by_uid
+from engine.core.game_object import CardObject, Permanent, SpellOnStack
+from engine.core.zones import Zone
 from engine.game.helpers import target_player as target_player_from_targets
 from engine.game.helpers import target_uid
 
@@ -40,6 +42,7 @@ class CardEffectContext:
     source: CardObject
     target_player_idx: int | None = None
     target_creature_uid: str | None = None
+    selected_mode: int | None = None
     draw_fn: DrawFn | None = None
 
     @classmethod
@@ -53,14 +56,20 @@ class CardEffectContext:
         card = spell.source
         if card is None:
             raise ValueError('spell has no source card')
+        mode_idx = spell.modes[0] if spell.modes else None
         return cls(
             game=game,
             controller_idx=spell.controller_idx,
             source=card,
             target_player_idx=target_player_from_targets(spell.targets),
             target_creature_uid=target_uid(spell.targets),
+            selected_mode=mode_idx,
             draw_fn=draw_fn,
         )
+
+    def target_creature(self) -> Permanent | None:
+        """Return the targeted creature permanent, if any."""
+        return find_creature_by_uid(self.game.zones, self.target_creature_uid)
 
     def resolve_player(self, target: PlayerTarget) -> int:
         """Map a player target specifier to a player index."""
@@ -163,6 +172,68 @@ class DealDamageToPlayer(CardEffect):
         ctx.game.players[victim].life -= self.amount
         ctx.game.mark_player_was_dealt_damage(victim)
         return f"dealt {self.amount} to P{victim + 1}"
+
+
+@dataclass(frozen=True)
+class DealDamage(CardEffect):
+    """Deal damage to a targeted creature, else to a player."""
+
+    amount: int
+    player_target: PlayerTarget = 'opponent'
+
+    def apply(self, ctx: CardEffectContext) -> str:
+        """Deal damage to the spell's creature target or default player."""
+        if self.amount <= 0:
+            return ''
+        target = ctx.target_creature()
+        if target is not None:
+            target.damage_marked += self.amount
+            ctx.game.check_sbas()
+            return f"dealt {self.amount} to {target.name}"
+        victim = ctx.resolve_player(self.player_target)
+        ctx.game.players[victim].life -= self.amount
+        ctx.game.mark_player_was_dealt_damage(victim)
+        return f"dealt {self.amount} to P{victim + 1}"
+
+
+@dataclass(frozen=True)
+class DestroyPermanent(CardEffect):
+    """Destroy target creature."""
+
+    def apply(self, ctx: CardEffectContext) -> str:
+        """Destroy the targeted creature."""
+        target = ctx.target_creature()
+        if target is None:
+            return 'no valid target'
+        ctx.game.zones.leave_battlefield(target, Zone.GRAVEYARD, 'destroy', ctx.game)
+        return f"destroyed {target.name}"
+
+
+@dataclass(frozen=True)
+class ExilePermanent(CardEffect):
+    """Exile target creature."""
+
+    def apply(self, ctx: CardEffectContext) -> str:
+        """Exile the targeted creature."""
+        target = ctx.target_creature()
+        if target is None:
+            return 'no valid target'
+        ctx.game.zones.leave_battlefield(target, Zone.EXILE, 'exile', ctx.game)
+        return f"exiled {target.name}"
+
+
+@dataclass(frozen=True)
+class Modal(CardEffect):
+    """Resolve exactly one mode chosen when the spell was cast."""
+
+    modes: tuple[CardEffect, ...]
+
+    def apply(self, ctx: CardEffectContext) -> str:
+        """Apply the selected mode effect."""
+        idx = ctx.selected_mode if ctx.selected_mode is not None else 0
+        if idx < 0 or idx >= len(self.modes):
+            return ''
+        return self.modes[idx].apply(ctx)
 
 
 @dataclass(frozen=True)

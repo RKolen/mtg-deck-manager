@@ -3,17 +3,28 @@
 from engine.cards.effects import (
     CardEffectContext,
     ConditionalEffect,
+    DealDamage,
     DealDamageToPlayer,
+    DestroyPermanent,
     DrawCards,
     EffectList,
+    ExilePermanent,
     GainLife,
     LoseLife,
     Mill,
+    Modal,
     Scry,
 )
-from engine.cards.script_loader import has_script, resolve_scripted_spell
+from engine.cards.script_loader import has_script, resolve_scripted_spell, scripted_card_names
 from engine.core.game_object import CardObject
-from tests.conftest import add_to_library, fresh_game, make_card, make_instant
+from tests.conftest import (
+    add_to_library,
+    fresh_game,
+    make_card,
+    make_creature,
+    make_instant,
+    place_on_battlefield,
+)
 
 
 def _card(name: str, oracle: str = '') -> CardObject:
@@ -24,12 +35,20 @@ def _card(name: str, oracle: str = '') -> CardObject:
     )
 
 
-def _ctx(game, *, target_player_idx: int | None = None) -> CardEffectContext:
+def _ctx(
+    game,
+    *,
+    target_player_idx: int | None = None,
+    target_creature_uid: str | None = None,
+    selected_mode: int | None = None,
+) -> CardEffectContext:
     return CardEffectContext(
         game=game,
         controller_idx=0,
         source=_card('Test'),
         target_player_idx=target_player_idx,
+        target_creature_uid=target_creature_uid,
+        selected_mode=selected_mode,
     )
 
 
@@ -149,3 +168,76 @@ def test_script_loader_returns_none_for_unscripted_card():
     source = _card('Random Spell')
     ctx = CardEffectContext(game=game, controller_idx=0, source=source)
     assert resolve_scripted_spell(ctx) is None
+
+
+def test_deal_damage_to_creature_marks_damage():
+    """DealDamage applies marked damage when a creature is targeted."""
+    game = fresh_game()
+    creature = place_on_battlefield(make_creature('Target', 2, 2), 1, game.zones)
+    detail = DealDamage(amount=3).apply(
+        _ctx(game, target_creature_uid=str(creature.obj_id)),
+    )
+    assert 'dealt 3 to Target' in detail
+    assert creature.damage_marked == 3
+
+
+def test_deal_damage_to_player_when_no_creature_target():
+    """DealDamage hits the opponent when no creature target is set."""
+    game = fresh_game()
+    detail = DealDamage(amount=3).apply(_ctx(game))
+    assert detail == 'dealt 3 to P2'
+    assert game.players[1].life == 17
+
+
+def test_destroy_permanent_leaves_battlefield():
+    """DestroyPermanent removes the targeted creature."""
+    game = fresh_game()
+    doomed = place_on_battlefield(make_creature('Doomed', 2, 2), 1, game.zones)
+    detail = DestroyPermanent().apply(
+        _ctx(game, target_creature_uid=str(doomed.obj_id)),
+    )
+    assert 'destroyed Doomed' in detail
+    assert doomed not in game.zones.battlefield
+
+
+def test_exile_permanent_sends_card_to_exile():
+    """ExilePermanent moves the creature's card to exile."""
+    game = fresh_game()
+    victim = place_on_battlefield(make_creature('Victim', 2, 2), 1, game.zones)
+    detail = ExilePermanent().apply(
+        _ctx(game, target_creature_uid=str(victim.obj_id)),
+    )
+    assert 'exiled Victim' in detail
+    assert victim not in game.zones.battlefield
+    assert len(game.zones.player_zones[1].exile) == 1
+
+
+def test_modal_resolves_selected_mode_only():
+    """Modal applies only the chosen mode effect."""
+    game = fresh_game()
+    modal = Modal(modes=(
+        GainLife(amount=5),
+        LoseLife(amount=2),
+    ))
+    assert 'gained 5 life' in modal.apply(_ctx(game, selected_mode=0))
+    assert game.players[0].life == 25
+    game.players[0].life = 20
+    assert 'lost 2 life' in modal.apply(_ctx(game, selected_mode=1))
+    assert game.players[0].life == 18
+
+
+def test_lightning_bolt_script_registered():
+    """Lightning Bolt is in the staple script registry."""
+    assert 'Lightning Bolt' in scripted_card_names()
+
+
+def test_script_loader_lightning_bolt_deals_three():
+    """Lightning Bolt script deals three damage to the opponent."""
+    game = fresh_game()
+    source = _card('Lightning Bolt', oracle='Lightning Bolt deals 3 damage to any target.')
+    ctx = CardEffectContext(game=game, controller_idx=0, source=source)
+    assert source.card_info is not None
+    assert has_script(source.card_info) is True
+    detail = resolve_scripted_spell(ctx)
+    assert detail == 'dealt 3 to P2'
+    assert game.players[1].life == 17

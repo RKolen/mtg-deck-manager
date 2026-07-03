@@ -5,12 +5,16 @@ Scripts are keyed by card name. Unscripted cards fall back to oracle regex handl
 
 from __future__ import annotations
 
-from engine.cards.effects import CardEffect, DealDamageToPlayer, Mill
+from engine.cards.effects import CardEffect, Mill
+from engine.cards.scripts.staples import STAPLE_SCRIPTS
 
-# Owned-deck and archetype scripts are added here incrementally.
-CARD_SCRIPTS: dict[str, tuple[CardEffect, ...]] = {
+# Owned-deck scripts are merged here as they are authored.
+_OWNED_DECK_SCRIPTS: dict[str, tuple[CardEffect, ...]] = {
     # Simplified Mind Funeral: mill four (discard/reveal omitted for now).
     'Mind Funeral': (Mill(count=4, target='target_player'),),
-    # Proof-of-concept burn script for integration tests.
-    'Scripted Shock': (DealDamageToPlayer(amount=2, target='opponent'),),
+}
+
+CARD_SCRIPTS: dict[str, tuple[CardEffect, ...]] = {
+    **_OWNED_DECK_SCRIPTS,
+    **STAPLE_SCRIPTS,
 }
