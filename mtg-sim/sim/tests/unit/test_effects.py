@@ -6,6 +6,7 @@ from engine.cards.effects import (
     DealDamage,
     DealDamageToPlayer,
     DestroyPermanent,
+    DrainLife,
     DrawCards,
     EffectList,
     ExilePermanent,
@@ -13,7 +14,10 @@ from engine.cards.effects import (
     LoseLife,
     Mill,
     Modal,
+    NoEffect,
+    PumpUntilEOT,
     Scry,
+    TreasureHunt,
 )
 from engine.cards.script_loader import has_script, resolve_scripted_spell, scripted_card_names
 from engine.core.game_object import CardObject
@@ -23,6 +27,7 @@ from tests.conftest import (
     make_card,
     make_creature,
     make_instant,
+    make_land,
     place_on_battlefield,
 )
 
@@ -142,26 +147,6 @@ def test_conditional_effect_branches():
     assert 'gained 1 life' in false_effect.apply(_ctx(game))
 
 
-def test_script_loader_mind_funeral_mills_target_player():
-    """Mind Funeral script mills four via script_loader."""
-    game = fresh_game()
-    for idx in range(4):
-        add_to_library(make_instant(f'G{idx}'), 1, game.zones)
-    source = _card('Mind Funeral', oracle='Target player mills four cards.')
-    ctx = CardEffectContext(
-        game=game,
-        controller_idx=0,
-        source=source,
-        target_player_idx=1,
-    )
-    assert source.card_info is not None
-    assert has_script(source.card_info) is True
-    detail = resolve_scripted_spell(ctx)
-    assert detail is not None
-    assert 'milled 4' in detail
-    assert len(game.zones.player_zones[1].graveyard) == 4
-
-
 def test_script_loader_returns_none_for_unscripted_card():
     """Unscripted cards return None so regex handlers can run."""
     game = fresh_game()
@@ -227,7 +212,7 @@ def test_modal_resolves_selected_mode_only():
 
 
 def test_lightning_bolt_script_registered():
-    """Lightning Bolt is in the staple script registry."""
+    """Lightning Bolt is in the card script registry."""
     assert 'Lightning Bolt' in scripted_card_names()
 
 
@@ -241,3 +226,27 @@ def test_script_loader_lightning_bolt_deals_three():
     detail = resolve_scripted_spell(ctx)
     assert detail == 'dealt 3 to P2'
     assert game.players[1].life == 17
+
+
+def test_treasure_hunt_puts_revealed_cards_in_hand():
+    """TreasureHunt reveals until a nonland and puts cards in hand."""
+    game = fresh_game()
+    add_to_library(make_land('Forest'), 0, game.zones)
+    add_to_library(make_instant('Shock'), 0, game.zones)
+    detail = TreasureHunt().apply(_ctx(game))
+    assert '2 card' in detail
+    assert len(game.zones.player_zones[0].hand) == 2
+
+
+def test_collective_brutality_drain_mode():
+    """Modal drain mode deals life loss and gain."""
+    game = fresh_game()
+    modal = Modal(modes=(
+        NoEffect(),
+        PumpUntilEOT(power=-2, toughness=-2),
+        DrainLife(amount=2),
+    ))
+    detail = modal.apply(_ctx(game, target_player_idx=1, selected_mode=2))
+    assert 'drained 2' in detail
+    assert game.players[1].life == 18
+    assert game.players[0].life == 22

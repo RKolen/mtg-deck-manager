@@ -14,8 +14,7 @@ from engine.abilities.keywords.actions.library import mill_cards, scry_cards
 from engine.abilities.keywords.actions.targets import find_creature_by_uid
 from engine.core.game_object import CardObject, Permanent, SpellOnStack
 from engine.core.zones import Zone
-from engine.game.helpers import target_player as target_player_from_targets
-from engine.game.helpers import target_uid
+from engine.rules.modifiers import add_until_eot_pt_modifier, add_until_eot_set_pt_modifier
 
 if TYPE_CHECKING:
     from engine.core.game_state import GameState
@@ -56,6 +55,9 @@ class CardEffectContext:
         card = spell.source
         if card is None:
             raise ValueError('spell has no source card')
+        from engine.game.helpers import target_player as target_player_from_targets  # pylint: disable=import-outside-toplevel
+        from engine.game.helpers import target_uid  # pylint: disable=import-outside-toplevel
+
         mode_idx = spell.modes[0] if spell.modes else None
         return cls(
             game=game,
@@ -172,6 +174,118 @@ class DealDamageToPlayer(CardEffect):
         ctx.game.players[victim].life -= self.amount
         ctx.game.mark_player_was_dealt_damage(victim)
         return f"dealt {self.amount} to P{victim + 1}"
+
+
+@dataclass(frozen=True)
+class PumpUntilEOT(CardEffect):
+    """Grant +P/+T until end of turn to a targeted creature."""
+
+    power: int
+    toughness: int
+
+    def apply(self, ctx: CardEffectContext) -> str:
+        """Apply a until-end-of-turn power/toughness bonus."""
+        target = ctx.target_creature()
+        if target is None:
+            return 'no valid target'
+        add_until_eot_pt_modifier(
+            target,
+            power_delta=self.power,
+            toughness_delta=self.toughness,
+            source_obj_id=ctx.source.obj_id,
+        )
+        return f"pumped {target.name} (+{self.power}/+{self.toughness})"
+
+
+@dataclass(frozen=True)
+class SetPowerToughnessUntilEOT(CardEffect):
+    """Set base power and toughness until end of turn (layer 7b)."""
+
+    power: int
+    toughness: int
+
+    def apply(self, ctx: CardEffectContext) -> str:
+        """Set P/T on the targeted creature until end of turn."""
+        target = ctx.target_creature()
+        if target is None:
+            return 'no valid target'
+        add_until_eot_set_pt_modifier(
+            target,
+            self.power,
+            self.toughness,
+            source_obj_id=ctx.source.obj_id,
+        )
+        return f"set {target.name} to {self.power}/{self.toughness}"
+
+
+@dataclass(frozen=True)
+class DestroyIfMaxManaValue(CardEffect):
+    """Destroy target creature when its mana value is at most max_mv."""
+
+    max_mv: int
+
+    def apply(self, ctx: CardEffectContext) -> str:
+        """Destroy the target if its mana value is within range."""
+        target = ctx.target_creature()
+        if target is None:
+            return 'no valid target'
+        mana_value = 99
+        if isinstance(target.source, CardObject) and target.source.card_info is not None:
+            mana_value = int(target.source.card_info.cmc)
+        if mana_value > self.max_mv:
+            return f"{target.name} not destroyed (MV {mana_value})"
+        ctx.game.zones.leave_battlefield(target, Zone.GRAVEYARD, 'destroy', ctx.game)
+        return f"destroyed {target.name}"
+
+
+@dataclass(frozen=True)
+class DrainLife(CardEffect):
+    """Target opponent loses life and the controller gains the same amount."""
+
+    amount: int
+    target: PlayerTarget = 'target_player'
+
+    def apply(self, ctx: CardEffectContext) -> str:
+        """Drain life from the chosen player."""
+        if self.amount <= 0:
+            return ''
+        victim = ctx.resolve_player(self.target)
+        ctx.game.players[victim].life -= self.amount
+        ctx.game.gain_life(ctx.controller_idx, self.amount)
+        return f"drained {self.amount} from P{victim + 1}"
+
+
+@dataclass(frozen=True)
+class TreasureHunt(CardEffect):
+    """Reveal from library until a nonland, then put revealed cards into hand."""
+
+    def apply(self, ctx: CardEffectContext) -> str:
+        """Run the Treasure Hunt reveal loop (lands included in hand)."""
+        lib = ctx.game.zones.player_zones[ctx.controller_idx].library
+        revealed: list[CardObject] = []
+        while lib:
+            card = lib.pop(0)
+            if not isinstance(card, CardObject):
+                continue
+            revealed.append(card)
+            if card.card_info is not None and not card.card_info.is_land:
+                break
+        hand = ctx.game.zones.player_zones[ctx.controller_idx].hand
+        for card in revealed:
+            hand.append(card)
+        return f"treasure hunt put {len(revealed)} card(s) in hand"
+
+
+@dataclass(frozen=True)
+class NoEffect(CardEffect):
+    """Placeholder for modes or branches not yet modeled."""
+
+    label: str = ''
+
+    def apply(self, ctx: CardEffectContext) -> str:
+        """Return an empty log fragment."""
+        _ = ctx
+        return ''
 
 
 @dataclass(frozen=True)
