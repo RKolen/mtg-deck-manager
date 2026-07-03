@@ -80,14 +80,19 @@ def requires_tap(cost_text: str) -> bool:
 
 def activation_mana_value(cost_text: str) -> int:
     """Return simplified generic mana (lands to tap) for an activation cost."""
+    return activation_mana_cost(cost_text).mana_value
+
+
+def activation_mana_cost(cost_text: str) -> ManaCost:
+    """Return the mana portion of an activation cost (excluding tap and equip)."""
     stripped = cost_text.replace(_TAP_COST, "")
     equip_match = _EQUIP_RE.search(stripped)
     if equip_match is not None:
         stripped = stripped[:equip_match.start()] + stripped[equip_match.end():]
     stripped = stripped.strip()
     if not stripped:
-        return 0
-    return ManaCost.parse(stripped).mana_value
+        return ManaCost()
+    return ManaCost.parse(stripped)
 
 
 def equip_cost(cost_text: str) -> ManaCost | None:
@@ -233,10 +238,11 @@ def activate_equip(
     if "Creature" not in host.type_line:
         return ActivationResult(ok=False, detail="Host must be a creature")
     cost = equip_cost(spec.cost_text)
-    if cost is not None and not game.players[equipment.controller_idx].mana_pool.can_pay(cost):
-        return ActivationResult(ok=False, detail="Cannot pay equip cost")
-    if cost is not None:
-        game.players[equipment.controller_idx].mana_pool.pay(cost)
+    if cost is not None and cost.mana_value > 0:
+        from engine.game.mana_payment import pay_mana_cost  # pylint: disable=import-outside-toplevel
+
+        if not pay_mana_cost(game, equipment.controller_idx, cost):
+            return ActivationResult(ok=False, detail="Cannot pay equip cost")
     if requires_tap(spec.cost_text):
         equipment.tapped = True
     equipment.attached_to = host.obj_id

@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+from engine.abilities.activated.core import activation_mana_cost
 from engine.cards.oracle_parse import is_affordable
+from engine.core.game_object import CardObject
 from engine.game import create_game
-from engine.game.mana_payment import can_pay_cast_mana, pay_cast_mana
-from tests.conftest import _CardStats, add_to_hand, fresh_game, make_card, make_deck
+from engine.game.mana_payment import (
+    can_pay_cast_mana,
+    can_pay_mana_cost,
+    pay_cast_mana,
+    pay_mana_cost,
+)
+from tests.conftest import _CardStats, add_to_hand, fresh_game, make_card, make_creature, make_deck
 from tests.conftest import make_instant, make_land, place_on_battlefield
 
 
@@ -60,4 +67,71 @@ def test_cast_shock_taps_mountain_for_red_mana():
     place_on_battlefield(make_land('Mountain', 'R'), 0, game.state.zones)
     data = game.action_cast(hand_idx)
     assert 'error' not in data
-    assert game.state.stack.is_empty is False
+    assert any(perm.tapped for perm in game.state.zones.battlefield)
+
+
+def test_cannot_pay_red_activation_with_forest_only():
+    """A {1}{R} activation needs a red source, not just any land."""
+    game = fresh_game()
+    place_on_battlefield(make_land('Forest', 'G'), 0, game.zones)
+    cost = activation_mana_cost('{1}{R}')
+    assert not can_pay_mana_cost(game.zones, 0, cost)
+
+
+def test_pay_red_activation_with_mountain_and_forest():
+    """Generic plus colored pips can be paid across two lands."""
+    game = fresh_game()
+    place_on_battlefield(make_land('Forest', 'G'), 0, game.zones)
+    place_on_battlefield(make_land('Mountain', 'R'), 0, game.zones)
+    cost = activation_mana_cost('{1}{R}')
+    assert pay_mana_cost(game, 0, cost) is True
+    tapped = [perm.tapped for perm in game.zones.battlefield]
+    assert tapped.count(True) == 2
+
+
+def test_cycle_colored_cost_requires_matching_mana():
+    """Cycling {1}{R} fails with only a Forest and succeeds with Mountain + land."""
+    cycler = make_instant('Street Wraith', oracle='Cycling {1}{R}')
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=cycler),
+    ]
+    place_on_battlefield(make_land('Forest', 'G'), 0, game.state.zones)
+    data = game.action_cycle(0)
+    assert 'error' in data
+    place_on_battlefield(make_land('Mountain', 'R'), 0, game.state.zones)
+    place_on_battlefield(make_land('Forest', 'G'), 0, game.state.zones)
+    data = game.action_cycle(0)
+    assert 'error' not in data
+    assert len(game.state.zones.player_zones[0].graveyard) == 1
+
+
+def test_equip_colored_cost_taps_lands():
+    """Equip {R} taps a Mountain instead of any untapped land."""
+    sword = make_card(
+        'Fire Sword',
+        type_line='Artifact — Equipment',
+        oracle='Equipped creature gets +1/+0.\nEquip {R}',
+        stats=_CardStats(cmc=1.0, pt='0/0'),
+    )
+    host = make_creature('Soldier', 1, 1)
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    equip_perm = place_on_battlefield(sword, 0, game.state.zones, sick=False)
+    host_perm = place_on_battlefield(host, 0, game.state.zones, sick=False)
+    place_on_battlefield(make_land('Forest', 'G'), 0, game.state.zones)
+    data = game.action_activate(
+        str(equip_perm.obj_id),
+        0,
+        host_uid=str(host_perm.obj_id),
+    )
+    assert 'error' in data
+    place_on_battlefield(make_land('Mountain', 'R'), 0, game.state.zones)
+    data = game.action_activate(
+        str(equip_perm.obj_id),
+        0,
+        host_uid=str(host_perm.obj_id),
+    )
+    assert 'error' not in data
+    assert equip_perm.attached_to == host_perm.obj_id

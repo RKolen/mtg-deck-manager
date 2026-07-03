@@ -57,20 +57,24 @@ from engine.abilities.keywords.other.morph import (
 from engine.abilities.keywords.other.outlast import (
     apply_outlast,
     can_outlast,
+    outlast_cost,
     outlast_mana_needed,
 )
 from engine.abilities.keywords.other.transmute import (
     apply_transmute,
     can_transmute,
+    transmute_cost,
     transmute_mana_needed,
 )
 from engine.abilities.keywords.other.transfigure import (
     apply_transfigure,
     can_transfigure,
+    transfigure_cost,
     transfigure_mana_needed,
 )
 from engine.abilities.keywords.other.aura_swap import (
     apply_aura_swap,
+    aura_swap_cost,
     aura_swap_mana_needed,
     can_aura_swap,
 )
@@ -96,7 +100,17 @@ from engine.abilities.keywords.other.ninjutsu import (
     ninjutsu_mana_needed,
 )
 from engine.abilities.activated import ActivationSpeed
-from engine.abilities.activated._cost_keyword import INSTANT_SPEED_PHASES
+from engine.abilities.activated._cost_keyword import INSTANT_SPEED_PHASES, parse_alt_cost
+from engine.abilities.activated.bloodrush import bloodrush_cost
+from engine.abilities.keywords.casting.embalm import embalm_cost
+from engine.abilities.keywords.other.boast import _BOAST_RE
+from engine.abilities.keywords.other.commander_ninjutsu import _COMMANDER_NINJUTSU_RE
+from engine.abilities.keywords.other.craft import _CRAFT_ACTIVATION_RE
+from engine.abilities.keywords.other.disguise import disguise_turn_up_cost
+from engine.abilities.keywords.other.encore import _ENCORE_RE
+from engine.abilities.keywords.other.eternalize import _ETERNALIZE_RE
+from engine.abilities.keywords.other.morph import morph_turn_up_cost
+from engine.abilities.keywords.other.ninjutsu import _NINJUTSU_RE
 from engine.abilities.keywords.other.blitz import sacrifice_blitz_creatures
 from engine.abilities.keywords.other.decayed import sacrifice_decayed_creatures
 from engine.abilities.keywords.other.dash import return_dash_creatures_to_hand
@@ -169,9 +183,9 @@ class ActivatedActionsMixin(GameRuntimeMixin):  # pylint: disable=too-many-publi
         else:
             if not activated.can_activate(perm, spec, self.state, 0, speed):
                 return self._client_error("Cannot activate now")
-            mana_needed = activated.activation_mana_value(spec.cost_text)
-            if mana_needed and not self._tap_lands_for_mana(0, mana_needed):
-                return self._client_error(f"Need {mana_needed} mana")
+            if not self._pay_mana_for_action(0, cost_text=spec.cost_text):
+                needed = activated.activation_mana_value(spec.cost_text)
+                return self._client_error(f"Need {needed} mana")
             result = activated.activate_on_stack(
                 self.state,
                 perm,
@@ -204,9 +218,13 @@ class ActivatedActionsMixin(GameRuntimeMixin):  # pylint: disable=too-many-publi
     def _resolve_cycle(self, _card: CardObject, card_info: CardInfo, hand_idx: int) -> dict:
         if not activated.can_cycle(card_info, self.phase, self.state.stack.is_empty):
             return {**self.to_client(), "error": "Cannot cycle now"}
-        mana_needed = activated.cycling_mana_needed(card_info)
-        if not self._tap_lands_for_mana(0, mana_needed):
-            return {**self.to_client(), "error": f"Need {mana_needed} mana to cycle"}
+        if not self._pay_mana_for_action(
+            0,
+            cost=activated.cycling_cost(card_info),
+            mana_needed=activated.cycling_mana_needed(card_info),
+        ):
+            cycle_needed = activated.cycling_mana_needed(card_info)
+            return {**self.to_client(), "error": f"Need {cycle_needed} mana to cycle"}
         activated.cycle_from_hand(self.state.zones, 0, hand_idx, self.state)
         drawn = self._draw_cards(0, 1)
         self._log("player", "cycle", f"Cycled {card_info.name}, drew {len(drawn)}")
@@ -220,11 +238,14 @@ class ActivatedActionsMixin(GameRuntimeMixin):  # pylint: disable=too-many-publi
         assert card is not None and card_info is not None
         if not can_bloodrush(card_info, self.phase, self.state.stack.is_empty):
             return {**self.to_client(), "error": "Cannot bloodrush now"}
-        mana_needed = bloodrush_mana_needed(card_info)
-        if not self._tap_lands_for_mana(0, mana_needed):
+        if not self._pay_mana_for_action(
+            0,
+            cost=bloodrush_cost(card_info),
+            mana_needed=bloodrush_mana_needed(card_info),
+        ):
             return {
                 **self.to_client(),
-                "error": f"Need {mana_needed} mana to bloodrush",
+                "error": f"Need {bloodrush_mana_needed(card_info)} mana to bloodrush",
             }
         detail = apply_bloodrush(
             self.state.zones,
@@ -250,11 +271,14 @@ class ActivatedActionsMixin(GameRuntimeMixin):  # pylint: disable=too-many-publi
         assert card is not None and card_info is not None
         if not can_ninjutsu(card_info, self.phase, self.state.stack.is_empty):
             return {**self.to_client(), "error": "Cannot ninjutsu now"}
-        mana_needed = ninjutsu_mana_needed(card_info)
-        if not self._tap_lands_for_mana(0, mana_needed):
+        if not self._pay_mana_for_action(
+            0,
+            cost=parse_alt_cost(card_info, _NINJUTSU_RE),
+            mana_needed=ninjutsu_mana_needed(card_info),
+        ):
             return {
                 **self.to_client(),
-                "error": f"Need {mana_needed} mana for ninjutsu",
+                "error": f"Need {ninjutsu_mana_needed(card_info)} mana for ninjutsu",
             }
         detail = apply_ninjutsu(
             self.state,
@@ -276,11 +300,17 @@ class ActivatedActionsMixin(GameRuntimeMixin):  # pylint: disable=too-many-publi
         card_info = commander.card_info
         if not can_commander_ninjutsu(card_info, self.phase, self.state.stack.is_empty):
             return {**self.to_client(), "error": "Cannot commander ninjutsu now"}
-        mana_needed = commander_ninjutsu_mana_needed(card_info)
-        if not self._tap_lands_for_mana(0, mana_needed):
+        if not self._pay_mana_for_action(
+            0,
+            cost=parse_alt_cost(card_info, _COMMANDER_NINJUTSU_RE),
+            mana_needed=commander_ninjutsu_mana_needed(card_info),
+        ):
             return {
                 **self.to_client(),
-                "error": f"Need {mana_needed} mana for commander ninjutsu",
+                "error": (
+                    f"Need {commander_ninjutsu_mana_needed(card_info)} mana"
+                    " for commander ninjutsu"
+                ),
             }
         detail = apply_commander_ninjutsu(
             self.state,
@@ -321,9 +351,13 @@ class ActivatedActionsMixin(GameRuntimeMixin):  # pylint: disable=too-many-publi
             return self._client_error("Cannot boast now")
         if has_exhaust(perm) and not can_use_exhaust_ability(perm):
             return self._client_error("Exhaust ability already used")
-        mana_needed = boast_mana_needed(perm)
-        if mana_needed and not self._tap_lands_for_mana(0, mana_needed):
-            return self._client_error(f"Need {mana_needed} mana to boast")
+        boast_match = _BOAST_RE.search(perm.oracle_text or '')
+        if not self._pay_mana_for_action(
+            0,
+            cost_text=boast_match.group(1) if boast_match else None,
+            mana_needed=boast_mana_needed(perm),
+        ):
+            return self._client_error(f"Need {boast_mana_needed(perm)} mana to boast")
         detail = apply_boast(perm, 0, self._draw_cards)
         if detail is None:
             return self._client_error("Boast failed")
@@ -347,9 +381,13 @@ class ActivatedActionsMixin(GameRuntimeMixin):  # pylint: disable=too-many-publi
         err = craft_artifact_error(self.state, perm, 0, artifact_ids)
         if err:
             return self._client_error(err)
-        mana_needed = craft_mana_needed(perm)
-        if mana_needed and not self._tap_lands_for_mana(0, mana_needed):
-            return self._client_error(f"Need {mana_needed} mana to craft")
+        craft_match = _CRAFT_ACTIVATION_RE.search(perm.oracle_text or '')
+        if not self._pay_mana_for_action(
+            0,
+            cost_text=craft_match.group(1) if craft_match else None,
+            mana_needed=craft_mana_needed(perm),
+        ):
+            return self._client_error(f"Need {craft_mana_needed(perm)} mana to craft")
         detail = apply_craft(self.state, perm, artifact_ids)
         if detail is None:
             return self._client_error("Craft failed")
@@ -365,9 +403,13 @@ class ActivatedActionsMixin(GameRuntimeMixin):  # pylint: disable=too-many-publi
         card_info = require_card_info(card)
         if not can_encore(card_info, self.phase, self.state.stack.is_empty):
             return {**self.to_client(), "error": "Cannot encore now"}
-        mana_needed = encore_mana_needed(card_info)
-        if not self._tap_lands_for_mana(0, mana_needed):
-            return {**self.to_client(), "error": f"Need {mana_needed} mana to encore"}
+        if not self._pay_mana_for_action(
+            0,
+            cost=parse_alt_cost(card_info, _ENCORE_RE),
+            mana_needed=encore_mana_needed(card_info),
+        ):
+            encore_needed = encore_mana_needed(card_info)
+            return {**self.to_client(), "error": f"Need {encore_needed} mana to encore"}
         detail = apply_encore_from_graveyard(
             self.state,
             self.state.zones,
@@ -388,9 +430,16 @@ class ActivatedActionsMixin(GameRuntimeMixin):  # pylint: disable=too-many-publi
         card_info = require_card_info(card)
         if not can_eternalize(card_info, self.phase, self.state.stack.is_empty):
             return {**self.to_client(), "error": "Cannot eternalize now"}
-        mana_needed = eternalize_mana_needed(card_info)
-        if not self._tap_lands_for_mana(0, mana_needed):
-            return {**self.to_client(), "error": f"Need {mana_needed} mana to eternalize"}
+        if not self._pay_mana_for_action(
+            0,
+            cost=parse_alt_cost(card_info, _ETERNALIZE_RE),
+            mana_needed=eternalize_mana_needed(card_info),
+        ):
+            eternalize_needed = eternalize_mana_needed(card_info)
+            return {
+                **self.to_client(),
+                "error": f"Need {eternalize_needed} mana to eternalize",
+            }
         detail = apply_eternalize_from_graveyard(
             self.state.zones,
             0,
@@ -410,9 +459,12 @@ class ActivatedActionsMixin(GameRuntimeMixin):  # pylint: disable=too-many-publi
             return self._client_error("Cannot outlast now")
         if has_exhaust(perm) and not can_use_exhaust_ability(perm):
             return self._client_error("Exhaust ability already used")
-        mana_needed = outlast_mana_needed(perm)
-        if mana_needed and not self._tap_lands_for_mana(0, mana_needed):
-            return self._client_error(f"Need {mana_needed} mana to outlast")
+        if not self._pay_mana_for_action(
+            0,
+            cost=outlast_cost(perm),
+            mana_needed=outlast_mana_needed(perm),
+        ):
+            return self._client_error(f"Need {outlast_mana_needed(perm)} mana to outlast")
         detail = apply_outlast(perm)
         if detail is None:
             return self._client_error("Outlast failed")
@@ -428,9 +480,12 @@ class ActivatedActionsMixin(GameRuntimeMixin):  # pylint: disable=too-many-publi
             return self._client_error("Permanent not found")
         if not can_transmute(perm, self.state, 0, self.phase):
             return self._client_error("Cannot transmute now")
-        mana_needed = transmute_mana_needed(perm)
-        if mana_needed and not self._tap_lands_for_mana(0, mana_needed):
-            return self._client_error(f"Need {mana_needed} mana to transmute")
+        if not self._pay_mana_for_action(
+            0,
+            cost=transmute_cost(perm),
+            mana_needed=transmute_mana_needed(perm),
+        ):
+            return self._client_error(f"Need {transmute_mana_needed(perm)} mana to transmute")
         detail = apply_transmute(self.state, perm)
         if detail is None:
             return self._client_error("Transmute failed")
@@ -444,9 +499,12 @@ class ActivatedActionsMixin(GameRuntimeMixin):  # pylint: disable=too-many-publi
             return self._client_error("Permanent not found")
         if not can_transfigure(perm, self.state, 0, self.phase):
             return self._client_error("Cannot transfigure now")
-        mana_needed = transfigure_mana_needed(perm)
-        if mana_needed and not self._tap_lands_for_mana(0, mana_needed):
-            return self._client_error(f"Need {mana_needed} mana to transfigure")
+        if not self._pay_mana_for_action(
+            0,
+            cost=transfigure_cost(perm),
+            mana_needed=transfigure_mana_needed(perm),
+        ):
+            return self._client_error(f"Need {transfigure_mana_needed(perm)} mana to transfigure")
         detail = apply_transfigure(self.state, perm)
         if detail is None:
             return self._client_error("Transfigure failed")
@@ -460,9 +518,12 @@ class ActivatedActionsMixin(GameRuntimeMixin):  # pylint: disable=too-many-publi
             return self._client_error("Permanent not found")
         if not can_aura_swap(perm, self.state, 0, self.phase):
             return self._client_error("Cannot aura swap now")
-        mana_needed = aura_swap_mana_needed(perm)
-        if mana_needed and not self._tap_lands_for_mana(0, mana_needed):
-            return self._client_error(f"Need {mana_needed} mana to aura swap")
+        if not self._pay_mana_for_action(
+            0,
+            cost=aura_swap_cost(perm),
+            mana_needed=aura_swap_mana_needed(perm),
+        ):
+            return self._client_error(f"Need {aura_swap_mana_needed(perm)} mana to aura swap")
         detail = apply_aura_swap(self.state, perm, hand_idx)
         if detail is None:
             return self._client_error("Aura swap failed")
@@ -487,15 +548,23 @@ class ActivatedActionsMixin(GameRuntimeMixin):  # pylint: disable=too-many-publi
     ) -> tuple[str, str] | str:
         """Apply morph/disguise turn-up; return (detail, action) or error string."""
         if can_turn_up_morph(perm, self.state, 0, self.phase):
-            mana_needed = morph_turn_up_mana_needed(card_info)
-            if mana_needed and not self._tap_lands_for_mana(0, mana_needed):
-                return f"Need {mana_needed} mana to turn face up"
+            morph_cost = morph_turn_up_cost(card_info)
+            if not self._pay_mana_for_action(
+                0,
+                cost=morph_cost,
+                mana_needed=morph_turn_up_mana_needed(card_info),
+            ):
+                return f"Need {morph_turn_up_mana_needed(card_info)} mana to turn face up"
             detail = apply_turn_up_morph(perm)
             return (detail, "turn_up_morph") if detail is not None else "Turn face up failed"
         if can_turn_up_disguise(perm, self.state, 0, self.phase):
-            mana_needed = disguise_turn_up_mana_needed(card_info)
-            if mana_needed and not self._tap_lands_for_mana(0, mana_needed):
-                return f"Need {mana_needed} mana to turn face up"
+            disguise_cost = disguise_turn_up_cost(card_info)
+            if not self._pay_mana_for_action(
+                0,
+                cost=disguise_cost,
+                mana_needed=disguise_turn_up_mana_needed(card_info),
+            ):
+                return f"Need {disguise_turn_up_mana_needed(card_info)} mana to turn face up"
             detail = apply_turn_up_disguise(perm)
             return (detail, "turn_up_disguise") if detail is not None else "Turn face up failed"
         return "Cannot turn face up now"
@@ -526,7 +595,11 @@ class ActivatedActionsMixin(GameRuntimeMixin):  # pylint: disable=too-many-publi
         if not has_embalm(card_info):
             return self._client_error(f"{card_info.name} does not have embalm")
         mana_needed, life_cost = embalm_mana_needed(card_info)
-        if not self._tap_lands_for_mana(0, mana_needed):
+        if not self._pay_mana_for_action(
+            0,
+            cost=embalm_cost(card_info),
+            mana_needed=mana_needed,
+        ):
             return self._client_error(f"Need {mana_needed} mana to embalm")
         if life_cost:
             self.state.players[0].life -= life_cost
@@ -556,9 +629,13 @@ class ActivatedActionsMixin(GameRuntimeMixin):  # pylint: disable=too-many-publi
         assert card is not None and card_info is not None
         if not activated.can_channel(card_info, self.phase, self.state.stack.is_empty):
             return {**self.to_client(), "error": "Cannot channel now"}
-        mana_needed = activated.channel_mana_needed(card_info)
-        if not self._tap_lands_for_mana(0, mana_needed):
-            return {**self.to_client(), "error": f"Need {mana_needed} mana to channel"}
+        if not self._pay_mana_for_action(
+            0,
+            cost=activated.channel_cost(card_info),
+            mana_needed=activated.channel_mana_needed(card_info),
+        ):
+            channel_needed = activated.channel_mana_needed(card_info)
+            return {**self.to_client(), "error": f"Need {channel_needed} mana to channel"}
         effect = activated.channel_effect(card_info)
         activated.discard_for_channel(self.state.zones, 0, hand_idx, self.state)
         detail = f"Channeled {card_info.name}"
@@ -582,9 +659,13 @@ class ActivatedActionsMixin(GameRuntimeMixin):  # pylint: disable=too-many-publi
         card_info = require_card_info(card)
         if not activated.can_unearth(card_info, self.phase, self.state.stack.is_empty):
             return {**self.to_client(), "error": "Cannot unearth now"}
-        mana_needed = activated.unearth_mana_needed(card_info)
-        if not self._tap_lands_for_mana(0, mana_needed):
-            return {**self.to_client(), "error": f"Need {mana_needed} mana to unearth"}
+        if not self._pay_mana_for_action(
+            0,
+            cost=activated.unearth_cost(card_info),
+            mana_needed=activated.unearth_mana_needed(card_info),
+        ):
+            unearth_needed = activated.unearth_mana_needed(card_info)
+            return {**self.to_client(), "error": f"Need {unearth_needed} mana to unearth"}
         activated.unearth_from_graveyard(self.state.zones, 0, graveyard_idx)
         self._log("player", "unearth", f"Unearthed {card_info.name}")
         return self.to_client()
@@ -609,9 +690,13 @@ class ActivatedActionsMixin(GameRuntimeMixin):  # pylint: disable=too-many-publi
         target = self._find_permanent(target_uid)
         if target is None:
             return {**self.to_client(), "error": "Scavenge target not found"}
-        mana_needed = activated.scavenge_mana_needed(card_info)
-        if not self._tap_lands_for_mana(0, mana_needed):
-            return {**self.to_client(), "error": f"Need {mana_needed} mana to scavenge"}
+        if not self._pay_mana_for_action(
+            0,
+            cost=activated.scavenge_cost(card_info),
+            mana_needed=activated.scavenge_mana_needed(card_info),
+        ):
+            scavenge_needed = activated.scavenge_mana_needed(card_info)
+            return {**self.to_client(), "error": f"Need {scavenge_needed} mana to scavenge"}
         err, detail = activated.scavenge_from_graveyard(
             self.state.zones,
             0,
@@ -687,9 +772,13 @@ class ActivatedActionsMixin(GameRuntimeMixin):  # pylint: disable=too-many-publi
             return {**self.to_client(), "error": "Permanent not found"}
         if not activated.can_level_up(perm, self.state, 0, self.phase):
             return {**self.to_client(), "error": "Cannot level up now"}
-        mana_needed = activated.level_up_mana_needed(perm)
-        if not self._tap_lands_for_mana(0, mana_needed):
-            return {**self.to_client(), "error": f"Need {mana_needed} mana to level up"}
+        if not self._pay_mana_for_action(
+            0,
+            cost=activated.level_up_cost(perm),
+            mana_needed=activated.level_up_mana_needed(perm),
+        ):
+            level_needed = activated.level_up_mana_needed(perm)
+            return {**self.to_client(), "error": f"Need {level_needed} mana to level up"}
         level = activated.apply_level_up(perm)
         self._log("player", "level_up", f"{perm.name} is level {level}")
         return self.to_client()

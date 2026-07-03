@@ -76,6 +76,17 @@ def can_pay_cast_mana(
 ) -> bool:
     """Return True when untapped lands can pay the spell's effective cost."""
     cost = effective_cast_cost(card, zones, controller_idx, land_slots)
+    return can_pay_mana_cost(zones, controller_idx, cost)
+
+
+def can_pay_mana_cost(
+    zones: ZoneManager,
+    controller_idx: int,
+    cost: ManaCost,
+) -> bool:
+    """Return True when the mana pool plus untapped lands can pay ``cost``."""
+    if cost.mana_value == 0:
+        return True
     pool = ManaPool()
     return _simulate_pay(cost, pool, zones.untapped_lands_of(controller_idx))
 
@@ -97,6 +108,22 @@ def _commit_pay(cost: ManaCost, pool: ManaPool, lands: list[Permanent]) -> bool:
             permanent.tapped = True
         return True
     return False
+
+
+def pay_mana_cost(
+    game: GameState,
+    player_idx: int,
+    cost: ManaCost,
+) -> bool:
+    """Tap lands and spend the mana pool to pay an arbitrary mana cost."""
+    if cost.mana_value == 0:
+        return True
+    pool = game.players[player_idx].mana_pool
+    if pool.can_pay(cost):
+        pool.pay(cost)
+        return True
+    lands = game.zones.untapped_lands_of(player_idx)
+    return _commit_pay(cost, pool, lands)
 
 
 def pay_cast_mana(

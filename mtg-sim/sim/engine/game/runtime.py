@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from deck_registry import CardInfo
 from engine.cards.oracle_parse import is_affordable
 from engine.core.game_object import CardObject, Permanent
+from engine.core.mana import ManaCost
 from engine.core.game_object import SpellOnStack
 from engine.core.game_state import LogEntry
 from engine.core.zones import Zone
@@ -210,6 +211,27 @@ class GameRuntimeMixin:
         from engine.game.mana_payment import pay_cast_mana  # pylint: disable=import-outside-toplevel
 
         return pay_cast_mana(self.state, player_idx, card_info, land_slots)
+
+    def _pay_mana_for_action(
+        self,
+        player_idx: int,
+        *,
+        cost: ManaCost | None = None,
+        cost_text: str | None = None,
+        mana_needed: int = 0,
+    ) -> bool:
+        """Pay a spell or activation mana cost using the pool and land colors."""
+        from engine.abilities.activated.core import activation_mana_cost  # pylint: disable=import-outside-toplevel
+        from engine.game.mana_payment import pay_mana_cost  # pylint: disable=import-outside-toplevel
+
+        resolved = cost
+        if cost_text is not None:
+            resolved = activation_mana_cost(cost_text)
+        elif resolved is None and mana_needed > 0:
+            resolved = ManaCost(generic=mana_needed)
+        if resolved is None or resolved.mana_value == 0:
+            return True
+        return pay_mana_cost(self.state, player_idx, resolved)
 
     def _available_mana(self, player_idx: int) -> int:
         return len(self.state.zones.untapped_lands_of(player_idx))
