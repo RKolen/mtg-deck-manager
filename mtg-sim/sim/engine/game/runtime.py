@@ -197,13 +197,19 @@ class GameRuntimeMixin:
         return bottomed
 
     def _tap_lands_for_mana(self, player_idx: int, amount: int) -> bool:
-        """Tap untapped lands to pay generic mana."""
+        """Tap untapped lands to pay generic mana (activated abilities, fallbacks)."""
         lands = self.state.zones.untapped_lands_of(player_idx)
         if len(lands) < amount:
             return False
         for land in lands[:amount]:
             land.tapped = True
         return True
+
+    def _tap_mana_for_spell(self, player_idx: int, card_info: CardInfo, land_slots: int) -> bool:
+        """Pay a spell cost using the mana pool and land colors."""
+        from engine.game.mana_payment import pay_cast_mana  # pylint: disable=import-outside-toplevel
+
+        return pay_cast_mana(self.state, player_idx, card_info, land_slots)
 
     def _available_mana(self, player_idx: int) -> int:
         return len(self.state.zones.untapped_lands_of(player_idx))

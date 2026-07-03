@@ -491,7 +491,7 @@ class GraveyardCastMixin(SpellStackPlacementMixin):
         if cast_err:
             return self._client_error(cast_err)
         mana_needed, life_cost = foretell_cast_mana_needed(card_info)
-        mana_err = self._tap_mana_or_error(0, mana_needed)
+        mana_err = self._tap_mana_or_error(0, mana_needed, card_info)
         if mana_err is not None:
             return mana_err
         card = cast_from_foretell_exile(self.state.zones, 0, exile_idx)

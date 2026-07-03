@@ -261,7 +261,7 @@ def test_can_pay_false_does_not_change_pool():
 # ---------------------------------------------------------------------------
 
 def test_affordable_bolt_with_mana():
-    """Lightning Bolt is affordable when the player has 1 mana."""
+    """Lightning Bolt is affordable when the player has a red mana source."""
     bolt = make_card("Lightning Bolt", "Instant", mana_cost="{R}", stats=_CardStats(
         cmc=1.0, pt="0/0"
     ))

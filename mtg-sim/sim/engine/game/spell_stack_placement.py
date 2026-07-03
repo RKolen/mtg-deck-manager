@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from deck_registry import CardInfo
 from engine.core.game_object import CardObject, Target
 from engine.game.cast_flow import (
     AnnounceCastCompletion,
@@ -52,8 +53,15 @@ class SpellStackPlacementMixin(GameRuntimeMixin):
         self.state.turn.action_taken()
         return targets
 
-    def _tap_mana_or_error(self, player_idx: int, mana_needed: int) -> dict | None:
+    def _tap_mana_or_error(
+        self,
+        player_idx: int,
+        mana_needed: int,
+        card_info: CardInfo | None = None,
+    ) -> dict | None:
         """Tap lands for mana; return a client error dict when payment fails."""
+        if card_info is not None and self._tap_mana_for_spell(player_idx, card_info, mana_needed):
+            return None
         if self._tap_lands_for_mana(player_idx, mana_needed):
             return None
         return self._client_error(
@@ -131,7 +139,11 @@ class SpellStackPlacementMixin(GameRuntimeMixin):
             if prepay_err is not None:
                 return self._client_error(prepay_err)
         mana_needed, life_cost = split_mana_cost(request.mana_cost(card_info))
-        mana_err = self._tap_mana_or_error(request.player_idx, mana_needed)
+        mana_err = self._tap_mana_or_error(
+            request.player_idx,
+            mana_needed,
+            card_info,
+        )
         if mana_err is not None:
             return mana_err
         detail = (

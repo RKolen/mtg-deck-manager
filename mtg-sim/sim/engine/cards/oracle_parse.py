@@ -230,13 +230,19 @@ def is_affordable(
     zones: ZoneManager | None = None,
     controller_idx: int = 0,
 ) -> bool:
-    """True when the player can cast this spell with the given mana available.
+    """True when the player can cast this spell with available mana sources.
 
-    Lands are never castable (they are played, not cast).
+    Lands are never castable (they are played, not cast). When ``zones`` is
+    provided, colored mana requirements are checked against land colors.
     """
     if card.is_land:
         return False
-    return available_mana >= mana_needed_to_cast(card, zones, controller_idx)
+    land_slots = mana_needed_to_cast(card, zones, controller_idx)
+    if zones is not None:
+        from engine.game.mana_payment import can_pay_cast_mana  # pylint: disable=import-outside-toplevel
+
+        return can_pay_cast_mana(zones, controller_idx, card, land_slots)
+    return available_mana >= land_slots
 
 
 def spell_category(card: CardInfo) -> str:

@@ -987,7 +987,7 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):  # pylint: disable=t
         if not isinstance(card, CardObject):
             return
         mana_needed, _ = payment_requirements(card_info)
-        if not self._tap_lands_for_mana(1, mana_needed):
+        if not self._tap_mana_for_spell(1, card_info, mana_needed):
             return
         target_player = 0 if spell_category(card_info) == "burn" else None
         targets = self._put_spell_on_stack(

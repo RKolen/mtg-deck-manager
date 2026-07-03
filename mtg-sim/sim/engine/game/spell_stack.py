@@ -229,7 +229,7 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
         )
         if adjustments.error:
             return {**self.to_client(), "error": adjustments.error}
-        mana_err = self._tap_mana_or_error(0, adjustments.mana_needed)
+        mana_err = self._tap_mana_or_error(0, adjustments.mana_needed, placement.card_info)
         if mana_err is not None:
             return mana_err
         self.state.players[0].spells_cast_this_turn += 1
@@ -386,7 +386,7 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
         if not can_cast_via_madness(card_info, self.phase, self.state.stack.is_empty):
             return {**self.to_client(), "error": "Cannot cast for madness now"}
         mana_needed, life_cost = madness_mana_needed(card_info)
-        mana_err = self._tap_mana_or_error(0, mana_needed)
+        mana_err = self._tap_mana_or_error(0, mana_needed, card_info)
         if mana_err is not None:
             return mana_err
         return self._complete_announce_cast(
@@ -429,7 +429,7 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
         if counters <= 0:
             return {**self.to_client(), "error": f"{card_info.name} has no suspend counters"}
         mana_needed, life_cost = suspend_mana_needed(card_info)
-        mana_err = self._tap_mana_or_error(0, mana_needed)
+        mana_err = self._tap_mana_or_error(0, mana_needed, card_info)
         if mana_err is not None:
             return mana_err
         self._pay_phyrexian(0, life_cost, card_info.name)
