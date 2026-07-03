@@ -12,7 +12,7 @@ from functools import lru_cache
 from typing import TypedDict
 
 from engine.abilities.keywords.registry_data import KEYWORD_ENTRIES, SCRYFALL_KEYWORD_COUNT
-from engine.core.game_object import oracle_has_keyword
+from engine.core.oracle_text import oracle_has_keyword
 
 KeywordKind = str  # ability | action | word
 KeywordCategory = str

@@ -14,7 +14,10 @@ import itertools
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, TypeAlias
 
+from engine.core.oracle_text import oracle_has_keyword
 from engine.core.sac_cast_flags import SacrificeCastFlags
+from engine.rules.layered_pt import effective_power as layered_effective_power
+from engine.rules.layered_pt import effective_toughness as layered_effective_toughness
 
 if TYPE_CHECKING:
     from deck_registry import CardInfo
@@ -117,11 +120,10 @@ class Target:
 
 
 @dataclass
-class Modifier:
+class Modifier:  # pylint: disable=too-many-instance-attributes
     """A continuous effect currently applied to a permanent.
 
-    Fully populated in Phase E9 (layer system). Stored on Permanent from
-    Phase E1 so the data structure is complete from the start.
+    Layers 6 and 7 (sublayers a/b/c) are applied in ``continuous.py``.
     """
 
     source_obj_id: int = 0
@@ -129,6 +131,12 @@ class Modifier:
     sublayer: str = ""
     timestamp: int = field(default_factory=_next_ts)
     duration: str = "permanent"
+    set_power: int | None = None
+    set_toughness: int | None = None
+    power_delta: int = 0
+    toughness_delta: int = 0
+    remove_all_abilities: bool = False
+    cda_from_graveyard_count: bool = False
 
 
 @dataclass
@@ -857,8 +865,10 @@ def _power_toughness(perm: Permanent) -> tuple[int, int]:
     return 0, 0
 
 
-def effective_power(perm: Permanent) -> int:
-    """Return combat power including counters and face-down 2/2 stats."""
+def effective_power(perm: Permanent, game: GameState | None = None) -> int:
+    """Return combat power including continuous effects and counters."""
+    if game is not None:
+        return layered_effective_power(game, perm)
     power, _ = _power_toughness(perm)
     return (
         power
@@ -868,8 +878,10 @@ def effective_power(perm: Permanent) -> int:
     )
 
 
-def effective_toughness(perm: Permanent) -> int:
-    """Return combat toughness including counters and face-down 2/2 stats."""
+def effective_toughness(perm: Permanent, game: GameState | None = None) -> int:
+    """Return combat toughness including continuous effects and counters."""
+    if game is not None:
+        return layered_effective_toughness(game, perm)
     _, toughness = _power_toughness(perm)
     return toughness + perm.counters.get('+1/+1', 0) - perm.counters.get('-1/-1', 0)
 
@@ -880,11 +892,6 @@ def _parse_int(value: str) -> int:
         return int(value)
     except ValueError:
         return 0
-
-
-def oracle_has_keyword(oracle_text: str, keyword: str) -> bool:
-    """Return True when oracle text contains the keyword (case-insensitive)."""
-    return keyword.lower() in oracle_text.lower()
 
 
 def _can_attack(perm: Permanent) -> bool:

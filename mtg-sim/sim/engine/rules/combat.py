@@ -14,7 +14,7 @@ from engine.abilities.keywords.other.ingest import apply_ingest_on_player_damage
 from engine.abilities.keywords.other.poisonous import apply_poisonous_on_player_damage
 from engine.abilities.keywords.other.toxic import apply_toxic_on_player_damage
 from engine.abilities.keywords.other.renown import apply_renown_on_combat_damage_to_player
-from engine.core.game_object import Permanent, effective_power
+from engine.core.game_object import Permanent, effective_power, effective_toughness
 from engine.core.game_state import GameState
 
 
@@ -54,9 +54,9 @@ def legal_blocker(blocker: Permanent, attacker: Permanent, game: GameState) -> b
     return keywords.legal_blocker(blocker, attacker, game)
 
 
-def power(perm: Permanent) -> int:
-    """Return current combat power using printed P/T plus +/- counters."""
-    return effective_power(perm)
+def power(perm: Permanent, game: GameState | None = None) -> int:
+    """Return current combat power using layered P/T when game is provided."""
+    return effective_power(perm, game)
 
 
 def eligible_attackers(permanents: list[Permanent]) -> list[Permanent]:
@@ -158,7 +158,7 @@ def _assign_combat_damage(
     attacker_deals = _deals_in_step(attacker, first_strike_step)
     if not is_blocked:
         if attacker_deals:
-            damage = power(attacker)
+            damage = power(attacker, context.game)
             _add_player_damage(context, attacker, damage)
             context.game.fire_combat_damage_triggers(
                 attacker,
@@ -204,7 +204,7 @@ def _assign_combat_damage(
         for blocker in blockers:
             apply_bushido_when_engaged(blocker)
     if attacker_deals:
-        damage = power(attacker)
+        damage = power(attacker, context.game)
         player_damage = _assign_attacker_damage(context, attacker, blockers, damage)
         _add_player_damage(context, attacker, player_damage)
         context.game.fire_combat_damage_triggers(
@@ -240,7 +240,7 @@ def _assign_combat_damage(
         _apply_lifelink(context.game, context.attacking_player_idx, attacker, damage)
     for blocker in blockers:
         if _deals_in_step(blocker, first_strike_step):
-            damage = power(blocker)
+            damage = power(blocker, context.game)
             _mark_combat_damage(context, attacker, blocker, damage)
             context.game.fire_combat_damage_triggers(
                 blocker,
@@ -307,7 +307,7 @@ def _assign_attacker_damage(
     """Assign attacker damage to blockers, returning trample damage to player."""
     remaining = attacker_power
     for blocker in blockers:
-        assigned = min(remaining, _lethal_damage(attacker, blocker))
+        assigned = min(remaining, _lethal_damage(context, attacker, blocker))
         _mark_combat_damage(context, blocker, attacker, assigned)
         context.game.fire_combat_damage_triggers(
             attacker,
@@ -322,8 +322,13 @@ def _assign_attacker_damage(
     return 0
 
 
-def _lethal_damage(source: Permanent, receiver: Permanent) -> int:
-    return keywords.lethal_damage_needed(source, receiver, _toughness(receiver))
+def _lethal_damage(
+    context: _CombatContext,
+    source: Permanent,
+    receiver: Permanent,
+) -> int:
+    toughness = effective_toughness(receiver, context.game)
+    return keywords.lethal_damage_needed(source, receiver, toughness)
 
 
 def _mark_combat_damage(
@@ -335,17 +340,7 @@ def _mark_combat_damage(
     """Mark combat damage, respecting infect, wither, and deathtouch."""
     if damage > 0:
         context.result.dealt_combat_damage = True
-    apply_combat_damage_to_creature(receiver, source, damage)
-
-
-def _toughness(perm: Permanent) -> int:
-    if perm.card_info is None:
-        return 0
-    return (
-        perm.card_info.numeric_toughness
-        + perm.counters.get("+1/+1", 0)
-        - perm.counters.get("-1/-1", 0)
-    )
+    apply_combat_damage_to_creature(receiver, source, damage, context.game)
 
 
 def _add_player_damage(context: _CombatContext, attacker: Permanent, damage: int) -> None:

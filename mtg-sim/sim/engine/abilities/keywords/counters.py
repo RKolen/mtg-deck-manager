@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from engine.abilities.keywords._core import has_keyword
 from engine.core.game_object import Permanent
+from engine.rules.continuous import has_creature_keyword
+
+if TYPE_CHECKING:
+    from engine.core.game_state import GameState
 
 
 def has_infect(perm: Permanent) -> bool:
@@ -31,6 +37,6 @@ def has_modular(perm: Permanent) -> bool:
     return has_keyword(perm, 'Modular')
 
 
-def is_indestructible(perm: Permanent) -> bool:
+def is_indestructible(perm: Permanent, game: GameState | None = None) -> bool:
     """Return True when lethal damage and destroy effects do not destroy this permanent."""
-    return has_keyword(perm, 'Indestructible')
+    return has_creature_keyword(game, perm, 'Indestructible')

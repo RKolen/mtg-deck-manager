@@ -27,6 +27,7 @@ from engine.core.game_object import (
     ZoneCard,
     _PermanentState,
 )
+from engine.rules.replacement import leyline_of_void_active
 
 if TYPE_CHECKING:
     from engine.core.game_state import GameState
@@ -149,6 +150,13 @@ class ZoneManager:
         """
         if perm not in self.battlefield:
             return
+
+        if (
+            game is not None
+            and to_zone == Zone.GRAVEYARD
+            and leyline_of_void_active(game)
+        ):
+            to_zone = Zone.EXILE
 
         if (
             game is not None

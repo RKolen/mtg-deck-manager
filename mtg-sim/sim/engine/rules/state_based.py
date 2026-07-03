@@ -16,9 +16,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from engine.abilities.keywords import consume_regeneration_shield, is_indestructible
-from engine.core.game_object import Permanent, TokenObject
+from engine.core.game_object import Permanent, TokenObject, effective_toughness
 from engine.core.zones import Zone
+from engine.rules.replacement import try_prevent_creature_destruction
 
 if TYPE_CHECKING:
     from engine.core.game_state import GameState
@@ -92,7 +92,7 @@ def _check_creature_sbas(game: GameState) -> list[SBAEvent]:
     for perm in list(game.zones.battlefield):
         if not _is_creature(perm):
             continue
-        toughness = _effective_toughness(perm)
+        toughness = effective_toughness(perm, game)
         if toughness <= 0:
             game.zones.leave_battlefield(perm, Zone.GRAVEYARD, "sba", game)
             events.append(SBAEvent(
@@ -100,8 +100,8 @@ def _check_creature_sbas(game: GameState) -> list[SBAEvent]:
                 description=f"{perm.name} has {toughness} toughness",
                 obj_id=perm.obj_id,
             ))
-        elif perm.damage_marked >= toughness and not is_indestructible(perm):
-            if consume_regeneration_shield(perm):
+        elif perm.damage_marked >= toughness:
+            if try_prevent_creature_destruction(game, perm):
                 continue
             game.zones.leave_battlefield(perm, Zone.GRAVEYARD, "sba", game)
             events.append(SBAEvent(
@@ -208,38 +208,6 @@ def _check_token_sbas(game: GameState) -> list[SBAEvent]:
                     description=f"Token {token.name} ceased to exist outside battlefield",
                 ))
     return events
-
-
-# ---------------------------------------------------------------------------
-# Permanent characteristic helpers (Phase A: card_info + counter deltas)
-# Full layer-system computation replaces these in Phase F.
-# ---------------------------------------------------------------------------
-
-def _effective_toughness(perm: Permanent) -> int:
-    """Toughness after +1/+1 and -1/-1 counters; minimum 0 for SBA check."""
-    base = _base_toughness(perm)
-    return base + perm.counters.get("+1/+1", 0) - perm.counters.get("-1/-1", 0)
-
-
-def _base_toughness(perm: Permanent) -> int:
-    """Printed toughness from the underlying card or token blueprint.
-
-    CardInfo.numeric_toughness applies max(1, …) for combat safety, but SBAs
-    must see the raw value so that a 0-toughness creature (e.g. after Humble)
-    is correctly detected by CR 704.5f.
-    """
-    if perm.card_info is not None:
-        try:
-            raw = perm.card_info.pt.split("/", maxsplit=1)[1]
-            return int(raw)
-        except (ValueError, TypeError, IndexError):
-            return 1
-    if isinstance(perm.source, TokenObject):
-        try:
-            return int(perm.source.toughness)
-        except (ValueError, TypeError):
-            return 1
-    return 1
 
 
 def _is_creature(perm: Permanent) -> bool:
