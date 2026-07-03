@@ -149,6 +149,26 @@ def test_indestructible_ignores_lethal_damage():
     assert god in game.zones.battlefield
 
 
+def test_humility_strips_indestructible_lethal_kills():
+    """Humility removes indestructible; a 1/1 with 1 damage dies to SBAs."""
+    game = fresh_game()
+    humility_oracle = (
+        "All creatures lose all abilities and have base power and toughness 1/1."
+    )
+    place_on_battlefield(
+        make_card(name="Humility", type_line="Enchantment", oracle=humility_oracle),
+        0,
+        game.zones,
+    )
+    god = place_on_battlefield(
+        make_creature("God", 5, 5, oracle="Indestructible."), 0, game.zones
+    )
+    god.damage_marked = 1
+    events = check_sbas(game)
+    assert any(e.rule == "704.5g" for e in events)
+    assert god not in game.zones.battlefield
+
+
 # ---------------------------------------------------------------------------
 # CR 704.5i — planeswalker at 0 loyalty
 # ---------------------------------------------------------------------------

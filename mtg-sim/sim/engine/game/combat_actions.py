@@ -42,6 +42,7 @@ from engine.rules.combat import (
     resolve_combat_damage,
     tap_attackers,
 )
+from engine.rules.modifiers import clear_until_end_of_turn_modifiers
 
 
 class CombatActionsMixin(ActivatedActionsMixin):
@@ -267,6 +268,7 @@ class CombatActionsMixin(ActivatedActionsMixin):
 
     def _finish_opponent_turn(self) -> None:
         """Clear combat state and move to the player's next draw step."""
+        clear_until_end_of_turn_modifiers(self.state)
         self.pending_opp_attackers = []
         self.pending_blockers = {}
         if self._check_game_over():

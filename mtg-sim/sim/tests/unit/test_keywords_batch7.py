@@ -15,6 +15,7 @@ from engine.abilities.keywords.casting.evoke import (
     normalize_evoke_cast,
 )
 from engine.abilities.keywords.other.etb import apply_etb_other_abilities
+from engine.core.game_object import effective_power
 from engine.game.cast_context import CastAnnounceOptions, HandAlternateCastChoices
 from engine.game.cast_announce_validate import validate_announce_cast, _CastValidationContext
 from tests.conftest import add_to_hand, fresh_game, make_creature, place_on_battlefield
@@ -81,8 +82,10 @@ def test_bloodrush_discards_and_pumps():
         str(target.obj_id),
     )
     assert detail is not None
-    assert target.counters.get('+power/+0') == 4
+    assert effective_power(target, game) == 7
     assert target.counters.get('+1/+1', 0) == 0
+    assert len(target.modifiers) == 1
+    assert target.modifiers[0].power_delta == 4
     assert len(game.zones.player_zones[0].hand) == 0
 
 

@@ -112,7 +112,8 @@ def test_bloodrush_grants_power_only():
     target = place_on_battlefield(make_creature("Target", 2, 2), 0, game.zones)
     detail = apply_bloodrush(game.zones, 0, 0, str(target.obj_id))
     assert detail is not None
-    assert target.counters.get('+power/+0') == 4
+    assert len(target.modifiers) == 1
+    assert target.modifiers[0].power_delta == 4
     assert target.counters.get('+1/+1', 0) == 0
-    assert effective_power(target) == 6
-    assert effective_toughness(target) == 2
+    assert effective_power(target, game) == 6
+    assert effective_toughness(target, game) == 2

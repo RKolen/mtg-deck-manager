@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from engine.abilities import activated
 from engine.abilities.activated.bloodrush import can_bloodrush
 from engine.abilities.keywords.other.battle_cry import clear_battle_cry_counters
+from engine.rules.modifiers import clear_until_end_of_turn_modifiers
 from engine.abilities.keywords.other.boast import can_boast, clear_boast_turn_counters
 from engine.abilities.keywords.other.echo import resolve_echo_upkeep
 from engine.abilities.keywords.other.epic import resolve_epic_upkeep
@@ -311,6 +312,7 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):  # pylint: disable=t
             self._log("rules", "dash", detail)
         for perm in self._permanents(0):
             clear_battle_cry_counters(perm)
+        clear_until_end_of_turn_modifiers(self.state)
         self._sacrifice_blitz_at_turn_end(0)
         self._sacrifice_decayed_at_turn_end(0)
         self._sacrifice_encore_at_turn_end(0)

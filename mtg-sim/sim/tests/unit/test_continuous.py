@@ -4,6 +4,10 @@ from engine.core.game_object import CardObject, Modifier, effective_power, effec
 from engine.abilities.keywords.combat import has_deathtouch, lethal_damage_needed
 from engine.abilities.keywords.targeting import can_target_permanent
 from engine.rules.continuous import abilities_suppressed, has_creature_keyword
+from engine.rules.modifiers import (
+    add_until_eot_pt_modifier,
+    clear_until_end_of_turn_modifiers,
+)
 from tests.conftest import fresh_game, make_card, make_creature, place_on_battlefield
 
 
@@ -121,3 +125,16 @@ def test_humility_strips_deathtouch_in_combat():
     bear = place_on_battlefield(make_creature('Bear', 2, 2), 1, game.zones)
     assert not has_deathtouch(snake, game)
     assert lethal_damage_needed(snake, bear, 2, game) == 2
+
+
+def test_until_eot_modifier_applies_and_clears():
+    """Pump modifiers in layer 7c expire when end-of-turn cleanup runs."""
+    game = fresh_game()
+    bear = place_on_battlefield(make_creature('Bear', 2, 2), 0, game.zones)
+    add_until_eot_pt_modifier(bear, power_delta=2, toughness_delta=2)
+    assert effective_power(bear, game) == 4
+    assert effective_toughness(bear, game) == 4
+    clear_until_end_of_turn_modifiers(game)
+    assert effective_power(bear, game) == 2
+    assert effective_toughness(bear, game) == 2
+    assert not bear.modifiers

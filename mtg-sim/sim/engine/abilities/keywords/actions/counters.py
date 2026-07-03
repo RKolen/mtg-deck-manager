@@ -9,6 +9,7 @@ from engine.abilities.keywords.actions._parse import parse_amount_after_keyword,
 from engine.abilities.keywords.actions.detect import has_keyword_action
 from engine.core.game_object import Permanent
 from engine.core.zones import ZoneManager
+from engine.rules.modifiers import add_until_eot_pt_modifier
 
 if TYPE_CHECKING:
     from engine.core.game_state import GameState
@@ -80,11 +81,11 @@ def put_plus_counters(perm: Permanent, count: int) -> None:
     perm.counters['+1/+1'] = perm.counters.get('+1/+1', 0) + count
 
 
-def put_power_bonus(perm: Permanent, amount: int) -> None:
-    """Add a temporary +N/+0 power bonus (bloodrush-style)."""
+def put_power_bonus(perm: Permanent, amount: int, *, source_obj_id: int = 0) -> None:
+    """Add a temporary +N/+0 power bonus until end of turn (layer 7c)."""
     if amount <= 0:
         return
-    perm.counters['+power/+0'] = perm.counters.get('+power/+0', 0) + amount
+    add_until_eot_pt_modifier(perm, power_delta=amount, source_obj_id=source_obj_id)
 
 
 def proliferate(game: GameState) -> list[str]:

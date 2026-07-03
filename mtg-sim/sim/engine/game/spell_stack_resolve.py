@@ -49,6 +49,7 @@ from engine.core.game_object import (
     spell_returns_to_hand_on_resolve,
 )
 from engine.core.zones import Zone
+from engine.rules.modifiers import add_until_eot_pt_modifier
 from engine.game.helpers import (
     card_names,
     last_creature,
@@ -406,8 +407,13 @@ class SpellResolveMixin(SpellStackPlacementMixin):
         self._relocate_resolved_spell(spell, card)
         if target is None:
             return f"Cast {card_info.name} (no target)"
-        target.counters["+1/+1"] = target.counters.get("+1/+1", 0) + max(power, toughness)
-        return f"{card_info.name} pumped {target.name}"
+        add_until_eot_pt_modifier(
+            target,
+            power_delta=power,
+            toughness_delta=toughness,
+            source_obj_id=spell.obj_id,
+        )
+        return f"{card_info.name} pumped {target.name} (+{power}/+{toughness})"
 
     def _resolve_removal(self, spell: SpellOnStack) -> str:
         """Resolve a destruction or exile spell."""
