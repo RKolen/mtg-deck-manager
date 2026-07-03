@@ -134,6 +134,26 @@ def parse_token_create_count(text: str) -> int:
     return 0
 
 
+def parse_look_at_count(text: str) -> int:
+    """Return N from 'look at the top N cards', or 0."""
+    match = re.search(r"look at the top (\w+|\d+) cards?", text, re.IGNORECASE)
+    if match is None:
+        return 0
+    return word_to_int(match.group(1))
+
+
+def parse_delirium_damage(text: str) -> tuple[int, int] | None:
+    """Return (base, delirium) damage amounts when oracle has a delirium clause."""
+    if 'delirium' not in text.lower():
+        return None
+    amounts = [int(match.group(1)) for match in re.finditer(r"deals? (\d+) damage", text, re.I)]
+    if len(amounts) >= 2:
+        return amounts[0], amounts[1]
+    if len(amounts) == 1:
+        return amounts[0], amounts[0]
+    return None
+
+
 def parse_modal_clauses(text: str) -> list[str] | None:
     """Split a 'Choose one' spell into bullet clause oracle fragments."""
     if not re.search(r"choose (?:one|two|up to one|any number)", text, re.IGNORECASE):

@@ -5,9 +5,11 @@ from __future__ import annotations
 from engine.cards.deck_script_store import sync_deck_scripts
 from engine.cards.effects import (
     DealDamage,
+    DeliriumDealDamage,
     DestroyPermanent,
     DiscardCards,
     DrawCards,
+    FightCreatures,
     Modal,
     Scry,
     Surveil,
@@ -95,3 +97,41 @@ def test_opt_serde_roundtrip_via_sync(tmp_path, monkeypatch):
     scripts = sync_deck_scripts('nid:8', deck)
     assert 'Opt' in scripts
     assert any(isinstance(effect, Scry) for effect in scripts['Opt'])
+
+
+def test_infer_delirium_damage():
+    """Delirium burn spells infer DeliriumDealDamage."""
+    heat = make_instant(
+        'Unholy Heat',
+        oracle=(
+            'Unholy Heat deals 2 damage to any target.\n'
+            'Delirium — Unholy Heat deals 6 damage instead if there are four or '
+            'more card types among cards in your graveyard.'
+        ),
+    )
+    effects = infer_effects_from_oracle(heat) or ()
+    assert any(isinstance(effect, DeliriumDealDamage) for effect in effects)
+
+
+def test_infer_look_at_top_as_scry():
+    """Look-at-the-top-N clauses infer Scry when scry keyword is absent."""
+    serum = make_instant(
+        'Serum Visions',
+        oracle='Look at the top three cards of your library, then put them back '
+        'in any order. Draw a card.',
+    )
+    effects = infer_effects_from_oracle(serum) or ()
+    assert any(isinstance(effect, Scry) for effect in effects)
+    scry = next(effect for effect in effects if isinstance(effect, Scry))
+    assert scry.count == 3
+
+
+def test_infer_fight_spell():
+    """Fight keyword action infers FightCreatures."""
+    fight = make_instant(
+        'Prey Upon',
+        oracle='Target creature you control fights target creature '
+        'you don\'t control.',
+    )
+    effects = infer_effects_from_oracle(fight) or ()
+    assert any(isinstance(effect, FightCreatures) for effect in effects)

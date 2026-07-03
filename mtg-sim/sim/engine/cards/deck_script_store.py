@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import re
 from dataclasses import dataclass
@@ -20,9 +21,25 @@ from deck_registry import CardInfo
 from engine.cards.builtin_scripts import BUILTIN_CARD_SCRIPTS
 from engine.cards.effect_serde import EffectDict, effects_from_json, effects_to_json
 from engine.cards.effects import CardEffect
+from engine.cards.llm_script_generator import generate_card_script_json
 from engine.cards.oracle_infer import infer_effects_from_oracle
+from engine.cards.script_coverage import (
+    DeckScriptCoverageReport,
+    ScriptSource,
+    build_coverage_report,
+)
+
+logger = logging.getLogger(__name__)
 
 _DEFAULT_CACHE_ROOT = Path(__file__).resolve().parents[2] / 'data' / 'deck_scripts'
+
+
+@dataclass(frozen=True)
+class DeckScriptSyncResult:
+    """Scripts plus coverage metadata from one deck sync."""
+
+    scripts: dict[str, tuple[CardEffect, ...]]
+    coverage: DeckScriptCoverageReport
 
 
 def deck_script_cache_root() -> Path:
@@ -62,6 +79,7 @@ class DeckScriptManifest:
     fingerprint: str
     updated_at: str
     cards: dict[str, list[EffectDict]]
+    card_sources: dict[str, str]
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize manifest for on-disk JSON storage."""
@@ -71,6 +89,7 @@ class DeckScriptManifest:
             'fingerprint': self.fingerprint,
             'updated_at': self.updated_at,
             'cards': self.cards,
+            'card_sources': self.card_sources,
         }
 
     @classmethod
@@ -84,6 +103,10 @@ class DeckScriptManifest:
             cards={
                 str(name): list(effects)
                 for name, effects in (data.get('cards') or {}).items()
+            },
+            card_sources={
+                str(name): str(source)
+                for name, source in (data.get('card_sources') or {}).items()
             },
         )
 
@@ -117,19 +140,100 @@ def _manifest_to_scripts(manifest: DeckScriptManifest) -> dict[str, tuple[CardEf
     }
 
 
+def _coverage_from_manifest(
+    cards: list[CardInfo],
+    manifest: DeckScriptManifest,
+) -> DeckScriptCoverageReport:
+    typed_sources: dict[str, ScriptSource] = dict(manifest.card_sources)  # type: ignore[assignment]
+    return build_coverage_report(cards, typed_sources)
+
+
+@dataclass(frozen=True)
+class CardScriptSeed:
+    """One card's seeded script JSON and how it was produced."""
+
+    effects: list[EffectDict] | None
+    source: ScriptSource
+
+
+def seed_card_script(  # pylint: disable=too-many-return-statements
+    card: CardInfo,
+    previous_cards: dict[str, list[EffectDict]],
+) -> CardScriptSeed:
+    """Resolve script JSON for one card and record how it was sourced."""
+    if card.is_land:
+        return CardScriptSeed(None, 'skipped_land')
+    if card.is_creature:
+        return CardScriptSeed(None, 'skipped_creature')
+    if card.name in previous_cards:
+        return CardScriptSeed(list(previous_cards[card.name]), 'cached')
+    builtin = BUILTIN_CARD_SCRIPTS.get(card.name)
+    if builtin is not None:
+        return CardScriptSeed(effects_to_json(builtin), 'builtin')
+    inferred = infer_effects_from_oracle(card)
+    if inferred is not None:
+        return CardScriptSeed(effects_to_json(inferred), 'inferred')
+    llm_script = generate_card_script_json(card)
+    if llm_script is not None:
+        return CardScriptSeed(llm_script, 'llm')
+    return CardScriptSeed(None, 'unscripted')
+
+
 def _seed_card_script(
     card: CardInfo,
     previous_cards: dict[str, list[EffectDict]],
 ) -> list[EffectDict] | None:
-    if card.name in previous_cards:
-        return list(previous_cards[card.name])
-    builtin = BUILTIN_CARD_SCRIPTS.get(card.name)
-    if builtin is not None:
-        return effects_to_json(builtin)
-    inferred = infer_effects_from_oracle(card)
-    if inferred is not None:
-        return effects_to_json(inferred)
-    return None
+    seed = seed_card_script(card, previous_cards)
+    return seed.effects
+
+
+def sync_deck_scripts_with_coverage(  # pylint: disable=too-many-locals
+    source_id: str,
+    cards: list[CardInfo],
+    *,
+    title: str = '',
+) -> DeckScriptSyncResult:
+    """Sync deck scripts and return coverage metadata."""
+    path = _manifest_path(source_id)
+    fingerprint = deck_fingerprint(cards)
+    existing = _load_manifest(path)
+    if existing is not None and existing.fingerprint == fingerprint:
+        scripts = _manifest_to_scripts(existing)
+        coverage = _coverage_from_manifest(cards, existing)
+        return DeckScriptSyncResult(scripts=scripts, coverage=coverage)
+
+    previous_cards = existing.cards if existing is not None else {}
+    cards_by_name = {card.name: card for card in cards if card.name}
+    card_entries: dict[str, list[EffectDict]] = {}
+    source_by_name: dict[str, ScriptSource] = {}
+    for name in _unique_card_names(cards):
+        card = cards_by_name[name]
+        seed = seed_card_script(card, previous_cards)
+        source_by_name[name] = seed.source
+        if seed.effects is not None:
+            card_entries[name] = seed.effects
+
+    coverage = build_coverage_report(cards, source_by_name)
+    manifest = DeckScriptManifest(
+        source_id=source_id,
+        title=title,
+        fingerprint=fingerprint,
+        updated_at=datetime.now(timezone.utc).isoformat(),
+        cards=card_entries,
+        card_sources=dict(source_by_name),
+    )
+    _save_manifest(path, manifest)
+    logger.info(
+        'Deck script sync %s: %.0f%% scripted (%d/%d unique cards)',
+        source_id,
+        coverage.scripted_pct * 100,
+        coverage.scripted_unique_cards,
+        coverage.total_unique_cards,
+    )
+    return DeckScriptSyncResult(
+        scripts=_manifest_to_scripts(manifest),
+        coverage=coverage,
+    )
 
 
 def sync_deck_scripts(
@@ -139,30 +243,11 @@ def sync_deck_scripts(
     title: str = '',
 ) -> dict[str, tuple[CardEffect, ...]]:
     """Load or refresh the script cache for a deck; return resolved CardEffects."""
-    path = _manifest_path(source_id)
-    fingerprint = deck_fingerprint(cards)
-    existing = _load_manifest(path)
-    if existing is not None and existing.fingerprint == fingerprint:
-        return _manifest_to_scripts(existing)
-
-    previous_cards = existing.cards if existing is not None else {}
-    cards_by_name = {card.name: card for card in cards if card.name}
-    card_entries: dict[str, list[EffectDict]] = {}
-    for name in _unique_card_names(cards):
-        card = cards_by_name[name]
-        seeded = _seed_card_script(card, previous_cards)
-        if seeded is not None:
-            card_entries[name] = seeded
-
-    manifest = DeckScriptManifest(
-        source_id=source_id,
+    return sync_deck_scripts_with_coverage(
+        source_id,
+        cards,
         title=title,
-        fingerprint=fingerprint,
-        updated_at=datetime.now(timezone.utc).isoformat(),
-        cards=card_entries,
-    )
-    _save_manifest(path, manifest)
-    return _manifest_to_scripts(manifest)
+    ).scripts
 
 
 def sync_player_deck_scripts(
@@ -198,16 +283,21 @@ class DeckMatchupScripts:
 
 def prepare_game_card_scripts(matchup: DeckMatchupScripts) -> dict[str, tuple[CardEffect, ...]]:
     """Sync player + opponent deck caches and merge for one game session."""
-    player_scripts = sync_player_deck_scripts(
-        matchup.player_deck_nid,
+    player_result = sync_deck_scripts_with_coverage(
+        f'nid:{matchup.player_deck_nid}',
         matchup.player_cards,
         title=matchup.player_title,
     )
-    opponent_scripts = sync_meta_deck_scripts(
-        matchup.meta_format,
-        matchup.meta_archetype,
+    opponent_result = sync_deck_scripts_with_coverage(
+        f'meta:{matchup.meta_format}:{matchup.meta_archetype}',
         matchup.opponent_cards,
+        title=matchup.meta_archetype,
     )
-    merged = dict(opponent_scripts)
-    merged.update(player_scripts)
+    logger.debug(
+        'Matchup script coverage player=%.0f%% opponent=%.0f%%',
+        player_result.coverage.scripted_pct * 100,
+        opponent_result.coverage.scripted_pct * 100,
+    )
+    merged = dict(opponent_result.scripts)
+    merged.update(player_result.scripts)
     return merged

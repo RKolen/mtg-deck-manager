@@ -6,12 +6,14 @@ from engine.cards.effects import (
     CreateToken,
     DealDamage,
     DealDamageToPlayer,
+    DeliriumDealDamage,
     DestroyPermanent,
     DiscardCards,
     DrainLife,
     DrawCards,
     EffectList,
     ExilePermanent,
+    FightCreatures,
     GainLife,
     LoseLife,
     LoseLifeEachOpponent,
@@ -306,3 +308,41 @@ def test_effect_serde_roundtrip_scry_and_surveil():
     for effect in (Scry(count=2), Surveil(count=3)):
         restored = effect_from_dict(effect_to_dict(effect))
         assert restored == effect
+
+
+def test_delirium_deal_damage_uses_higher_amount_with_delirium():
+    """DeliriumDealDamage deals more when four graveyard types are met."""
+    game = fresh_game()
+    for type_line in ('Creature', 'Instant', 'Sorcery', 'Artifact'):
+        game.zones.player_zones[0].graveyard.append(
+            CardObject(
+                controller_idx=0,
+                owner_idx=0,
+                card_info=make_card(name=type_line, type_line=type_line),
+            ),
+        )
+    detail = DeliriumDealDamage(base_amount=2, delirium_amount=6).apply(_ctx(game))
+    assert 'dealt 6' in detail
+    assert game.players[1].life == 14
+
+
+def test_fight_creatures_deal_damage_to_each_other():
+    """FightCreatures exchanges power-based damage between two targets."""
+    game = fresh_game()
+    attacker = make_creature('Attacker', power=3, toughness=3)
+    blocker = make_creature('Blocker', power=2, toughness=4)
+    place_on_battlefield(attacker, 0, game.zones)
+    place_on_battlefield(blocker, 1, game.zones)
+    perm_a = game.zones.battlefield[0]
+    perm_b = game.zones.battlefield[1]
+    ctx = CardEffectContext(
+        game=game,
+        controller_idx=0,
+        source=_card('Fight Spell'),
+        target_creature_uid=str(perm_a.obj_id),
+        second_target_creature_uid=str(perm_b.obj_id),
+    )
+    detail = FightCreatures().apply(ctx)
+    assert 'fought' in detail
+    assert perm_a.damage_marked == 2
+    assert perm_b.damage_marked == 3

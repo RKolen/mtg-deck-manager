@@ -8,6 +8,7 @@ from __future__ import annotations
 from engine.cards.effects import (
     CardEffect,
     DealDamage,
+    DeliriumDealDamage,
     DestroyIfMaxManaValue,
     DestroyPermanent,
     DiscardCards,
@@ -55,5 +56,5 @@ BUILTIN_CARD_SCRIPTS: dict[str, tuple[CardEffect, ...]] = {
     'Sleight of Hand': (DrawCards(count=1),),
     'Thoughtseize': (DiscardCards(count=1, target='target_player'),),
     'Treasure Hunt': (TreasureHunt(),),
-    'Unholy Heat': (DealDamage(amount=2),),
+    'Unholy Heat': (DeliriumDealDamage(base_amount=2, delirium_amount=6),),
 }

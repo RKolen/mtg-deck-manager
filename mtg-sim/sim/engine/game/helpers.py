@@ -527,8 +527,13 @@ def targets_from_request(
 
 def target_uid(targets: list[Target]) -> str | None:
     """Return the first permanent target as a legacy uid string."""
-    target = next((t for t in targets if t.obj_id is not None), None)
-    return str(target.obj_id) if target is not None else None
+    uids = creature_target_uids(targets)
+    return uids[0] if uids else None
+
+
+def creature_target_uids(targets: list[Target]) -> list[str]:
+    """Return permanent target obj_ids as legacy uid strings."""
+    return [str(target.obj_id) for target in targets if target.obj_id is not None]
 
 
 def target_player(targets: list[Target]) -> int | None:

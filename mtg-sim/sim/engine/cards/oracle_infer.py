@@ -9,17 +9,20 @@ from __future__ import annotations
 import re
 
 from deck_registry import CardInfo
+from engine.abilities.keywords.actions.fight import has_fight
 from engine.abilities.keywords.actions.library import mill_count, scry_count, surveil_count
 from engine.cards.effects import (
     CardEffect,
     CreateToken,
     DealDamage,
+    DeliriumDealDamage,
     DestroyIfMaxManaValue,
     DestroyPermanent,
     DiscardCards,
     DrawCards,
     EffectList,
     ExilePermanent,
+    FightCreatures,
     GainLife,
     LoseLifeEachOpponent,
     Mill,
@@ -33,10 +36,12 @@ from engine.cards.effects import (
 )
 from engine.cards.oracle_parse import (
     parse_damage,
+    parse_delirium_damage,
     parse_discard,
     parse_draw,
     parse_each_opponent_life_loss,
     parse_life_gain,
+    parse_look_at_count,
     parse_modal_clauses,
     parse_pump,
     parse_token_blueprint,
@@ -79,6 +84,17 @@ def _infer_mill_target(text: str) -> MillTarget:
 
 def _infer_category_effects(text: str, category: str) -> list[CardEffect]:
     effects: list[CardEffect] = []
+    delirium = parse_delirium_damage(text)
+    if delirium is not None:
+        base_amount, delirium_amount = delirium
+        effects.append(DeliriumDealDamage(
+            base_amount=base_amount,
+            delirium_amount=delirium_amount,
+        ))
+        return effects
+    if has_fight(text) and category != 'burn':
+        effects.append(FightCreatures())
+        return effects
     if category == 'burn':
         amount = parse_damage(text)
         if amount > 0:
@@ -107,6 +123,13 @@ def _append_supplemental_effects(effects: list[CardEffect], text: str) -> None:
     scry_amount = scry_count(text)
     if scry_amount > 0 and not any(isinstance(effect, Scry) for effect in effects):
         effects.append(Scry(count=scry_amount))
+    else:
+        look_amount = parse_look_at_count(text)
+        if look_amount > 0 and not any(isinstance(effect, Scry) for effect in effects):
+            effects.append(Scry(count=look_amount))
+
+    if has_fight(text) and not any(isinstance(effect, FightCreatures) for effect in effects):
+        effects.append(FightCreatures())
 
     surveil_amount = surveil_count(text)
     if surveil_amount > 0 and not any(isinstance(effect, Surveil) for effect in effects):

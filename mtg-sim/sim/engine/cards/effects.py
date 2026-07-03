@@ -10,9 +10,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
+from engine.abilities.keywords.actions.fight import fight_creatures
 from engine.abilities.keywords.actions.library import mill_cards, scry_cards, surveil_cards
 from engine.abilities.keywords.actions.specialty import discard_from_hand
 from engine.abilities.keywords.actions.tokens import create_token_from_blueprint
+from engine.abilities.keywords.ability_words.conditions import delirium_met
 from engine.cards.oracle_parse import TokenBlueprint
 from engine.abilities.keywords.actions.targets import find_creature_by_uid
 from engine.core.game_object import CardObject, Permanent, SpellOnStack
@@ -37,7 +39,7 @@ class CardEffect(ABC):  # pylint: disable=too-few-public-methods
 
 
 @dataclass
-class CardEffectContext:
+class CardEffectContext:  # pylint: disable=too-many-instance-attributes
     """Runtime inputs for applying scripted card effects."""
 
     game: GameState
@@ -45,6 +47,7 @@ class CardEffectContext:
     source: CardObject
     target_player_idx: int | None = None
     target_creature_uid: str | None = None
+    second_target_creature_uid: str | None = None
     selected_mode: int | None = None
     draw_fn: DrawFn | None = None
 
@@ -59,16 +62,18 @@ class CardEffectContext:
         card = spell.source
         if card is None:
             raise ValueError('spell has no source card')
+        from engine.game.helpers import creature_target_uids  # pylint: disable=import-outside-toplevel
         from engine.game.helpers import target_player as target_player_from_targets  # pylint: disable=import-outside-toplevel
-        from engine.game.helpers import target_uid  # pylint: disable=import-outside-toplevel
 
+        creature_uids = creature_target_uids(spell.targets)
         mode_idx = spell.modes[0] if spell.modes else None
         return cls(
             game=game,
             controller_idx=spell.controller_idx,
             source=card,
             target_player_idx=target_player_from_targets(spell.targets),
-            target_creature_uid=target_uid(spell.targets),
+            target_creature_uid=creature_uids[0] if creature_uids else None,
+            second_target_creature_uid=creature_uids[1] if len(creature_uids) > 1 else None,
             selected_mode=mode_idx,
             draw_fn=draw_fn,
         )
@@ -76,6 +81,10 @@ class CardEffectContext:
     def target_creature(self) -> Permanent | None:
         """Return the targeted creature permanent, if any."""
         return find_creature_by_uid(self.game.zones, self.target_creature_uid)
+
+    def second_target_creature(self) -> Permanent | None:
+        """Return the second targeted creature permanent, if any."""
+        return find_creature_by_uid(self.game.zones, self.second_target_creature_uid)
 
     def resolve_player(self, target: PlayerTarget) -> int:
         """Map a player target specifier to a player index."""
@@ -312,6 +321,39 @@ class DealDamage(CardEffect):
         ctx.game.players[victim].life -= self.amount
         ctx.game.mark_player_was_dealt_damage(victim)
         return f"dealt {self.amount} to P{victim + 1}"
+
+
+@dataclass(frozen=True)
+class DeliriumDealDamage(CardEffect):
+    """Deal damage; use the higher amount when the controller has delirium."""
+
+    base_amount: int
+    delirium_amount: int
+    player_target: PlayerTarget = 'opponent'
+
+    def apply(self, ctx: CardEffectContext) -> str:
+        """Deal base or delirium damage depending on graveyard card types."""
+        amount = (
+            self.delirium_amount
+            if delirium_met(ctx.game, ctx.controller_idx)
+            else self.base_amount
+        )
+        return DealDamage(amount=amount, player_target=self.player_target).apply(ctx)
+
+
+@dataclass(frozen=True)
+class FightCreatures(CardEffect):
+    """Fight: two targeted creatures deal damage equal to their power to each other."""
+
+    def apply(self, ctx: CardEffectContext) -> str:
+        """Resolve fight between two targeted creatures."""
+        fighter = ctx.target_creature()
+        opponent = ctx.second_target_creature()
+        if fighter is None or opponent is None:
+            return 'fight (need two creature targets)'
+        dmg_a, dmg_b = fight_creatures(fighter, opponent, ctx.game)
+        ctx.game.check_sbas()
+        return f"{fighter.name} fought {opponent.name} ({dmg_a}/{dmg_b} damage)"
 
 
 @dataclass(frozen=True)

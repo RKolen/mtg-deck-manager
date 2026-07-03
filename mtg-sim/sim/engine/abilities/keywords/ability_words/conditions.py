@@ -189,6 +189,11 @@ def _delirium_met(game: GameState, player_idx: int) -> bool:
     return len(types) >= 4
 
 
+def delirium_met(game: GameState, player_idx: int) -> bool:
+    """Return True when the player has delirium (four or more card types in graveyard)."""
+    return _delirium_met(game, player_idx)
+
+
 def is_source_etb_metalcraft(
     event: TriggerEvent,
     game: GameState,

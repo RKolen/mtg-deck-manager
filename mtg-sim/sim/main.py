@@ -23,6 +23,7 @@ Optional AI environment variables:
   SIDECAR_URL    - Host-side AI sidecar (preferred; keeps inference out of DDEV)
   OLLAMA_URL     - Direct Ollama URL (fallback when SIDECAR_URL is unset)
   OLLAMA_MODEL   - Chat model for pilot decisions and key moments
+  LLM_SCRIPT_GENERATION - Set to 1 to LLM-generate card scripts during deck sync
   CAVEMAN_PILOT  - Pilot prompt compression: rules (default), llm, or off
   CAVEMAN_PILOT_MIN_CHARS - Skip compression below this length (default 120)
   SIM_BATCH_SIZE - Games per Forge subprocess chunk (default 5)

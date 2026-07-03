@@ -8,6 +8,7 @@ from engine.cards.effects import (
     CardEffect,
     CreateToken,
     DealDamage,
+    DeliriumDealDamage,
     DestroyIfMaxManaValue,
     DestroyPermanent,
     DiscardCards,
@@ -15,6 +16,7 @@ from engine.cards.effects import (
     DrawCards,
     EffectList,
     ExilePermanent,
+    FightCreatures,
     GainLife,
     LoseLifeEachOpponent,
     Mill,
@@ -75,6 +77,11 @@ _EFFECT_BUILDERS: dict[str, EffectBuilder] = {
         amount=int(d['amount']),
         player_target=d.get('player_target', 'opponent'),
     ),
+    'DeliriumDealDamage': lambda d: DeliriumDealDamage(
+        base_amount=int(d['base_amount']),
+        delirium_amount=int(d['delirium_amount']),
+        player_target=d.get('player_target', 'opponent'),
+    ),
     'DestroyIfMaxManaValue': lambda d: DestroyIfMaxManaValue(max_mv=int(d['max_mv'])),
     'DestroyPermanent': lambda _: DestroyPermanent(),
     'DiscardCards': lambda d: DiscardCards(
@@ -87,6 +94,7 @@ _EFFECT_BUILDERS: dict[str, EffectBuilder] = {
     ),
     'DrawCards': lambda d: DrawCards(count=int(d['count'])),
     'ExilePermanent': lambda _: ExilePermanent(),
+    'FightCreatures': lambda _: FightCreatures(),
     'GainLife': lambda d: GainLife(amount=int(d['amount'])),
     'LoseLifeEachOpponent': lambda d: LoseLifeEachOpponent(amount=int(d['amount'])),
     'Mill': _mill,
@@ -108,6 +116,8 @@ _EFFECT_BUILDERS: dict[str, EffectBuilder] = {
     'TreasureHunt': lambda _: TreasureHunt(),
 }
 
+ALLOWED_EFFECT_TYPES: frozenset[str] = frozenset(_EFFECT_BUILDERS) | frozenset({'EffectList'})
+
 
 def effect_to_dict(effect: CardEffect) -> EffectDict:  # pylint: disable=too-many-return-statements,too-many-branches
     """Convert a CardEffect to a JSON-serializable dict."""
@@ -121,6 +131,13 @@ def effect_to_dict(effect: CardEffect) -> EffectDict:  # pylint: disable=too-man
         return {
             'type': 'DealDamage',
             'amount': effect.amount,
+            'player_target': effect.player_target,
+        }
+    if isinstance(effect, DeliriumDealDamage):
+        return {
+            'type': 'DeliriumDealDamage',
+            'base_amount': effect.base_amount,
+            'delirium_amount': effect.delirium_amount,
             'player_target': effect.player_target,
         }
     if isinstance(effect, DestroyIfMaxManaValue):
@@ -139,6 +156,8 @@ def effect_to_dict(effect: CardEffect) -> EffectDict:  # pylint: disable=too-man
         return {'type': 'DrawCards', 'count': effect.count}
     if isinstance(effect, ExilePermanent):
         return {'type': 'ExilePermanent'}
+    if isinstance(effect, FightCreatures):
+        return {'type': 'FightCreatures'}
     if isinstance(effect, GainLife):
         return {'type': 'GainLife', 'amount': effect.amount}
     if isinstance(effect, LoseLifeEachOpponent):
