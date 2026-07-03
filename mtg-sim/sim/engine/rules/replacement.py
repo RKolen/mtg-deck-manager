@@ -10,10 +10,12 @@ from engine.rules.continuous import has_creature_keyword
 if TYPE_CHECKING:
     from engine.core.game_object import Permanent
     from engine.core.game_state import GameState
+    from engine.core.zones import Zone
 
 _SHIELD_COUNTER = 'shield'
 _REGENERATION_SHIELD = 'regeneration shield'
 _LEYLINE_ORACLE = 'if a card would be put into an opponent'
+_REST_IN_PEACE_ORACLE = 'if a card or token would be put into a graveyard'
 
 
 @dataclass(frozen=True)
@@ -123,6 +125,25 @@ def leyline_of_void_active(game: GameState) -> bool:
     return any(_is_leyline_of_void(perm) for perm in game.zones.battlefield)
 
 
+def rest_in_peace_active(game: GameState) -> bool:
+    """Return True when Rest in Peace is on the battlefield."""
+    return any(_is_rest_in_peace(perm) for perm in game.zones.battlefield)
+
+
+def graveyard_to_exile_active(game: GameState) -> bool:
+    """Return True when cards that would enter a graveyard are exiled instead."""
+    return leyline_of_void_active(game) or rest_in_peace_active(game)
+
+
+def resolve_graveyard_destination(game: GameState) -> Zone:
+    """Return the zone a card should enter when graveyard was requested."""
+    from engine.core.zones import Zone  # pylint: disable=import-outside-toplevel
+
+    if graveyard_to_exile_active(game):
+        return Zone.EXILE
+    return Zone.GRAVEYARD
+
+
 def _damage_replacement_queue(receiver: Permanent) -> ReplacementQueue:
     queue = ReplacementQueue()
 
@@ -147,4 +168,11 @@ def _is_leyline_of_void(perm: Permanent) -> bool:
     return (
         perm.name == 'Leyline of the Void'
         or _LEYLINE_ORACLE in perm.oracle_text.lower()
+    )
+
+
+def _is_rest_in_peace(perm: Permanent) -> bool:
+    return (
+        perm.name == 'Rest in Peace'
+        or _REST_IN_PEACE_ORACLE in perm.oracle_text.lower()
     )

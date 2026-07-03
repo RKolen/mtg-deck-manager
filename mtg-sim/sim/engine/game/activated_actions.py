@@ -207,7 +207,7 @@ class ActivatedActionsMixin(GameRuntimeMixin):  # pylint: disable=too-many-publi
         mana_needed = activated.cycling_mana_needed(card_info)
         if not self._tap_lands_for_mana(0, mana_needed):
             return {**self.to_client(), "error": f"Need {mana_needed} mana to cycle"}
-        activated.cycle_from_hand(self.state.zones, 0, hand_idx)
+        activated.cycle_from_hand(self.state.zones, 0, hand_idx, self.state)
         drawn = self._draw_cards(0, 1)
         self._log("player", "cycle", f"Cycled {card_info.name}, drew {len(drawn)}")
         return self.to_client()
@@ -231,6 +231,7 @@ class ActivatedActionsMixin(GameRuntimeMixin):  # pylint: disable=too-many-publi
             0,
             hand_idx,
             target_creature_uid,
+            self.state,
         )
         if detail is None:
             return {**self.to_client(), "error": "Bloodrush failed"}
@@ -559,7 +560,7 @@ class ActivatedActionsMixin(GameRuntimeMixin):  # pylint: disable=too-many-publi
         if not self._tap_lands_for_mana(0, mana_needed):
             return {**self.to_client(), "error": f"Need {mana_needed} mana to channel"}
         effect = activated.channel_effect(card_info)
-        activated.discard_for_channel(self.state.zones, 0, hand_idx)
+        activated.discard_for_channel(self.state.zones, 0, hand_idx, self.state)
         detail = f"Channeled {card_info.name}"
         draw_count = activated.channel_draw(effect)
         if draw_count:

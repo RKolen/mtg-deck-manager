@@ -5,6 +5,7 @@ from __future__ import annotations
 import random
 import re
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from engine.abilities.keywords.actions._parse import (
     parse_amount_after_keyword,
@@ -15,6 +16,9 @@ from engine.abilities.keywords.actions._parse import (
 from engine.abilities.keywords.actions.detect import has_keyword_action
 from engine.core.game_object import CardObject, Permanent
 from engine.core.zones import Zone, ZoneManager
+
+if TYPE_CHECKING:
+    from engine.core.game_state import GameState
 
 _MILLS_VERB_RE = re.compile(r'\bmills?\s+(\w+|\d+)', re.IGNORECASE)
 
@@ -75,14 +79,26 @@ def surveil_count(oracle_text: str) -> int:
     return parse_amount_after_keyword(oracle_text, 'surveil')
 
 
-def mill_cards(zones: ZoneManager, player_idx: int, count: int) -> list[CardObject]:
+def mill_cards(
+    zones: ZoneManager,
+    player_idx: int,
+    count: int,
+    game: GameState | None = None,
+) -> list[CardObject]:
     """Move the top count cards from library to graveyard."""
     lib = zones.player_zones[player_idx].library
     milled: list[CardObject] = []
     for _ in range(min(count, len(lib))):
-        card = lib.pop(0)
+        card = lib[0]
         if isinstance(card, CardObject):
-            zones.player_zones[player_idx].graveyard.append(card)
+            zones.put_card_in_zone(
+                card,
+                Zone.GRAVEYARD,
+                player_idx,
+                'mill',
+                game,
+                from_zone=Zone.LIBRARY,
+            )
             milled.append(card)
     return milled
 
@@ -107,9 +123,14 @@ def scry_cards(
     return len(bottom)
 
 
-def surveil_cards(zones: ZoneManager, player_idx: int, count: int) -> int:
+def surveil_cards(
+    zones: ZoneManager,
+    player_idx: int,
+    count: int,
+    game: GameState | None = None,
+) -> int:
     """Surveil N (MVP): put the top N cards into the graveyard."""
-    milled = mill_cards(zones, player_idx, count)
+    milled = mill_cards(zones, player_idx, count, game)
     return len(milled)
 
 

@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 from deck_registry import CardInfo
 from engine.abilities.keywords.registry import has_registered_keyword
 from engine.core.game_object import CardObject
 from engine.core.mana import ManaCost
-from engine.core.zones import ZoneManager
+from engine.core.zones import Zone, ZoneManager
+
+if TYPE_CHECKING:
+    from engine.core.game_state import GameState
 
 INSTANT_SPEED_PHASES = frozenset({
     "main1",
@@ -51,10 +55,18 @@ def discard_from_hand(
     zones: ZoneManager,
     player_idx: int,
     hand_idx: int,
+    game: GameState | None = None,
 ) -> CardObject:
     """Move a card from hand to graveyard (cycling, channel, etc.)."""
     hand = zones.player_zones[player_idx].hand
-    card = hand.pop(hand_idx)
+    card = hand[hand_idx]
     assert isinstance(card, CardObject)
-    zones.player_zones[player_idx].graveyard.append(card)
+    zones.put_card_in_zone(
+        card,
+        Zone.GRAVEYARD,
+        player_idx,
+        'discard',
+        game,
+        from_zone=Zone.HAND,
+    )
     return card

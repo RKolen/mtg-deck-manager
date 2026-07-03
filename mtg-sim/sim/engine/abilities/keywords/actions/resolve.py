@@ -231,15 +231,15 @@ def _apply_mill(ctx: ActionContext) -> str | None:
     if 'each player mills' in ctx.oracle_text.lower():
         parts = []
         for idx in (0, 1):
-            milled = mill_cards(ctx.zones, idx, count)
+            milled = mill_cards(ctx.zones, idx, count, ctx.game)
             parts.append(f"P{idx + 1} milled {len(milled)}")
         return '; '.join(parts)
     oracle_lower = ctx.oracle_text.lower()
     if 'target player mills' in oracle_lower or 'target opponent mills' in oracle_lower:
         victim = _opponent_idx(ctx.controller_idx)
-        milled = mill_cards(ctx.zones, victim, count)
+        milled = mill_cards(ctx.zones, victim, count, ctx.game)
         return f"milled {len(milled)} (P{victim + 1})"
-    milled = mill_cards(ctx.zones, ctx.controller_idx, count)
+    milled = mill_cards(ctx.zones, ctx.controller_idx, count, ctx.game)
     return f"milled {len(milled)}"
 
 
@@ -260,7 +260,7 @@ def _apply_surveil(ctx: ActionContext) -> str | None:
     if not has_surveil(ctx.oracle_text):
         return None
     count = surveil_count(ctx.oracle_text)
-    milled = surveil_cards(ctx.zones, ctx.controller_idx, count)
+    milled = surveil_cards(ctx.zones, ctx.controller_idx, count, ctx.game)
     return f"surveiled {milled} to graveyard"
 
 
@@ -336,7 +336,7 @@ def _apply_counter_action(ctx: ActionContext) -> str | None:
 def _apply_connive(ctx: ActionContext) -> str | None:
     if not has_connive(ctx.oracle_text) or ctx.draw_fn is None:
         return None
-    return connive(ctx.zones, ctx.controller_idx, ctx.oracle_text, ctx.draw_fn)
+    return connive(ctx.zones, ctx.controller_idx, ctx.oracle_text, ctx.draw_fn, ctx.game)
 
 
 def _apply_explore(ctx: ActionContext) -> str | None:
@@ -597,7 +597,7 @@ def _apply_collect_evidence(ctx: ActionContext) -> str | None:
 def _apply_discard_action(ctx: ActionContext) -> str | None:
     if not has_discard_action(ctx.oracle_text):
         return None
-    return discard_from_hand(ctx.zones, ctx.controller_idx)
+    return discard_from_hand(ctx.zones, ctx.controller_idx, ctx.game)
 
 
 def _apply_venture(ctx: ActionContext) -> str | None:
@@ -663,7 +663,7 @@ def _apply_assemble(ctx: ActionContext) -> str | None:
 def _apply_abandon(ctx: ActionContext) -> str | None:
     if not has_abandon(ctx.oracle_text):
         return None
-    return abandon_hand(ctx.zones, ctx.controller_idx)
+    return abandon_hand(ctx.zones, ctx.controller_idx, ctx.game)
 
 
 def _apply_meld(ctx: ActionContext) -> str | None:

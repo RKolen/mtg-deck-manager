@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 from deck_registry import CardInfo
 from engine.abilities.keywords.casting.flashback import INSTANT_SPEED_PHASES
@@ -14,6 +15,9 @@ from engine.abilities.keywords.casting._hand_discard import (
 from engine.core.game_object import CardObject
 from engine.core.mana import ManaCost
 from engine.core.zones import ZoneManager
+
+if TYPE_CHECKING:
+    from engine.core.game_state import GameState
 
 _JUMP_START_COST_RE = re.compile(
     r'jump-?start\s*((?:\{[^}]+\})+)',
@@ -76,6 +80,7 @@ def discard_for_jump_start(
     zones: ZoneManager,
     player_idx: int,
     discard_hand_idx: int,
+    game: GameState | None = None,
 ) -> CardObject:
     """Discard a card from hand to pay jump-start (call after jump_start_discard_error)."""
-    return pop_hand_to_graveyard(zones, player_idx, discard_hand_idx)
+    return pop_hand_to_graveyard(zones, player_idx, discard_hand_idx, game)

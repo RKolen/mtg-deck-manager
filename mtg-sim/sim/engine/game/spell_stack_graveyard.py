@@ -363,7 +363,7 @@ class GraveyardCastMixin(SpellStackPlacementMixin):
                 return discard_err
             assert discard_hand_idx is not None
             jump_state.discarded = discard_for_jump_start(
-                self.state.zones, 0, discard_hand_idx,
+                self.state.zones, 0, discard_hand_idx, self.state,
             )
             return None
 
@@ -412,7 +412,7 @@ class GraveyardCastMixin(SpellStackPlacementMixin):
                 return discard_err
             assert discard_hand_idx is not None
             retrace_state.discarded = discard_land_for_retrace(
-                self.state.zones, 0, discard_hand_idx,
+                self.state.zones, 0, discard_hand_idx, self.state,
             )
             retrace_state.life = retrace_life_cost(card_info)
             return None

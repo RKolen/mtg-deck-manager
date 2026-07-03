@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 from deck_registry import CardInfo
 from engine.abilities.keywords.actions._parse import word_to_int
@@ -10,6 +11,9 @@ from engine.abilities.keywords.actions.library import mill_cards
 from engine.abilities.keywords.registry import has_registered_keyword
 from engine.core.game_object import CardObject
 from engine.core.zones import ZoneManager
+
+if TYPE_CHECKING:
+    from engine.core.game_state import GameState
 
 _DREDGE_RE = re.compile(r'dredge\s+(\w+|\d+)', re.IGNORECASE)
 
@@ -43,6 +47,7 @@ def apply_dredge(
     zones: ZoneManager,
     player_idx: int,
     graveyard_idx: int,
+    game: GameState | None = None,
 ) -> tuple[str | None, str | None, list[CardObject]]:
     """Mill for dredge; the dredge card stays in the graveyard."""
     graveyard = zones.player_zones[player_idx].graveyard
@@ -54,7 +59,7 @@ def apply_dredge(
     card_info = card.card_info
     if not has_dredge(card_info):
         return f'{card_info.name} does not have dredge', None, []
-    milled = mill_cards(zones, player_idx, dredge_amount(card_info))
+    milled = mill_cards(zones, player_idx, dredge_amount(card_info), game)
     names = ', '.join(c.card_info.name for c in milled if c.card_info)
     detail = f"dredge {card_info.name} milled {len(milled)}"
     if names:

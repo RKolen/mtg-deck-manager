@@ -437,7 +437,7 @@ class SpellResolveMixin(SpellStackPlacementMixin):
         card_info = require_card_info(card)
         oracle = card_info.oracle_text or ''
         if has_connive(oracle):
-            detail = connive(self.state.zones, controller_idx, oracle, self._draw_cards)
+            detail = connive(self.state.zones, controller_idx, oracle, self._draw_cards, self.state)
             self._relocate_resolved_spell(spell, card)
             return f"{card_info.name} {detail}"
         count = (parse_draw(oracle) or 1) + extra_draw_from_kicker(

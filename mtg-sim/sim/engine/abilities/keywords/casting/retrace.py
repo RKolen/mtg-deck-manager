@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 from deck_registry import CardInfo
 from engine.abilities.keywords import has_flash
@@ -13,6 +14,9 @@ from engine.abilities.keywords.casting._hand_discard import (
 )
 from engine.core.game_object import CardObject
 from engine.core.zones import ZoneManager
+
+if TYPE_CHECKING:
+    from engine.core.game_state import GameState
 
 _RETRACE_RE = re.compile(r'\bretrace\b', re.IGNORECASE)
 
@@ -79,6 +83,7 @@ def discard_land_for_retrace(
     zones: ZoneManager,
     player_idx: int,
     discard_hand_idx: int,
+    game: GameState | None = None,
 ) -> CardObject:
     """Discard a land from hand to pay retrace (call after retrace_land_discard_error)."""
-    return pop_hand_to_graveyard(zones, player_idx, discard_hand_idx)
+    return pop_hand_to_graveyard(zones, player_idx, discard_hand_idx, game)

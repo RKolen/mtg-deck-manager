@@ -26,7 +26,7 @@ from engine.core.game_object import (
     StackObject,
     Target,
 )
-from engine.core.zones import ZoneManager
+from engine.core.zones import Zone, ZoneManager
 
 if TYPE_CHECKING:
     from deck_registry import CardInfo
@@ -83,16 +83,20 @@ class Stack:
         obj = self.objects.pop()
 
         if _has_targets(obj) and _all_targets_illegal(obj, zones, game):
-            _move_spell_card_to_graveyard(obj, zones)
+            _move_spell_card_to_graveyard(obj, zones, game)
             return StackResolution(obj=obj, fizzled=True, reason="all_targets_illegal")
 
         if game is not None and _ward_counters_resolution(obj, zones, game):
-            _move_spell_card_to_graveyard(obj, zones)
+            _move_spell_card_to_graveyard(obj, zones, game)
             return StackResolution(obj=obj, fizzled=True, reason="ward_not_paid")
 
         return StackResolution(obj=obj, fizzled=False, reason="resolved")
 
-    def counter_top(self, zones: ZoneManager) -> StackObject | None:
+    def counter_top(
+        self,
+        zones: ZoneManager,
+        game: GameState | None = None,
+    ) -> StackObject | None:
         """Remove the top object without resolving it (e.g. Counterspell).
 
         Spell cards go to graveyard; ability objects cease to exist.
@@ -104,7 +108,7 @@ class Stack:
         if not _can_counter_stack_object(obj):
             return None
         obj = self.objects.pop()
-        _move_spell_card_to_graveyard(obj, zones)
+        _move_spell_card_to_graveyard(obj, zones, game)
         return obj
 
     def to_client(self) -> list[dict]:
@@ -215,7 +219,11 @@ def _all_targets_illegal(
     )
 
 
-def _move_spell_card_to_graveyard(obj: StackObject, zones: ZoneManager) -> None:
+def _move_spell_card_to_graveyard(
+    obj: StackObject,
+    zones: ZoneManager,
+    game: GameState | None = None,
+) -> None:
     """Place the source card after fizzle/counter; flashback spells exile instead.
 
     Ability objects have no card to move; they simply cease to exist.
@@ -225,9 +233,14 @@ def _move_spell_card_to_graveyard(obj: StackObject, zones: ZoneManager) -> None:
     source: CardObject | None = obj.source
     if source is None or spell_is_ephemeral_copy(obj):
         return
-    destination = (
-        zones.player_zones[obj.owner_idx].exile
-        if spell_exiles_from_graveyard_cast(obj)
-        else zones.player_zones[obj.owner_idx].graveyard
+    if spell_exiles_from_graveyard_cast(obj):
+        zones.player_zones[obj.owner_idx].exile.append(source)
+        return
+    zones.put_card_in_zone(
+        source,
+        Zone.GRAVEYARD,
+        obj.owner_idx,
+        'counter',
+        game,
+        from_zone=Zone.STACK,
     )
-    destination.append(source)

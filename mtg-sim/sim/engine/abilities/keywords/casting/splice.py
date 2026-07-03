@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 from deck_registry import CardInfo
 from engine.abilities.keywords.casting.alt_cost_mana import alt_cost_mana_needed
@@ -11,6 +12,9 @@ from engine.abilities.keywords.casting._hand_discard import discard_hand_card_na
 from engine.core.game_object import CardObject
 from engine.core.mana import ManaCost
 from engine.core.zones import ZoneManager
+
+if TYPE_CHECKING:
+    from engine.core.game_state import GameState
 
 _SPLICE_COST_RE = re.compile(
     r'splice\s*(?:onto\s+arcane\s*)?((?:\{[^}]+\})+)',
@@ -82,11 +86,12 @@ def discard_for_splice(
     zones: ZoneManager,
     player_idx: int,
     hand_idx: int | None,
+    game: GameState | None = None,
 ) -> str | None:
     """Discard the spliced arcane card from hand."""
     if not splice_hand_card_is_arcane(zones, player_idx, hand_idx):
         return None
-    return discard_hand_card_name(zones, player_idx, hand_idx)
+    return discard_hand_card_name(zones, player_idx, hand_idx, game)
 
 
 def splice_mana_extra(card: CardInfo, paid_splice: bool) -> int:

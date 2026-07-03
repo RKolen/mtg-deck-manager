@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 from deck_registry import CardInfo
 from engine.abilities.activated._cost_keyword import (
@@ -17,6 +18,9 @@ from engine.cards.oracle_parse import parse_damage, parse_draw
 from engine.core.game_object import CardObject, Permanent
 from engine.core.mana import ManaCost
 from engine.core.zones import Zone, ZoneManager
+
+if TYPE_CHECKING:
+    from engine.core.game_state import GameState
 
 _CYCLING_RE = re.compile(
     r"cycling\s*((?:\{[^}]+\})+)",
@@ -66,9 +70,10 @@ def cycle_from_hand(
     zones: ZoneManager,
     player_idx: int,
     hand_idx: int,
+    game: GameState | None = None,
 ) -> CardObject:
     """Discard a card from hand for cycling (after costs are paid)."""
-    return discard_from_hand(zones, player_idx, hand_idx)
+    return discard_from_hand(zones, player_idx, hand_idx, game)
 
 
 def has_channel(card: CardInfo) -> bool:
@@ -125,9 +130,10 @@ def discard_for_channel(
     zones: ZoneManager,
     player_idx: int,
     hand_idx: int,
+    game: GameState | None = None,
 ) -> CardObject:
     """Discard a card from hand for channel (after costs are paid)."""
-    return discard_from_hand(zones, player_idx, hand_idx)
+    return discard_from_hand(zones, player_idx, hand_idx, game)
 
 
 def has_unearth(card: CardInfo) -> bool:

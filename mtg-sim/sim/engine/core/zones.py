@@ -27,7 +27,7 @@ from engine.core.game_object import (
     ZoneCard,
     _PermanentState,
 )
-from engine.rules.replacement import leyline_of_void_active
+from engine.rules.replacement import resolve_graveyard_destination
 
 if TYPE_CHECKING:
     from engine.core.game_state import GameState
@@ -151,12 +151,8 @@ class ZoneManager:
         if perm not in self.battlefield:
             return
 
-        if (
-            game is not None
-            and to_zone == Zone.GRAVEYARD
-            and leyline_of_void_active(game)
-        ):
-            to_zone = Zone.EXILE
+        if game is not None and to_zone == Zone.GRAVEYARD:
+            to_zone = resolve_graveyard_destination(game)
 
         if (
             game is not None
@@ -312,6 +308,37 @@ class ZoneManager:
     def find_permanent(self, obj_id: int) -> Permanent | None:
         """Return the battlefield permanent with the given obj_id, or None."""
         return next((p for p in self.battlefield if p.obj_id == obj_id), None)
+
+    # ------------------------------------------------------------------
+    # Player zone card moves (mill, discard, stack → graveyard, …)
+    # ------------------------------------------------------------------
+
+    def put_card_in_zone(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self,
+        card: CardObject,
+        to_zone: Zone,
+        player_idx: int,
+        cause: str,
+        game: GameState | None = None,
+        *,
+        from_zone: Zone | None = None,
+    ) -> Zone:
+        """Place a card in a player zone, applying graveyard replacement effects."""
+        actual_zone = to_zone
+        if game is not None and to_zone == Zone.GRAVEYARD:
+            actual_zone = resolve_graveyard_destination(game)
+        if from_zone is not None:
+            self._remove_from_player_zone(card, from_zone, player_idx)
+        self._place_card_in_zone(card, actual_zone, player_idx)
+        if from_zone is not None:
+            self._emit(ZoneMoveEvent(
+                obj=card,
+                from_zone=from_zone,
+                to_zone=actual_zone,
+                cause=cause,
+                player_idx=player_idx,
+            ))
+        return actual_zone
 
     # ------------------------------------------------------------------
     # Internal helpers

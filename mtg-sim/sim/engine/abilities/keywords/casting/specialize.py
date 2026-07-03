@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 from deck_registry import CardInfo
 from engine.abilities.keywords.casting._hand_discard import (
@@ -13,6 +14,9 @@ from engine.abilities.keywords.casting.alt_cost_mana import alt_cost_mana_needed
 from engine.abilities.keywords.registry import has_registered_keyword
 from engine.core.mana import ManaCost
 from engine.core.zones import ZoneManager
+
+if TYPE_CHECKING:
+    from engine.core.game_state import GameState
 
 _SPECIALIZE_RE = re.compile(
     r'specialize\s*((?:\{[^}]+\})+)',
@@ -67,6 +71,7 @@ def discard_for_specialize(
     zones: ZoneManager,
     player_idx: int,
     hand_idx: int | None,
+    game: GameState | None = None,
 ) -> str | None:
     """Discard the specialize cost card from hand."""
-    return discard_hand_card_name(zones, player_idx, hand_idx)
+    return discard_hand_card_name(zones, player_idx, hand_idx, game)

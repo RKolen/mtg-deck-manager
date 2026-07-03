@@ -328,6 +328,7 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
                 self.state.zones,
                 0,
                 placement.opts.modifiers.reductions.specialize_hand_idx,
+                self.state,
             )
             if specialized:
                 self._log('rules', 'specialize', f"specialized (discarded {specialized})")
@@ -336,6 +337,7 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
                 self.state.zones,
                 0,
                 placement.opts.modifiers.reductions.splice_hand_idx,
+                self.state,
             )
             if spliced:
                 self._log('rules', 'splice', f"spliced {spliced}")

@@ -9,6 +9,7 @@ from engine.cards.oracle_parse import is_affordable
 from engine.core.game_object import CardObject, Permanent
 from engine.core.game_object import SpellOnStack
 from engine.core.game_state import LogEntry
+from engine.core.zones import Zone
 from engine.core.game_object import (
     spell_exiles_from_graveyard_cast,
     spell_is_ephemeral_copy,
@@ -282,7 +283,14 @@ class GameRuntimeMixin:
             return None
 
     def _move_card_to_graveyard(self, card: CardObject) -> None:
-        self.state.zones.player_zones[card.owner_idx].graveyard.append(card)
+        self.state.zones.put_card_in_zone(
+            card,
+            Zone.GRAVEYARD,
+            card.owner_idx,
+            'spell',
+            self.state,
+            from_zone=Zone.STACK,
+        )
 
     def _relocate_resolved_spell(self, spell: SpellOnStack, card: CardObject) -> None:
         """Exile alt-cast spells, return buyback spells to hand, else graveyard."""

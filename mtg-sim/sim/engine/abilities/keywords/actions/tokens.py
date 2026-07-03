@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 from engine.abilities.keywords.actions._parse import word_to_int
 from engine.abilities.keywords.actions.counters import put_plus_counters
@@ -12,6 +13,9 @@ from engine.abilities.keywords._token_factory import enter_token_from_blueprint
 from engine.cards.oracle_parse import TokenBlueprint, parse_token_blueprint
 from engine.core.game_object import Permanent, TokenObject
 from engine.core.zones import ZoneManager
+
+if TYPE_CHECKING:
+    from engine.core.game_state import GameState
 
 _CONNIVE_MILL_RE = re.compile(
     r'connive (\w+|\d+)',
@@ -137,11 +141,12 @@ def connive(
     controller_idx: int,
     oracle_text: str,
     draw_fn,
+    game: GameState | None = None,
 ) -> str:
     """Connive: draw a card, then mill N."""
     drawn = draw_fn(controller_idx, 1)
     mill_n = connive_mill_count(oracle_text)
-    milled = mill_cards(zones, controller_idx, mill_n)
+    milled = mill_cards(zones, controller_idx, mill_n, game)
     draw_label = drawn[0].card_info.name if drawn and drawn[0].card_info else 'a card'
     return f"connived (drew {draw_label}, milled {len(milled)})"
 

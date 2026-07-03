@@ -217,7 +217,7 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):  # pylint: disable=t
         """Replace the draw step draw with dredge."""
         assert self.phase == "draw"
         self._begin_turn(0)
-        err, detail, _milled = apply_dredge(self.state.zones, 0, graveyard_idx)
+        err, detail, _milled = apply_dredge(self.state.zones, 0, graveyard_idx, self.state)
         if err:
             return {**self.to_client(), "error": err}
         self._log("player", "dredge", detail or "dredge")

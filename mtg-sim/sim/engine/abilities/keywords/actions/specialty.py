@@ -245,14 +245,25 @@ def collect_evidence(zones: ZoneManager, controller_idx: int) -> str | None:
     return 'collected evidence (6+ cards in graveyard)'
 
 
-def discard_from_hand(zones: ZoneManager, controller_idx: int) -> str:
+def discard_from_hand(
+    zones: ZoneManager,
+    controller_idx: int,
+    game: GameState | None = None,
+) -> str:
     """Discard the last card from hand (simplified Discard action)."""
     hand = zones.player_zones[controller_idx].hand
     if not hand:
         return 'discarded (empty hand)'
-    card = hand.pop()
+    card = hand[-1]
     assert isinstance(card, CardObject)
-    zones.player_zones[controller_idx].graveyard.append(card)
+    zones.put_card_in_zone(
+        card,
+        Zone.GRAVEYARD,
+        controller_idx,
+        'discard',
+        game,
+        from_zone=Zone.HAND,
+    )
     name = card.card_info.name if card.card_info else 'card'
     return f"discarded {name}"
 
@@ -410,14 +421,25 @@ def assemble_legion(zones: ZoneManager, controller_idx: int) -> str:
     return f"assembled {name}"
 
 
-def abandon_hand(zones: ZoneManager, controller_idx: int) -> str:
+def abandon_hand(
+    zones: ZoneManager,
+    controller_idx: int,
+    game: GameState | None = None,
+) -> str:
     """Abandon: discard two cards from hand."""
     hand = zones.player_zones[controller_idx].hand
     discarded = 0
     while hand and discarded < 2:
-        card = hand.pop()
+        card = hand[-1]
         if isinstance(card, CardObject):
-            zones.player_zones[controller_idx].graveyard.append(card)
+            zones.put_card_in_zone(
+                card,
+                Zone.GRAVEYARD,
+                controller_idx,
+                'discard',
+                game,
+                from_zone=Zone.HAND,
+            )
             discarded += 1
     return f"abandoned {discarded} card(s)"
 

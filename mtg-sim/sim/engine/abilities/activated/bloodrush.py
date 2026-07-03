@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 from deck_registry import CardInfo
 from engine.abilities.activated._cost_keyword import (
@@ -16,6 +17,9 @@ from engine.abilities.keywords.actions.targets import find_creature_by_uid
 from engine.core.mana import ManaCost
 from engine.core.zones import ZoneManager
 from engine.core.zone_card_lookup import hand_card_with_info
+
+if TYPE_CHECKING:
+    from engine.core.game_state import GameState
 
 _BLOODRUSH_COST_RE = re.compile(
     r'bloodrush\s*[—–-]\s*((?:\{[^}]+\})+)',
@@ -69,6 +73,7 @@ def apply_bloodrush(
     player_idx: int,
     hand_idx: int,
     target_creature_uid: str | None,
+    game: GameState | None = None,
 ) -> str | None:
     """Discard the bloodrush card and grant +X/+0 to a target creature."""
     loaded = hand_card_with_info(zones, player_idx, hand_idx)
@@ -81,7 +86,7 @@ def apply_bloodrush(
     if target is None:
         return None
     power = bloodrush_power(card_info)
-    discard_from_hand(zones, player_idx, hand_idx)
+    discard_from_hand(zones, player_idx, hand_idx, game)
     put_power_bonus(target, power)
     name = card_info.name
     return f"bloodrush {name}: +{power}/+0 on {target.name}"
