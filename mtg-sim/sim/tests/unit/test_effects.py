@@ -3,22 +3,28 @@
 from engine.cards.effects import (
     CardEffectContext,
     ConditionalEffect,
+    CreateToken,
     DealDamage,
     DealDamageToPlayer,
     DestroyPermanent,
+    DiscardCards,
     DrainLife,
     DrawCards,
     EffectList,
     ExilePermanent,
     GainLife,
     LoseLife,
+    LoseLifeEachOpponent,
     Mill,
     Modal,
     NoEffect,
     PumpUntilEOT,
     Scry,
+    Surveil,
     TreasureHunt,
 )
+from engine.cards.effect_serde import effect_from_dict, effect_to_dict
+from engine.cards.oracle_parse import TokenBlueprint
 from engine.cards.script_loader import has_script, resolve_scripted_spell, scripted_card_names
 from engine.core.game_object import CardObject
 from tests.conftest import (
@@ -250,3 +256,53 @@ def test_collective_brutality_drain_mode():
     assert 'drained 2' in detail
     assert game.players[1].life == 18
     assert game.players[0].life == 22
+
+
+def test_surveil_puts_cards_in_graveyard():
+    """Surveil mills the top of the controller's library."""
+    game = fresh_game()
+    add_to_library(make_instant('Top'), 0, game.zones)
+    detail = Surveil(count=1).apply(_ctx(game))
+    assert 'surveiled 1' in detail
+    assert len(game.zones.player_zones[0].graveyard) == 1
+
+
+def test_discard_cards_from_controller_hand():
+    """DiscardCards removes cards from the chosen player's hand."""
+    game = fresh_game()
+    game.zones.player_zones[0].hand.append(
+        CardObject(controller_idx=0, owner_idx=0, card_info=make_instant('Hand Card')),
+    )
+    detail = DiscardCards(count=1, target='controller').apply(_ctx(game))
+    assert 'discarded Hand Card' in detail
+    assert len(game.zones.player_zones[0].hand) == 0
+
+
+def test_create_token_puts_permanent_on_battlefield():
+    """CreateToken enters a token permanent for the controller."""
+    game = fresh_game()
+    blueprint = TokenBlueprint(
+        name='Soldier Token',
+        type_line='Creature — Soldier',
+        power='1',
+        toughness='1',
+        colors=['W'],
+    )
+    detail = CreateToken(blueprint=blueprint).apply(_ctx(game))
+    assert 'created Soldier Token' in detail
+    assert len(game.zones.battlefield) == 1
+
+
+def test_lose_life_each_opponent_in_two_player_game():
+    """LoseLifeEachOpponent reduces the opponent's life in a duel."""
+    game = fresh_game()
+    detail = LoseLifeEachOpponent(amount=3).apply(_ctx(game))
+    assert 'each opponent lost 3 life' in detail
+    assert game.players[1].life == 17
+
+
+def test_effect_serde_roundtrip_scry_and_surveil():
+    """Scry and Surveil survive JSON serialization."""
+    for effect in (Scry(count=2), Surveil(count=3)):
+        restored = effect_from_dict(effect_to_dict(effect))
+        assert restored == effect

@@ -10,7 +10,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
-from engine.abilities.keywords.actions.library import mill_cards, scry_cards
+from engine.abilities.keywords.actions.library import mill_cards, scry_cards, surveil_cards
+from engine.abilities.keywords.actions.specialty import discard_from_hand
+from engine.abilities.keywords.actions.tokens import create_token_from_blueprint
+from engine.cards.oracle_parse import TokenBlueprint
 from engine.abilities.keywords.actions.targets import find_creature_by_uid
 from engine.core.game_object import CardObject, Permanent, SpellOnStack
 from engine.core.zones import Zone
@@ -21,6 +24,7 @@ if TYPE_CHECKING:
 
 PlayerTarget = Literal['controller', 'opponent', 'target_player']
 MillTarget = Literal['controller', 'opponent', 'each', 'target_player']
+DiscardTarget = Literal['controller', 'target_player', 'each_opponent']
 DrawFn = Callable[[int, int], list[CardObject]]
 
 
@@ -366,6 +370,82 @@ class Scry(CardEffect):
             self.bottom_indices,
         )
         return f"scry {self.count} (put {bottomed} on bottom)"
+
+
+@dataclass(frozen=True)
+class Surveil(CardEffect):
+    """Surveil N: put the top cards into the graveyard (MVP)."""
+
+    count: int
+
+    def apply(self, ctx: CardEffectContext) -> str:
+        """Mill the top of the controller's library for surveil."""
+        milled = surveil_cards(
+            ctx.game.zones,
+            ctx.controller_idx,
+            self.count,
+            ctx.game,
+        )
+        return f"surveiled {milled} to graveyard"
+
+
+@dataclass(frozen=True)
+class DiscardCards(CardEffect):
+    """Discard cards from a player's hand."""
+
+    count: int
+    target: DiscardTarget = 'controller'
+
+    def apply(self, ctx: CardEffectContext) -> str:
+        """Discard the configured number of cards from the chosen hand(s)."""
+        if self.count <= 0:
+            return ''
+        victims: list[int]
+        if self.target == 'each_opponent':
+            victims = [1 - ctx.controller_idx]
+        elif self.target == 'target_player':
+            victims = [ctx.resolve_player('target_player')]
+        else:
+            victims = [ctx.controller_idx]
+        parts: list[str] = []
+        for victim in victims:
+            for _ in range(self.count):
+                parts.append(discard_from_hand(ctx.game.zones, victim, ctx.game))
+        return '; '.join(parts)
+
+
+@dataclass(frozen=True)
+class CreateToken(CardEffect):
+    """Create one or more creature tokens from a blueprint."""
+
+    blueprint: TokenBlueprint
+    count: int = 1
+
+    def apply(self, ctx: CardEffectContext) -> str:
+        """Create tokens on the battlefield for the controller."""
+        names: list[str] = []
+        for _ in range(max(1, self.count)):
+            names.append(create_token_from_blueprint(
+                ctx.game.zones,
+                ctx.controller_idx,
+                self.blueprint,
+            ))
+        return f"created {', '.join(names)}"
+
+
+@dataclass(frozen=True)
+class LoseLifeEachOpponent(CardEffect):
+    """Each opponent loses life (two-player: the opponent)."""
+
+    amount: int
+
+    def apply(self, ctx: CardEffectContext) -> str:
+        """Reduce each opponent's life total."""
+        if self.amount <= 0:
+            return ''
+        opponent = 1 - ctx.controller_idx
+        ctx.game.players[opponent].life -= self.amount
+        return f"each opponent lost {self.amount} life"
 
 
 @dataclass(frozen=True)

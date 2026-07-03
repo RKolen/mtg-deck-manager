@@ -20,6 +20,7 @@ from deck_registry import CardInfo
 from engine.cards.builtin_scripts import BUILTIN_CARD_SCRIPTS
 from engine.cards.effect_serde import EffectDict, effects_from_json, effects_to_json
 from engine.cards.effects import CardEffect
+from engine.cards.oracle_infer import infer_effects_from_oracle
 
 _DEFAULT_CACHE_ROOT = Path(__file__).resolve().parents[2] / 'data' / 'deck_scripts'
 
@@ -117,15 +118,18 @@ def _manifest_to_scripts(manifest: DeckScriptManifest) -> dict[str, tuple[CardEf
 
 
 def _seed_card_script(
-    name: str,
+    card: CardInfo,
     previous_cards: dict[str, list[EffectDict]],
 ) -> list[EffectDict] | None:
-    if name in previous_cards:
-        return list(previous_cards[name])
-    builtin = BUILTIN_CARD_SCRIPTS.get(name)
-    if builtin is None:
-        return None
-    return effects_to_json(builtin)
+    if card.name in previous_cards:
+        return list(previous_cards[card.name])
+    builtin = BUILTIN_CARD_SCRIPTS.get(card.name)
+    if builtin is not None:
+        return effects_to_json(builtin)
+    inferred = infer_effects_from_oracle(card)
+    if inferred is not None:
+        return effects_to_json(inferred)
+    return None
 
 
 def sync_deck_scripts(
@@ -142,9 +146,11 @@ def sync_deck_scripts(
         return _manifest_to_scripts(existing)
 
     previous_cards = existing.cards if existing is not None else {}
+    cards_by_name = {card.name: card for card in cards if card.name}
     card_entries: dict[str, list[EffectDict]] = {}
     for name in _unique_card_names(cards):
-        seeded = _seed_card_script(name, previous_cards)
+        card = cards_by_name[name]
+        seeded = _seed_card_script(card, previous_cards)
         if seeded is not None:
             card_entries[name] = seeded
 

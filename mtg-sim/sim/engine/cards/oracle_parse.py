@@ -12,13 +12,16 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from engine.abilities.keywords.other.affinity import affinity_reduction
+from engine.abilities.keywords.actions._parse import word_to_int
 
 if TYPE_CHECKING:
     from deck_registry import CardInfo
     from engine.core.zones import ZoneManager
+
+DiscardTarget = Literal['controller', 'target_player', 'each_opponent']
 
 _WORD_TO_INT = {"a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4}
 
@@ -75,6 +78,84 @@ def parse_life_gain(text: str) -> int:
     """Return life gained from a 'gain N life' effect, or 0."""
     m = re.search(r"gain (\d+) life", text, re.IGNORECASE)
     return int(m.group(1)) if m else 0
+
+
+def parse_each_opponent_life_loss(text: str) -> int:
+    """Return life lost from 'each opponent loses N life', or 0."""
+    m = re.search(r"each opponent loses (\d+) life", text, re.IGNORECASE)
+    return int(m.group(1)) if m else 0
+
+
+def parse_discard(text: str) -> tuple[int, DiscardTarget] | None:
+    """Return (count, target) for discard effects, or None when absent.
+
+    target is one of: controller, target_player, each_opponent.
+    """
+    each = re.search(
+        r"each opponent discards (?:a|an|one|(\w+|\d+)) cards?",
+        text,
+        re.IGNORECASE,
+    )
+    if each is not None:
+        count = word_to_int(each.group(1)) if each.group(1) else 1
+        return count, 'each_opponent'
+    target_player = re.search(
+        r"target (?:player|opponent) discards (?:a|an|one|(\w+|\d+)) cards?",
+        text,
+        re.IGNORECASE,
+    )
+    if target_player is not None:
+        count = word_to_int(target_player.group(1)) if target_player.group(1) else 1
+        return count, 'target_player'
+    self_discard = re.search(
+        r"(?:you )?discards? (?:a|an|one|(\w+|\d+)) cards?",
+        text,
+        re.IGNORECASE,
+    )
+    if self_discard is not None:
+        count = word_to_int(self_discard.group(1)) if self_discard.group(1) else 1
+        return count, 'controller'
+    return None
+
+
+def parse_token_create_count(text: str) -> int:
+    """Return how many tokens a create clause makes (0 when none)."""
+    if not re.search(r"create ", text, re.IGNORECASE):
+        return 0
+    numbered = re.search(
+        r"create (two|three|four|five|six|seven|eight|nine|ten|\d+)",
+        text,
+        re.IGNORECASE,
+    )
+    if numbered is not None:
+        return word_to_int(numbered.group(1))
+    if re.search(r"create (?:a|an) ", text, re.IGNORECASE):
+        return 1
+    return 0
+
+
+def parse_modal_clauses(text: str) -> list[str] | None:
+    """Split a 'Choose one' spell into bullet clause oracle fragments."""
+    if not re.search(r"choose (?:one|two|up to one|any number)", text, re.IGNORECASE):
+        return None
+    if '•' in text or '\u2022' in text:
+        parts = re.split(r"[•\u2022]", text)
+        clauses = [part.strip().strip('—–-').strip() for part in parts[1:] if part.strip()]
+        if len(clauses) >= 2:
+            return clauses
+    lines = text.splitlines()
+    clauses: list[str] = []
+    past_header = False
+    for line in lines:
+        if re.search(r"choose (?:one|two|up to one)", line, re.IGNORECASE):
+            past_header = True
+            continue
+        if not past_header:
+            continue
+        stripped = re.sub(r"^[\s\-–—]+\s*", "", line.strip())
+        if stripped:
+            clauses.append(stripped)
+    return clauses if len(clauses) >= 2 else None
 
 
 def parse_token_blueprint(text: str) -> TokenBlueprint | None:
