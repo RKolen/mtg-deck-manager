@@ -179,6 +179,7 @@ class GraveyardCastMixin(SpellStackPlacementMixin):
                 self.state.zones,
                 0,
                 creature_id,
+                self.state,
             )
             if tap_err:
                 return tap_err

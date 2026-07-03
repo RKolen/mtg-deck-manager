@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from engine.core.game_object import Permanent, effective_power
 from engine.core.zones import Zone, ZoneMoveEvent
 from engine.rules.triggers import TriggerDefinition, TriggerEvent
+
+if TYPE_CHECKING:
+    from engine.core.game_state import GameState
 
 
 def is_controller_creature_enters_battlefield(
@@ -13,6 +18,7 @@ def is_controller_creature_enters_battlefield(
     *,
     exclude_source_id: int | None = None,
     min_power: int | None = None,
+    game: GameState | None = None,
 ) -> bool:
     """True when a creature entered the battlefield under the controller."""
     if not (
@@ -25,7 +31,7 @@ def is_controller_creature_enters_battlefield(
         return False
     if exclude_source_id is not None and event.obj.obj_id == exclude_source_id:
         return False
-    if min_power is not None and effective_power(event.obj) < min_power:
+    if min_power is not None and effective_power(event.obj, game) < min_power:
         return False
     return True
 

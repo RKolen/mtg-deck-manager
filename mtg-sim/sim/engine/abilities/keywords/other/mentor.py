@@ -14,9 +14,9 @@ if TYPE_CHECKING:
     from engine.core.game_state import GameState
 
 
-def has_mentor(perm: Permanent) -> bool:
+def has_mentor(perm: Permanent, game: GameState | None = None) -> bool:
     """Return True when the permanent has mentor."""
-    return has_keyword(perm, 'Mentor')
+    return has_keyword(perm, 'Mentor', game)
 
 
 def has_mentor_card(card: CardInfo) -> bool:
@@ -30,9 +30,9 @@ def apply_mentor_on_attack(
     attacker_ids: list[str],
 ) -> str | None:
     """Put a +1/+1 counter on another attacking creature with less power."""
-    if not has_mentor(mentor):
+    if not has_mentor(mentor, game):
         return None
-    mentor_power = effective_power(mentor)
+    mentor_power = effective_power(mentor, game)
     best: Permanent | None = None
     best_power = -1
     for attacker_id in attacker_ids:
@@ -41,7 +41,7 @@ def apply_mentor_on_attack(
         perm = game.zones.find_permanent(int(attacker_id))
         if perm is None or perm.controller_idx != mentor.controller_idx:
             continue
-        power = effective_power(perm)
+        power = effective_power(perm, game)
         if power >= mentor_power:
             continue
         if best is None or power > best_power:

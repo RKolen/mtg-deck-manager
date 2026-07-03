@@ -12,9 +12,9 @@ if TYPE_CHECKING:
     from engine.core.game_state import GameState
 
 
-def has_training(perm: Permanent) -> bool:
+def has_training(perm: Permanent, game: GameState | None = None) -> bool:
     """Return True when the permanent has training."""
-    return has_keyword(perm, 'Training')
+    return has_keyword(perm, 'Training', game)
 
 
 def apply_training_on_attack(
@@ -23,16 +23,16 @@ def apply_training_on_attack(
     attacker_ids: list[str],
 ) -> str | None:
     """Put a +1/+1 counter on this creature when a stronger ally attacks."""
-    if not has_training(trainee):
+    if not has_training(trainee, game):
         return None
-    trainee_power = effective_power(trainee)
+    trainee_power = effective_power(trainee, game)
     for attacker_id in attacker_ids:
         if attacker_id == str(trainee.obj_id):
             continue
         perm = game.zones.find_permanent(int(attacker_id))
         if perm is None or perm.controller_idx != trainee.controller_idx:
             continue
-        if effective_power(perm) > trainee_power:
+        if effective_power(perm, game) > trainee_power:
             put_plus_counters(trainee, 1)
             return f"training +1/+1 on {trainee.name}"
     return None

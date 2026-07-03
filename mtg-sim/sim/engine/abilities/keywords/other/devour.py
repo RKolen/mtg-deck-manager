@@ -44,7 +44,7 @@ def apply_devour_etb(game: GameState, permanent: Permanent) -> str | None:
         return None
     amount = devour_amount(permanent.oracle_text)
     candidates = other_controlled_creatures(permanent, game.zones.battlefield)
-    candidates.sort(key=effective_power)
+    candidates.sort(key=lambda perm: effective_power(perm, game))
     sacrificed = 0
     for victim in candidates[:amount]:
         game.zones.leave_battlefield(victim, Zone.GRAVEYARD, 'devour', game)

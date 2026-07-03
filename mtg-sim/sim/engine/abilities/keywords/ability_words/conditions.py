@@ -32,11 +32,11 @@ if TYPE_CHECKING:
 
 def is_controller_creature_enters(
     event: TriggerEvent,
-    _game: GameState,
+    game: GameState,
     definition: TriggerDefinition,
 ) -> bool:
     """Rally: a creature entered the battlefield under your control."""
-    return is_controller_creature_enters_battlefield(event, definition)
+    return is_controller_creature_enters_battlefield(event, definition, game=game)
 
 
 def is_controller_land_enters(
@@ -228,7 +228,7 @@ def is_battalion_mass_attack(
 
 def _max_creature_power(game: GameState, player_idx: int) -> int:
     powers = [
-        effective_power(perm)
+        effective_power(perm, game)
         for perm in game.zones.battlefield
         if perm.controller_idx == player_idx and 'Creature' in perm.type_line
     ]
@@ -373,7 +373,7 @@ def is_domain_spell_cast(
 
 def _distinct_creature_powers(game: GameState, player_idx: int) -> int:
     powers = {
-        effective_power(perm)
+        effective_power(perm, game)
         for perm in game.zones.battlefield
         if perm.controller_idx == player_idx and 'Creature' in perm.type_line
     }
@@ -442,16 +442,16 @@ def is_pack_tactics_attack(
     source = _source_attacker(event, game, definition)
     if source is None:
         return False
-    source_power = effective_power(source)
-    source_toughness = effective_toughness(source)
+    source_power = effective_power(source, game)
+    source_toughness = effective_toughness(source, game)
     for perm in game.zones.battlefield:
         if perm.controller_idx != definition.controller_idx:
             continue
         if perm.obj_id == source.obj_id or 'Creature' not in perm.type_line:
             continue
-        if effective_power(perm) > source_power:
+        if effective_power(perm, game) > source_power:
             return True
-        if effective_toughness(perm) > source_toughness:
+        if effective_toughness(perm, game) > source_toughness:
             return True
     return False
 

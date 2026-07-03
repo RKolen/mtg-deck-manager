@@ -13,9 +13,9 @@ if TYPE_CHECKING:
     from engine.core.game_state import GameState
 
 
-def has_myriad(perm: Permanent) -> bool:
+def has_myriad(perm: Permanent, game: GameState | None = None) -> bool:
     """Return True when the permanent has myriad."""
-    return has_keyword(perm, 'Myriad')
+    return has_keyword(perm, 'Myriad', game)
 
 
 def has_myriad_card(card: CardInfo) -> bool:
@@ -30,7 +30,7 @@ def apply_myriad_on_attack(
     defending_player_idx: int,
 ) -> str | None:
     """Create tapped token copies attacking each opponent except the defender."""
-    if not has_myriad(attacker):
+    if not has_myriad(attacker, game):
         return None
     player_count = len(game.players)
     created: list[str] = []
@@ -44,8 +44,8 @@ def apply_myriad_on_attack(
             owner_idx=attacker.owner_idx,
             name=attacker.name,
             type_line=attacker.type_line,
-            power=str(effective_power(attacker)),
-            toughness=str(effective_toughness(attacker)),
+            power=str(effective_power(attacker, game)),
+            toughness=str(effective_toughness(attacker, game)),
             oracle_text=attacker.oracle_text,
             created_by_obj_id=attacker.obj_id,
         )

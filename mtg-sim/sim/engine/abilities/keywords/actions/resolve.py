@@ -280,7 +280,7 @@ def _apply_fight(ctx: ActionContext) -> str | None:
     opponent = find_creature_by_uid(ctx.zones, ctx.second_creature_uid)
     if fighter is None or opponent is None:
         return "fight (need two creature targets)"
-    dmg_a, dmg_b = fight_creatures(fighter, opponent)
+    dmg_a, dmg_b = fight_creatures(fighter, opponent, ctx.game)
     return f"{fighter.name} fought {opponent.name} ({dmg_a}/{dmg_b} damage)"
 
 

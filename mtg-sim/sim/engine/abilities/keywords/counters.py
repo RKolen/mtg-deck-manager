@@ -12,29 +12,29 @@ if TYPE_CHECKING:
     from engine.core.game_state import GameState
 
 
-def has_infect(perm: Permanent) -> bool:
+def has_infect(perm: Permanent, game: GameState | None = None) -> bool:
     """Return True when combat damage gives poison or -1/-1 counters."""
-    return has_keyword(perm, 'Infect')
+    return has_keyword(perm, 'Infect', game)
 
 
-def has_wither(perm: Permanent) -> bool:
+def has_wither(perm: Permanent, game: GameState | None = None) -> bool:
     """Return True when damage to creatures gives -1/-1 counters."""
-    return has_keyword(perm, 'Wither')
+    return has_keyword(perm, 'Wither', game)
 
 
-def has_persist(perm: Permanent) -> bool:
+def has_persist(perm: Permanent, game: GameState | None = None) -> bool:
     """Return True when the creature returns with -1/-1 if it had none."""
-    return has_keyword(perm, 'Persist')
+    return has_keyword(perm, 'Persist', game)
 
 
-def has_undying(perm: Permanent) -> bool:
+def has_undying(perm: Permanent, game: GameState | None = None) -> bool:
     """Return True when the creature returns with +1/+1 if it had none."""
-    return has_keyword(perm, 'Undying')
+    return has_keyword(perm, 'Undying', game)
 
 
-def has_modular(perm: Permanent) -> bool:
+def has_modular(perm: Permanent, game: GameState | None = None) -> bool:
     """Return True when the permanent has modular."""
-    return has_keyword(perm, 'Modular')
+    return has_keyword(perm, 'Modular', game)
 
 
 def is_indestructible(perm: Permanent, game: GameState | None = None) -> bool:

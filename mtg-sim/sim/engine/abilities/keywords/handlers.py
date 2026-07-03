@@ -37,17 +37,17 @@ def apply_combat_damage_to_creature(
     damage = reduce_combat_damage(receiver, damage)
     if damage <= 0:
         return
-    if has_infect(source):
+    if has_infect(source, game):
         receiver.counters['-1/-1'] = receiver.counters.get('-1/-1', 0) + damage
         return
-    if has_wither(source):
+    if has_wither(source, game):
         receiver.counters['-1/-1'] = receiver.counters.get('-1/-1', 0) + damage
         return
     damage = apply_damage_with_replacements(game, receiver, source, damage)
     if damage <= 0:
         return
     receiver.damage_marked += damage
-    if has_deathtouch(source):
+    if has_deathtouch(source, game):
         toughness = effective_toughness(receiver, game)
         receiver.damage_marked = max(receiver.damage_marked, toughness)
 

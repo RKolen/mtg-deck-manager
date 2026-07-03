@@ -70,7 +70,7 @@ def can_attack(perm: Permanent, game: GameState | None = None) -> bool:
         )
         and not perm.tapped
         and not sick
-        and not has_keyword(perm, 'Defender')
+        and not has_keyword(perm, 'Defender', game)
         and not blocks_attack(perm)
     )
 
@@ -82,17 +82,21 @@ def can_block(perm: Permanent) -> bool:
     return perm.counters.get('unleash_no_block', 0) <= 0
 
 
-def _evasion_allows_block(blocker: Permanent, attacker: Permanent) -> bool:
+def _evasion_allows_block(
+    blocker: Permanent,
+    attacker: Permanent,
+    game: GameState | None = None,
+) -> bool:
     """Return False when evasion prevents this blocker from blocking the attacker."""
-    if has_keyword(attacker, 'Flying'):
-        return has_keyword(blocker, 'Flying') or has_keyword(blocker, 'Reach')
-    if has_keyword(attacker, 'Horsemanship'):
-        return has_keyword(blocker, 'Horsemanship')
-    if has_keyword(attacker, 'Shadow'):
-        return has_keyword(blocker, 'Shadow')
-    if has_keyword(attacker, 'Fear') or has_keyword(attacker, 'Intimidate'):
+    if has_keyword(attacker, 'Flying', game):
+        return has_keyword(blocker, 'Flying', game) or has_keyword(blocker, 'Reach', game)
+    if has_keyword(attacker, 'Horsemanship', game):
+        return has_keyword(blocker, 'Horsemanship', game)
+    if has_keyword(attacker, 'Shadow', game):
+        return has_keyword(blocker, 'Shadow', game)
+    if has_keyword(attacker, 'Fear', game) or has_keyword(attacker, 'Intimidate', game):
         return is_artifact_creature(blocker)
-    if not skulk_allows_block(blocker, attacker):
+    if not skulk_allows_block(blocker, attacker, game):
         return False
     return True
 
@@ -101,54 +105,75 @@ def legal_blocker(blocker: Permanent, attacker: Permanent, game: GameState) -> b
     """Return whether blocker may block attacker (evasion keywords)."""
     if prowl_unblockable(attacker, game) or not can_block(blocker):
         return False
-    return _evasion_allows_block(blocker, attacker)
+    return _evasion_allows_block(blocker, attacker, game)
 
 
-def menace_requires_two_blockers(attacker: Permanent) -> bool:
+def menace_requires_two_blockers(
+    attacker: Permanent,
+    game: GameState | None = None,
+) -> bool:
     """Return True when menace requires at least two blockers."""
-    return has_keyword(attacker, 'Menace')
+    return has_keyword(attacker, 'Menace', game)
 
 
-def has_enough_blockers(attacker: Permanent, blockers: list[Permanent]) -> bool:
+def has_enough_blockers(
+    attacker: Permanent,
+    blockers: list[Permanent],
+    game: GameState | None = None,
+) -> bool:
     """Return True when declared blockers satisfy menace."""
-    if menace_requires_two_blockers(attacker):
+    if menace_requires_two_blockers(attacker, game):
         return len(blockers) >= 2
     return bool(blockers)
 
 
-def should_tap_attacker(attacker: Permanent) -> bool:
+def should_tap_attacker(
+    attacker: Permanent,
+    game: GameState | None = None,
+) -> bool:
     """Return True when declaring an attack should tap the attacker."""
-    return not has_keyword(attacker, 'Vigilance')
+    return not has_keyword(attacker, 'Vigilance', game)
 
 
-def deals_in_first_strike_step(perm: Permanent) -> bool:
+def deals_in_first_strike_step(
+    perm: Permanent,
+    game: GameState | None = None,
+) -> bool:
     """Return True when the permanent assigns damage in the first-strike step."""
-    return has_keyword(perm, 'First strike') or has_keyword(perm, 'Double strike')
+    return has_keyword(perm, 'First strike', game) or has_keyword(perm, 'Double strike', game)
 
 
-def deals_in_regular_step(perm: Permanent) -> bool:
+def deals_in_regular_step(
+    perm: Permanent,
+    game: GameState | None = None,
+) -> bool:
     """Return True when the permanent assigns damage in the regular damage step."""
-    return has_keyword(perm, 'Double strike') or not deals_in_first_strike_step(perm)
+    return has_keyword(perm, 'Double strike', game) or not deals_in_first_strike_step(perm, game)
 
 
-def has_lifelink(perm: Permanent) -> bool:
+def has_lifelink(perm: Permanent, game: GameState | None = None) -> bool:
     """Return True when combat damage from this permanent gains life."""
-    return has_keyword(perm, 'Lifelink')
+    return has_keyword(perm, 'Lifelink', game)
 
 
-def has_trample(perm: Permanent) -> bool:
+def has_trample(perm: Permanent, game: GameState | None = None) -> bool:
     """Return True when excess combat damage may trample to the player."""
-    return has_keyword(perm, 'Trample')
+    return has_keyword(perm, 'Trample', game)
 
 
-def has_deathtouch(perm: Permanent) -> bool:
+def has_deathtouch(perm: Permanent, game: GameState | None = None) -> bool:
     """Return True when any combat damage from this permanent is lethal."""
-    return has_keyword(perm, 'Deathtouch')
+    return has_keyword(perm, 'Deathtouch', game)
 
 
-def lethal_damage_needed(source: Permanent, receiver: Permanent, receiver_toughness: int) -> int:
+def lethal_damage_needed(
+    source: Permanent,
+    receiver: Permanent,
+    receiver_toughness: int,
+    game: GameState | None = None,
+) -> int:
     """Return combat damage needed to destroy receiver from source."""
-    if has_deathtouch(source):
+    if has_deathtouch(source, game):
         return 1
     return max(0, receiver_toughness - receiver.damage_marked)
 

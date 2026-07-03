@@ -2,12 +2,24 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from engine.abilities.keywords.registry import detect_keywords, has_registered_keyword
 from engine.core.game_object import Permanent
+from engine.rules.continuous import has_creature_keyword
+
+if TYPE_CHECKING:
+    from engine.core.game_state import GameState
 
 
-def has_keyword(perm: Permanent, keyword: str) -> bool:
-    """Return True when the permanent's oracle text contains keyword."""
+def has_keyword(
+    perm: Permanent,
+    keyword: str,
+    game: GameState | None = None,
+) -> bool:
+    """Return True when the permanent has keyword, respecting layer 6 if game is set."""
+    if game is not None:
+        return has_creature_keyword(game, perm, keyword)
     return has_registered_keyword(perm.oracle_text, keyword)
 
 

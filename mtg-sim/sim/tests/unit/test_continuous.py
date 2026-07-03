@@ -1,6 +1,8 @@
 """Unit tests for engine/rules/continuous.py (layer system, Phase E9)."""
 
 from engine.core.game_object import CardObject, Modifier, effective_power, effective_toughness
+from engine.abilities.keywords.combat import has_deathtouch, lethal_damage_needed
+from engine.abilities.keywords.targeting import can_target_permanent
 from engine.rules.continuous import abilities_suppressed, has_creature_keyword
 from tests.conftest import fresh_game, make_card, make_creature, place_on_battlefield
 
@@ -79,3 +81,43 @@ def test_layer_7c_modifier_deltas_stack():
     bear.modifiers.append(Modifier(layer=7, sublayer='c', power_delta=1, toughness_delta=2))
     assert effective_power(bear, game) == 5
     assert effective_toughness(bear, game) == 5
+
+
+def test_humility_strips_hexproof_for_targeting():
+    """Layer 6 removes hexproof so opponents can target creatures under Humility."""
+    game = fresh_game()
+    oracle = (
+        "All creatures lose all abilities and have base power and toughness 1/1."
+    )
+    place_on_battlefield(
+        make_card(name='Humility', type_line='Enchantment', oracle=oracle),
+        0,
+        game.zones,
+    )
+    hexproof = place_on_battlefield(
+        make_creature('Slippery', 2, 2, oracle='Hexproof.'),
+        0,
+        game.zones,
+    )
+    assert not can_target_permanent(hexproof, 1, game=game)
+
+
+def test_humility_strips_deathtouch_in_combat():
+    """Layer 6 removes deathtouch; lethal damage needs full toughness."""
+    game = fresh_game()
+    oracle = (
+        "All creatures lose all abilities and have base power and toughness 1/1."
+    )
+    place_on_battlefield(
+        make_card(name='Humility', type_line='Enchantment', oracle=oracle),
+        0,
+        game.zones,
+    )
+    snake = place_on_battlefield(
+        make_creature('Snake', 1, 1, oracle='Deathtouch.'),
+        0,
+        game.zones,
+    )
+    bear = place_on_battlefield(make_creature('Bear', 2, 2), 1, game.zones)
+    assert not has_deathtouch(snake, game)
+    assert lethal_damage_needed(snake, bear, 2, game) == 2

@@ -618,7 +618,7 @@ def validate_announce_cast(
         ),
         lambda: _reject_keyword(opts.costs.paid_casualty, paid.casualty, name, "casualty"),
         lambda: casualty_sacrifice_error(
-            ctx.zones,
+            ctx.game,
             ctx.player_idx,
             card_info,
             opts.costs.paid_casualty,

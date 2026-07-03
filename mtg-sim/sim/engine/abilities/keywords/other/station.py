@@ -79,7 +79,7 @@ def station_power_error(  # pylint: disable=too-many-return-statements
             return f'{perm.name} is not a creature'
         if perm.tapped:
             return f'{perm.name} is already tapped'
-        total += effective_power(perm)
+        total += effective_power(perm, game)
     if total < required:
         return f'Need station power {required}, have {total}'
     return None

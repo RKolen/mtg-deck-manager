@@ -82,7 +82,7 @@ class Stack:
 
         obj = self.objects.pop()
 
-        if _has_targets(obj) and _all_targets_illegal(obj, zones):
+        if _has_targets(obj) and _all_targets_illegal(obj, zones, game):
             _move_spell_card_to_graveyard(obj, zones)
             return StackResolution(obj=obj, fizzled=True, reason="all_targets_illegal")
 
@@ -151,7 +151,12 @@ def _has_targets(obj: StackObject) -> bool:
     return bool(_get_targets(obj))
 
 
-def _target_is_legal(target: Target, zones: ZoneManager, obj: StackObject) -> bool:
+def _target_is_legal(
+    target: Target,
+    zones: ZoneManager,
+    obj: StackObject,
+    game: GameState | None = None,
+) -> bool:
     """True when a target is still legal for resolution (CR 608.2b)."""
     if target.player_idx is not None:
         return True
@@ -160,19 +165,21 @@ def _target_is_legal(target: Target, zones: ZoneManager, obj: StackObject) -> bo
     perm = zones.find_permanent(target.obj_id)
     if perm is None:
         return False
-    return _permanent_target_legal(perm, obj.controller_idx, _source_card_for_targeting(obj))
+    return _permanent_target_legal(perm, obj.controller_idx, _source_card_for_targeting(obj), game)
 
 
 def _permanent_target_legal(
     target: Permanent,
     controller_idx: int,
     source_card: CardInfo | None = None,
+    game: GameState | None = None,
 ) -> bool:
     """Apply hexproof, shroud, and protection to a permanent target."""
     return can_target_permanent(
         target,
         controller_idx,
         source_card=source_card,
+        game=game,
     )
 
 
@@ -196,11 +203,15 @@ def _ward_counters_resolution(obj: StackObject, zones: ZoneManager, game: GameSt
     return False
 
 
-def _all_targets_illegal(obj: StackObject, zones: ZoneManager) -> bool:
+def _all_targets_illegal(
+    obj: StackObject,
+    zones: ZoneManager,
+    game: GameState | None = None,
+) -> bool:
     """True when every declared target is illegal (triggers fizzle)."""
     targets = _get_targets(obj)
     return bool(targets) and all(
-        not _target_is_legal(t, zones, obj) for t in targets
+        not _target_is_legal(t, zones, obj, game) for t in targets
     )
 
 

@@ -57,7 +57,7 @@ def test_casualty_requires_creature_power():
     weak = place_on_battlefield(make_creature('Weak', 1, 1), 0, game.zones)
     assert has_casualty(spell)
     assert casualty_power_required(spell) == 2
-    err = casualty_sacrifice_error(game.zones, 0, spell, True, [weak.obj_id])
+    err = casualty_sacrifice_error(game, 0, spell, True, [weak.obj_id])
     assert err is not None
 
 

@@ -31,6 +31,7 @@ def is_evolve_creature_enters(
         event,
         definition,
         exclude_source_id=definition.source_permanent_id,
+        game=game,
     ):
         return False
     if not isinstance(event, ZoneMoveEvent) or not isinstance(event.obj, Permanent):
@@ -38,7 +39,7 @@ def is_evolve_creature_enters(
     source = game.zones.find_permanent(definition.source_permanent_id)
     if source is None:
         return False
-    return effective_power(event.obj) > effective_power(source)
+    return effective_power(event.obj, game) > effective_power(source, game)
 
 
 class EvolveEffect(Effect):

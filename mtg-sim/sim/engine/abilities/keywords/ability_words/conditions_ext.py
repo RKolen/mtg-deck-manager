@@ -399,6 +399,7 @@ def is_kinfall_creature_enters(
         event,
         definition,
         min_power=4,
+        game=_game,
     )
 
 

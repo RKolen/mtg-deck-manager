@@ -49,7 +49,7 @@ def test_casualty_keyword_validates_creature_sacrifice():
     assert has_casualty_card(spell)
     assert supports_casualty_copies(spell)
     weak = place_on_battlefield(make_creature('Weak', 1, 1), 0, game.zones)
-    casualty_err = casualty_sacrifice_error(game.zones, 0, spell, True, [weak.obj_id])
+    casualty_err = casualty_sacrifice_error(game, 0, spell, True, [weak.obj_id])
     assert casualty_err is not None
 
 

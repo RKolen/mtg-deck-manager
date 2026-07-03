@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 from deck_registry import CardInfo
 from engine.abilities.keywords.casting._timing import INSTANT_SPEED_PHASES
 from engine.abilities.keywords.casting.alt_cost_mana import alt_cost_mana_needed
 from engine.abilities.keywords.registry import has_registered_keyword
-from engine.core.game_object import Permanent
+from engine.core.game_object import Permanent, effective_power
 from engine.core.mana import ManaCost
 from engine.core.zones import ZoneManager
-from engine.core.game_object import effective_power
+
+if TYPE_CHECKING:
+    from engine.core.game_state import GameState
 
 _HARMONIZE_COST_RE = re.compile(
     r'harmonize\s*((?:\{[^}]+\})+)',
@@ -90,9 +93,12 @@ def tap_for_harmonize(zones: ZoneManager, creature_id: int) -> None:
     perm.tapped = True
 
 
-def harmonize_generic_reduction(perm: Permanent) -> int:
+def harmonize_generic_reduction(
+    perm: Permanent,
+    game: GameState | None = None,
+) -> int:
     """Return generic mana reduction from tapping this creature for harmonize."""
-    return effective_power(perm)
+    return effective_power(perm, game)
 
 
 def resolve_harmonize_mana(
@@ -100,6 +106,7 @@ def resolve_harmonize_mana(
     zones: ZoneManager,
     player_idx: int,
     creature_id: int | None,
+    game: GameState | None = None,
 ) -> tuple[int, int, str | None]:
     """Apply optional harmonize tap and return remaining mana, life, and error."""
     mana_needed, life_cost = harmonize_mana_needed(card)
@@ -111,5 +118,5 @@ def resolve_harmonize_mana(
     perm = zones.find_permanent(creature_id)
     assert perm is not None
     tap_for_harmonize(zones, creature_id)
-    reduction = harmonize_generic_reduction(perm)
+    reduction = harmonize_generic_reduction(perm, game)
     return max(0, mana_needed - reduction), life_cost, None

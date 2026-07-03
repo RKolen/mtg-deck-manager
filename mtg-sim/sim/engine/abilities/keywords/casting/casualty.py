@@ -52,22 +52,23 @@ def normalize_casualty_sacrifice_id(
     return sacrifice_ids[0]
 
 
-def _legal_casualty_sacrifice(perm: Permanent, card: CardInfo) -> bool:
+def _legal_casualty_sacrifice(perm: Permanent, card: CardInfo, game: GameState) -> bool:
     """Return True when a creature may be sacrificed for casualty."""
     if 'Creature' not in perm.type_line:
         return False
     required = casualty_power_required(card)
-    return effective_power(perm) >= required
+    return effective_power(perm, game) >= required
 
 
 def casualty_sacrifice_error(
-    zones: ZoneManager,
+    game: GameState,
     player_idx: int,
     card: CardInfo,
     paid_casualty: bool,
     sacrifice_ids: list[int],
 ) -> str | None:
     """Return an error message when the casualty sacrifice is illegal."""
+    zones = game.zones
     message: str | None = None
     if not paid_casualty:
         if sacrifice_ids and has_casualty(card):
@@ -85,7 +86,7 @@ def casualty_sacrifice_error(
                 message = f"Casualty sacrifice {sacrifice_id} not found"
             elif perm.controller_idx != player_idx:
                 message = "Casualty may only sacrifice creatures you control"
-            elif not _legal_casualty_sacrifice(perm, card):
+            elif not _legal_casualty_sacrifice(perm, card, game):
                 required = casualty_power_required(card)
                 message = (
                     f"{perm.name} does not have power {required} or greater "

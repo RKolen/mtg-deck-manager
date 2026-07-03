@@ -74,19 +74,19 @@ class ProtectionSource:
         return bool(self.colors)
 
 
-def has_hexproof(perm: Permanent) -> bool:
+def has_hexproof(perm: Permanent, game: GameState | None = None) -> bool:
     """Return True when opponents cannot target this permanent."""
-    return has_keyword(perm, 'Hexproof')
+    return has_keyword(perm, 'Hexproof', game)
 
 
-def has_shroud(perm: Permanent) -> bool:
+def has_shroud(perm: Permanent, game: GameState | None = None) -> bool:
     """Return True when no player can target this permanent."""
-    return has_keyword(perm, 'Shroud')
+    return has_keyword(perm, 'Shroud', game)
 
 
-def has_ward(perm: Permanent) -> bool:
+def has_ward(perm: Permanent, game: GameState | None = None) -> bool:
     """Return True when the permanent has ward."""
-    return has_keyword(perm, 'Ward')
+    return has_keyword(perm, 'Ward', game)
 
 
 def ward_cost(perm: Permanent) -> ManaCost:
@@ -97,19 +97,23 @@ def ward_cost(perm: Permanent) -> ManaCost:
     return ManaCost.parse(match.group(1))
 
 
-def must_pay_ward(source_controller_idx: int, target: Permanent) -> bool:
+def must_pay_ward(
+    source_controller_idx: int,
+    target: Permanent,
+    game: GameState | None = None,
+) -> bool:
     """Return True when ward cost applies to this targeting relationship."""
-    return has_ward(target) and source_controller_idx != target.controller_idx
+    return has_ward(target, game) and source_controller_idx != target.controller_idx
 
 
 def pay_ward_for_target(game: GameState, source_controller_idx: int, target: Permanent) -> bool:
     """Pay ward cost from the spell controller; return False if payment fails."""
-    if not must_pay_ward(source_controller_idx, target):
+    if not must_pay_ward(source_controller_idx, target, game):
         return True
     return game.players[source_controller_idx].mana_pool.pay(ward_cost(target))
 
 
-def protection_qualities(perm: Permanent) -> frozenset[str]:
+def protection_qualities(perm: Permanent, game: GameState | None = None) -> frozenset[str]:
     """Return all protection qualities parsed from oracle text."""
     text = perm.oracle_text
     found = {
@@ -120,7 +124,7 @@ def protection_qualities(perm: Permanent) -> frozenset[str]:
         _normalize_protection_quality(match.group(1))
         for match in _PROTECTION_AND_FROM_RE.finditer(text)
     )
-    if not found and has_keyword(perm, 'Protection'):
+    if not found and has_keyword(perm, 'Protection', game):
         return frozenset({'everything'})
     return frozenset(found)
 
@@ -184,9 +188,13 @@ def _source_matches_protection_quality(source: ProtectionSource, quality: str) -
     return quality in source.colors
 
 
-def has_protection_from(perm: Permanent, source: ProtectionSource) -> bool:
+def has_protection_from(
+    perm: Permanent,
+    source: ProtectionSource,
+    game: GameState | None = None,
+) -> bool:
     """Return True when protection on perm blocks targeting by source."""
-    qualities = protection_qualities(perm)
+    qualities = protection_qualities(perm, game)
     if not qualities:
         return False
     return any(_source_matches_protection_quality(source, quality) for quality in qualities)
@@ -198,6 +206,7 @@ def can_target_permanent(
     *,
     source: ProtectionSource | None = None,
     source_card: CardInfo | None = None,
+    game: GameState | None = None,
 ) -> bool:
     """Return True when controller_idx may target target with a spell or ability."""
     resolved = (
@@ -206,7 +215,7 @@ def can_target_permanent(
         else (source if source is not None else ProtectionSource())
     )
     hexproof_blocks = (
-        has_hexproof(target) and controller_idx != target.controller_idx
+        has_hexproof(target, game) and controller_idx != target.controller_idx
     )
     hexproof_from_blocks = (
         controller_idx != target.controller_idx
@@ -216,10 +225,10 @@ def can_target_permanent(
         )
     )
     return (
-        not has_shroud(target)
+        not has_shroud(target, game)
         and not hexproof_blocks
         and not hexproof_from_blocks
-        and not has_protection_from(target, resolved)
+        and not has_protection_from(target, resolved, game)
     )
 
 

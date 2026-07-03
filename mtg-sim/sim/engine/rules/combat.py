@@ -39,9 +39,9 @@ class _CombatContext:
     result: CombatDamageResult
 
 
-def can_attack(perm: Permanent) -> bool:
+def can_attack(perm: Permanent, game: GameState | None = None) -> bool:
     """Return whether a permanent can attack under current combat rules."""
-    return keywords.can_attack(perm)
+    return keywords.can_attack(perm, game)
 
 
 def can_block(perm: Permanent) -> bool:
@@ -59,15 +59,18 @@ def power(perm: Permanent, game: GameState | None = None) -> int:
     return effective_power(perm, game)
 
 
-def eligible_attackers(permanents: list[Permanent]) -> list[Permanent]:
+def eligible_attackers(
+    permanents: list[Permanent],
+    game: GameState | None = None,
+) -> list[Permanent]:
     """Return permanents from the list that can legally attack."""
-    return [perm for perm in permanents if can_attack(perm)]
+    return [perm for perm in permanents if can_attack(perm, game)]
 
 
-def tap_attackers(attackers: list[Permanent]) -> None:
+def tap_attackers(attackers: list[Permanent], game: GameState | None = None) -> None:
     """Tap attackers as part of declaring them unless they have vigilance."""
     for attacker in attackers:
-        if keywords.should_tap_attacker(attacker):
+        if keywords.should_tap_attacker(attacker, game):
             attacker.tapped = True
 
 
@@ -82,7 +85,7 @@ def resolve_combat_damage(
     attackers = _selected_attackers(game, attacking_player_idx, attacker_ids)
     result = CombatDamageResult(attackers=attackers)
     context = _CombatContext(game, attacking_player_idx, defending_player_idx, result)
-    tap_attackers(attackers)
+    tap_attackers(attackers, game)
 
     for attacker in attackers:
         blockers = _blockers_for(game, defending_player_idx, attacker, blocker_assignments)
@@ -108,7 +111,7 @@ def _attacker_is_blocked(
 ) -> bool:
     if keywords.landwalk_unblockable(attacker, context.defending_player_idx, context.game):
         return False
-    return keywords.has_enough_blockers(attacker, blockers)
+    return keywords.has_enough_blockers(attacker, blockers, context.game)
 
 
 def _resolve_first_strike_damage(
@@ -119,7 +122,9 @@ def _resolve_first_strike_damage(
 ) -> None:
     """Resolve first-strike damage, then SBAs before regular damage."""
     first_strikers = [
-        perm for perm in [attacker, *blockers] if keywords.deals_in_first_strike_step(perm)
+        perm
+        for perm in [attacker, *blockers]
+        if keywords.deals_in_first_strike_step(perm, context.game)
     ]
     if not first_strikers:
         return
@@ -155,7 +160,7 @@ def _assign_combat_damage(
     is_blocked: bool,
     first_strike_step: bool,
 ) -> None:
-    attacker_deals = _deals_in_step(attacker, first_strike_step)
+    attacker_deals = _deals_in_step(attacker, first_strike_step, context.game)
     if not is_blocked:
         if attacker_deals:
             damage = power(attacker, context.game)
@@ -239,7 +244,7 @@ def _assign_combat_damage(
         )
         _apply_lifelink(context.game, context.attacking_player_idx, attacker, damage)
     for blocker in blockers:
-        if _deals_in_step(blocker, first_strike_step):
+        if _deals_in_step(blocker, first_strike_step, context.game):
             damage = power(blocker, context.game)
             _mark_combat_damage(context, attacker, blocker, damage)
             context.game.fire_combat_damage_triggers(
@@ -282,10 +287,10 @@ def _blockers_for(
     return blockers
 
 
-def _deals_in_step(perm: Permanent, first_strike_step: bool) -> bool:
+def _deals_in_step(perm: Permanent, first_strike_step: bool, game: GameState) -> bool:
     if first_strike_step:
-        return keywords.deals_in_first_strike_step(perm)
-    return keywords.deals_in_regular_step(perm)
+        return keywords.deals_in_first_strike_step(perm, game)
+    return keywords.deals_in_regular_step(perm, game)
 
 
 def _apply_lifelink(
@@ -294,7 +299,7 @@ def _apply_lifelink(
     source: Permanent,
     damage_dealt: int,
 ) -> None:
-    if damage_dealt > 0 and keywords.has_lifelink(source):
+    if damage_dealt > 0 and keywords.has_lifelink(source, game):
         game.gain_life(controller_idx, damage_dealt, source.obj_id)
 
 
@@ -317,7 +322,7 @@ def _assign_attacker_damage(
         remaining -= assigned
         if remaining <= 0:
             return 0
-    if keywords.has_trample(attacker):
+    if keywords.has_trample(attacker, context.game):
         return remaining
     return 0
 
@@ -328,7 +333,7 @@ def _lethal_damage(
     receiver: Permanent,
 ) -> int:
     toughness = effective_toughness(receiver, context.game)
-    return keywords.lethal_damage_needed(source, receiver, toughness)
+    return keywords.lethal_damage_needed(source, receiver, toughness, context.game)
 
 
 def _mark_combat_damage(
@@ -348,7 +353,7 @@ def _add_player_damage(context: _CombatContext, attacker: Permanent, damage: int
     if damage <= 0:
         return
     context.result.dealt_combat_damage = True
-    if keywords.has_infect(attacker):
+    if keywords.has_infect(attacker, context.game):
         context.result.infect_damage_to_player += damage
     else:
         context.result.damage_to_player += damage
