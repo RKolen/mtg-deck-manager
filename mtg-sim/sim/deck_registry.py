@@ -16,6 +16,8 @@ from urllib.parse import urljoin
 
 import requests
 
+from engine.cards.land_mana import parse_produced_mana_from_oracle
+
 logger = logging.getLogger(__name__)
 
 DRUPAL_URL: str = os.environ.get("DRUPAL_URL", "")
@@ -155,6 +157,11 @@ def _parse_gql_card(card: dict) -> dict:
 
 def _card_info_from(info: dict, quantity: int, sideboard: bool) -> CardInfo:
     """Build a CardInfo from an enriched dict."""
+    type_line = info.get("type_line", "")
+    produced = list(info.get("produced_mana", []) or [])
+    oracle_text = info.get("oracle_text", "")
+    if not produced and "Land" in type_line:
+        produced = parse_produced_mana_from_oracle(oracle_text, type_line=type_line)
     return CardInfo(
         name=info["name"],
         quantity=quantity,
@@ -162,11 +169,11 @@ def _card_info_from(info: dict, quantity: int, sideboard: bool) -> CardInfo:
         mana=ManaProfile(
             cmc=info.get("cmc", 0.0),
             cost=info.get("mana_cost", ""),
-            produced=info.get("produced_mana", []),
+            produced=produced,
         ),
-        type_line=info.get("type_line", ""),
+        type_line=type_line,
         pt=info.get("pt", "0/0"),
-        oracle_text=info.get("oracle_text", ""),
+        oracle_text=oracle_text,
     )
 
 

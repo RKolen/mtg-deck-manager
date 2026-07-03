@@ -52,7 +52,10 @@ from deck_registry import (
     fetch_meta_deck,
     fetch_player_deck,
 )
-from engine.cards.deck_script_store import DeckMatchupScripts, prepare_game_card_scripts
+from engine.cards.deck_script_store import (
+    DeckMatchupScripts,
+    prepare_game_card_scripts_with_coverage,
+)
 from engine.game import InteractiveGame, _GameConfig, create_game, get_game, remove_game
 from engine.game.action_dispatch import dispatch_game_action
 from engine_sim import _BatchConfig, run_simulation as run_python_simulation
@@ -244,6 +247,7 @@ async def simulate(req: SimulateRequest) -> dict:
         pilot_info.get("message"),
     )
 
+    script_coverage: dict[str, object] | None = None
     if engine == "forge":
         forge_pilot = resolve_forge_pilot_config(
             matchup.player_pilot.text,
@@ -261,8 +265,8 @@ async def simulate(req: SimulateRequest) -> dict:
             ),
         )
     else:
-        card_scripts = await asyncio.to_thread(
-            prepare_game_card_scripts,
+        script_result = await asyncio.to_thread(
+            prepare_game_card_scripts_with_coverage,
             DeckMatchupScripts(
                 player_deck_nid=req.playerDeckId,
                 player_cards=matchup.player_deck,
@@ -272,6 +276,7 @@ async def simulate(req: SimulateRequest) -> dict:
                 opponent_cards=matchup.opponent_deck,
             ),
         )
+        script_coverage = script_result.coverage_payload
         results = await asyncio.to_thread(
             run_python_simulation,
             matchup.player_deck,
@@ -281,7 +286,7 @@ async def simulate(req: SimulateRequest) -> dict:
                 names=(matchup.deck_title, req.opponentArchetype),
                 opponent_pilot_prompt=matchup.opponent_pilot.text,
                 player_pilot_prompt=matchup.player_pilot.text,
-                card_scripts=card_scripts,
+                card_scripts=script_result.scripts,
             ),
         )
 
@@ -328,6 +333,8 @@ async def simulate(req: SimulateRequest) -> dict:
     stats["engineRequested"] = engine
     stats["fellBackToMock"] = fell_back_to_mock
     stats["pilotInfo"] = pilot_info
+    if engine_used == "python":
+        stats["scriptCoverage"] = script_coverage
     return stats
 
 
@@ -450,8 +457,8 @@ async def game_start(req: StartGameRequest) -> dict:
     )
 
     deck_title = await asyncio.to_thread(fetch_deck_title, req.playerDeckId)
-    card_scripts = await asyncio.to_thread(
-        prepare_game_card_scripts,
+    script_result = await asyncio.to_thread(
+        prepare_game_card_scripts_with_coverage,
         DeckMatchupScripts(
             player_deck_nid=req.playerDeckId,
             player_cards=player_deck,
@@ -472,9 +479,11 @@ async def game_start(req: StartGameRequest) -> dict:
             player_pilot_prompt=player_pilot.text,
             pilot_prompt_resolved=True,
         ),
-        card_scripts=card_scripts,
+        card_scripts=script_result.scripts,
     )
-    return game.to_client()
+    client = game.to_client()
+    client["scriptCoverage"] = script_result.coverage_payload
+    return client
 
 
 def _dispatch_blocker_action(game: InteractiveGame, req: GameActionRequest) -> dict | None:

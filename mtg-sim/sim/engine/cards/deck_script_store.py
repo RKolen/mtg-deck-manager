@@ -283,6 +283,30 @@ class DeckMatchupScripts:
 
 def prepare_game_card_scripts(matchup: DeckMatchupScripts) -> dict[str, tuple[CardEffect, ...]]:
     """Sync player + opponent deck caches and merge for one game session."""
+    return prepare_game_card_scripts_with_coverage(matchup).scripts
+
+
+@dataclass(frozen=True)
+class GameCardScriptsResult:
+    """Merged card scripts and per-deck coverage for a matchup."""
+
+    scripts: dict[str, tuple[CardEffect, ...]]
+    player_coverage: DeckScriptCoverageReport
+    opponent_coverage: DeckScriptCoverageReport
+
+    @property
+    def coverage_payload(self) -> dict[str, object]:
+        """API-friendly coverage summary for both decks."""
+        return {
+            'player': self.player_coverage.to_dict(),
+            'opponent': self.opponent_coverage.to_dict(),
+        }
+
+
+def prepare_game_card_scripts_with_coverage(
+    matchup: DeckMatchupScripts,
+) -> GameCardScriptsResult:
+    """Sync caches, merge scripts, and return coverage for both decks."""
     player_result = sync_deck_scripts_with_coverage(
         f'nid:{matchup.player_deck_nid}',
         matchup.player_cards,
@@ -300,4 +324,8 @@ def prepare_game_card_scripts(matchup: DeckMatchupScripts) -> dict[str, tuple[Ca
     )
     merged = dict(opponent_result.scripts)
     merged.update(player_result.scripts)
-    return merged
+    return GameCardScriptsResult(
+        scripts=merged,
+        player_coverage=player_result.coverage,
+        opponent_coverage=opponent_result.coverage,
+    )
