@@ -38,7 +38,9 @@ from engine.abilities.keywords.casting.warp import apply_warp_on_resolve
 from engine.abilities.keywords.casting.squad import apply_squad_on_etb
 from engine.abilities.keywords.other.etb import apply_etb_other_abilities
 from engine.abilities.keywords.other.evoke import mark_evoked_cast
+from engine.cards.effects import CardEffectContext
 from engine.cards.oracle_parse import parse_draw, spell_category
+from engine.cards.script_loader import resolve_scripted_spell
 from engine.core.game_object import (
     ActivatedAbilityOnStack,
     CardObject,
@@ -111,6 +113,17 @@ class SpellResolveMixin(SpellStackPlacementMixin):
             return resolve_ability_effect(obj, self.state)
         return "Resolved ability"
 
+    def _resolve_scripted_spell(self, spell: SpellOnStack) -> str | None:
+        """Apply a Phase G card script when the resolving spell has one."""
+        card = spell.source
+        if card is None:
+            return None
+        ctx = CardEffectContext.from_spell(self.state, spell, self._draw_cards)
+        detail = resolve_scripted_spell(ctx)
+        if detail:
+            self.state.check_sbas()
+        return detail
+
     def _apply_spell(self, spell: SpellOnStack) -> str:  # pylint: disable=too-many-return-statements
         """Apply a resolved spell's effect."""
         card = spell.source
@@ -129,6 +142,10 @@ class SpellResolveMixin(SpellStackPlacementMixin):
             return self._resolve_tiered_spell(spell)
         if spell.modes and has_spree(card_info):
             return self._resolve_spree_spell(spell)
+        scripted = self._resolve_scripted_spell(spell)
+        if scripted is not None:
+            self._relocate_resolved_spell(spell, card)
+            return f"{card_info.name}: {scripted}"
         category = spell_category(card_info)
         dispatch = {
             "creature": self._resolve_creature_spell,
