@@ -32,6 +32,26 @@ def add_until_eot_pt_modifier(
     return modifier
 
 
+def add_until_eot_set_pt_modifier(
+    perm: Permanent,
+    power: int,
+    toughness: int,
+    *,
+    source_obj_id: int = 0,
+) -> Modifier:
+    """Apply a layer-7b set P/T that expires at end of turn."""
+    modifier = Modifier(
+        source_obj_id=source_obj_id,
+        layer=7,
+        sublayer='b',
+        set_power=power,
+        set_toughness=toughness,
+        duration=DURATION_UNTIL_EOT,
+    )
+    perm.modifiers.append(modifier)
+    return modifier
+
+
 def clear_until_end_of_turn_modifiers(game: GameState) -> None:
     """Remove until-end-of-turn modifiers from all battlefield permanents."""
     for perm in game.zones.battlefield:
