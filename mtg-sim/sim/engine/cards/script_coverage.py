@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Literal, cast
 
 from deck_registry import CardInfo
 
@@ -23,6 +23,23 @@ _SCRIPTED_SOURCES: frozenset[ScriptSource] = frozenset({
     'inferred',
     'llm',
 })
+
+_SCRIPT_SOURCE_VALUES: frozenset[str] = frozenset({
+    'cached',
+    'builtin',
+    'inferred',
+    'llm',
+    'unscripted',
+    'skipped_creature',
+    'skipped_land',
+})
+
+
+def parse_script_source(value: str) -> ScriptSource:
+    """Parse a stored script source string; unknown values become unscripted."""
+    if value in _SCRIPT_SOURCE_VALUES:
+        return cast(ScriptSource, value)
+    return 'unscripted'
 
 
 @dataclass(frozen=True)

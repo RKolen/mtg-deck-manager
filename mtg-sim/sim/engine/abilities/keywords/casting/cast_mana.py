@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -65,6 +66,8 @@ from engine.abilities.keywords.casting.specialize import (
     specialize_mana_needed,
 )
 from engine.abilities.keywords.casting.warp import normalize_warp_cast, warp_mana_needed
+from engine.core.mana import ManaCost
+from engine.game.cast_alt_mode_flags import AltCastModeFlags
 from engine.abilities.keywords.casting.web_slinging import (
     normalize_web_slinging_cast,
     web_slinging_mana_needed,
@@ -131,17 +134,44 @@ class _RepeatCastCounts:
 
 
 @dataclass(frozen=True)
-class CastManaModifiers:  # pylint: disable=too-many-instance-attributes
-    """Optional cost modifiers for announce-cast mana."""
+class _CastManaOptional:
+    """Scalar optional costs for announce-cast mana."""
 
     kicker_times: int = 0
     bestow_target_uid: str | None = None
-    repeat: _RepeatCastCounts = field(default_factory=_RepeatCastCounts)
     spree_mode_indices: tuple[int, ...] = ()
     tiered_mode_index: int | None = None
+
+
+@dataclass(frozen=True)
+class CastManaModifiers:
+    """Optional cost modifiers for announce-cast mana."""
+
+    optional: _CastManaOptional = field(default_factory=_CastManaOptional)
+    repeat: _RepeatCastCounts = field(default_factory=_RepeatCastCounts)
     bools: _FlatBoolMods = field(default_factory=_FlatBoolMods)
     sac: _SacManaModifiers = field(default_factory=_SacManaModifiers)
     face: FaceAlternateCastFlags = field(default_factory=FaceAlternateCastFlags)
+
+    @property
+    def kicker_times(self) -> int:
+        """Number of times kicker was paid."""
+        return self.optional.kicker_times
+
+    @property
+    def bestow_target_uid(self) -> str | None:
+        """Bestow host UID when bestow was paid."""
+        return self.optional.bestow_target_uid
+
+    @property
+    def spree_mode_indices(self) -> tuple[int, ...]:
+        """Chosen spree mode indices."""
+        return self.optional.spree_mode_indices
+
+    @property
+    def tiered_mode_index(self) -> int | None:
+        """Chosen tiered mode index."""
+        return self.optional.tiered_mode_index
 
     @property
     def replicate_times(self) -> int:
@@ -195,17 +225,44 @@ class CastManaModifiers:  # pylint: disable=too-many-instance-attributes
 
 
 @dataclass(frozen=True)
-class _TimingAvailability:  # pylint: disable=too-many-instance-attributes
+class _PaidTimingExtras:
+    """Extra timing payments applied after alternate costs."""
+
+    paid_awaken: bool = False
+    paid_impending: bool = False
+    paid_splice: bool = False
+    paid_compleated: bool = False
+
+
+@dataclass(frozen=True)
+class _TimingAvailability:
     """Alternate cost availability for timing-sensitive casts."""
 
     freerunning_available: bool = False
     spectacle_available: bool = False
     surge_available: bool = False
     escalate_extra_targets: int = 0
-    paid_awaken: bool = False
-    paid_impending: bool = False
-    paid_splice: bool = False
-    paid_compleated: bool = False
+    paid: _PaidTimingExtras = field(default_factory=_PaidTimingExtras)
+
+    @property
+    def paid_awaken(self) -> bool:
+        """Whether awaken extra mana was paid."""
+        return self.paid.paid_awaken
+
+    @property
+    def paid_impending(self) -> bool:
+        """Whether impending extra mana was paid."""
+        return self.paid.paid_impending
+
+    @property
+    def paid_splice(self) -> bool:
+        """Whether splice extra mana was paid."""
+        return self.paid.paid_splice
+
+    @property
+    def paid_compleated(self) -> bool:
+        """Whether compleated extra life was paid."""
+        return self.paid.paid_compleated
 
 
 @dataclass(frozen=True)
@@ -225,20 +282,59 @@ class _FaceCastTiming:
 
 
 @dataclass(frozen=True)
-class CastManaTiming:  # pylint: disable=too-many-instance-attributes
+class _DirectTimingCasts:
+    """Timing-based alternate costs selected at announce."""
+
+    miracle: bool = False
+    freerunning: bool = False
+    cleave: bool = False
+    alt_modes: AltCastModeFlags = field(default_factory=AltCastModeFlags)
+
+
+@dataclass(frozen=True)
+class CastManaTiming:
     """Timing-sensitive alternate costs for announce-cast mana."""
 
-    cast_for_miracle: bool = False
-    cast_for_freerunning: bool = False
+    direct: _DirectTimingCasts = field(default_factory=_DirectTimingCasts)
     opponent_damage: _OpponentDamageCasts = field(default_factory=_OpponentDamageCasts)
-    cast_for_cleave: bool = False
-    cast_for_warp: bool = False
-    cast_for_web_slinging: bool = False
-    cast_for_converted: bool = False
-    cast_for_specialize: bool = False
     face: _FaceCastTiming = field(default_factory=_FaceCastTiming)
     paid_conspire: bool = False
     available: _TimingAvailability = field(default_factory=_TimingAvailability)
+
+    @property
+    def cast_for_miracle(self) -> bool:
+        """Whether miracle was announced."""
+        return self.direct.miracle
+
+    @property
+    def cast_for_freerunning(self) -> bool:
+        """Whether freerunning was announced."""
+        return self.direct.freerunning
+
+    @property
+    def cast_for_cleave(self) -> bool:
+        """Whether cleave was announced."""
+        return self.direct.cleave
+
+    @property
+    def cast_for_warp(self) -> bool:
+        """Whether warp was announced."""
+        return self.direct.alt_modes.warp
+
+    @property
+    def cast_for_web_slinging(self) -> bool:
+        """Whether web-slinging was announced."""
+        return self.direct.alt_modes.web_slinging
+
+    @property
+    def cast_for_converted(self) -> bool:
+        """Whether More Than Meets the Eye was announced."""
+        return self.direct.alt_modes.converted
+
+    @property
+    def cast_for_specialize(self) -> bool:
+        """Whether specialize was announced."""
+        return self.direct.alt_modes.specialize
 
     @property
     def cast_for_morph(self) -> bool:
@@ -290,39 +386,104 @@ class AnnounceCastManaOptions:
 def _payment_requirements(card: CardInfo) -> tuple[int, int]:
     """Return base mana and life for simplified payment (avoids game package import)."""
     phyrexian_pips = (card.mana_cost or '').upper().count('/P')
-    total_cmc = int(card.cmc) if card.cmc == int(card.cmc) else max(1, int(card.cmc))
-    return max(0, total_cmc - phyrexian_pips), phyrexian_pips * 2
+    if card.mana_cost:
+        mana_needed = max(0, ManaCost.parse(card.mana_cost).mana_value - phyrexian_pips)
+    else:
+        total_cmc = int(card.cmc) if card.cmc == int(card.cmc) else max(1, int(card.cmc))
+        mana_needed = max(0, total_cmc - phyrexian_pips)
+    return mana_needed, phyrexian_pips * 2
 
 
-def _resolve_timing_alternate_mana(  # pylint: disable=too-many-return-statements
-    card: CardInfo,
-    timing: CastManaTiming,
-) -> tuple[int, int] | None:
-    """Return mana/life for timing-based alternate costs, or None if none apply."""
+_TimingManaResolver = Callable[[CardInfo, CastManaTiming], tuple[int, int] | None]
+
+
+def _miracle_timing_mana(card: CardInfo, timing: CastManaTiming) -> tuple[int, int] | None:
     if normalize_miracle_cast(card, timing.cast_for_miracle):
         return miracle_mana_needed(card)
+    return None
+
+
+def _spectacle_timing_mana(card: CardInfo, timing: CastManaTiming) -> tuple[int, int] | None:
     if normalize_spectacle_cast(
         card, timing.cast_for_spectacle, available=timing.spectacle_available
     ):
         return spectacle_mana_needed(card)
-    if normalize_surge_cast(
-        card, timing.cast_for_surge, available=timing.surge_available
-    ):
+    return None
+
+
+def _surge_timing_mana(card: CardInfo, timing: CastManaTiming) -> tuple[int, int] | None:
+    if normalize_surge_cast(card, timing.cast_for_surge, available=timing.surge_available):
         return surge_mana_needed(card)
+    return None
+
+
+def _prototype_timing_mana(card: CardInfo, timing: CastManaTiming) -> tuple[int, int] | None:
     if normalize_prototype_cast(card, timing.cast_for_prototype):
         return prototype_mana_needed(card)
+    return None
+
+
+def _cleave_timing_mana(card: CardInfo, timing: CastManaTiming) -> tuple[int, int] | None:
     if normalize_cleave_cast(card, timing.cast_for_cleave):
         return cleave_mana_needed(card)
-    if normalize_freerunning_cast(card, timing.cast_for_freerunning, timing.freerunning_available):
+    return None
+
+
+def _freerunning_timing_mana(card: CardInfo, timing: CastManaTiming) -> tuple[int, int] | None:
+    if normalize_freerunning_cast(
+        card, timing.cast_for_freerunning, timing.freerunning_available
+    ):
         return freerunning_mana_needed(card)
+    return None
+
+
+def _warp_timing_mana(card: CardInfo, timing: CastManaTiming) -> tuple[int, int] | None:
     if normalize_warp_cast(card, timing.cast_for_warp):
         return warp_mana_needed(card)
+    return None
+
+
+def _web_slinging_timing_mana(card: CardInfo, timing: CastManaTiming) -> tuple[int, int] | None:
     if normalize_web_slinging_cast(card, timing.cast_for_web_slinging):
         return web_slinging_mana_needed(card)
+    return None
+
+
+def _converted_timing_mana(card: CardInfo, timing: CastManaTiming) -> tuple[int, int] | None:
     if normalize_more_than_meets_the_eye_cast(card, timing.cast_for_converted):
         return more_than_meets_the_eye_mana_needed(card)
+    return None
+
+
+def _specialize_timing_mana(card: CardInfo, timing: CastManaTiming) -> tuple[int, int] | None:
     if normalize_specialize_cast(card, timing.cast_for_specialize):
         return specialize_mana_needed(card)
+    return None
+
+
+_TIMING_MANA_RESOLVERS: tuple[_TimingManaResolver, ...] = (
+    _miracle_timing_mana,
+    _spectacle_timing_mana,
+    _surge_timing_mana,
+    _prototype_timing_mana,
+    _cleave_timing_mana,
+    _freerunning_timing_mana,
+    _warp_timing_mana,
+    _web_slinging_timing_mana,
+    _converted_timing_mana,
+    _specialize_timing_mana,
+)
+
+
+def _resolve_timing_alternate_mana(
+    card: CardInfo,
+    timing: CastManaTiming,
+) -> tuple[int, int] | None:
+    """Return mana/life for timing-based alternate costs, or None if none apply."""
+    for resolver in _TIMING_MANA_RESOLVERS:
+        result = resolver(card, timing)
+        if result is not None:
+            return result
     return None
 
 

@@ -55,17 +55,13 @@ def can_aura_swap(
     return phase in ('main1', 'main2') and game.stack.is_empty
 
 
-def apply_aura_swap(  # pylint: disable=too-many-return-statements
+def _aura_swap_hand_card(
     game: GameState,
     perm: Permanent,
     hand_idx: int,
-) -> str | None:
-    """Exchange this Aura with an Aura card from hand."""
-    if not has_aura_swap(perm) or perm.attached_to is None:
-        return None
-    host = game.zones.find_permanent(perm.attached_to)
-    if host is None:
-        return None
+    host: Permanent,
+) -> CardObject | None:
+    """Return the hand card to swap in, or None when invalid."""
     hand = game.zones.player_zones[perm.controller_idx].hand
     if hand_idx < 0 or hand_idx >= len(hand):
         return None
@@ -77,10 +73,30 @@ def apply_aura_swap(  # pylint: disable=too-many-return-statements
         return None
     if not can_enchant_target(card_info.oracle_text or '', host):
         return None
+    return card
+
+
+def apply_aura_swap(
+    game: GameState,
+    perm: Permanent,
+    hand_idx: int,
+) -> str | None:
+    """Exchange this Aura with an Aura card from hand."""
+    if not has_aura_swap(perm) or perm.attached_to is None:
+        return None
+    host = game.zones.find_permanent(perm.attached_to)
+    if host is None:
+        return None
+    card = _aura_swap_hand_card(game, perm, hand_idx, host)
+    if card is None:
+        return None
+    card_info = card.card_info
+    assert card_info is not None
     perm_name = perm.name
     incoming_name = card_info.name
     host_id = host.obj_id
     controller_idx = perm.controller_idx
+    hand = game.zones.player_zones[controller_idx].hand
     game.zones.leave_battlefield(perm, Zone.HAND, 'aura_swap', game)
     hand.pop(hand_idx)
     new_perm = game.zones.enter_battlefield(card, controller_idx, 'aura_swap')

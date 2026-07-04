@@ -2,6 +2,7 @@
 
 from engine.cards.effects import (
     CardEffectContext,
+    _CardEffectTargets,
     ConditionalEffect,
     CreateToken,
     DealDamage,
@@ -59,8 +60,10 @@ def _ctx(
         game=game,
         controller_idx=0,
         source=_card('Test'),
-        target_player_idx=target_player_idx,
-        target_creature_uid=target_creature_uid,
+        targets=_CardEffectTargets(
+            player_idx=target_player_idx,
+            creature_uid=target_creature_uid,
+        ),
         selected_mode=selected_mode,
     )
 
@@ -114,8 +117,8 @@ def test_deal_damage_to_player():
 def test_scry_puts_cards_on_bottom():
     """Scry reorders the top of the library."""
     game = fresh_game()
-    add_to_library(make_instant('Top'), 0, game.zones)
     add_to_library(make_instant('Second'), 0, game.zones)
+    add_to_library(make_instant('Top'), 0, game.zones)
     detail = Scry(count=2, bottom_indices=(0,)).apply(_ctx(game))
     assert 'scry 2' in detail
     lib = game.zones.player_zones[0].library
@@ -239,8 +242,8 @@ def test_script_loader_lightning_bolt_deals_three():
 def test_treasure_hunt_puts_revealed_cards_in_hand():
     """TreasureHunt reveals until a nonland and puts cards in hand."""
     game = fresh_game()
-    add_to_library(make_land('Forest'), 0, game.zones)
     add_to_library(make_instant('Shock'), 0, game.zones)
+    add_to_library(make_land('Forest'), 0, game.zones)
     detail = TreasureHunt().apply(_ctx(game))
     assert '2 card' in detail
     assert len(game.zones.player_zones[0].hand) == 2
@@ -339,8 +342,10 @@ def test_fight_creatures_deal_damage_to_each_other():
         game=game,
         controller_idx=0,
         source=_card('Fight Spell'),
-        target_creature_uid=str(perm_a.obj_id),
-        second_target_creature_uid=str(perm_b.obj_id),
+        targets=_CardEffectTargets(
+            creature_uid=str(perm_a.obj_id),
+            second_creature_uid=str(perm_b.obj_id),
+        ),
     )
     detail = FightCreatures().apply(ctx)
     assert 'fought' in detail

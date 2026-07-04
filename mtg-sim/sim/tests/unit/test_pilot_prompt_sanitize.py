@@ -26,8 +26,10 @@ def test_clean_strategy_not_contaminated() -> None:
     assert is_contaminated_pilot_prompt(clean) is False
 
 
-def test_finalize_pilot_prompt_falls_back_to_rules() -> None:
+def test_finalize_pilot_prompt_falls_back_to_rules(monkeypatch) -> None:
     """Poisoned LLM compression is replaced with rules compression."""
+    monkeypatch.setenv("CAVEMAN_PILOT_MIN_SAVED", "40")
+    monkeypatch.setenv("CAVEMAN_PILOT_MIN_RATIO", "0.1")
     raw = (
         "You are piloting a deck that basically just wants to attack with "
         "the biggest creature on the board every single turn."

@@ -59,7 +59,25 @@ def _find_perm(game: GameState, uid: str) -> Permanent | None:
     return None
 
 
-def station_power_error(  # pylint: disable=too-many-return-statements
+def _crew_member_station_error(
+    game: GameState,
+    controller_idx: int,
+    uid: str,
+) -> tuple[str | None, int]:
+    """Validate one crewer and return an error or its effective power."""
+    perm = _find_perm(game, uid)
+    if perm is None:
+        return f'Crewer {uid} not found', 0
+    if perm.controller_idx != controller_idx:
+        return f'{perm.name} cannot station', 0
+    if 'Creature' not in perm.type_line:
+        return f'{perm.name} is not a creature', 0
+    if perm.tapped:
+        return f'{perm.name} is already tapped', 0
+    return None, effective_power(perm, game)
+
+
+def station_power_error(
     game: GameState,
     controller_idx: int,
     crewer_ids: list[str],
@@ -70,16 +88,10 @@ def station_power_error(  # pylint: disable=too-many-return-statements
         return 'Invalid station cost'
     total = 0
     for uid in crewer_ids:
-        perm = _find_perm(game, uid)
-        if perm is None:
-            return f'Crewer {uid} not found'
-        if perm.controller_idx != controller_idx:
-            return f'{perm.name} cannot station'
-        if 'Creature' not in perm.type_line:
-            return f'{perm.name} is not a creature'
-        if perm.tapped:
-            return f'{perm.name} is already tapped'
-        total += effective_power(perm, game)
+        err, power = _crew_member_station_error(game, controller_idx, uid)
+        if err is not None:
+            return err
+        total += power
     if total < required:
         return f'Need station power {required}, have {total}'
     return None

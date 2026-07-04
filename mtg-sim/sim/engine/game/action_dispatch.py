@@ -17,7 +17,11 @@ from engine.game.cast_context import (
     _CostConditionAlts,
     _PaidSacrificeCosts,
     _RepeatCostChoices,
+    _ConvokeReductionIds,
+    _HandReductionIds,
+    _SpectacleCostAlts,
 )
+from engine.game.cast_alt_mode_flags import AltCastModeFlags
 from engine.game.face_alternate_cast import FaceAlternateCastFlags
 
 if TYPE_CHECKING:
@@ -69,13 +73,17 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
             conditions=_CostConditionAlts(
                 cast_for_miracle=req.castForMiracle,
                 cast_for_freerunning=req.castForFreerunning,
-                cast_for_spectacle=req.castForSpectacle,
-                cast_for_surge=req.castForSurge,
                 cast_for_prototype=req.castForPrototype,
-                cast_for_warp=req.castForWarp,
-                cast_for_web_slinging=req.castForWebSlinging,
-                cast_for_converted=req.castForConverted,
-                cast_for_specialize=req.castForSpecialize,
+                spectacle=_SpectacleCostAlts(
+                    cast_for_spectacle=req.castForSpectacle,
+                    cast_for_surge=req.castForSurge,
+                ),
+                alt_modes=AltCastModeFlags(
+                    warp=req.castForWarp,
+                    web_slinging=req.castForWebSlinging,
+                    converted=req.castForConverted,
+                    specialize=req.castForSpecialize,
+                ),
             ),
             face=FaceAlternateCastFlags(
                 cast_for_morph=req.castForMorph,
@@ -101,15 +109,19 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
                 ),
             ),
             reductions=CastManaReductionIds(
-                convoke_creature_ids=convoke_ids,
-                delve_graveyard_indices=tuple(req.delveGraveyardIndices),
-                improvise_artifact_ids=improvise_ids,
-                sneak_land_hand_indices=tuple(req.sneakLandHandIndices),
+                convoke=_ConvokeReductionIds(
+                    convoke_creature_ids=convoke_ids,
+                    delve_graveyard_indices=tuple(req.delveGraveyardIndices),
+                    improvise_artifact_ids=improvise_ids,
+                ),
+                hand=_HandReductionIds(
+                    sneak_land_hand_indices=tuple(req.sneakLandHandIndices),
+                    awaken_land_hand_idx=req.awakenLandHandIdx,
+                    splice_hand_idx=req.spliceHandIdx,
+                    specialize_hand_idx=req.specializeHandIdx,
+                    web_sling_creature_uid=req.webSlingCreatureUid,
+                ),
                 assist_mana=req.assistMana,
-                awaken_land_hand_idx=req.awakenLandHandIdx,
-                splice_hand_idx=req.spliceHandIdx,
-                specialize_hand_idx=req.specializeHandIdx,
-                web_sling_creature_uid=req.webSlingCreatureUid,
             ),
         ),
     )

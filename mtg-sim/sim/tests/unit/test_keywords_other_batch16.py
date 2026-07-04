@@ -49,6 +49,7 @@ from tests.conftest import (
     make_creature,
     make_deck,
     make_instant,
+    make_land,
     place_on_battlefield,
     put_lands_on_battlefield,
 )
@@ -197,7 +198,7 @@ def test_game_harmonize_and_turn_up_morph():
     face_down = place_on_battlefield(shifter_info, 0, game.state.zones)
     face_down.face_down = True
     assert can_turn_up_morph(face_down, game.state, 0, 'main1')
-    put_lands_on_battlefield(game, 5)
+    put_lands_on_battlefield(game, 5, land_info=make_land('Forest', 'G'))
     turn_up = game.action_turn_up_morph(str(face_down.obj_id))
     assert 'error' not in turn_up
     assert not face_down.face_down

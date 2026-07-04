@@ -120,23 +120,117 @@ class Target:
 
 
 @dataclass
-class Modifier:  # pylint: disable=too-many-instance-attributes
+class _ModifierLayer:
+    """Layer ordering metadata for one modifier."""
+
+    layer: int = 7
+    sublayer: str = ""
+    timestamp: int = field(default_factory=_next_ts)
+    duration: str = "permanent"
+
+
+@dataclass
+class _ModifierPt:
+    """Power and toughness changes applied by one modifier."""
+
+    set_power: int | None = None
+    set_toughness: int | None = None
+    power_delta: int = 0
+    toughness_delta: int = 0
+
+
+@dataclass
+class Modifier:
     """A continuous effect currently applied to a permanent.
 
     Layers 6 and 7 (sublayers a/b/c) are applied in ``continuous.py``.
     """
 
     source_obj_id: int = 0
-    layer: int = 7
-    sublayer: str = ""
-    timestamp: int = field(default_factory=_next_ts)
-    duration: str = "permanent"
-    set_power: int | None = None
-    set_toughness: int | None = None
-    power_delta: int = 0
-    toughness_delta: int = 0
+    layer_info: _ModifierLayer = field(default_factory=_ModifierLayer)
+    pt: _ModifierPt = field(default_factory=_ModifierPt)
     remove_all_abilities: bool = False
     cda_from_graveyard_count: bool = False
+
+    @property
+    def layer(self) -> int:
+        """Continuous effect layer number."""
+        return self.layer_info.layer
+
+    @layer.setter
+    def layer(self, value: int) -> None:
+        """Set continuous effect layer number."""
+        self.layer_info.layer = value
+
+    @property
+    def sublayer(self) -> str:
+        """Layer 7 sublayer label."""
+        return self.layer_info.sublayer
+
+    @sublayer.setter
+    def sublayer(self, value: str) -> None:
+        """Set layer 7 sublayer label."""
+        self.layer_info.sublayer = value
+
+    @property
+    def timestamp(self) -> int:
+        """Timestamp for ordering simultaneous effects."""
+        return self.layer_info.timestamp
+
+    @timestamp.setter
+    def timestamp(self, value: int) -> None:
+        """Set modifier timestamp."""
+        self.layer_info.timestamp = value
+
+    @property
+    def duration(self) -> str:
+        """How long this modifier lasts."""
+        return self.layer_info.duration
+
+    @duration.setter
+    def duration(self, value: str) -> None:
+        """Set modifier duration."""
+        self.layer_info.duration = value
+
+    @property
+    def set_power(self) -> int | None:
+        """Layer 7b set power, if any."""
+        return self.pt.set_power
+
+    @set_power.setter
+    def set_power(self, value: int | None) -> None:
+        """Set layer 7b power."""
+        self.pt.set_power = value
+
+    @property
+    def set_toughness(self) -> int | None:
+        """Layer 7b set toughness, if any."""
+        return self.pt.set_toughness
+
+    @set_toughness.setter
+    def set_toughness(self, value: int | None) -> None:
+        """Set layer 7b toughness."""
+        self.pt.set_toughness = value
+
+    @property
+    def power_delta(self) -> int:
+        """Layer 7c power bonus."""
+        return self.pt.power_delta
+
+    @power_delta.setter
+    def power_delta(self, value: int) -> None:
+        """Set layer 7c power bonus."""
+        self.pt.power_delta = value
+
+    @property
+    def toughness_delta(self) -> int:
+        """Layer 7c toughness bonus."""
+        return self.pt.toughness_delta
+
+    @toughness_delta.setter
+    def toughness_delta(self, value: int) -> None:
+        """Set layer 7c toughness bonus."""
+        self.pt.toughness_delta = value
 
 
 @dataclass

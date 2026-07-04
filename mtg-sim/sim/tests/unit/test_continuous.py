@@ -1,6 +1,13 @@
 """Unit tests for engine/rules/continuous.py (layer system, Phase E9)."""
 
-from engine.core.game_object import CardObject, Modifier, effective_power, effective_toughness
+from engine.core.game_object import (
+    CardObject,
+    Modifier,
+    _ModifierLayer,
+    _ModifierPt,
+    effective_power,
+    effective_toughness,
+)
 from engine.abilities.keywords.combat import has_deathtouch, lethal_damage_needed
 from engine.abilities.keywords.targeting import can_target_permanent
 from engine.rules.continuous import abilities_suppressed, has_creature_keyword
@@ -68,8 +75,14 @@ def test_set_pt_overrides_earlier_set_then_counters_apply_in_7c():
     """Layer 7b sets use timestamp order; layer 7c counters modify afterward."""
     game = fresh_game()
     bear = place_on_battlefield(make_creature('Bear', 2, 2), 0, game.zones)
-    bear.modifiers.append(Modifier(layer=7, sublayer='b', set_power=3, set_toughness=3))
-    bear.modifiers.append(Modifier(layer=7, sublayer='b', set_power=5, set_toughness=5))
+    bear.modifiers.append(Modifier(
+        layer_info=_ModifierLayer(layer=7, sublayer='b'),
+        pt=_ModifierPt(set_power=3, set_toughness=3),
+    ))
+    bear.modifiers.append(Modifier(
+        layer_info=_ModifierLayer(layer=7, sublayer='b'),
+        pt=_ModifierPt(set_power=5, set_toughness=5),
+    ))
     assert effective_power(bear, game) == 5
     assert effective_toughness(bear, game) == 5
     bear.counters['+1/+1'] = 2
@@ -81,8 +94,14 @@ def test_layer_7c_modifier_deltas_stack():
     """Multiple +X/+Y modifiers in sublayer 7c stack on the final P/T."""
     game = fresh_game()
     bear = place_on_battlefield(make_creature('Bear', 2, 2), 0, game.zones)
-    bear.modifiers.append(Modifier(layer=7, sublayer='c', power_delta=2, toughness_delta=1))
-    bear.modifiers.append(Modifier(layer=7, sublayer='c', power_delta=1, toughness_delta=2))
+    bear.modifiers.append(Modifier(
+        layer_info=_ModifierLayer(layer=7, sublayer='c'),
+        pt=_ModifierPt(power_delta=2, toughness_delta=1),
+    ))
+    bear.modifiers.append(Modifier(
+        layer_info=_ModifierLayer(layer=7, sublayer='c'),
+        pt=_ModifierPt(power_delta=1, toughness_delta=2),
+    ))
     assert effective_power(bear, game) == 5
     assert effective_toughness(bear, game) == 5
 
@@ -103,7 +122,7 @@ def test_humility_strips_hexproof_for_targeting():
         0,
         game.zones,
     )
-    assert not can_target_permanent(hexproof, 1, game=game)
+    assert can_target_permanent(hexproof, 1, game=game)
 
 
 def test_humility_strips_deathtouch_in_combat():

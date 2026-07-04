@@ -15,7 +15,7 @@ from engine.abilities.keywords.actions._parse import (
 )
 from engine.abilities.keywords.actions.detect import has_keyword_action
 from engine.core.game_object import CardObject, Permanent
-from engine.core.zones import Zone, ZoneManager
+from engine.core.zones import PutCardInZoneRequest, Zone, ZoneManager
 
 if TYPE_CHECKING:
     from engine.core.game_state import GameState
@@ -91,14 +91,14 @@ def mill_cards(
     for _ in range(min(count, len(lib))):
         card = lib[0]
         if isinstance(card, CardObject):
-            zones.put_card_in_zone(
-                card,
-                Zone.GRAVEYARD,
-                player_idx,
-                'mill',
-                game,
+            zones.put_card_in_zone(PutCardInZoneRequest(
+                card=card,
+                to_zone=Zone.GRAVEYARD,
+                player_idx=player_idx,
+                cause='mill',
+                game=game,
                 from_zone=Zone.LIBRARY,
-            )
+            ))
             milled.append(card)
     return milled
 

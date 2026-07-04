@@ -176,6 +176,8 @@ from engine.abilities.keywords.other.ninjutsu import (
     ninjutsu_mana_needed,
 )
 from engine.cards.oracle_parse import is_affordable, spell_category
+from engine.cards.permanent_entry import is_aura
+from engine.abilities.keywords.other.enchant import has_enchant
 from engine.core.game_object import (
     ActivatedAbilityOnStack,
     CardObject,
@@ -298,6 +300,7 @@ def card_to_client(
         "category": spell_category(card),
         "isLand": card.is_land,
         "isCreature": card.is_creature,
+        "requiresAuraTarget": is_aura(card) and has_enchant(card),
         "affordable": affordable,
         "hasEvoke": has_evoke_kw,
         "evokeAffordable": has_evoke_kw and available_mana >= evoke_mana,

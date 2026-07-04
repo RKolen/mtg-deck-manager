@@ -9,7 +9,7 @@ from deck_registry import CardInfo
 from engine.abilities.keywords.registry import has_registered_keyword
 from engine.core.game_object import CardObject
 from engine.core.mana import ManaCost
-from engine.core.zones import Zone, ZoneManager
+from engine.core.zones import PutCardInZoneRequest, Zone, ZoneManager
 
 if TYPE_CHECKING:
     from engine.core.game_state import GameState
@@ -61,12 +61,12 @@ def discard_from_hand(
     hand = zones.player_zones[player_idx].hand
     card = hand[hand_idx]
     assert isinstance(card, CardObject)
-    zones.put_card_in_zone(
-        card,
-        Zone.GRAVEYARD,
-        player_idx,
-        'discard',
-        game,
+    zones.put_card_in_zone(PutCardInZoneRequest(
+        card=card,
+        to_zone=Zone.GRAVEYARD,
+        player_idx=player_idx,
+        cause='discard',
+        game=game,
         from_zone=Zone.HAND,
-    )
+    ))
     return card

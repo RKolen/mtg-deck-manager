@@ -16,6 +16,7 @@ from engine.core.game_object import (
     _SpellCasting,
 )
 from engine.game.face_alternate_cast import FaceAlternateCastFlags
+from engine.game.cast_alt_mode_flags import AltCastModeFlags
 
 
 @dataclass(frozen=True)
@@ -133,19 +134,23 @@ class HandCastCostChoices:
 
 
 @dataclass(frozen=True)
-class _CostConditionAlts:  # pylint: disable=too-many-instance-attributes
+class _SpectacleCostAlts:
+    """Spectacle and surge alternate cast choices."""
+
+    cast_for_spectacle: bool = False
+    cast_for_surge: bool = False
+
+
+@dataclass(frozen=True)
+class _CostConditionAlts:
     """Alternate cast modes that modify cost based on a condition."""
 
     cast_for_miracle: bool = False
     cast_for_freerunning: bool = False
-    cast_for_spectacle: bool = False
-    cast_for_surge: bool = False
     cast_for_prototype: bool = False
     cast_for_splice: bool = False
-    cast_for_warp: bool = False
-    cast_for_web_slinging: bool = False
-    cast_for_converted: bool = False
-    cast_for_specialize: bool = False
+    spectacle: _SpectacleCostAlts = field(default_factory=_SpectacleCostAlts)
+    alt_modes: AltCastModeFlags = field(default_factory=AltCastModeFlags)
 
 
 @dataclass(frozen=True)
@@ -173,12 +178,12 @@ class HandAlternateCastChoices:
     @property
     def cast_for_spectacle(self) -> bool:
         """Whether this cast uses spectacle."""
-        return self.conditions.cast_for_spectacle
+        return self.conditions.spectacle.cast_for_spectacle
 
     @property
     def cast_for_surge(self) -> bool:
         """Whether this cast uses surge."""
-        return self.conditions.cast_for_surge
+        return self.conditions.spectacle.cast_for_surge
 
     @property
     def cast_for_prototype(self) -> bool:
@@ -193,22 +198,22 @@ class HandAlternateCastChoices:
     @property
     def cast_for_warp(self) -> bool:
         """Whether this cast uses warp."""
-        return self.conditions.cast_for_warp
+        return self.conditions.alt_modes.warp
 
     @property
     def cast_for_web_slinging(self) -> bool:
         """Whether this cast uses web-slinging."""
-        return self.conditions.cast_for_web_slinging
+        return self.conditions.alt_modes.web_slinging
 
     @property
     def cast_for_converted(self) -> bool:
         """Whether this cast uses More Than Meets the Eye."""
-        return self.conditions.cast_for_converted
+        return self.conditions.alt_modes.converted
 
     @property
     def cast_for_specialize(self) -> bool:
         """Whether this cast uses specialize."""
-        return self.conditions.cast_for_specialize
+        return self.conditions.alt_modes.specialize
 
     @property
     def cast_for_morph(self) -> bool:
@@ -281,18 +286,32 @@ class CastTargetingIds:
 
 
 @dataclass(frozen=True)
-class CastManaReductionIds:  # pylint: disable=too-many-instance-attributes
-    """Ids for convoke, delve, improvise, and similar reductions."""
+class _ConvokeReductionIds:
+    """Creature, graveyard, and artifact ids for cost reductions."""
 
     convoke_creature_ids: tuple[int, ...] = ()
     delve_graveyard_indices: tuple[int, ...] = ()
     improvise_artifact_ids: tuple[int, ...] = ()
+
+
+@dataclass(frozen=True)
+class _HandReductionIds:
+    """Hand indices and creature ids for cost reductions."""
+
     sneak_land_hand_indices: tuple[int, ...] = ()
-    assist_mana: int = 0
     awaken_land_hand_idx: int | None = None
     splice_hand_idx: int | None = None
     specialize_hand_idx: int | None = None
     web_sling_creature_uid: str | None = None
+
+
+@dataclass(frozen=True)
+class CastManaReductionIds:
+    """Ids for convoke, delve, improvise, and similar reductions."""
+
+    convoke: _ConvokeReductionIds = field(default_factory=_ConvokeReductionIds)
+    hand: _HandReductionIds = field(default_factory=_HandReductionIds)
+    assist_mana: int = 0
 
 
 @dataclass(frozen=True)

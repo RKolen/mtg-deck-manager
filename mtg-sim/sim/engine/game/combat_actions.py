@@ -33,8 +33,32 @@ from engine.abilities.keywords.other.living_metal import (
 from engine.abilities.keywords.other.provoke import assign_provoke_blocks
 from engine.abilities.keywords.other.rampage import apply_rampage_on_block
 from engine.core.turn_structure import Step
-from engine.game.activated_actions import ActivatedActionsMixin
-from engine.game.helpers import perm_names
+from engine.game.activated_actions_keywords import ActivatedActionsKeywordsMixin
+from engine.abilities.keywords.other.boast import clear_boast_turn_counters
+from engine.abilities.keywords.other.bushido import clear_bushido_combat_markers
+from engine.abilities.keywords.other.cumulative_upkeep import resolve_cumulative_upkeep
+from engine.abilities.keywords.other.daybound import resolve_daybound_upkeep
+from engine.abilities.keywords.other.echo import resolve_echo_upkeep
+from engine.abilities.keywords.other.epic import resolve_epic_upkeep
+from engine.abilities.keywords.other.fading import resolve_fading_upkeep
+from engine.abilities.keywords.other.outlast import clear_outlast_turn_marker
+from engine.abilities.keywords.other.phasing import resolve_phasing_upkeep
+from engine.abilities.keywords.other.recover import resolve_recover_upkeep
+from engine.abilities.keywords.other.transmute import clear_transmute_turn_marker
+from engine.abilities.keywords.other.vanishing import resolve_vanishing_upkeep
+from engine.abilities.keywords.casting.paradigm import resolve_paradigm_upkeep
+from engine.abilities.keywords.casting.rebound import resolve_rebound_upkeep
+from engine.cards.oracle_parse import is_affordable, spell_category
+from engine.core.game_object import CardObject
+from engine.core.zones import Zone
+from engine.game.cast_flow import _TargetRef
+from engine.game.helpers import (
+    card_names,
+    is_land,
+    payment_requirements,
+    perm_names,
+    require_card_info,
+)
 from engine.rules.combat import (
     can_attack,
     eligible_attackers,
@@ -44,11 +68,18 @@ from engine.rules.combat import (
 )
 from engine.rules.modifiers import clear_until_end_of_turn_modifiers
 
+from deck_registry import CardInfo
+from mcts import llm_pick
 
-class CombatActionsMixin(ActivatedActionsMixin):
+
+class CombatActionsMixin(ActivatedActionsKeywordsMixin):
     """Attack and block steps for the human player."""
 
     if TYPE_CHECKING:
+        on_the_play: bool
+        pilot_prompt: str
+        player_pilot_prompt: str
+
         def action_play_land(self, _hand_idx: int) -> dict:
             """Play a land from the player's hand (defined in InteractiveGame)."""
             return {}
@@ -56,6 +87,218 @@ class CombatActionsMixin(ActivatedActionsMixin):
         def action_cast(self, _hand_idx: int) -> dict:
             """Cast a spell from the player's hand (defined in InteractiveGame)."""
             return {}
+
+        def _tick_suspend_upkeep(self, player_idx: int) -> None:
+            """Advance suspend counters during upkeep (defined in SpellStackMixin)."""
+
+    def _start_player_turn_one(self) -> None:
+        """Begin the first player-controlled turn after mulligans."""
+        self._begin_turn(0)
+        if self.on_the_play:
+            self._log("system", "no_draw", "No draw on the play, turn 1")
+        else:
+            drawn = self._draw_cards(0, 1)
+            self._log("player", "draw", f"Drew: {card_names(drawn) or '-'}")
+        self.phase = "main1"
+
+    def _begin_turn(self, player_idx: int) -> None:
+        """Untap permanents and clear per-turn player state."""
+        self.state.turn.begin_turn(player_idx)
+        for perm in self._permanents(player_idx):
+            clear_boast_turn_counters(perm)
+            clear_bushido_combat_markers(perm)
+            clear_outlast_turn_marker(perm)
+            clear_transmute_turn_marker(perm)
+            perm.counters.pop('valiant_this_turn', None)
+            if perm.counters.pop('exerted', 0) or perm.counters.pop('detained', 0):
+                continue
+            perm.tapped = False
+            perm.sick = False
+            perm.damage_marked = 0
+        player = self.state.players[player_idx]
+        player.mana_pool.empty()
+        player.land_played = False
+        player.spells_cast_this_turn = 0
+        player.combat_damage_dealt_this_turn = False
+        player.was_dealt_damage_this_turn = False
+        player.revolt_this_turn = False
+        player.permanents_entered_this_turn = 0
+        self.state.creature_died_this_turn = False
+        self.state.meta.deaths.permanents_died = 0
+        self._fire_step_triggers(Step.UPKEEP)
+        for detail in resolve_echo_upkeep(
+            self.state,
+            player_idx,
+            self._tap_lands_for_mana,
+        ):
+            self._log('rules', 'echo', detail)
+        for detail in resolve_epic_upkeep(self.state, player_idx):
+            self._log('rules', 'epic', detail)
+        for detail in resolve_fading_upkeep(self.state, player_idx):
+            self._log('rules', 'fading', detail)
+        for detail in resolve_cumulative_upkeep(
+            self.state,
+            player_idx,
+            self._tap_lands_for_mana,
+        ):
+            self._log('rules', 'cumulative_upkeep', detail)
+        for detail in resolve_vanishing_upkeep(self.state, player_idx):
+            self._log('rules', 'vanishing', detail)
+        for detail in resolve_paradigm_upkeep(self.state, player_idx):
+            self._log('rules', 'paradigm', detail)
+        for detail in resolve_rebound_upkeep(self.state.zones, player_idx):
+            self._log('rules', 'rebound', detail)
+        for detail in resolve_recover_upkeep(self.state, player_idx):
+            self._log('rules', 'recover', detail)
+        for detail in resolve_phasing_upkeep(self.state, player_idx):
+            self._log('rules', 'phasing', detail)
+        for detail in resolve_daybound_upkeep(self.state, player_idx):
+            self._log('rules', 'daybound', detail)
+        self._tick_suspend_upkeep(player_idx)
+
+    def run_opponent_main_phase(self) -> None:
+        """Run a simple opponent draw, land, and spell sequence."""
+        self._begin_turn(1)
+        drawn = self._draw_cards(1, 1)
+        if drawn:
+            self._log(
+                "opponent",
+                "draw",
+                f"Drew a card ({len(self._zones(1).hand)} in hand)",
+            )
+        land_idx = next(
+            (
+                idx for idx, card in enumerate(self._zones(1).hand)
+                if isinstance(card, CardObject) and is_land(card)
+            ),
+            None,
+        )
+        if land_idx is not None:
+            card = self._zones(1).hand[land_idx]
+            if not isinstance(card, CardObject):
+                return
+            self.state.zones.enter_battlefield(card, 1, "play_land", Zone.HAND)
+            self.state.players[1].land_played = True
+            self._log("opponent", "land", require_card_info(card).name)
+        self._opponent_cast_one_spell()
+        self._check_game_over()
+
+    def _llm_pick_spell(
+        self,
+        options: list[tuple[int, CardInfo]],
+        player_idx: int,
+        pilot_prompt: str,
+        actor: str,
+    ) -> tuple[int, CardInfo]:
+        """Pick the best spell to cast from available options."""
+        heuristic = sorted(
+            options,
+            key=lambda item: (not item[1].is_creature, item[1].cmc),
+        )[0]
+        if not pilot_prompt:
+            return heuristic
+        option_names = [
+            f"{ci.name} ({ci.short_type()}, CMC {int(ci.cmc)})"
+            for _, ci in options
+        ]
+        opp_idx = 1 - player_idx
+        state = {
+            "turn": self.state.turn.context.turn_number,
+            "own_life": self.state.players[player_idx].life,
+            "opp_life": self.state.players[opp_idx].life,
+            "mana": self._available_mana(player_idx),
+        }
+        idx, reasoning = llm_pick(
+            "Choose the ONE spell to cast that best serves your deck strategy.",
+            option_names,
+            state,
+            system_prompt=pilot_prompt,
+        )
+        if not reasoning:
+            return heuristic
+        self._log(actor, "pick", reasoning)
+        return options[idx]
+
+    def _opponent_cast_one_spell(self) -> None:
+        """Cast the best affordable opponent spell, guided by pilot prompt when set."""
+        options = [
+            (idx, require_card_info(card))
+            for idx, card in enumerate(self._zones(1).hand)
+            if (
+                isinstance(card, CardObject)
+                and not is_land(card)
+                and is_affordable(require_card_info(card), self._available_mana(1))
+            )
+        ]
+        if not options:
+            return
+        hand_idx, card_info = self._llm_pick_spell(
+            options,
+            player_idx=1,
+            pilot_prompt=self.pilot_prompt,
+            actor="pilot",
+        )
+        card = self._zones(1).hand[hand_idx]
+        if not isinstance(card, CardObject):
+            return
+        mana_needed, _ = payment_requirements(card_info)
+        if not self._tap_mana_for_spell(1, card_info, mana_needed):
+            return
+        target_player = 0 if spell_category(card_info) == "burn" else None
+        targets = self._put_spell_on_stack(
+            player_idx=1,
+            card=card,
+            target_ref=_TargetRef(None, target_player),
+        )
+        self._log("opponent", "cast", f"{card_info.name} on stack")
+        self.state.fire_spell_cast_triggers(card, tuple(targets))
+        self._auto_pass_stack()
+
+    def _player_castable_spell_options(self) -> list[tuple[int, CardInfo]]:
+        """Return affordable non-land spells in the player's hand."""
+        hand = self._zones(0).hand
+        return [
+            (i, require_card_info(card))
+            for i, card in enumerate(hand)
+            if isinstance(card, CardObject)
+            and not is_land(card)
+            and self._is_card_castable(card)
+        ]
+
+    def _player_play_land_if_needed(self) -> None:
+        """Play the first available land when none has been played this turn."""
+        if self.state.players[0].land_played:
+            return
+        hand = self._zones(0).hand
+        for i, card in enumerate(hand):
+            if isinstance(card, CardObject) and is_land(card):
+                self.action_play_land(i)
+                break
+
+    def action_auto_main(self) -> dict:
+        """Auto-play the player's main phase, using deck notes when configured."""
+        assert self.phase in ("main1", "main2")
+        self._player_play_land_if_needed()
+        while self.phase != "game_over":
+            options = self._player_castable_spell_options()
+            if not options:
+                break
+            if self.player_pilot_prompt:
+                hand_idx, _ = self._llm_pick_spell(
+                    options,
+                    player_idx=0,
+                    pilot_prompt=self.player_pilot_prompt,
+                    actor="player_pilot",
+                )
+            else:
+                hand_idx = sorted(
+                    options,
+                    key=lambda item: (not item[1].is_creature, item[1].cmc),
+                )[0][0]
+            result = self.action_cast(hand_idx)
+            if result.get("error"):
+                break
+        return self.to_client()
 
     def action_auto_attack(self) -> dict:
         """Auto-attack with all eligible player creatures and confirm combat."""
@@ -172,7 +415,55 @@ class CombatActionsMixin(ActivatedActionsMixin):
         self._finish_opponent_turn()
         return self.to_client()
 
-    def _apply_attack_keywords(  # pylint: disable=too-many-locals
+    def _log_attack_keyword(self, detail: str | None, tag: str) -> None:
+        """Log one on-attack keyword result when it produced a detail."""
+        if detail:
+            self._log('rules', tag, detail)
+
+    def _apply_permanent_attack_keywords(
+        self,
+        perm,
+        *,
+        solo: bool,
+        attacker_ids: list[str],
+        defending_player_idx: int,
+    ) -> None:
+        """Apply annihilator through battle cry for one attacking permanent."""
+        for apply_fn, tag in (
+            (apply_annihilator_on_attack, 'annihilator'),
+            (apply_afflict_on_attack, 'afflict'),
+            (apply_firebending_on_attack, 'firebending'),
+            (apply_double_team_on_attack, 'double team'),
+        ):
+            self._log_attack_keyword(apply_fn(self.state, perm), tag)
+        self._log_attack_keyword(
+            apply_exalted_on_attack(self.state, perm, solo_attack=solo),
+            'exalted',
+        )
+        for detail, tag in (
+            (apply_mentor_on_attack(self.state, perm, attacker_ids), 'mentor'),
+            (apply_training_on_attack(self.state, perm, attacker_ids), 'training'),
+        ):
+            self._log_attack_keyword(detail, tag)
+        self._log_attack_keyword(
+            apply_myriad_on_attack(
+                self.state,
+                perm,
+                defending_player_idx=defending_player_idx,
+            ),
+            'myriad',
+        )
+        enlist_detail = apply_enlist_on_attack(self.state, perm, attacker_ids)
+        self._log_attack_keyword(enlist_detail, 'enlist')
+        if enlist_detail and 'draw' in enlist_detail:
+            self._draw_cards(perm.controller_idx, 1)
+        self._log_attack_keyword(apply_mobilize_on_attack(self.state, perm), 'mobilize')
+        self._log_attack_keyword(
+            apply_battle_cry_on_attack(self.state, perm, attacker_ids),
+            'battle_cry',
+        )
+
+    def _apply_attack_keywords(
         self,
         attacker_ids: list[str],
         *,
@@ -184,60 +475,12 @@ class CombatActionsMixin(ActivatedActionsMixin):
             perm = self._find_permanent(attacker_id)
             if perm is None:
                 continue
-            for apply_fn, tag in (
-                (apply_annihilator_on_attack, 'annihilator'),
-                (apply_afflict_on_attack, 'afflict'),
-                (apply_firebending_on_attack, 'firebending'),
-                (apply_double_team_on_attack, 'double team'),
-            ):
-                detail = apply_fn(self.state, perm)
-                if detail:
-                    self._log('rules', tag, detail)
-            exalted_detail = apply_exalted_on_attack(
-                self.state,
+            self._apply_permanent_attack_keywords(
                 perm,
-                solo_attack=solo,
-            )
-            if exalted_detail:
-                self._log('rules', 'exalted', exalted_detail)
-            mentor_detail = apply_mentor_on_attack(
-                self.state,
-                perm,
-                attacker_ids,
-            )
-            training_detail = apply_training_on_attack(self.state, perm, attacker_ids)
-            for detail, tag in (
-                (mentor_detail, 'mentor'),
-                (training_detail, 'training'),
-            ):
-                if detail:
-                    self._log('rules', tag, detail)
-            myriad_detail = apply_myriad_on_attack(
-                self.state,
-                perm,
+                solo=solo,
+                attacker_ids=attacker_ids,
                 defending_player_idx=defending_player_idx,
             )
-            if myriad_detail:
-                self._log('rules', 'myriad', myriad_detail)
-            enlist_detail = apply_enlist_on_attack(
-                self.state,
-                perm,
-                attacker_ids,
-            )
-            if enlist_detail:
-                self._log('rules', 'enlist', enlist_detail)
-                if 'draw' in enlist_detail:
-                    self._draw_cards(perm.controller_idx, 1)
-            mobilize_detail = apply_mobilize_on_attack(self.state, perm)
-            if mobilize_detail:
-                self._log('rules', 'mobilize', mobilize_detail)
-            battle_cry_detail = apply_battle_cry_on_attack(
-                self.state,
-                perm,
-                attacker_ids,
-            )
-            if battle_cry_detail:
-                self._log('rules', 'battle_cry', battle_cry_detail)
 
     def _start_opponent_attack(self) -> None:
         """Declare opponent attackers or finish the opponent turn."""

@@ -29,12 +29,14 @@ def word_to_int(word: str) -> int:
 
 
 def parse_amount_after_keyword(text: str, keyword: str) -> int:
-    """Return N from phrases like 'Mill two' or 'Scry 1' (default 1)."""
-    pattern = rf'\b{re.escape(keyword)}\s+(\w+|\d+)'
-    match = re.search(pattern, text, re.IGNORECASE)
-    if match is None:
+    """Return N from phrases like 'Mill two' or 'Scry 1'; 0 when keyword is absent."""
+    numbered = rf'\b{re.escape(keyword)}\s+(\w+|\d+)'
+    match = re.search(numbered, text, re.IGNORECASE)
+    if match is not None:
+        return word_to_int(match.group(1))
+    if re.search(rf'\b{re.escape(keyword)}\b', text, re.IGNORECASE):
         return 1
-    return word_to_int(match.group(1))
+    return 0
 
 
 def parse_target_player_mill(text: str) -> int:

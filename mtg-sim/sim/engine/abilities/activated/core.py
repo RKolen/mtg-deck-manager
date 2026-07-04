@@ -11,12 +11,14 @@ from deck_registry import CardInfo
 from engine.abilities.keywords.ability_words.effects import AbilityWordEffect
 from engine.core.game_object import ActivatedAbilityOnStack, Permanent, Target
 from engine.core.mana import ManaCost, mana_of
+from engine.rules.mana_payment import pay_mana_cost
 
 if TYPE_CHECKING:
     from engine.core.game_state import GameState
 
 _TAP_COST = "{T}"
 _EQUIP_RE = re.compile(r"equip\s+(\{[^}]+\})", re.IGNORECASE)
+_LOYALTY_COST_RE = re.compile(r"^([+−-])\s*(\d+)")
 
 
 class ActivationSpeed(Enum):
@@ -50,6 +52,13 @@ def parse_activated_abilities(oracle_text: str) -> list[ActivatedAbilitySpec]:
     specs: list[ActivatedAbilitySpec] = []
     for raw_line in oracle_text.split("\n"):
         line = raw_line.strip()
+        if _EQUIP_RE.search(line) and ":" not in line:
+            specs.append(ActivatedAbilitySpec(
+                cost_text=line,
+                effect_text="Attach this Equipment to target creature",
+                equip=True,
+            ))
+            continue
         if ":" not in line:
             continue
         cost_text, effect_text = line.split(":", maxsplit=1)
@@ -86,13 +95,37 @@ def activation_mana_value(cost_text: str) -> int:
 def activation_mana_cost(cost_text: str) -> ManaCost:
     """Return the mana portion of an activation cost (excluding tap and equip)."""
     stripped = cost_text.replace(_TAP_COST, "")
+    equip_only = equip_cost(stripped)
+    if equip_only is not None and _EQUIP_RE.match(stripped.strip()):
+        return equip_only
     equip_match = _EQUIP_RE.search(stripped)
     if equip_match is not None:
         stripped = stripped[:equip_match.start()] + stripped[equip_match.end():]
-    stripped = stripped.strip()
+    stripped = _strip_loyalty_prefix(stripped.strip())
     if not stripped:
         return ManaCost()
     return ManaCost.parse(stripped)
+
+
+def loyalty_cost_change(cost_text: str) -> int | None:
+    """Return loyalty added or removed by a planeswalker ability cost."""
+    match = _LOYALTY_COST_RE.match(cost_text.strip())
+    if match is None:
+        return None
+    sign = -1 if match.group(1) in '-−' else 1
+    return sign * int(match.group(2))
+
+
+def can_pay_loyalty(perm: Permanent, delta: int) -> bool:
+    """Return True when the permanent can pay a loyalty cost."""
+    if delta >= 0:
+        return True
+    return perm.counters.get('loyalty', 0) + delta >= 0
+
+
+def _strip_loyalty_prefix(cost_text: str) -> str:
+    """Remove a leading loyalty cost from an activation cost string."""
+    return _LOYALTY_COST_RE.sub('', cost_text, count=1).strip(' ,')
 
 
 def equip_cost(cost_text: str) -> ManaCost | None:
@@ -135,6 +168,19 @@ def has_mana_ability_card(card: CardInfo) -> bool:
     return has_mana_ability(card)
 
 
+def _activation_speed_ok(
+    spec: ActivatedAbilitySpec,
+    game: GameState,
+    speed: ActivationSpeed,
+) -> bool:
+    """Return True when stack/phase rules allow activation at this speed."""
+    if spec.mana_ability:
+        return True
+    if speed == ActivationSpeed.INSTANT:
+        return True
+    return speed == ActivationSpeed.SORCERY and game.stack.is_empty
+
+
 def can_activate(
     perm: Permanent,
     spec: ActivatedAbilitySpec,
@@ -147,15 +193,14 @@ def can_activate(
         return False
     if perm.tapped and requires_tap(spec.cost_text):
         return False
-    if spec.equip and speed != ActivationSpeed.SORCERY:
+    if spec.equip and (
+        speed != ActivationSpeed.SORCERY or not game.stack.is_empty
+    ):
         return False
-    if spec.equip and not game.stack.is_empty:
+    loyalty = loyalty_cost_change(spec.cost_text)
+    if loyalty is not None and not can_pay_loyalty(perm, loyalty):
         return False
-    if spec.mana_ability:
-        return True
-    return speed == ActivationSpeed.INSTANT or (
-        speed == ActivationSpeed.SORCERY and game.stack.is_empty
-    )
+    return _activation_speed_ok(spec, game, speed)
 
 
 def activate_mana_ability(game: GameState, perm: Permanent, spec: ActivatedAbilitySpec) -> str:
@@ -179,6 +224,23 @@ class _ActivationCall:
     mana_paid: bool = False
 
 
+def _pay_loyalty_activation_cost(
+    perm: Permanent,
+    spec: ActivatedAbilitySpec,
+    call: _ActivationCall,
+) -> ActivationResult | None:
+    """Pay loyalty cost or return an error result; None when no loyalty cost."""
+    loyalty = loyalty_cost_change(spec.cost_text)
+    if loyalty is None:
+        return None
+    if not call.mana_paid:
+        return ActivationResult(ok=False, detail="Need loyalty payment")
+    if not can_pay_loyalty(perm, loyalty):
+        return ActivationResult(ok=False, detail="Not enough loyalty")
+    perm.counters['loyalty'] = perm.counters.get('loyalty', 0) + loyalty
+    return None
+
+
 def activate_on_stack(
     game: GameState,
     perm: Permanent,
@@ -189,10 +251,16 @@ def activate_on_stack(
     if spec.mana_ability:
         detail = activate_mana_ability(game, perm, spec)
         return ActivationResult(ok=bool(detail), detail=detail, used_stack=False)
-    if spec.equip:
-        return ActivationResult(ok=False, detail="Use equip activation with a host")
-    if requires_tap(spec.cost_text) and perm.tapped:
-        return ActivationResult(ok=False, detail="Already tapped")
+    if spec.equip or (requires_tap(spec.cost_text) and perm.tapped):
+        detail = (
+            "Use equip activation with a host"
+            if spec.equip
+            else "Already tapped"
+        )
+        return ActivationResult(ok=False, detail=detail)
+    loyalty_err = _pay_loyalty_activation_cost(perm, spec, call)
+    if loyalty_err is not None:
+        return loyalty_err
     mana_needed = activation_mana_value(spec.cost_text)
     if mana_needed > 0 and not call.mana_paid:
         return ActivationResult(ok=False, detail=f"Need {mana_needed} mana")
@@ -239,8 +307,6 @@ def activate_equip(
         return ActivationResult(ok=False, detail="Host must be a creature")
     cost = equip_cost(spec.cost_text)
     if cost is not None and cost.mana_value > 0:
-        from engine.game.mana_payment import pay_mana_cost  # pylint: disable=import-outside-toplevel
-
         if not pay_mana_cost(game, equipment.controller_idx, cost):
             return ActivationResult(ok=False, detail="Cannot pay equip cost")
     if requires_tap(spec.cost_text):

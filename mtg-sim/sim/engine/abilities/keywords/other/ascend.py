@@ -25,12 +25,11 @@ def has_ascend_card(card: CardInfo) -> bool:
 
 def update_ascend_status(game: GameState, player_idx: int) -> str | None:
     """Set ascended when the player controls ten or more permanents."""
-    if game.players[player_idx].ascended:
-        return None
     count = sum(
         1 for perm in game.zones.battlefield if perm.controller_idx == player_idx
     )
     if count < 10:
         return None
-    game.players[player_idx].ascended = True
+    if not game.players[player_idx].ascended:
+        game.players[player_idx].ascended = True
     return f"P{player_idx + 1} ascended (City's Blessing)"

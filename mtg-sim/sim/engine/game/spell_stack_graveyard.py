@@ -69,7 +69,7 @@ from engine.game.cast_flow import (
     _TargetRef,
 )
 from engine.game.helpers import require_card_info
-from engine.game.spell_stack_placement import SpellStackPlacementMixin
+from engine.game.spell_stack_resolve import SpellResolveMixin
 
 
 @dataclass
@@ -95,7 +95,7 @@ class _RetraceCastState:
     life: int = 0
 
 
-class GraveyardCastMixin(SpellStackPlacementMixin):
+class GraveyardCastMixin(SpellResolveMixin):
     """Cast from graveyard, foretell setup/cast, and plot setup/cast."""
 
     def _announce_flashback_cast(

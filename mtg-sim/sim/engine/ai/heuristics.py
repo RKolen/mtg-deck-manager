@@ -66,9 +66,14 @@ def ai_burn_target(opponent_life: int, opponent_creatures: list[Permanent]) -> s
     return "player"
 
 
+def _creature_permanents(permanents: list[Permanent]) -> list[Permanent]:
+    """Return permanents whose card info marks them as creatures."""
+    return [p for p in permanents if p.card_info and p.card_info.is_creature]
+
+
 def ai_removal_target(opponent_creatures: list[Permanent]) -> Permanent | None:
     """Return the highest-power creature for the AI to remove, or None."""
-    creatures = [p for p in opponent_creatures if p.card_info and p.card_info.is_creature]
+    creatures = _creature_permanents(opponent_creatures)
     if not creatures:
         return None
     return max(creatures, key=lambda p: p.card_info.numeric_power if p.card_info else 0)
@@ -76,7 +81,7 @@ def ai_removal_target(opponent_creatures: list[Permanent]) -> Permanent | None:
 
 def ai_pump_target(own_creatures: list[Permanent]) -> Permanent | None:
     """Return the highest-power friendly creature to pump, or None."""
-    creatures = [p for p in own_creatures if p.card_info and p.card_info.is_creature]
+    creatures = _creature_permanents(own_creatures)
     if not creatures:
         return None
     return max(creatures, key=lambda p: p.card_info.numeric_power if p.card_info else 0)

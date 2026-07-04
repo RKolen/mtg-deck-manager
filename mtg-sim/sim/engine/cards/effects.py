@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
 from engine.abilities.keywords.actions.fight import fight_creatures
@@ -17,7 +17,7 @@ from engine.abilities.keywords.actions.tokens import create_token_from_blueprint
 from engine.abilities.keywords.ability_words.conditions import delirium_met
 from engine.cards.oracle_parse import TokenBlueprint
 from engine.abilities.keywords.actions.targets import find_creature_by_uid
-from engine.core.game_object import CardObject, Permanent, SpellOnStack
+from engine.core.game_object import CardObject, Permanent
 from engine.core.zones import Zone
 from engine.rules.modifiers import add_until_eot_pt_modifier, add_until_eot_set_pt_modifier
 
@@ -30,8 +30,13 @@ DiscardTarget = Literal['controller', 'target_player', 'each_opponent']
 DrawFn = Callable[[int, int], list[CardObject]]
 
 
-class CardEffect(ABC):  # pylint: disable=too-few-public-methods
+class CardEffect(ABC):
     """A single structured effect applied during spell or ability resolution."""
+
+    @property
+    def kind(self) -> str:
+        """Effect type name used by serde and logging."""
+        return type(self).__name__
 
     @abstractmethod
     def apply(self, ctx: CardEffectContext) -> str:
@@ -39,44 +44,39 @@ class CardEffect(ABC):  # pylint: disable=too-few-public-methods
 
 
 @dataclass
-class CardEffectContext:  # pylint: disable=too-many-instance-attributes
+class _CardEffectTargets:
+    """Chosen targets for one resolving effect."""
+
+    player_idx: int | None = None
+    creature_uid: str | None = None
+    second_creature_uid: str | None = None
+
+
+@dataclass
+class CardEffectContext:
     """Runtime inputs for applying scripted card effects."""
 
     game: GameState
     controller_idx: int
     source: CardObject
-    target_player_idx: int | None = None
-    target_creature_uid: str | None = None
-    second_target_creature_uid: str | None = None
+    targets: _CardEffectTargets = field(default_factory=_CardEffectTargets)
     selected_mode: int | None = None
     draw_fn: DrawFn | None = None
 
-    @classmethod
-    def from_spell(
-        cls,
-        game: GameState,
-        spell: SpellOnStack,
-        draw_fn: DrawFn | None = None,
-    ) -> CardEffectContext:
-        """Build context from a resolving spell on the stack."""
-        card = spell.source
-        if card is None:
-            raise ValueError('spell has no source card')
-        from engine.game.helpers import creature_target_uids  # pylint: disable=import-outside-toplevel
-        from engine.game.helpers import target_player as target_player_from_targets  # pylint: disable=import-outside-toplevel
+    @property
+    def target_player_idx(self) -> int | None:
+        """Target player index when the spell targets a player."""
+        return self.targets.player_idx
 
-        creature_uids = creature_target_uids(spell.targets)
-        mode_idx = spell.modes[0] if spell.modes else None
-        return cls(
-            game=game,
-            controller_idx=spell.controller_idx,
-            source=card,
-            target_player_idx=target_player_from_targets(spell.targets),
-            target_creature_uid=creature_uids[0] if creature_uids else None,
-            second_target_creature_uid=creature_uids[1] if len(creature_uids) > 1 else None,
-            selected_mode=mode_idx,
-            draw_fn=draw_fn,
-        )
+    @property
+    def target_creature_uid(self) -> str | None:
+        """Primary creature target UID."""
+        return self.targets.creature_uid
+
+    @property
+    def second_target_creature_uid(self) -> str | None:
+        """Secondary creature target UID."""
+        return self.targets.second_creature_uid
 
     def target_creature(self) -> Permanent | None:
         """Return the targeted creature permanent, if any."""

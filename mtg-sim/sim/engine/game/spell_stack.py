@@ -69,7 +69,6 @@ from engine.game.helpers import (
     require_card_info,
 )
 from engine.game.spell_stack_graveyard import GraveyardCastMixin
-from engine.game.spell_stack_resolve import SpellResolveMixin
 
 
 @dataclass(frozen=True)
@@ -122,7 +121,7 @@ def _build_cast_detail(
     return detail
 
 
-class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
+class SpellStackMixin(GraveyardCastMixin):
     """Stack placement, casting announcements, and spell resolution."""
 
     def _announce_cast(
@@ -211,7 +210,129 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
             return sacrificed.name
         return ""
 
-    def _place_validated_hand_cast(  # pylint: disable=too-many-branches,too-many-locals
+    def _build_hand_cast_stack_context(
+        self,
+        placement: HandCastPlacement,
+    ) -> SpellCastContext:
+        """Build stack context from validated hand-cast placement."""
+        mods = placement.paid.modifiers
+        stack_modes = (
+            (mods.tiered_mode,)
+            if mods.tiered_mode is not None
+            else mods.spree_modes
+        )
+        copies = mods.copy_casts.stack_copies
+        resolve_extras = mods.copy_casts.resolve_extras
+        return SpellCastContext(
+            payment=SpellCastPayment(
+                costs=_CostMods(
+                    kicker_times=mods.kicker_times,
+                    squad_times=mods.squad_times,
+                    entwined=mods.entwined,
+                    overloaded=mods.overloaded,
+                    bestow=mods.bestow,
+                    paid_buyback=mods.buyback,
+                ),
+                modes=_AlternateModes(
+                    sac=SacrificeCastFlags(
+                        emerge=mods.sac.emerge,
+                        evoke=mods.sac.evoke,
+                        mutate=mods.sac.mutate,
+                        casualty=mods.sac.casualty,
+                        bargain=mods.sac.bargain,
+                        gift=mods.sac.gift,
+                        artifact=_ArtifactCastSacFlags(
+                            offering=mods.sac.artifact.offering,
+                            for_mirrodin=mods.sac.artifact.for_mirrodin,
+                        ),
+                    ),
+                    morph_face_down=mods.face.morph,
+                ),
+                keywords=_KeywordPays(
+                    disguise_face_down=mods.face.disguise,
+                    dash=mods.face.dash,
+                    blitz=mods.face.blitz,
+                    cleave=copies.cleave,
+                    conspire=copies.conspire,
+                    demonstrate=copies.demonstrate,
+                    awaken=resolve_extras.awaken,
+                ),
+            ),
+            repeat=_StackRepeatCosts(
+                replicate_times=mods.replicate_times,
+                squad_times=mods.squad_times,
+            ),
+            spree_mode_indices=stack_modes,
+            extras=_HandCastExtras(
+                awaken_land_hand_idx=placement.opts.modifiers.reductions.hand.awaken_land_hand_idx,
+                fuse=copies.fuse,
+                impending=resolve_extras.impending,
+                prototype=mods.prototype,
+                warp=mods.conditions.alt_modes.warp,
+                converted=mods.conditions.alt_modes.converted,
+            ),
+        )
+
+    def _log_post_hand_cast_effects(
+        self,
+        placement: HandCastPlacement,
+        adjustments: CastAdjustmentResult,
+        targets: list,
+    ) -> None:
+        """Apply bargain, gift, ripple, and other post-cast side effects."""
+        mods = placement.paid.modifiers
+        if bargain_draw_on_cast(placement.card_info, mods.sac.bargain):
+            drawn = self._draw_cards(0, 1)
+            if drawn:
+                self._log("player", "draw", f"Bargain drew {require_card_info(drawn[0]).name}")
+        if gift_opponent_draws(placement.card_info, mods.sac.gift):
+            drawn = self._draw_cards(1, 1)
+            if drawn:
+                self._log(
+                    "player",
+                    "draw",
+                    f"Gift drew {require_card_info(drawn[0]).name} for opponent",
+                )
+        self.state.fire_spell_cast_triggers(
+            placement.card,
+            tuple(targets),
+            mana_spent=adjustments.mana_needed,
+        )
+        ripple_detail = apply_ripple_on_cast(self.state, 0, placement.card_info)
+        if ripple_detail:
+            self._log('rules', 'ripple', ripple_detail)
+        if placement.paid.modifiers.conditions.alt_modes.specialize:
+            specialized = discard_for_specialize(
+                self.state.zones,
+                0,
+                placement.opts.modifiers.reductions.hand.specialize_hand_idx,
+                self.state,
+            )
+            if specialized:
+                self._log('rules', 'specialize', f"specialized (discarded {specialized})")
+        if placement.paid.modifiers.copy_casts.resolve_extras.paid_splice:
+            spliced = discard_for_splice(
+                self.state.zones,
+                0,
+                placement.opts.modifiers.reductions.hand.splice_hand_idx,
+                self.state,
+            )
+            if spliced:
+                self._log('rules', 'splice', f"spliced {spliced}")
+        if placement.paid.modifiers.conditions.alt_modes.web_slinging:
+            slung = return_creature_for_web_sling(
+                self.state.zones,
+                0,
+                placement.opts.modifiers.reductions.hand.web_sling_creature_uid,
+            )
+            if slung:
+                self._log('rules', 'web-slinging', f"returned {slung}")
+        for word_detail in apply_spell_hosted_ability_words(
+            self.state, placement.card_info, 0
+        ):
+            self._log("player", "ability_word", word_detail)
+
+    def _place_validated_hand_cast(
         self,
         placement: HandCastPlacement,
     ) -> dict:
@@ -235,61 +356,7 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
         self.state.players[0].spells_cast_this_turn += 1
         self._pay_phyrexian(0, placement.life_cost, placement.card_info.name)
         sacrificed_name = self._apply_emerge_casualty_sacrifice(placement.paid)
-        mods = placement.paid.modifiers
-        stack_modes = (
-            (mods.tiered_mode,)
-            if mods.tiered_mode is not None
-            else mods.spree_modes
-        )
-        stack_context = SpellCastContext(
-            payment=SpellCastPayment(
-                costs=_CostMods(
-                    kicker_times=mods.kicker_times,
-                    squad_times=mods.squad_times,
-                    entwined=mods.entwined,
-                    overloaded=mods.overloaded,
-                    bestow=mods.bestow,
-                    paid_buyback=mods.buyback,
-                ),
-                modes=_AlternateModes(
-                    sac=SacrificeCastFlags(
-                        emerge=mods.emerge,
-                        evoke=mods.evoke,
-                        mutate=mods.mutate,
-                        casualty=mods.casualty,
-                        bargain=mods.bargain,
-                        gift=mods.gift,
-                        artifact=_ArtifactCastSacFlags(
-                            offering=mods.sac.artifact.offering,
-                            for_mirrodin=mods.sac.artifact.for_mirrodin,
-                        ),
-                    ),
-                    morph_face_down=mods.morph,
-                ),
-                keywords=_KeywordPays(
-                    disguise_face_down=mods.disguise,
-                    dash=mods.dash,
-                    blitz=mods.blitz,
-                    cleave=mods.copy_casts.cleave,
-                    conspire=mods.copy_casts.conspire,
-                    demonstrate=mods.copy_casts.demonstrate,
-                    awaken=mods.copy_casts.awaken,
-                ),
-            ),
-            repeat=_StackRepeatCosts(
-                replicate_times=mods.replicate_times,
-                squad_times=mods.squad_times,
-            ),
-            spree_mode_indices=stack_modes,
-            extras=_HandCastExtras(
-                awaken_land_hand_idx=placement.opts.modifiers.reductions.awaken_land_hand_idx,
-                fuse=mods.copy_casts.fuse,
-                impending=mods.copy_casts.impending,
-                prototype=mods.prototype,
-                warp=mods.conditions.warp,
-                converted=mods.conditions.converted,
-            ),
-        )
+        stack_context = self._build_hand_cast_stack_context(placement)
         targets = self._put_spell_on_stack(
             player_idx=0,
             card=placement.card,
@@ -303,56 +370,7 @@ class SpellStackMixin(GraveyardCastMixin, SpellResolveMixin):
             adjustments,
         )
         self._log("player", "cast", cast_detail)
-        if bargain_draw_on_cast(placement.card_info, mods.bargain):
-            drawn = self._draw_cards(0, 1)
-            if drawn:
-                self._log("player", "draw", f"Bargain drew {require_card_info(drawn[0]).name}")
-        if gift_opponent_draws(placement.card_info, mods.gift):
-            drawn = self._draw_cards(1, 1)
-            if drawn:
-                self._log(
-                    "player",
-                    "draw",
-                    f"Gift drew {require_card_info(drawn[0]).name} for opponent",
-                )
-        self.state.fire_spell_cast_triggers(
-            placement.card,
-            tuple(targets),
-            mana_spent=adjustments.mana_needed,
-        )
-        ripple_detail = apply_ripple_on_cast(self.state, 0, placement.card_info)
-        if ripple_detail:
-            self._log('rules', 'ripple', ripple_detail)
-        if placement.paid.modifiers.conditions.specialize:
-            specialized = discard_for_specialize(
-                self.state.zones,
-                0,
-                placement.opts.modifiers.reductions.specialize_hand_idx,
-                self.state,
-            )
-            if specialized:
-                self._log('rules', 'specialize', f"specialized (discarded {specialized})")
-        if placement.paid.modifiers.copy_casts.paid_splice:
-            spliced = discard_for_splice(
-                self.state.zones,
-                0,
-                placement.opts.modifiers.reductions.splice_hand_idx,
-                self.state,
-            )
-            if spliced:
-                self._log('rules', 'splice', f"spliced {spliced}")
-        if placement.paid.modifiers.conditions.web_slinging:
-            slung = return_creature_for_web_sling(
-                self.state.zones,
-                0,
-                placement.opts.modifiers.reductions.web_sling_creature_uid,
-            )
-            if slung:
-                self._log('rules', 'web-slinging', f"returned {slung}")
-        for word_detail in apply_spell_hosted_ability_words(
-            self.state, placement.card_info, 0
-        ):
-            self._log("player", "ability_word", word_detail)
+        self._log_post_hand_cast_effects(placement, adjustments, targets)
         if placement.auto_resolve:
             self._auto_pass_stack()
         return self.to_client()

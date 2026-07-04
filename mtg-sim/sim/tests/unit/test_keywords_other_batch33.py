@@ -127,6 +127,6 @@ def test_commander_ninjutsu_puts_commander_on_battlefield():
     )
     assert detail is not None
     assert 'commander ninjutsu' in detail
-    assert attacker in game.zones.player_zones[0].hand
+    assert attacker.source in game.zones.player_zones[0].hand
     assert game.players[0].commander is None
     assert game.zones.battlefield[-1].name == 'Yuriko'

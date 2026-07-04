@@ -47,7 +47,7 @@ def resolve_cast_adjustments(
     mana, delve_count, err = resolve_delve_for_cast(
         card,
         mana_needed,
-        list(reductions.delve_graveyard_indices),
+        list(reductions.convoke.delve_graveyard_indices),
         zones,
         player_idx,
     )
@@ -57,7 +57,7 @@ def resolve_cast_adjustments(
     mana, convoke_ids, err = resolve_convoke_for_cast(
         card,
         mana,
-        list(reductions.convoke_creature_ids),
+        list(reductions.convoke.convoke_creature_ids),
         zones,
         player_idx,
     )
@@ -67,7 +67,7 @@ def resolve_cast_adjustments(
     mana, improvise_ids, err = resolve_improvise_for_cast(
         card,
         mana,
-        list(reductions.improvise_artifact_ids),
+        list(reductions.convoke.improvise_artifact_ids),
         zones,
         player_idx,
     )
@@ -86,7 +86,7 @@ def resolve_cast_adjustments(
         player_idx,
         SneakCastInput(
             options.spell_hand_idx,
-            reductions.sneak_land_hand_indices,
+            reductions.hand.sneak_land_hand_indices,
         ),
     )
     if err is not None:

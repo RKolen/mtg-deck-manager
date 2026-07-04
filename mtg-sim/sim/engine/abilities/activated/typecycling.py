@@ -65,7 +65,10 @@ def has_basic_landcycling_card(card: CardInfo) -> bool:
 
 def has_landcycling_card(card: CardInfo) -> bool:
     """Return True when the card has landcycling."""
-    return _has_typecycling_keyword(card, 'Landcycling')
+    return (
+        _has_typecycling_keyword(card, 'Landcycling')
+        and not has_basic_landcycling_card(card)
+    )
 
 
 def has_slivercycling_card(card: CardInfo) -> bool:

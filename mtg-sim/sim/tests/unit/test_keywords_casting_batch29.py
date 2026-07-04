@@ -5,6 +5,7 @@ from __future__ import annotations
 from engine.abilities.keywords.casting.cast_mana import (
     AnnounceCastManaOptions,
     CastManaTiming,
+    _PaidTimingExtras,
     _TimingAvailability,
     resolve_announce_cast_mana,
 )
@@ -26,6 +27,7 @@ from engine.abilities.keywords.casting.warp import (
     warp_mana_needed,
 )
 from engine.core.game_object import CardObject
+from tests.cast_mana_test_helpers import resolve_alt_mode_cast_mana
 from tests.conftest import fresh_game, make_creature, make_instant, place_on_battlefield
 
 
@@ -42,10 +44,7 @@ def test_warp_alternate_cost_and_exile_marker():
     assert normalize_warp_cast(card, True)
     mana, _life = warp_mana_needed(card)
     assert mana == 2
-    paid_mana, _paid_life = resolve_announce_cast_mana(
-        card,
-        AnnounceCastManaOptions(timing=CastManaTiming(cast_for_warp=True)),
-    )
+    paid_mana, _paid_life = resolve_alt_mode_cast_mana(card, warp=True)
     assert paid_mana == 2
     game = fresh_game()
     perm = place_on_battlefield(card, 0, game.zones)
@@ -94,7 +93,9 @@ def test_compleated_adds_life_cost():
         card,
         AnnounceCastManaOptions(
             timing=CastManaTiming(
-                available=_TimingAvailability(paid_compleated=True),
+                available=_TimingAvailability(
+                    paid=_PaidTimingExtras(paid_compleated=True),
+                ),
             ),
         ),
     )

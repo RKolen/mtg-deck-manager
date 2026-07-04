@@ -39,8 +39,9 @@ def test_connive_draws_then_mills_library():
     """Connive draws a card and mills cards from the library."""
     game = fresh_game()
     top = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant('Top'))
+    middle = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant('Middle'))
     bottom = CardObject(controller_idx=0, owner_idx=0, card_info=make_instant('Bottom'))
-    game.zones.player_zones[0].library.extend([bottom, top])
+    game.zones.player_zones[0].library.extend([bottom, middle, top])
     assert has_connive('Connive 2.')
     detail = connive(
         game.zones,

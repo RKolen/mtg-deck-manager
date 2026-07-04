@@ -220,6 +220,18 @@ class ManaPool:
         """Total number of mana floating in the pool."""
         return len(self.pool)
 
+    def to_client(self) -> dict[str, int]:
+        """Serialise the pool for clients."""
+        return {
+            "total": self.total(),
+            "W": self.of_color("W"),
+            "U": self.of_color("U"),
+            "B": self.of_color("B"),
+            "R": self.of_color("R"),
+            "G": self.of_color("G"),
+            "C": self.of_color("C"),
+        }
+
     def of_color(self, color: str) -> int:
         """Count of a specific color currently in the pool."""
         return sum(1 for m in self.pool if m.color == color)

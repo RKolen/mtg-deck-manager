@@ -34,10 +34,23 @@ def validate_partner_with_deck(deck: list[CardInfo]) -> str | None:
     partners = [card for card in deck if has_partner_with(card)]
     if not partners:
         return None
-    if len(partners) < 2:
-        return "Partner with deck must include two partner legendary creatures"
+    if len(partners) >= 2:
+        named = partner_with_name(partners[0])
+        if named is not None:
+            if not any(named.lower() in card.name.lower() for card in partners[1:]):
+                return f"Partner with {named} requires that creature in the deck"
+        return None
     named = partner_with_name(partners[0])
-    if named is not None:
-        if not any(named.lower() in card.name.lower() for card in partners[1:]):
-            return f"Partner with {named} requires that creature in the deck"
-    return None
+    if named is not None and any(
+        named.lower() in card.name.lower()
+        for card in deck
+        if card is not partners[0]
+    ):
+        return None
+    if any(
+        has_registered_keyword(card.oracle_text or '', 'Partner')
+        and not has_partner_with(card)
+        for card in deck
+    ):
+        return None
+    return "Partner with deck must include two partner legendary creatures"

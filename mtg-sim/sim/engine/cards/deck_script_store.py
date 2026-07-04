@@ -27,6 +27,7 @@ from engine.cards.script_coverage import (
     DeckScriptCoverageReport,
     ScriptSource,
     build_coverage_report,
+    parse_script_source,
 )
 
 logger = logging.getLogger(__name__)
@@ -79,7 +80,7 @@ class DeckScriptManifest:
     fingerprint: str
     updated_at: str
     cards: dict[str, list[EffectDict]]
-    card_sources: dict[str, str]
+    card_sources: dict[str, ScriptSource]
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize manifest for on-disk JSON storage."""
@@ -105,7 +106,7 @@ class DeckScriptManifest:
                 for name, effects in (data.get('cards') or {}).items()
             },
             card_sources={
-                str(name): str(source)
+                str(name): parse_script_source(str(source))
                 for name, source in (data.get('card_sources') or {}).items()
             },
         )
@@ -144,8 +145,7 @@ def _coverage_from_manifest(
     cards: list[CardInfo],
     manifest: DeckScriptManifest,
 ) -> DeckScriptCoverageReport:
-    typed_sources: dict[str, ScriptSource] = dict(manifest.card_sources)  # type: ignore[assignment]
-    return build_coverage_report(cards, typed_sources)
+    return build_coverage_report(cards, manifest.card_sources)
 
 
 @dataclass(frozen=True)
@@ -156,15 +156,11 @@ class CardScriptSeed:
     source: ScriptSource
 
 
-def seed_card_script(  # pylint: disable=too-many-return-statements
+def _seed_non_creature_script(
     card: CardInfo,
     previous_cards: dict[str, list[EffectDict]],
 ) -> CardScriptSeed:
-    """Resolve script JSON for one card and record how it was sourced."""
-    if card.is_land:
-        return CardScriptSeed(None, 'skipped_land')
-    if card.is_creature:
-        return CardScriptSeed(None, 'skipped_creature')
+    """Resolve a non-creature script from cache, builtin, infer, or LLM."""
     if card.name in previous_cards:
         return CardScriptSeed(list(previous_cards[card.name]), 'cached')
     builtin = BUILTIN_CARD_SCRIPTS.get(card.name)
@@ -179,6 +175,18 @@ def seed_card_script(  # pylint: disable=too-many-return-statements
     return CardScriptSeed(None, 'unscripted')
 
 
+def seed_card_script(
+    card: CardInfo,
+    previous_cards: dict[str, list[EffectDict]],
+) -> CardScriptSeed:
+    """Resolve script JSON for one card and record how it was sourced."""
+    if card.is_land:
+        return CardScriptSeed(None, 'skipped_land')
+    if card.is_creature:
+        return CardScriptSeed(None, 'skipped_creature')
+    return _seed_non_creature_script(card, previous_cards)
+
+
 def _seed_card_script(
     card: CardInfo,
     previous_cards: dict[str, list[EffectDict]],
@@ -187,7 +195,35 @@ def _seed_card_script(
     return seed.effects
 
 
-def sync_deck_scripts_with_coverage(  # pylint: disable=too-many-locals
+def _build_synced_manifest(
+    source_id: str,
+    cards: list[CardInfo],
+    *,
+    title: str,
+    fingerprint: str,
+    previous_cards: dict[str, list[EffectDict]],
+) -> DeckScriptManifest:
+    """Seed scripts for all unique cards and build a manifest."""
+    cards_by_name = {card.name: card for card in cards if card.name}
+    card_entries: dict[str, list[EffectDict]] = {}
+    source_by_name: dict[str, ScriptSource] = {}
+    for name in _unique_card_names(cards):
+        card = cards_by_name[name]
+        seed = seed_card_script(card, previous_cards)
+        source_by_name[name] = seed.source
+        if seed.effects is not None:
+            card_entries[name] = seed.effects
+    return DeckScriptManifest(
+        source_id=source_id,
+        title=title,
+        fingerprint=fingerprint,
+        updated_at=datetime.now(timezone.utc).isoformat(),
+        cards=card_entries,
+        card_sources=dict(source_by_name),
+    )
+
+
+def sync_deck_scripts_with_coverage(
     source_id: str,
     cards: list[CardInfo],
     *,
@@ -203,25 +239,14 @@ def sync_deck_scripts_with_coverage(  # pylint: disable=too-many-locals
         return DeckScriptSyncResult(scripts=scripts, coverage=coverage)
 
     previous_cards = existing.cards if existing is not None else {}
-    cards_by_name = {card.name: card for card in cards if card.name}
-    card_entries: dict[str, list[EffectDict]] = {}
-    source_by_name: dict[str, ScriptSource] = {}
-    for name in _unique_card_names(cards):
-        card = cards_by_name[name]
-        seed = seed_card_script(card, previous_cards)
-        source_by_name[name] = seed.source
-        if seed.effects is not None:
-            card_entries[name] = seed.effects
-
-    coverage = build_coverage_report(cards, source_by_name)
-    manifest = DeckScriptManifest(
-        source_id=source_id,
+    manifest = _build_synced_manifest(
+        source_id,
+        cards,
         title=title,
         fingerprint=fingerprint,
-        updated_at=datetime.now(timezone.utc).isoformat(),
-        cards=card_entries,
-        card_sources=dict(source_by_name),
+        previous_cards=previous_cards,
     )
+    coverage = build_coverage_report(cards, manifest.card_sources)
     _save_manifest(path, manifest)
     logger.info(
         'Deck script sync %s: %.0f%% scripted (%d/%d unique cards)',

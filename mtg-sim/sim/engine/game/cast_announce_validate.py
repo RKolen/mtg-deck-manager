@@ -10,6 +10,7 @@ from engine.abilities.keywords.casting.bestow import (
     bestow_host_error,
     normalize_bestow,
 )
+from engine.cards.permanent_entry import aura_target_error
 from engine.abilities.keywords.casting.buyback import normalize_buyback
 from engine.abilities.keywords.casting.casualty import (
     casualty_sacrifice_error,
@@ -106,6 +107,7 @@ from engine.core.zones import ZoneManager
 from engine.game.helpers import CastAnnounceOptions
 from engine.core.sac_cast_flags import SacrificeCastFlags as _SacCastFlags
 from engine.core.sac_cast_flags import _ArtifactCastSacFlags
+from engine.game.cast_alt_mode_flags import AltCastModeFlags
 
 
 @dataclass(frozen=True)
@@ -119,18 +121,22 @@ class _FaceCastFlags:
 
 
 @dataclass(frozen=True)
-class _ConditionCastFlags:  # pylint: disable=too-many-instance-attributes
+class _SpectacleCastFlags:
+    """Spectacle and surge alternate cast flags."""
+
+    spectacle: bool = False
+    surge: bool = False
+
+
+@dataclass(frozen=True)
+class _ConditionCastFlags:
     """Condition-gated alternate cast flags."""
 
     miracle: bool = False
     freerunning: bool = False
-    spectacle: bool = False
-    surge: bool = False
     prototype: bool = False
-    warp: bool = False
-    web_slinging: bool = False
-    converted: bool = False
-    specialize: bool = False
+    spectacle_flags: _SpectacleCastFlags = field(default_factory=_SpectacleCastFlags)
+    alt_modes: AltCastModeFlags = field(default_factory=AltCastModeFlags)
 
 
 @dataclass(frozen=True)
@@ -143,17 +149,31 @@ class _RepeatCostCounts:
 
 
 @dataclass(frozen=True)
-class _CopyOnCastFlags:  # pylint: disable=too-many-instance-attributes
+class _StackCopyFlags:
     """Optional costs that put a copy of the spell onto the stack."""
 
     cleave: bool = False
     conspire: bool = False
     demonstrate: bool = False
     fuse: bool = False
+
+
+@dataclass(frozen=True)
+class _ResolveCastExtras:
+    """Optional costs applied when the spell resolves."""
+
     awaken: bool = False
     impending: bool = False
     paid_splice: bool = False
     paid_compleated: bool = False
+
+
+@dataclass(frozen=True)
+class _CopyOnCastFlags:
+    """Optional copy-on-cast and resolve-time extras."""
+
+    stack_copies: _StackCopyFlags = field(default_factory=_StackCopyFlags)
+    resolve_extras: _ResolveCastExtras = field(default_factory=_ResolveCastExtras)
 
 
 @dataclass(frozen=True)
@@ -169,7 +189,7 @@ class _FlatCostFlags:
 
 
 @dataclass(frozen=True)
-class PaidCastModifiers:  # pylint: disable=too-many-public-methods
+class PaidCastModifiers:
     """Normalized optional cost flags after validation."""
 
     spree_modes: tuple[int, ...]
@@ -232,37 +252,17 @@ class PaidCastModifiers:  # pylint: disable=too-many-public-methods
     @property
     def spectacle(self) -> bool:
         """Whether spectacle was used."""
-        return self.conditions.spectacle
+        return self.conditions.spectacle_flags.spectacle
 
     @property
     def surge(self) -> bool:
         """Whether surge was used."""
-        return self.conditions.surge
+        return self.conditions.spectacle_flags.surge
 
     @property
-    def morph(self) -> bool:
-        """Whether morph (face-down) was used."""
-        return self.face.morph
-
-    @property
-    def disguise(self) -> bool:
-        """Whether disguise (face-down) was used."""
-        return self.face.disguise
-
-    @property
-    def dash(self) -> bool:
-        """Whether dash was used."""
-        return self.face.dash
-
-    @property
-    def blitz(self) -> bool:
-        """Whether blitz was used."""
-        return self.face.blitz
-
-    @property
-    def emerge(self) -> bool:
-        """Whether emerge was used."""
-        return self.sac.emerge
+    def prototype(self) -> bool:
+        """Whether prototype was used."""
+        return self.conditions.prototype
 
     @property
     def evoke(self) -> bool:
@@ -270,29 +270,19 @@ class PaidCastModifiers:  # pylint: disable=too-many-public-methods
         return self.sac.evoke
 
     @property
+    def morph(self) -> bool:
+        """Whether morph was used."""
+        return self.face.morph
+
+    @property
+    def emerge(self) -> bool:
+        """Whether emerge was used."""
+        return self.sac.emerge
+
+    @property
     def mutate(self) -> bool:
         """Whether mutate was used."""
         return self.sac.mutate
-
-    @property
-    def casualty(self) -> bool:
-        """Whether casualty was used."""
-        return self.sac.casualty
-
-    @property
-    def bargain(self) -> bool:
-        """Whether bargain was paid."""
-        return self.sac.bargain
-
-    @property
-    def gift(self) -> bool:
-        """Whether gift was paid."""
-        return self.sac.gift
-
-    @property
-    def prototype(self) -> bool:
-        """Whether prototype was used."""
-        return self.conditions.prototype
 
 
 @dataclass(frozen=True)
@@ -398,16 +388,20 @@ def _normalized_paid_flags(
             bestow=normalize_bestow(card_info, opts.modifiers.targeting.bestow_target_uid),
             buyback=normalize_buyback(card_info, opts.costs.paid_buyback),
             copy_casts=_CopyOnCastFlags(
-                cleave=normalize_cleave_cast(card_info, opts.alternate.cast_for_cleave),
-                conspire=normalize_paid_conspire(card_info, opts.costs.paid_conspire),
-                demonstrate=normalize_paid_demonstrate(card_info, opts.costs.paid_demonstrate),
-                fuse=normalize_paid_fuse(card_info, opts.costs.paid_fuse),
-                awaken=normalize_paid_awaken(card_info, opts.costs.paid_awaken),
-                impending=normalize_paid_impending(card_info, opts.costs.paid_impending),
-                paid_splice=normalize_paid_splice(card_info, opts.costs.paid_splice),
-                paid_compleated=normalize_paid_compleated(
-                    card_info,
-                    opts.costs.paid_compleated,
+                stack_copies=_StackCopyFlags(
+                    cleave=normalize_cleave_cast(card_info, opts.alternate.cast_for_cleave),
+                    conspire=normalize_paid_conspire(card_info, opts.costs.paid_conspire),
+                    demonstrate=normalize_paid_demonstrate(card_info, opts.costs.paid_demonstrate),
+                    fuse=normalize_paid_fuse(card_info, opts.costs.paid_fuse),
+                ),
+                resolve_extras=_ResolveCastExtras(
+                    awaken=normalize_paid_awaken(card_info, opts.costs.paid_awaken),
+                    impending=normalize_paid_impending(card_info, opts.costs.paid_impending),
+                    paid_splice=normalize_paid_splice(card_info, opts.costs.paid_splice),
+                    paid_compleated=normalize_paid_compleated(
+                        card_info,
+                        opts.costs.paid_compleated,
+                    ),
                 ),
             ),
             counts=_RepeatCostCounts(
@@ -448,32 +442,36 @@ def _normalized_paid_flags(
                 opts.alternate.cast_for_freerunning,
                 combat_damage_dealt,
             ),
-            spectacle=normalize_spectacle_cast(
-                card_info,
-                opts.alternate.cast_for_spectacle,
-                available=spectacle_available(game, player_idx),
-            ),
-            surge=normalize_surge_cast(
-                card_info,
-                opts.alternate.cast_for_surge,
-                available=surge_available(game, player_idx),
+            spectacle_flags=_SpectacleCastFlags(
+                spectacle=normalize_spectacle_cast(
+                    card_info,
+                    opts.alternate.cast_for_spectacle,
+                    available=spectacle_available(game, player_idx),
+                ),
+                surge=normalize_surge_cast(
+                    card_info,
+                    opts.alternate.cast_for_surge,
+                    available=surge_available(game, player_idx),
+                ),
             ),
             prototype=normalize_prototype_cast(
                 card_info,
                 opts.alternate.cast_for_prototype,
             ),
-            warp=normalize_warp_cast(card_info, opts.alternate.cast_for_warp),
-            web_slinging=normalize_web_slinging_cast(
-                card_info,
-                opts.alternate.cast_for_web_slinging,
-            ),
-            converted=normalize_more_than_meets_the_eye_cast(
-                card_info,
-                opts.alternate.cast_for_converted,
-            ),
-            specialize=normalize_specialize_cast(
-                card_info,
-                opts.alternate.cast_for_specialize,
+            alt_modes=AltCastModeFlags(
+                warp=normalize_warp_cast(card_info, opts.alternate.cast_for_warp),
+                web_slinging=normalize_web_slinging_cast(
+                    card_info,
+                    opts.alternate.cast_for_web_slinging,
+                ),
+                converted=normalize_more_than_meets_the_eye_cast(
+                    card_info,
+                    opts.alternate.cast_for_converted,
+                ),
+                specialize=normalize_specialize_cast(
+                    card_info,
+                    opts.alternate.cast_for_specialize,
+                ),
             ),
         ),
     )
@@ -519,6 +517,12 @@ def validate_announce_cast(
             ctx.player_idx,
             opts.modifiers.targeting.bestow_target_uid,
         ),
+        lambda: aura_target_error(
+            card_info,
+            ctx.zones,
+            ctx.player_idx,
+            target_uid_str,
+        ),
         lambda: _reject_keyword(opts.alternate.cast_for_miracle, paid.miracle, name, "miracle"),
         lambda: _reject_keyword(
             opts.alternate.cast_for_spectacle,
@@ -535,7 +539,7 @@ def validate_announce_cast(
         ),
         lambda: _reject_keyword(
             opts.alternate.cast_for_surge,
-            paid.conditions.surge,
+            paid.conditions.spectacle_flags.surge,
             name,
             "surge",
         ),
@@ -546,19 +550,24 @@ def validate_announce_cast(
             and not surge_available(ctx.game, ctx.player_idx)
             else None
         ),
-        lambda: _reject_keyword(opts.alternate.cast_for_morph, paid.morph, name, "morph"),
-        lambda: _reject_keyword(opts.alternate.cast_for_disguise, paid.disguise, name, "disguise"),
-        lambda: _reject_keyword(opts.alternate.cast_for_dash, paid.dash, name, "dash"),
-        lambda: _reject_keyword(opts.alternate.cast_for_blitz, paid.blitz, name, "blitz"),
+        lambda: _reject_keyword(opts.alternate.cast_for_morph, paid.face.morph, name, "morph"),
+        lambda: _reject_keyword(
+            opts.alternate.cast_for_disguise,
+            paid.face.disguise,
+            name,
+            "disguise",
+        ),
+        lambda: _reject_keyword(opts.alternate.cast_for_dash, paid.face.dash, name, "dash"),
+        lambda: _reject_keyword(opts.alternate.cast_for_blitz, paid.face.blitz, name, "blitz"),
         lambda: _reject_keyword(
             opts.alternate.cast_for_cleave,
-            paid.copy_casts.cleave,
+            paid.copy_casts.stack_copies.cleave,
             name,
             "cleave",
         ),
         lambda: _reject_keyword(
             opts.costs.paid_conspire,
-            paid.copy_casts.conspire,
+            paid.copy_casts.stack_copies.conspire,
             name,
             "conspire",
         ),
@@ -570,7 +579,7 @@ def validate_announce_cast(
         ),
         lambda: _reject_keyword(
             opts.costs.paid_demonstrate,
-            paid.copy_casts.demonstrate,
+            paid.copy_casts.stack_copies.demonstrate,
             name,
             "demonstrate",
         ),
@@ -592,8 +601,8 @@ def validate_announce_cast(
             "squad",
         ),
         lambda: _reject_keyword(opts.costs.paid_buyback, paid.buyback, name, "buyback"),
-        lambda: _reject_keyword(opts.alternate.cast_for_emerge, paid.emerge, name, "emerge"),
-        lambda: _reject_keyword(opts.alternate.cast_for_evoke, paid.evoke, name, "evoke"),
+        lambda: _reject_keyword(opts.alternate.cast_for_emerge, paid.sac.emerge, name, "emerge"),
+        lambda: _reject_keyword(opts.alternate.cast_for_evoke, paid.sac.evoke, name, "evoke"),
         lambda: emerge_sacrifice_error(
             ctx.zones,
             ctx.player_idx,
@@ -601,7 +610,7 @@ def validate_announce_cast(
             opts.alternate.cast_for_emerge,
             list(opts.modifiers.targeting.emerge_sacrifice_ids),
         ),
-        lambda: _reject_keyword(opts.alternate.cast_for_mutate, paid.mutate, name, "mutate"),
+        lambda: _reject_keyword(opts.alternate.cast_for_mutate, paid.sac.mutate, name, "mutate"),
         lambda: mutate_host_error(
             ctx.zones,
             ctx.player_idx,
@@ -616,7 +625,7 @@ def validate_announce_cast(
             card_info,
             opts.modifiers.targeting.tiered_mode_index,
         ),
-        lambda: _reject_keyword(opts.costs.paid_casualty, paid.casualty, name, "casualty"),
+        lambda: _reject_keyword(opts.costs.paid_casualty, paid.sac.casualty, name, "casualty"),
         lambda: casualty_sacrifice_error(
             ctx.game,
             ctx.player_idx,
@@ -624,9 +633,14 @@ def validate_announce_cast(
             opts.costs.paid_casualty,
             list(opts.modifiers.targeting.casualty_sacrifice_ids),
         ),
-        lambda: _reject_keyword(opts.costs.paid_bargain, paid.bargain, name, "bargain"),
+        lambda: _reject_keyword(opts.costs.paid_bargain, paid.sac.bargain, name, "bargain"),
         lambda: _reject_keyword(opts.costs.paid_gift, paid.sac.gift, name, "gift"),
-        lambda: _reject_keyword(opts.costs.paid_fuse, paid.copy_casts.fuse, name, "fuse"),
+        lambda: _reject_keyword(
+            opts.costs.paid_fuse,
+            paid.copy_casts.stack_copies.fuse,
+            name,
+            "fuse",
+        ),
         lambda: bargain_sacrifice_error(
             ctx.zones,
             ctx.player_idx,
@@ -640,13 +654,18 @@ def validate_announce_cast(
             and not has_escalate(card_info)
             else None
         ),
-        lambda: _reject_keyword(opts.costs.paid_awaken, paid.copy_casts.awaken, name, "awaken"),
+        lambda: _reject_keyword(
+            opts.costs.paid_awaken,
+            paid.copy_casts.resolve_extras.awaken,
+            name,
+            "awaken",
+        ),
         lambda: awaken_land_error(
             ctx.zones,
             ctx.player_idx,
             card_info,
             opts.costs.paid_awaken,
-            opts.modifiers.reductions.awaken_land_hand_idx,
+            opts.modifiers.reductions.hand.awaken_land_hand_idx,
         ),
         lambda: _reject_keyword(
             opts.alternate.cast_for_offering,
@@ -676,7 +695,7 @@ def validate_announce_cast(
         ),
         lambda: _reject_keyword(
             opts.costs.paid_impending,
-            paid.copy_casts.impending,
+            paid.copy_casts.resolve_extras.impending,
             name,
             "impending",
         ),
@@ -688,55 +707,55 @@ def validate_announce_cast(
         ),
         lambda: _reject_keyword(
             opts.costs.paid_splice,
-            paid.copy_casts.paid_splice,
+            paid.copy_casts.resolve_extras.paid_splice,
             name,
             "splice",
         ),
         lambda: splice_hand_error(
             ctx.zones,
             ctx.player_idx,
-            opts.modifiers.reductions.splice_hand_idx,
-            paid=paid.copy_casts.paid_splice,
+            opts.modifiers.reductions.hand.splice_hand_idx,
+            paid=paid.copy_casts.resolve_extras.paid_splice,
         ),
         lambda: _reject_keyword(
             opts.alternate.cast_for_warp,
-            paid.conditions.warp,
+            paid.conditions.alt_modes.warp,
             name,
             "warp",
         ),
         lambda: _reject_keyword(
             opts.alternate.cast_for_web_slinging,
-            paid.conditions.web_slinging,
+            paid.conditions.alt_modes.web_slinging,
             name,
             "web-slinging",
         ),
         lambda: web_sling_creature_error(
             ctx.zones,
             ctx.player_idx,
-            opts.modifiers.reductions.web_sling_creature_uid,
-            paid=paid.conditions.web_slinging,
+            opts.modifiers.reductions.hand.web_sling_creature_uid,
+            paid=paid.conditions.alt_modes.web_slinging,
         ),
         lambda: _reject_keyword(
             opts.alternate.cast_for_converted,
-            paid.conditions.converted,
+            paid.conditions.alt_modes.converted,
             name,
             "More Than Meets the Eye",
         ),
         lambda: _reject_keyword(
             opts.alternate.cast_for_specialize,
-            paid.conditions.specialize,
+            paid.conditions.alt_modes.specialize,
             name,
             "specialize",
         ),
         lambda: specialize_discard_error(
             ctx.zones,
             ctx.player_idx,
-            opts.modifiers.reductions.specialize_hand_idx,
-            paid=paid.conditions.specialize,
+            opts.modifiers.reductions.hand.specialize_hand_idx,
+            paid=paid.conditions.alt_modes.specialize,
         ),
         lambda: _reject_keyword(
             opts.costs.paid_compleated,
-            paid.copy_casts.paid_compleated,
+            paid.copy_casts.resolve_extras.paid_compleated,
             name,
             "compleated",
         ),

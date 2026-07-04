@@ -145,7 +145,9 @@ from engine.abilities.keywords.actions.targets import find_creature_by_uid
 from engine.abilities.keywords.actions.tokens import (
     connive,
     create_creature_token_from_oracle,
+    create_token_from_blueprint,
     explore_creature,
+    food_token_blueprint,
     has_connive,
     has_create,
     has_explore,
@@ -153,12 +155,11 @@ from engine.abilities.keywords.actions.tokens import (
     has_investigate,
     has_populate,
     has_treasure,
-    food_token_blueprint,
     investigate,
     populate_token,
     treasure_token_blueprint,
-    create_token_from_blueprint,
 )
+from engine.cards.oracle_parse import parse_token_create_count
 from engine.abilities.keywords.handlers import grant_regeneration_shield
 from engine.abilities.keywords.registry import has_registered_keyword
 from engine.core.game_object import CardObject
@@ -401,7 +402,9 @@ def _apply_treasure(ctx: ActionContext) -> str | None:
 def _apply_food(ctx: ActionContext) -> str | None:
     if not has_food(ctx.oracle_text):
         return None
-    times = parse_amount_after_keyword(ctx.oracle_text, 'food')
+    times = parse_token_create_count(ctx.oracle_text)
+    if times <= 0:
+        times = parse_amount_after_keyword(ctx.oracle_text, 'food')
     names = [
         create_token_from_blueprint(
             ctx.zones, ctx.controller_idx, food_token_blueprint(),

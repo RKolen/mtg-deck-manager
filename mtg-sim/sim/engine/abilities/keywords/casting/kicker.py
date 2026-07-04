@@ -80,8 +80,11 @@ def normalize_kicker_times(card: CardInfo, kicker_times: int) -> int:
 def cast_mana_needed(card: CardInfo, kicker_times: int) -> tuple[int, int]:
     """Return total mana and life for a cast with optional kicker payments."""
     phyrexian_pips = (card.mana_cost or '').upper().count('/P')
-    total_cmc = int(card.cmc) if card.cmc == int(card.cmc) else max(1, int(card.cmc))
-    base = max(0, total_cmc - phyrexian_pips)
+    if card.mana_cost:
+        base = max(0, ManaCost.parse(card.mana_cost).mana_value - phyrexian_pips)
+    else:
+        total_cmc = int(card.cmc) if card.cmc == int(card.cmc) else max(1, int(card.cmc))
+        base = max(0, total_cmc - phyrexian_pips)
     life = phyrexian_pips * 2
     times = normalize_kicker_times(card, kicker_times)
     return base + kicker_mana_per_time(card) * times, life
@@ -126,7 +129,7 @@ def kicked_counter_count(card: CardInfo, kicker_times: int) -> int:
         return 0
     match = _KICKED_COUNTER_RE.search(card.oracle_text or '')
     if match is None:
-        return 0
+        return times if is_multikicker(card) else 0
     word = match.group(1).lower()
     per_kick = _WORD_TO_INT.get(word, int(word) if word.isdigit() else 1)
     return per_kick * times if is_multikicker(card) else per_kick

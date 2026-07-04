@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from engine.core.game_object import Modifier, Permanent
+from engine.core.game_object import Modifier, Permanent, _ModifierLayer, _ModifierPt
 
 if TYPE_CHECKING:
     from engine.core.game_state import GameState
@@ -22,11 +22,8 @@ def add_until_eot_pt_modifier(
     """Apply a layer-7c P/T bonus that expires at end of turn."""
     modifier = Modifier(
         source_obj_id=source_obj_id,
-        layer=7,
-        sublayer='c',
-        power_delta=power_delta,
-        toughness_delta=toughness_delta,
-        duration=DURATION_UNTIL_EOT,
+        layer_info=_ModifierLayer(layer=7, sublayer='c', duration=DURATION_UNTIL_EOT),
+        pt=_ModifierPt(power_delta=power_delta, toughness_delta=toughness_delta),
     )
     perm.modifiers.append(modifier)
     return modifier
@@ -42,11 +39,8 @@ def add_until_eot_set_pt_modifier(
     """Apply a layer-7b set P/T that expires at end of turn."""
     modifier = Modifier(
         source_obj_id=source_obj_id,
-        layer=7,
-        sublayer='b',
-        set_power=power,
-        set_toughness=toughness,
-        duration=DURATION_UNTIL_EOT,
+        layer_info=_ModifierLayer(layer=7, sublayer='b', duration=DURATION_UNTIL_EOT),
+        pt=_ModifierPt(set_power=power, set_toughness=toughness),
     )
     perm.modifiers.append(modifier)
     return modifier

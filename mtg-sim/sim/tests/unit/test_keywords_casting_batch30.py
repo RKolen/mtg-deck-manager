@@ -5,6 +5,7 @@ from __future__ import annotations
 from engine.abilities.keywords.casting.cast_mana import (
     AnnounceCastManaOptions,
     CastManaModifiers,
+    _CastManaOptional,
     resolve_announce_cast_mana,
 )
 from engine.abilities.keywords.casting.paradigm import (
@@ -47,7 +48,9 @@ def test_tiered_requires_one_mode_and_adds_mana():
     paid_mana, _life = resolve_announce_cast_mana(
         card,
         AnnounceCastManaOptions(
-            modifiers=CastManaModifiers(tiered_mode_index=1),
+            modifiers=CastManaModifiers(
+                optional=_CastManaOptional(tiered_mode_index=1),
+            ),
         ),
     )
     assert paid_mana == 4

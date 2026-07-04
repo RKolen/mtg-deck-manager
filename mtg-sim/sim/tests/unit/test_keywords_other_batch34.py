@@ -27,7 +27,7 @@ def test_exploit_sacrifices_on_etb():
     detail = apply_exploit_etb(game, host)
     assert detail is not None
     assert 'sacrificed' in detail
-    assert fodder in game.zones.player_zones[0].graveyard
+    assert fodder.source in game.zones.player_zones[0].graveyard
     details = apply_etb_other_abilities(game, host)
     assert any('exploit' in item for item in details)
 

@@ -55,6 +55,13 @@ def test_dredge_keyword_mills_from_library():
             card_info=make_creature('Top Card', 1, 1),
         ),
     )
+    zones.player_zones[0].library.append(
+        CardObject(
+            controller_idx=0,
+            owner_idx=0,
+            card_info=make_creature('Second Card', 1, 1),
+        ),
+    )
     dredge_card = make_creature('Golgari', 6, 6, oracle='Dredge 2')
     assert has_dredge_card(dredge_card)
     zones.player_zones[0].graveyard.append(

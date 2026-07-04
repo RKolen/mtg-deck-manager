@@ -6,11 +6,13 @@ from typing import TYPE_CHECKING
 
 from deck_registry import CardInfo
 from engine.cards.oracle_parse import is_affordable
-from engine.core.game_object import CardObject, Permanent
+from engine.core.game_object import CardObject, Permanent, Target
 from engine.core.mana import ManaCost
 from engine.core.game_object import SpellOnStack
 from engine.core.game_state import LogEntry
-from engine.core.zones import Zone
+from engine.abilities.activated.core import activation_mana_cost
+from engine.core.zones import PutCardInZoneRequest, Zone
+from engine.rules.mana_payment import pay_cast_mana, pay_mana_cost
 from engine.core.game_object import (
     spell_exiles_from_graveyard_cast,
     spell_is_ephemeral_copy,
@@ -31,11 +33,25 @@ from engine.abilities.keywords.casting.rebound import (
 )
 from engine.game.helpers import (
     HandCastContext,
+    SpellCastContext,
     card_to_client,
     has_instant_timing,
     is_land,
     require_card_info,
+    spell_on_stack_from_context,
+    targets_from_request,
 )
+from engine.game.cast_flow import (
+    AnnounceCastCompletion,
+    ExileCastRequest,
+    GraveyardCastRequest,
+    _CastLog,
+    _TargetRef,
+    not_enough_mana_message,
+    split_mana_cost,
+)
+from engine.game.cast_modifiers import apply_post_cast_modifiers
+from engine.game.cast_context import _HandCastExtras
 
 if TYPE_CHECKING:
     from engine.core.game_state import GameState
@@ -82,6 +98,7 @@ class GameRuntimeMixin:
             "playerBattlefield": self._battlefield_to_client(0),
             "playerLife": self.state.players[0].life,
             "playerMana": self._available_mana(0),
+            "playerManaPool": self.state.players[0].mana_pool.to_client(),
             "playerTotalMana": self._total_mana(0),
             "playerLandPlayed": self.state.players[0].land_played,
             "playerGraveyard": self._graveyard_names(0),
@@ -208,8 +225,6 @@ class GameRuntimeMixin:
 
     def _tap_mana_for_spell(self, player_idx: int, card_info: CardInfo, land_slots: int) -> bool:
         """Pay a spell cost using the mana pool and land colors."""
-        from engine.game.mana_payment import pay_cast_mana  # pylint: disable=import-outside-toplevel
-
         return pay_cast_mana(self.state, player_idx, card_info, land_slots)
 
     def _pay_mana_for_action(
@@ -221,9 +236,6 @@ class GameRuntimeMixin:
         mana_needed: int = 0,
     ) -> bool:
         """Pay a spell or activation mana cost using the pool and land colors."""
-        from engine.abilities.activated.core import activation_mana_cost  # pylint: disable=import-outside-toplevel
-        from engine.game.mana_payment import pay_mana_cost  # pylint: disable=import-outside-toplevel
-
         resolved = cost
         if cost_text is not None:
             resolved = activation_mana_cost(cost_text)
@@ -232,6 +244,11 @@ class GameRuntimeMixin:
         if resolved is None or resolved.mana_value == 0:
             return True
         return pay_mana_cost(self.state, player_idx, resolved)
+
+    def _empty_mana_pools(self) -> None:
+        """Drain floating mana from each player (CR 106.4, simplified)."""
+        for player in self.state.players:
+            player.mana_pool.empty()
 
     def _available_mana(self, player_idx: int) -> int:
         return len(self.state.zones.untapped_lands_of(player_idx))
@@ -275,6 +292,18 @@ class GameRuntimeMixin:
             return None, self._client_error(err)
         return card, None
 
+    def _load_graveyard_card(
+        self,
+        player_idx: int,
+        graveyard_idx: int,
+    ) -> tuple[CardObject | None, CardInfo | None, dict | None]:
+        """Return (card, card_info, None) or (None, None, error_dict)."""
+        card, err = self._graveyard_card_checked(player_idx, graveyard_idx)
+        if err is not None:
+            return None, None, err
+        assert card is not None
+        return card, require_card_info(card), None
+
     def _exile_card_checked(
         self,
         player_idx: int,
@@ -311,14 +340,14 @@ class GameRuntimeMixin:
             return None
 
     def _move_card_to_graveyard(self, card: CardObject) -> None:
-        self.state.zones.put_card_in_zone(
-            card,
-            Zone.GRAVEYARD,
-            card.owner_idx,
-            'spell',
-            self.state,
+        self.state.zones.put_card_in_zone(PutCardInZoneRequest(
+            card=card,
+            to_zone=Zone.GRAVEYARD,
+            player_idx=card.owner_idx,
+            cause='spell',
+            game=self.state,
             from_zone=Zone.STACK,
-        )
+        ))
 
     def _relocate_resolved_spell(self, spell: SpellOnStack, card: CardObject) -> None:
         """Exile alt-cast spells, return buyback spells to hand, else graveyard."""
@@ -359,5 +388,148 @@ class GameRuntimeMixin:
         """Auto-pass both players until the stack is empty."""
         while not self.state.stack.is_empty:
             self.action_pass_priority()
-            if not self.state.stack.is_empty:
-                self.action_pass_priority()
+
+    def _put_spell_on_stack(
+        self,
+        player_idx: int,
+        card: CardObject,
+        target_ref: _TargetRef,
+        context: SpellCastContext | None = None,
+    ) -> list[Target]:
+        """Move a cast spell onto the stack."""
+        opts = context or SpellCastContext()
+        targets = targets_from_request(target_ref.target_uid_str, target_ref.target_player_idx)
+        if opts.from_graveyard:
+            self.state.zones.cast_from_graveyard(card, player_idx)
+        elif not opts.from_exile:
+            self.state.zones.play_from_hand(card, player_idx)
+        self.state.stack.push(spell_on_stack_from_context(
+            player_idx,
+            card,
+            targets,
+            opts,
+        ))
+        actor = "player" if player_idx == 0 else "opponent"
+        for detail in apply_post_cast_modifiers(self.state, player_idx, card, targets, opts):
+            self._log(actor, "storm" if "storm" in detail else "cascade", detail)
+        self.state.turn.action_taken()
+        return targets
+
+    def _tap_mana_or_error(
+        self,
+        player_idx: int,
+        mana_needed: int,
+        card_info: CardInfo | None = None,
+    ) -> dict | None:
+        """Tap lands for mana; return a client error dict when payment fails."""
+        if card_info is not None and self._tap_mana_for_spell(player_idx, card_info, mana_needed):
+            return None
+        if self._tap_lands_for_mana(player_idx, mana_needed):
+            return None
+        return self._client_error(
+            not_enough_mana_message(self._available_mana(player_idx), mana_needed),
+        )
+
+    def _pay_phyrexian(self, player_idx: int, life_cost: int, card_name: str) -> None:
+        """Pay phyrexian life for a cast when applicable."""
+        if life_cost:
+            self.state.players[player_idx].life -= life_cost
+            self._log("player", "phyrexian", f"Paid {life_cost} life for {card_name}")
+
+    def _exile_announce_completion(
+        self,
+        request: ExileCastRequest,
+    ) -> AnnounceCastCompletion:
+        """Build completion args for a spell cast from exile."""
+        return AnnounceCastCompletion(
+            card=request.card,
+            card_info=request.card_info,
+            player_idx=0,
+            target_uid_str=request.target_uid_str,
+            target_player_idx=request.target_player_idx,
+            context=SpellCastContext(
+                alternate=request.alternate,
+                from_exile=True,
+            ),
+            log_opts=_CastLog(
+                log_action="cast",
+                log_detail=request.log_detail,
+                auto_resolve=request.auto_resolve,
+                life_cost=request.life_cost,
+            ),
+        )
+
+    def _complete_announce_cast(self, completion: AnnounceCastCompletion) -> dict:
+        """Increment cast count, place the spell, log, and optionally auto-pass."""
+        card = completion.card
+        card_info = completion.card_info
+        player_idx = completion.player_idx
+        self.state.players[player_idx].spells_cast_this_turn += 1
+        self._pay_phyrexian(player_idx, completion.life_cost, card_info.name)
+        targets = self._put_spell_on_stack(
+            player_idx,
+            card,
+            _TargetRef(completion.target_uid_str, completion.target_player_idx),
+            context=completion.context,
+        )
+        actor = "player" if player_idx == 0 else "opponent"
+        self._log(actor, completion.log_action, completion.log_detail)
+        self.state.fire_spell_cast_triggers(card, tuple(targets))
+        if completion.auto_resolve:
+            self._auto_pass_stack()
+        return self.to_client()
+
+    def _announce_graveyard_spell(
+        self,
+        graveyard_idx: int,
+        target_ref: _TargetRef,
+        auto_resolve: bool,
+        request: GraveyardCastRequest,
+    ) -> dict:
+        """Validate, pay, and cast a spell from the graveyard."""
+        card, err = self._graveyard_card_checked(request.player_idx, graveyard_idx)
+        if err is not None:
+            return err
+        assert card is not None
+        card_info = require_card_info(card)
+        if not request.has_keyword(card_info):
+            return self._client_error(request.keyword_error(card_info))
+        if not request.can_cast(card_info):
+            return self._client_error(request.timing_error)
+        if request.prepay is not None:
+            prepay_err = request.prepay(card, card_info)
+            if prepay_err is not None:
+                return self._client_error(prepay_err)
+        mana_needed, life_cost = split_mana_cost(request.mana_cost(card_info))
+        mana_err = self._tap_mana_or_error(
+            request.player_idx,
+            mana_needed,
+            card_info,
+        )
+        if mana_err is not None:
+            return mana_err
+        detail = (
+            request.log_detail(card_info)
+            if callable(request.log_detail)
+            else request.log_detail
+        )
+        return self._complete_announce_cast(
+            AnnounceCastCompletion(
+                card=card,
+                card_info=card_info,
+                player_idx=request.player_idx,
+                target_uid_str=target_ref.target_uid_str,
+                target_player_idx=target_ref.target_player_idx,
+                context=SpellCastContext(
+                    alternate=request.alternate,
+                    from_graveyard=True,
+                    extras=_HandCastExtras(mayhem=request.log_action == 'mayhem'),
+                ),
+                log_opts=_CastLog(
+                    log_action=request.log_action,
+                    log_detail=detail,
+                    auto_resolve=auto_resolve,
+                    life_cost=life_cost,
+                ),
+            ),
+        )

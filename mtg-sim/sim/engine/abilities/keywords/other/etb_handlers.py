@@ -29,6 +29,7 @@ from engine.abilities.keywords.other.daybound import (
     apply_daybound_etb,
     apply_nightbound_etb,
 )
+from engine.abilities.keywords.other.embalm import apply_embalm_etb
 from engine.abilities.keywords.other.encore import apply_encore_etb
 from engine.abilities.keywords.other.evoke import apply_evoke_on_etb
 from engine.abilities.keywords.other.exploit import apply_exploit_etb, has_exploit
@@ -198,6 +199,10 @@ def _job_select_detail(game: GameState, permanent: Permanent) -> str | None:
     return None
 
 
+def _embalm_detail(game: GameState, permanent: Permanent) -> str | None:
+    return apply_embalm_etb(game.zones, permanent)
+
+
 ETB_DETAIL_PRODUCERS: tuple[EtbDetailFn, ...] = (
     _living_weapon_detail,
     _modular_detail,
@@ -234,6 +239,7 @@ ETB_DETAIL_PRODUCERS: tuple[EtbDetailFn, ...] = (
     _hideaway_detail,
     _fortify_detail,
     _job_select_detail,
+    _embalm_detail,
 )
 
 

@@ -14,19 +14,19 @@ def announce_cast_detail_suffix(
     for label, active in (
         ('miracle', mods.miracle),
         ('spectacle', mods.spectacle),
-        ('morph', mods.morph),
-        ('disguise', mods.disguise),
-        ('dash', mods.dash),
-        ('blitz', mods.blitz),
-        ('cleave', mods.copy_casts.cleave),
-        ('conspire', mods.copy_casts.conspire),
-        ('demonstrate', mods.copy_casts.demonstrate),
+        ('morph', mods.face.morph),
+        ('disguise', mods.face.disguise),
+        ('dash', mods.face.dash),
+        ('blitz', mods.face.blitz),
+        ('cleave', mods.copy_casts.stack_copies.cleave),
+        ('conspire', mods.copy_casts.stack_copies.conspire),
+        ('demonstrate', mods.copy_casts.stack_copies.demonstrate),
         ('freerunning', mods.freerunning),
         ('overloaded', mods.overloaded),
         ('bestow', mods.bestow),
         ('entwined', mods.entwined),
         ('buyback', mods.buyback),
-        ('mutate', mods.mutate),
+        ('mutate', mods.sac.mutate),
     ):
         if active:
             tags.append(label)
@@ -36,11 +36,11 @@ def announce_cast_detail_suffix(
         tags.append(f'squad x{mods.squad_times}')
     if mods.kicker_times:
         tags.append(f'kicked x{mods.kicker_times}')
-    if mods.emerge:
+    if mods.sac.emerge:
         tags.append(f'emerge, sacrificed {sacrificed_name}')
-    if mods.casualty:
+    if mods.sac.casualty:
         tags.append(f'casualty, sacrificed {sacrificed_name}')
-    if mods.bargain:
+    if mods.sac.bargain:
         tags.append(f'bargain, sacrificed {sacrificed_name}')
     if mods.spree_modes:
         tags.append(f'spree modes {list(mods.spree_modes)}')

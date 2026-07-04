@@ -12,7 +12,6 @@ ZoneManager methods so the listener chain fires correctly.
 
 from __future__ import annotations
 
-import enum
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -27,22 +26,11 @@ from engine.core.game_object import (
     ZoneCard,
     _PermanentState,
 )
+from engine.core.zone_types import Zone
 from engine.rules.replacement import resolve_graveyard_destination
 
 if TYPE_CHECKING:
     from engine.core.game_state import GameState
-
-
-class Zone(enum.Enum):
-    """All zones defined by the MTG Comprehensive Rules (CR 400.1)."""
-
-    LIBRARY = "library"
-    HAND = "hand"
-    BATTLEFIELD = "battlefield"
-    GRAVEYARD = "graveyard"
-    EXILE = "exile"
-    STACK = "stack"
-    COMMAND = "command"
 
 
 @dataclass
@@ -61,6 +49,18 @@ class ZoneMoveEvent:
 
 
 ZoneMoveListener = Callable[[ZoneMoveEvent], None]
+
+
+@dataclass(frozen=True)
+class PutCardInZoneRequest:
+    """Arguments for moving one card into a player zone."""
+
+    card: CardObject
+    to_zone: Zone
+    player_idx: int
+    cause: str
+    game: GameState | None = None
+    from_zone: Zone | None = None
 
 
 @dataclass
@@ -313,30 +313,25 @@ class ZoneManager:
     # Player zone card moves (mill, discard, stack → graveyard, …)
     # ------------------------------------------------------------------
 
-    def put_card_in_zone(  # pylint: disable=too-many-arguments,too-many-positional-arguments
-        self,
-        card: CardObject,
-        to_zone: Zone,
-        player_idx: int,
-        cause: str,
-        game: GameState | None = None,
-        *,
-        from_zone: Zone | None = None,
-    ) -> Zone:
+    def put_card_in_zone(self, request: PutCardInZoneRequest) -> Zone:
         """Place a card in a player zone, applying graveyard replacement effects."""
-        actual_zone = to_zone
-        if game is not None and to_zone == Zone.GRAVEYARD:
-            actual_zone = resolve_graveyard_destination(game)
-        if from_zone is not None:
-            self._remove_from_player_zone(card, from_zone, player_idx)
-        self._place_card_in_zone(card, actual_zone, player_idx)
-        if from_zone is not None:
+        actual_zone = request.to_zone
+        if request.game is not None and request.to_zone == Zone.GRAVEYARD:
+            actual_zone = resolve_graveyard_destination(request.game)
+        if request.from_zone is not None:
+            self._remove_from_player_zone(
+                request.card,
+                request.from_zone,
+                request.player_idx,
+            )
+        self._place_card_in_zone(request.card, actual_zone, request.player_idx)
+        if request.from_zone is not None:
             self._emit(ZoneMoveEvent(
-                obj=card,
-                from_zone=from_zone,
+                obj=request.card,
+                from_zone=request.from_zone,
                 to_zone=actual_zone,
-                cause=cause,
-                player_idx=player_idx,
+                cause=request.cause,
+                player_idx=request.player_idx,
             ))
         return actual_zone
 

@@ -15,7 +15,7 @@ from engine.abilities.keywords.registry import has_registered_keyword
 from engine.cards.oracle_parse import TokenBlueprint, parse_damage, parse_token_blueprint
 from engine.core.game_object import CardObject
 from engine.core.library_reveal import resolve_top_card_contest
-from engine.core.zones import Zone
+from engine.core.zones import PutCardInZoneRequest, Zone
 
 if TYPE_CHECKING:
     from engine.core.game_state import GameState
@@ -256,14 +256,14 @@ def discard_from_hand(
         return 'discarded (empty hand)'
     card = hand[-1]
     assert isinstance(card, CardObject)
-    zones.put_card_in_zone(
-        card,
-        Zone.GRAVEYARD,
-        controller_idx,
-        'discard',
-        game,
+    zones.put_card_in_zone(PutCardInZoneRequest(
+        card=card,
+        to_zone=Zone.GRAVEYARD,
+        player_idx=controller_idx,
+        cause='discard',
+        game=game,
         from_zone=Zone.HAND,
-    )
+    ))
     name = card.card_info.name if card.card_info else 'card'
     return f"discarded {name}"
 
@@ -432,14 +432,14 @@ def abandon_hand(
     while hand and discarded < 2:
         card = hand[-1]
         if isinstance(card, CardObject):
-            zones.put_card_in_zone(
-                card,
-                Zone.GRAVEYARD,
-                controller_idx,
-                'discard',
-                game,
+            zones.put_card_in_zone(PutCardInZoneRequest(
+                card=card,
+                to_zone=Zone.GRAVEYARD,
+                player_idx=controller_idx,
+                cause='discard',
+                game=game,
                 from_zone=Zone.HAND,
-            )
+            ))
             discarded += 1
     return f"abandoned {discarded} card(s)"
 

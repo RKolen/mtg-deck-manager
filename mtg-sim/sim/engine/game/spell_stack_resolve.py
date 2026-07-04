@@ -3,6 +3,12 @@
 from __future__ import annotations
 
 from deck_registry import CardInfo
+from engine.cards.permanent_entry import (
+    apply_planeswalker_entry,
+    attach_aura,
+    is_aura,
+    is_planeswalker,
+)
 from engine.abilities.keywords.actions import (
     ActionContext,
     has_connive,
@@ -38,7 +44,7 @@ from engine.abilities.keywords.casting.warp import apply_warp_on_resolve
 from engine.abilities.keywords.casting.squad import apply_squad_on_etb
 from engine.abilities.keywords.other.etb import apply_etb_other_abilities
 from engine.abilities.keywords.other.evoke import mark_evoked_cast
-from engine.cards.effects import CardEffectContext
+from engine.cards.effect_context_factory import card_effect_context_from_spell
 from engine.cards.oracle_parse import parse_draw, spell_category
 from engine.cards.script_loader import resolve_scripted_spell
 from engine.core.game_object import (
@@ -118,35 +124,50 @@ class SpellResolveMixin(SpellStackPlacementMixin):
         card = spell.source
         if card is None:
             return None
-        ctx = CardEffectContext.from_spell(self.state, spell, self._draw_cards)
+        ctx = card_effect_context_from_spell(self.state, spell, self._draw_cards)
         detail = resolve_scripted_spell(ctx)
         if detail:
             self.state.check_sbas()
         return detail
 
-    def _apply_spell(self, spell: SpellOnStack) -> str:  # pylint: disable=too-many-return-statements
-        """Apply a resolved spell's effect."""
-        card = spell.source
-        assert card is not None
-        card_info = require_card_info(card)
-        if spell.casting.impending:
-            detail = apply_impending_on_resolve(
-                self.state.zones,
-                spell.controller_idx,
-                card,
-            )
-            if detail:
-                self._register_permanent_triggers(self.state.zones.battlefield[-1])
-                return detail
+    def _resolve_impending_spell(self, spell: SpellOnStack, card: CardObject) -> str | None:
+        """Resolve an impending spell early, or None to continue."""
+        if not spell.casting.impending:
+            return None
+        detail = apply_impending_on_resolve(
+            self.state.zones,
+            spell.controller_idx,
+            card,
+        )
+        if not detail:
+            return None
+        self._register_permanent_triggers(self.state.zones.battlefield[-1])
+        return detail
+
+    def _resolve_mode_or_scripted_spell(
+        self,
+        spell: SpellOnStack,
+        card: CardObject,
+        card_info: CardInfo,
+    ) -> str | None:
+        """Resolve tiered, spree, or scripted spells; None to use category dispatch."""
         if spell.modes and has_tiered(card_info):
             return self._resolve_tiered_spell(spell)
         if spell.modes and has_spree(card_info):
             return self._resolve_spree_spell(spell)
         scripted = self._resolve_scripted_spell(spell)
-        if scripted is not None:
-            self._relocate_resolved_spell(spell, card)
-            return f"{card_info.name}: {scripted}"
-        category = spell_category(card_info)
+        if scripted is None:
+            return None
+        self._relocate_resolved_spell(spell, card)
+        return f"{card_info.name}: {scripted}"
+
+    def _resolve_spell_category(
+        self,
+        spell: SpellOnStack,
+        card_info: CardInfo,
+        category: str,
+    ) -> str | None:
+        """Dispatch a spell by oracle category; None when unhandled."""
         dispatch = {
             "creature": self._resolve_creature_spell,
             "burn": self._resolve_burn,
@@ -155,21 +176,42 @@ class SpellResolveMixin(SpellStackPlacementMixin):
             "draw": self._resolve_draw,
         }
         handler = dispatch.get(category)
+        if handler is None:
+            return None
         skip_actions: frozenset[str] = frozenset()
         if category == 'draw' and has_connive(card_info.oracle_text or ''):
             skip_actions = frozenset({'Connive'})
-        if handler is not None:
-            primary = handler(spell)
-            awaken_detail = self._apply_awaken_on_resolve(spell)
-            extras = self._spell_keyword_action_detail(spell, skip_actions=skip_actions)
-            parts = [primary]
-            if awaken_detail:
-                parts.append(awaken_detail)
-            if extras:
-                parts.append(extras)
-            if len(parts) > 1:
-                return "; ".join(parts)
-            return primary
+        primary = handler(spell)
+        awaken_detail = self._apply_awaken_on_resolve(spell)
+        extras = self._spell_keyword_action_detail(spell, skip_actions=skip_actions)
+        parts = [primary]
+        if awaken_detail:
+            parts.append(awaken_detail)
+        if extras:
+            parts.append(extras)
+        if len(parts) > 1:
+            return "; ".join(parts)
+        return primary
+
+    def _apply_spell(self, spell: SpellOnStack) -> str:
+        """Apply a resolved spell's effect."""
+        card = spell.source
+        assert card is not None
+        card_info = require_card_info(card)
+        detail = (
+            self._resolve_impending_spell(spell, card)
+            or self._resolve_mode_or_scripted_spell(spell, card, card_info)
+        )
+        if detail is not None:
+            return detail
+        if is_planeswalker(card_info):
+            return self._resolve_planeswalker_spell(spell)
+        if is_aura(card_info):
+            return self._resolve_aura_spell(spell)
+        category = spell_category(card_info)
+        resolved = self._resolve_spell_category(spell, card_info, category)
+        if resolved is not None:
+            return resolved
         if keyword_actions_in_oracle(card_info.oracle_text):
             extras = self._spell_keyword_action_detail(spell)
             if extras:
@@ -291,7 +333,78 @@ class SpellResolveMixin(SpellStackPlacementMixin):
         self._move_card_to_graveyard(card)
         return f"Cast {card_info.name} (mutate target not found)"
 
-    def _resolve_creature_spell(self, spell: SpellOnStack) -> str:  # pylint: disable=too-many-branches
+    def _resolve_aura_spell(self, spell: SpellOnStack) -> str:
+        """Resolve an Aura: enter the battlefield attached to its target."""
+        card = spell.source
+        assert card is not None
+        card_info = require_card_info(card)
+        host_id = target_uid(spell.targets)
+        host = self._find_permanent(host_id) if host_id is not None else None
+        permanent = self.state.zones.enter_battlefield(
+            card,
+            spell.controller_idx,
+            'resolve',
+        )
+        attach_detail = attach_aura(permanent, host)
+        self._register_permanent_triggers(permanent)
+        self.state.check_sbas()
+        if attach_detail:
+            return attach_detail
+        self.state.zones.leave_battlefield(permanent, Zone.GRAVEYARD, 'aura_illegal', self.state)
+        return f'{card_info.name} (no legal enchant target)'
+
+    def _resolve_planeswalker_spell(self, spell: SpellOnStack) -> str:
+        """Resolve a planeswalker spell onto the battlefield."""
+        card = spell.source
+        assert card is not None
+        card_info = require_card_info(card)
+        permanent = self.state.zones.enter_battlefield(
+            card,
+            spell.controller_idx,
+            'resolve',
+        )
+        loyalty = apply_planeswalker_entry(permanent)
+        self._register_permanent_triggers(permanent)
+        detail = f'Cast planeswalker {card_info.name}'
+        if loyalty:
+            detail = f'{detail} ({loyalty} loyalty)'
+        return detail
+
+    def _resolve_creature_etb(
+        self,
+        permanent: Permanent,
+        spell: SpellOnStack,
+        card_info: CardInfo,
+        counters: int,
+    ) -> str:
+        """Apply ETB modifiers and counters after a normal creature resolve."""
+        detail = f"Cast creature {card_info.name}"
+        if spell.casting.converted:
+            converted_detail = apply_converted_on_etb(permanent)
+            if converted_detail:
+                detail = converted_detail
+        if spell.casting.prototype:
+            proto_detail = apply_prototype_on_etb(permanent)
+            if proto_detail:
+                detail = proto_detail
+        if spell.casting.warp:
+            warp_detail = apply_warp_on_resolve(permanent)
+            if warp_detail:
+                detail = f"{detail}; {warp_detail}"
+        self._apply_creature_counters(permanent, spell)
+        squad_detail = apply_squad_on_etb(
+            self.state.zones,
+            permanent,
+            spell.payment.squad_times,
+        )
+        if squad_detail:
+            detail = f"{detail}; {squad_detail}"
+        self._register_permanent_triggers(permanent)
+        if counters:
+            detail = f"{detail} with {counters} +1/+1 counter(s)"
+        return detail
+
+    def _resolve_creature_spell(self, spell: SpellOnStack) -> str:
         """Resolve a creature spell onto the battlefield."""
         card = spell.source
         assert card is not None
@@ -325,31 +438,7 @@ class SpellResolveMixin(SpellStackPlacementMixin):
         counters = kicked_counter_count(card_info, spell.payment.kicker_times)
         if counters:
             permanent.counters["+1/+1"] = permanent.counters.get("+1/+1", 0) + counters
-        detail = f"Cast creature {card_info.name}"
-        if spell.casting.converted:
-            converted_detail = apply_converted_on_etb(permanent)
-            if converted_detail:
-                detail = converted_detail
-        if spell.casting.prototype:
-            proto_detail = apply_prototype_on_etb(permanent)
-            if proto_detail:
-                detail = proto_detail
-        if spell.casting.warp:
-            warp_detail = apply_warp_on_resolve(permanent)
-            if warp_detail:
-                detail = f"{detail}; {warp_detail}"
-        self._apply_creature_counters(permanent, spell)
-        squad_detail = apply_squad_on_etb(
-            self.state.zones,
-            permanent,
-            spell.payment.squad_times,
-        )
-        if squad_detail:
-            detail = f"{detail}; {squad_detail}"
-        self._register_permanent_triggers(permanent)
-        if counters:
-            detail = f"{detail} with {counters} +1/+1 counter(s)"
-        return detail
+        return self._resolve_creature_etb(permanent, spell, card_info, counters)
 
     def _resolve_overload_burn(
         self, spell: SpellOnStack, card: CardObject, card_info: CardInfo

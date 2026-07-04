@@ -156,12 +156,14 @@ def _append_supplemental_effects(effects: list[CardEffect], text: str) -> None:
 
 
 def _infer_clause_effects(clause: str) -> CardEffect:
-    inferred = infer_effects_from_oracle(_clause_card(clause))
-    if inferred is None:
+    card = _clause_card(clause)
+    category = spell_category(card)
+    effects = _infer_category_effects(clause, category)
+    if not effects:
         return NoEffect(label=clause[:40])
-    if len(inferred) == 1:
-        return inferred[0]
-    return EffectList(inferred)
+    if len(effects) == 1:
+        return effects[0]
+    return EffectList(tuple(effects))
 
 
 def _infer_modal(text: str) -> Modal | None:

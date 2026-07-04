@@ -73,23 +73,44 @@ class _TurnFlags:
 
 
 @dataclass
-class PlayerInfo:  # pylint: disable=too-many-instance-attributes
+class _PlayerAgendaState:
+    """Hidden agenda tracking for one player."""
+
+    hidden_agenda_name: str | None = None
+    double_agenda_names: tuple[str, str] | None = None
+    hidden_agenda_revealed: bool = False
+    double_agenda_revealed: bool = False
+
+
+@dataclass
+class _PlayerCampaignMeta:
+    """Ascend, dungeon, and attraction campaign state."""
+
+    ascended: bool = False
+    dungeon_room: int = 0
+    attractions: int = 0
+
+
+@dataclass
+class _PlayerSessionMeta:
+    """Match-level player metadata outside zones."""
+
+    has_lost: bool = False
+    speed: int = 0
+    paradigm_spell_names: list[str] = field(default_factory=list)
+    commander: CardObject | None = None
+
+
+@dataclass
+class PlayerInfo:
     """Per-player state that lives outside the zone system."""
 
     name: str
     vitals: _PlayerVitals = field(default_factory=_PlayerVitals)
     turn_flags: _TurnFlags = field(default_factory=_TurnFlags)
-    ascended: bool = False
-    dungeon_room: int = 0
-    attractions: int = 0
-    has_lost: bool = False
-    speed: int = 0
-    paradigm_spell_names: list[str] = field(default_factory=list)
-    hidden_agenda_name: str | None = None
-    double_agenda_names: tuple[str, str] | None = None
-    hidden_agenda_revealed: bool = False
-    double_agenda_revealed: bool = False
-    commander: CardObject | None = None
+    campaign: _PlayerCampaignMeta = field(default_factory=_PlayerCampaignMeta)
+    agenda: _PlayerAgendaState = field(default_factory=_PlayerAgendaState)
+    session: _PlayerSessionMeta = field(default_factory=_PlayerSessionMeta)
 
     @property
     def life(self) -> int:
@@ -190,6 +211,38 @@ class PlayerInfo:  # pylint: disable=too-many-instance-attributes
     def firebending_red(self, value: int) -> None:
         """Set firebending red mana tracker."""
         self.turn_flags.firebending_red = value
+
+    def __getattr__(self, name: str):
+        """Expose nested campaign, agenda, and session fields by legacy names."""
+        mapped = _NESTED_PLAYER_FIELDS.get(name)
+        if mapped is None:
+            raise AttributeError(f'{type(self).__name__!r} object has no attribute {name!r}')
+        bucket, field_name = mapped
+        return getattr(getattr(self, bucket), field_name)
+
+    def __setattr__(self, name: str, value) -> None:
+        """Route legacy attribute writes into nested campaign, agenda, and session."""
+        mapped = _NESTED_PLAYER_FIELDS.get(name)
+        if mapped is not None and name in _NESTED_PLAYER_FIELDS:
+            bucket, field_name = mapped
+            setattr(getattr(self, bucket), field_name, value)
+            return
+        super().__setattr__(name, value)
+
+
+_NESTED_PLAYER_FIELDS: dict[str, tuple[str, str]] = {
+    'ascended': ('campaign', 'ascended'),
+    'dungeon_room': ('campaign', 'dungeon_room'),
+    'attractions': ('campaign', 'attractions'),
+    'has_lost': ('session', 'has_lost'),
+    'speed': ('session', 'speed'),
+    'paradigm_spell_names': ('session', 'paradigm_spell_names'),
+    'commander': ('session', 'commander'),
+    'hidden_agenda_name': ('agenda', 'hidden_agenda_name'),
+    'double_agenda_names': ('agenda', 'double_agenda_names'),
+    'hidden_agenda_revealed': ('agenda', 'hidden_agenda_revealed'),
+    'double_agenda_revealed': ('agenda', 'double_agenda_revealed'),
+}
 
 
 @dataclass
@@ -507,7 +560,7 @@ class GameState:
             "name": player.name,
             "life": player.life,
             "poison": player.poison,
-            "manaPool": player.mana_pool.total(),
+            "manaPool": player.mana_pool.to_client(),
             "landPlayed": player.land_played,
             "graveyard": [_card_name(c) for c in zones.graveyard],
             "libraryCount": len(zones.library),

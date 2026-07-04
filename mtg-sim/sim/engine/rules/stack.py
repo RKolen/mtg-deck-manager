@@ -26,7 +26,7 @@ from engine.core.game_object import (
     StackObject,
     Target,
 )
-from engine.core.zones import Zone, ZoneManager
+from engine.core.zones import PutCardInZoneRequest, Zone, ZoneManager
 
 if TYPE_CHECKING:
     from deck_registry import CardInfo
@@ -236,11 +236,11 @@ def _move_spell_card_to_graveyard(
     if spell_exiles_from_graveyard_cast(obj):
         zones.player_zones[obj.owner_idx].exile.append(source)
         return
-    zones.put_card_in_zone(
-        source,
-        Zone.GRAVEYARD,
-        obj.owner_idx,
-        'counter',
-        game,
+    zones.put_card_in_zone(PutCardInZoneRequest(
+        card=source,
+        to_zone=Zone.GRAVEYARD,
+        player_idx=obj.owner_idx,
+        cause='counter',
+        game=game,
         from_zone=Zone.STACK,
-    )
+    ))

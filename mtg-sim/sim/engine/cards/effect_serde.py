@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from engine.cards.effects import (
     CardEffect,
@@ -32,6 +33,7 @@ from engine.cards.oracle_parse import TokenBlueprint
 
 EffectDict = dict[str, Any]
 EffectBuilder = Callable[[EffectDict], CardEffect]
+EffectSerializer = Callable[[Any], EffectDict]
 
 
 def _token_blueprint_to_dict(blueprint: TokenBlueprint) -> dict[str, Any]:
@@ -69,6 +71,106 @@ def _create_token(data: EffectDict) -> CardEffect:
         blueprint=_token_blueprint_from_dict(data['blueprint']),
         count=int(data.get('count', 1)),
     )
+
+
+def _serialize_create_token(effect: CreateToken) -> EffectDict:
+    return {
+        'type': 'CreateToken',
+        'count': effect.count,
+        'blueprint': _token_blueprint_to_dict(effect.blueprint),
+    }
+
+
+def _serialize_deal_damage(effect: DealDamage) -> EffectDict:
+    return {
+        'type': 'DealDamage',
+        'amount': effect.amount,
+        'player_target': effect.player_target,
+    }
+
+
+def _serialize_delirium_deal_damage(effect: DeliriumDealDamage) -> EffectDict:
+    return {
+        'type': 'DeliriumDealDamage',
+        'base_amount': effect.base_amount,
+        'delirium_amount': effect.delirium_amount,
+        'player_target': effect.player_target,
+    }
+
+
+def _serialize_discard_cards(effect: DiscardCards) -> EffectDict:
+    return {
+        'type': 'DiscardCards',
+        'count': effect.count,
+        'target': effect.target,
+    }
+
+
+def _serialize_drain_life(effect: DrainLife) -> EffectDict:
+    return {'type': 'DrainLife', 'amount': effect.amount, 'target': effect.target}
+
+
+def _serialize_draw_cards(effect: DrawCards) -> EffectDict:
+    return {'type': 'DrawCards', 'count': effect.count}
+
+
+def _serialize_mill(effect: Mill) -> EffectDict:
+    return {'type': 'Mill', 'count': effect.count, 'target': effect.target}
+
+
+def _serialize_modal(effect: Modal) -> EffectDict:
+    return {'type': 'Modal', 'modes': [effect_to_dict(mode) for mode in effect.modes]}
+
+
+def _serialize_no_effect(effect: NoEffect) -> EffectDict:
+    return {'type': 'NoEffect', 'label': effect.label}
+
+
+def _serialize_pump_until_eot(effect: PumpUntilEOT) -> EffectDict:
+    return {
+        'type': 'PumpUntilEOT',
+        'power': effect.power,
+        'toughness': effect.toughness,
+    }
+
+
+def _serialize_scry(effect: Scry) -> EffectDict:
+    return {
+        'type': 'Scry',
+        'count': effect.count,
+        'bottom_indices': list(effect.bottom_indices),
+    }
+
+
+def _serialize_set_pt_until_eot(effect: SetPowerToughnessUntilEOT) -> EffectDict:
+    return {
+        'type': 'SetPowerToughnessUntilEOT',
+        'power': effect.power,
+        'toughness': effect.toughness,
+    }
+
+
+def _serialize_destroy_if_max_mv(effect: DestroyIfMaxManaValue) -> EffectDict:
+    return {'type': 'DestroyIfMaxManaValue', 'max_mv': effect.max_mv}
+
+
+def _serialize_gain_life(effect: GainLife) -> EffectDict:
+    return {'type': 'GainLife', 'amount': effect.amount}
+
+
+def _serialize_lose_life_each_opponent(effect: LoseLifeEachOpponent) -> EffectDict:
+    return {'type': 'LoseLifeEachOpponent', 'amount': effect.amount}
+
+
+def _serialize_surveil(effect: Surveil) -> EffectDict:
+    return {'type': 'Surveil', 'count': effect.count}
+
+
+def _serialize_effect_list(effect: EffectList) -> EffectDict:
+    return {
+        'type': 'EffectList',
+        'effects': [effect_to_dict(child) for child in effect.effects],
+    }
 
 
 _EFFECT_BUILDERS: dict[str, EffectBuilder] = {
@@ -116,86 +218,39 @@ _EFFECT_BUILDERS: dict[str, EffectBuilder] = {
     'TreasureHunt': lambda _: TreasureHunt(),
 }
 
+_EFFECT_SERIALIZERS: dict[type[CardEffect], EffectSerializer] = {
+    CreateToken: _serialize_create_token,
+    DealDamage: _serialize_deal_damage,
+    DeliriumDealDamage: _serialize_delirium_deal_damage,
+    DestroyIfMaxManaValue: _serialize_destroy_if_max_mv,
+    DestroyPermanent: lambda _: {'type': 'DestroyPermanent'},
+    DiscardCards: _serialize_discard_cards,
+    DrainLife: _serialize_drain_life,
+    DrawCards: _serialize_draw_cards,
+    ExilePermanent: lambda _: {'type': 'ExilePermanent'},
+    FightCreatures: lambda _: {'type': 'FightCreatures'},
+    GainLife: _serialize_gain_life,
+    LoseLifeEachOpponent: _serialize_lose_life_each_opponent,
+    Mill: _serialize_mill,
+    Modal: _serialize_modal,
+    NoEffect: _serialize_no_effect,
+    PumpUntilEOT: _serialize_pump_until_eot,
+    Scry: _serialize_scry,
+    SetPowerToughnessUntilEOT: _serialize_set_pt_until_eot,
+    Surveil: _serialize_surveil,
+    TreasureHunt: lambda _: {'type': 'TreasureHunt'},
+    EffectList: _serialize_effect_list,
+}
+
 ALLOWED_EFFECT_TYPES: frozenset[str] = frozenset(_EFFECT_BUILDERS) | frozenset({'EffectList'})
 
 
-def effect_to_dict(effect: CardEffect) -> EffectDict:  # pylint: disable=too-many-return-statements,too-many-branches
+def effect_to_dict(effect: CardEffect) -> EffectDict:
     """Convert a CardEffect to a JSON-serializable dict."""
-    if isinstance(effect, CreateToken):
-        return {
-            'type': 'CreateToken',
-            'count': effect.count,
-            'blueprint': _token_blueprint_to_dict(effect.blueprint),
-        }
-    if isinstance(effect, DealDamage):
-        return {
-            'type': 'DealDamage',
-            'amount': effect.amount,
-            'player_target': effect.player_target,
-        }
-    if isinstance(effect, DeliriumDealDamage):
-        return {
-            'type': 'DeliriumDealDamage',
-            'base_amount': effect.base_amount,
-            'delirium_amount': effect.delirium_amount,
-            'player_target': effect.player_target,
-        }
-    if isinstance(effect, DestroyIfMaxManaValue):
-        return {'type': 'DestroyIfMaxManaValue', 'max_mv': effect.max_mv}
-    if isinstance(effect, DestroyPermanent):
-        return {'type': 'DestroyPermanent'}
-    if isinstance(effect, DiscardCards):
-        return {
-            'type': 'DiscardCards',
-            'count': effect.count,
-            'target': effect.target,
-        }
-    if isinstance(effect, DrainLife):
-        return {'type': 'DrainLife', 'amount': effect.amount, 'target': effect.target}
-    if isinstance(effect, DrawCards):
-        return {'type': 'DrawCards', 'count': effect.count}
-    if isinstance(effect, ExilePermanent):
-        return {'type': 'ExilePermanent'}
-    if isinstance(effect, FightCreatures):
-        return {'type': 'FightCreatures'}
-    if isinstance(effect, GainLife):
-        return {'type': 'GainLife', 'amount': effect.amount}
-    if isinstance(effect, LoseLifeEachOpponent):
-        return {'type': 'LoseLifeEachOpponent', 'amount': effect.amount}
-    if isinstance(effect, Mill):
-        return {'type': 'Mill', 'count': effect.count, 'target': effect.target}
-    if isinstance(effect, Modal):
-        return {'type': 'Modal', 'modes': [effect_to_dict(mode) for mode in effect.modes]}
-    if isinstance(effect, NoEffect):
-        return {'type': 'NoEffect', 'label': effect.label}
-    if isinstance(effect, PumpUntilEOT):
-        return {
-            'type': 'PumpUntilEOT',
-            'power': effect.power,
-            'toughness': effect.toughness,
-        }
-    if isinstance(effect, Scry):
-        return {
-            'type': 'Scry',
-            'count': effect.count,
-            'bottom_indices': list(effect.bottom_indices),
-        }
-    if isinstance(effect, SetPowerToughnessUntilEOT):
-        return {
-            'type': 'SetPowerToughnessUntilEOT',
-            'power': effect.power,
-            'toughness': effect.toughness,
-        }
-    if isinstance(effect, Surveil):
-        return {'type': 'Surveil', 'count': effect.count}
-    if isinstance(effect, TreasureHunt):
-        return {'type': 'TreasureHunt'}
-    if isinstance(effect, EffectList):
-        return {
-            'type': 'EffectList',
-            'effects': [effect_to_dict(child) for child in effect.effects],
-        }
-    raise TypeError(f'unsupported effect type: {type(effect).__name__}')
+    serializer = _EFFECT_SERIALIZERS.get(type(effect))
+    if serializer is None:
+        raise TypeError(f'unsupported effect type: {type(effect).__name__}')
+    return serializer(effect)
 
 
 def effect_from_dict(data: EffectDict) -> CardEffect:
@@ -203,6 +258,8 @@ def effect_from_dict(data: EffectDict) -> CardEffect:
     effect_type = data['type']
     if effect_type == 'EffectList':
         return EffectList(tuple(effect_from_dict(child) for child in data['effects']))
+    if effect_type == 'draw':
+        return DrawCards(count=int(data['count']))
     builder = _EFFECT_BUILDERS.get(effect_type)
     if builder is None:
         raise ValueError(f'unknown effect type: {effect_type!r}')

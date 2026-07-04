@@ -8,13 +8,17 @@ from typing import TypeAlias
 
 from deck_registry import CardInfo
 from engine.core.game_object import CardObject, SpellAlternateCast
+from engine.game.cast_alt_mode_flags import AltCastModeFlags
 from engine.abilities.keywords.casting.cast_mana import (
     AnnounceCastManaOptions,
     CastManaModifiers,
     CastManaTiming,
+    _CastManaOptional,
+    _DirectTimingCasts,
     _FaceCastTiming,
     _FlatBoolMods,
     _OpponentDamageCasts,
+    _PaidTimingExtras,
     _RepeatCastCounts,
     _SacManaModifiers,
     _TimingAvailability,
@@ -165,31 +169,33 @@ def cast_modifiers_for_announce(
 ) -> CastManaModifiers:
     """Build CastManaModifiers from validated announce state and request options."""
     return CastManaModifiers(
-        kicker_times=paid.modifiers.kicker_times,
-        bestow_target_uid=opts.modifiers.targeting.bestow_target_uid,
+        optional=_CastManaOptional(
+            kicker_times=paid.modifiers.kicker_times,
+            bestow_target_uid=opts.modifiers.targeting.bestow_target_uid,
+            spree_mode_indices=paid.modifiers.spree_modes,
+            tiered_mode_index=paid.modifiers.tiered_mode,
+        ),
         repeat=_RepeatCastCounts(
             replicate_times=paid.modifiers.replicate_times,
             squad_times=paid.modifiers.squad_times,
         ),
-        spree_mode_indices=paid.modifiers.spree_modes,
-        tiered_mode_index=paid.modifiers.tiered_mode,
         bools=_FlatBoolMods(
             entwined=paid.modifiers.entwined,
             overloaded=paid.modifiers.overloaded,
             paid_buyback=paid.modifiers.buyback,
         ),
         sac=_SacManaModifiers(
-            cast_for_emerge=paid.modifiers.emerge,
-            cast_for_evoke=paid.modifiers.evoke,
-            cast_for_mutate=paid.modifiers.mutate,
+            cast_for_emerge=paid.modifiers.sac.emerge,
+            cast_for_evoke=paid.modifiers.sac.evoke,
+            cast_for_mutate=paid.modifiers.sac.mutate,
             cast_for_offering=paid.modifiers.sac.artifact.offering,
             mutate_target_uid=opts.modifiers.targeting.mutate_target_uid,
         ),
         face=FaceAlternateCastFlags(
-            cast_for_morph=paid.modifiers.morph,
-            cast_for_disguise=paid.modifiers.disguise,
-            cast_for_dash=paid.modifiers.dash,
-            cast_for_blitz=paid.modifiers.blitz,
+            cast_for_morph=paid.modifiers.face.morph,
+            cast_for_disguise=paid.modifiers.face.disguise,
+            cast_for_dash=paid.modifiers.face.dash,
+            cast_for_blitz=paid.modifiers.face.blitz,
         ),
     )
 
@@ -202,31 +208,37 @@ def cast_timing_for_announce(
 ) -> CastManaTiming:
     """Build CastManaTiming from validated announce state."""
     return CastManaTiming(
-        cast_for_miracle=paid.modifiers.miracle,
-        cast_for_freerunning=paid.modifiers.freerunning,
+        direct=_DirectTimingCasts(
+            miracle=paid.modifiers.miracle,
+            freerunning=paid.modifiers.freerunning,
+            cleave=paid.modifiers.copy_casts.stack_copies.cleave,
+            alt_modes=AltCastModeFlags(
+                warp=paid.modifiers.conditions.alt_modes.warp,
+                web_slinging=paid.modifiers.conditions.alt_modes.web_slinging,
+                converted=paid.modifiers.conditions.alt_modes.converted,
+                specialize=paid.modifiers.conditions.alt_modes.specialize,
+            ),
+        ),
         opponent_damage=_OpponentDamageCasts(
             spectacle=paid.modifiers.spectacle,
-            surge=paid.modifiers.conditions.surge,
+            surge=paid.modifiers.surge,
         ),
-        cast_for_cleave=paid.modifiers.copy_casts.cleave,
-        cast_for_warp=paid.modifiers.conditions.warp,
-        cast_for_web_slinging=paid.modifiers.conditions.web_slinging,
-        cast_for_converted=paid.modifiers.conditions.converted,
-        cast_for_specialize=paid.modifiers.conditions.specialize,
         face=_FaceCastTiming(
-            morph=paid.modifiers.morph,
+            morph=paid.modifiers.face.morph,
             prototype=paid.modifiers.prototype,
         ),
-        paid_conspire=paid.modifiers.copy_casts.conspire,
+        paid_conspire=paid.modifiers.copy_casts.stack_copies.conspire,
         available=_TimingAvailability(
             freerunning_available=state.players[controller_idx].combat_damage_dealt_this_turn,
             spectacle_available=spectacle_available(state, controller_idx),
             surge_available=surge_available(state, controller_idx),
             escalate_extra_targets=opts.modifiers.targeting.escalate_extra_targets,
-            paid_awaken=paid.modifiers.copy_casts.awaken,
-            paid_impending=paid.modifiers.copy_casts.impending,
-            paid_splice=paid.modifiers.copy_casts.paid_splice,
-            paid_compleated=paid.modifiers.copy_casts.paid_compleated,
+            paid=_PaidTimingExtras(
+                paid_awaken=paid.modifiers.copy_casts.resolve_extras.awaken,
+                paid_impending=paid.modifiers.copy_casts.resolve_extras.impending,
+                paid_splice=paid.modifiers.copy_casts.resolve_extras.paid_splice,
+                paid_compleated=paid.modifiers.copy_casts.resolve_extras.paid_compleated,
+            ),
         ),
     )
 

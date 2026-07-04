@@ -6,11 +6,11 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable
 
 from engine.rules.continuous import has_creature_keyword
+from engine.core.zone_types import Zone
 
 if TYPE_CHECKING:
     from engine.core.game_object import Permanent
     from engine.core.game_state import GameState
-    from engine.core.zones import Zone
 
 _SHIELD_COUNTER = 'shield'
 _REGENERATION_SHIELD = 'regeneration shield'
@@ -137,8 +137,6 @@ def graveyard_to_exile_active(game: GameState) -> bool:
 
 def resolve_graveyard_destination(game: GameState) -> Zone:
     """Return the zone a card should enter when graveyard was requested."""
-    from engine.core.zones import Zone  # pylint: disable=import-outside-toplevel
-
     if graveyard_to_exile_active(game):
         return Zone.EXILE
     return Zone.GRAVEYARD

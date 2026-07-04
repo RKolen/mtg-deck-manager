@@ -137,7 +137,11 @@ def test_firebending_adds_red_mana_until_combat_ends():
 def test_banding_band_size_with_multiple_attackers():
     """Two banding attackers form a band."""
     game = fresh_game()
-    first = place_on_battlefield(make_creature('Band A', 2, 2, oracle='Banding'), 0, game.zones)
-    second = place_on_battlefield(make_creature('Band B', 2, 2, oracle='Banding'), 0, game.zones)
+    first = place_on_battlefield(
+        make_creature('Band A', 2, 2, oracle='Banding'), 0, game.zones, sick=False,
+    )
+    second = place_on_battlefield(
+        make_creature('Band B', 2, 2, oracle='Banding'), 0, game.zones, sick=False,
+    )
     assert attacking_band_size([first, second]) == 2
     assert can_attack(first, game)

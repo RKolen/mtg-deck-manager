@@ -2,11 +2,6 @@
 
 from __future__ import annotations
 
-from engine.abilities.keywords.casting.cast_mana import (
-    AnnounceCastManaOptions,
-    CastManaTiming,
-    resolve_announce_cast_mana,
-)
 from engine.abilities.keywords.casting.more_than_meets_the_eye import (
     apply_converted_on_etb,
     has_more_than_meets_the_eye,
@@ -14,6 +9,7 @@ from engine.abilities.keywords.casting.more_than_meets_the_eye import (
     normalize_more_than_meets_the_eye_cast,
     more_than_meets_the_eye_mana_needed,
 )
+from tests.cast_mana_test_helpers import resolve_alt_mode_cast_mana
 from tests.conftest import fresh_game, make_creature, place_on_battlefield
 
 
@@ -33,12 +29,7 @@ def test_more_than_meets_the_eye_alternate_cost_and_etb_marker():
     assert normalize_more_than_meets_the_eye_cast(card, True)
     mana, _life = more_than_meets_the_eye_mana_needed(card)
     assert mana == 3
-    paid_mana, _paid_life = resolve_announce_cast_mana(
-        card,
-        AnnounceCastManaOptions(
-            timing=CastManaTiming(cast_for_converted=True),
-        ),
-    )
+    paid_mana, _paid_life = resolve_alt_mode_cast_mana(card, converted=True)
     assert paid_mana == 3
     perm = place_on_battlefield(card, 0, fresh_game().zones)
     detail = apply_converted_on_etb(perm)

@@ -31,6 +31,7 @@ from tests.conftest import (
     make_card,
     make_creature,
     place_on_battlefield,
+    put_lands_on_battlefield,
 )
 
 
@@ -88,6 +89,7 @@ def test_equip_card_detects_equipment_ability():
 def test_equip_activation_attaches_to_creature_host():
     """Equip activation attaches equipment to a legal creature host."""
     game = fresh_game()
+    put_lands_on_battlefield(game, 1)
     sword = place_on_battlefield(
         make_card(
             'Blade',

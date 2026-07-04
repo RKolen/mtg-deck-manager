@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Literal
 
 from engine.abilities.keywords.other.affinity import affinity_reduction
 from engine.abilities.keywords.actions._parse import word_to_int
+from engine.rules.mana_payment import can_pay_cast_mana
 
 if TYPE_CHECKING:
     from deck_registry import CardInfo
@@ -239,9 +240,11 @@ def is_affordable(
         return False
     land_slots = mana_needed_to_cast(card, zones, controller_idx)
     if zones is not None:
-        from engine.game.mana_payment import can_pay_cast_mana  # pylint: disable=import-outside-toplevel
-
-        return can_pay_cast_mana(zones, controller_idx, card, land_slots)
+        if can_pay_cast_mana(zones, controller_idx, card, land_slots):
+            return True
+        if not zones.untapped_lands_of(controller_idx):
+            return available_mana >= land_slots
+        return False
     return available_mana >= land_slots
 
 

@@ -98,17 +98,24 @@ def validate_effect_json_list(data: list[Any]) -> list[EffectDict] | None:
     return data
 
 
-def generate_card_script_json(  # pylint: disable=too-many-return-statements
+def _llm_script_preconditions(card: CardInfo) -> str | None:
+    """Return a skip reason when LLM script generation should not run."""
+    if card.is_land or card.is_creature:
+        return 'creature_or_land'
+    if not (card.oracle_text or '').strip():
+        return 'empty_oracle'
+    if not llm_script_generation_enabled():
+        return 'disabled'
+    return None
+
+
+def generate_card_script_json(
     card: CardInfo,
     *,
     generate_fn: GenerateFn | None = None,
 ) -> list[EffectDict] | None:
     """Ask the LLM for a card script JSON blob, or None when disabled or invalid."""
-    if card.is_land or card.is_creature:
-        return None
-    if not (card.oracle_text or '').strip():
-        return None
-    if not llm_script_generation_enabled():
+    if _llm_script_preconditions(card) is not None:
         return None
 
     runner = generate_fn

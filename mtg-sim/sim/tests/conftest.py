@@ -20,8 +20,11 @@ from engine.game.cast_context import (
     CastManaReductionIds,
     CastModifierIds,
     CastTargetingIds,
+    _ConvokeReductionIds,
+    _HandReductionIds,
     _PaidCastExtras,
     _SacrificeTargetIds,
+    _SpectacleCostAlts,
     HandAlternateCastChoices,
     HandCastCostChoices,
     _CostConditionAlts,
@@ -82,12 +85,22 @@ def _modifier_ids_from_kw(modifier_kw: dict[str, Any]) -> CastModifierIds:
             ),
         ),
         reductions=CastManaReductionIds(
-            convoke_creature_ids=_as_tuple(modifier_kw.get("convoke_creature_ids", ())),
-            delve_graveyard_indices=_as_tuple(modifier_kw.get("delve_graveyard_indices", ())),
-            improvise_artifact_ids=_as_tuple(modifier_kw.get("improvise_artifact_ids", ())),
-            sneak_land_hand_indices=_as_tuple(modifier_kw.get("sneak_land_hand_indices", ())),
+            convoke=_ConvokeReductionIds(
+                convoke_creature_ids=_as_tuple(modifier_kw.get("convoke_creature_ids", ())),
+                delve_graveyard_indices=_as_tuple(
+                    modifier_kw.get("delve_graveyard_indices", ()),
+                ),
+                improvise_artifact_ids=_as_tuple(
+                    modifier_kw.get("improvise_artifact_ids", ()),
+                ),
+            ),
+            hand=_HandReductionIds(
+                sneak_land_hand_indices=_as_tuple(
+                    modifier_kw.get("sneak_land_hand_indices", ()),
+                ),
+                awaken_land_hand_idx=modifier_kw.get("awaken_land_hand_idx"),
+            ),
             assist_mana=int(modifier_kw.get("assist_mana", 0)),
-            awaken_land_hand_idx=modifier_kw.get("awaken_land_hand_idx"),
         ),
     )
 
@@ -128,8 +141,10 @@ def cast_announce_options(**kwargs: Any) -> CastAnnounceOptions:
             conditions=_CostConditionAlts(
                 cast_for_miracle=bool(flat.get("cast_for_miracle", False)),
                 cast_for_freerunning=bool(flat.get("cast_for_freerunning", False)),
-                cast_for_spectacle=bool(flat.get("cast_for_spectacle", False)),
-                cast_for_surge=bool(flat.get("cast_for_surge", False)),
+                spectacle=_SpectacleCostAlts(
+                    cast_for_spectacle=bool(flat.get("cast_for_spectacle", False)),
+                    cast_for_surge=bool(flat.get("cast_for_surge", False)),
+                ),
             ),
             face=FaceAlternateCastFlags(
                 cast_for_morph=bool(flat.get("cast_for_morph", False)),
@@ -176,14 +191,21 @@ def resolve_player_attacks(
     )
 
 
-def put_lands_on_battlefield(game: Any, count: int, player_idx: int = 0) -> None:
+def put_lands_on_battlefield(
+    game: Any,
+    count: int,
+    player_idx: int = 0,
+    *,
+    land_info: CardInfo | None = None,
+) -> None:
     """Put untapped lands onto the battlefield for integration-style tests."""
     zones = game.state.zones if hasattr(game, 'state') else game.zones
+    card_info = land_info or make_land()
     for _ in range(count):
         land = CardObject(
             controller_idx=player_idx,
             owner_idx=player_idx,
-            card_info=make_land(),
+            card_info=card_info,
         )
         zones.enter_battlefield(land, player_idx, 'test_setup', Zone.HAND)
 
@@ -227,7 +249,7 @@ def make_land(name: str = "Plains", color: str = "W") -> CardInfo:
         quantity=1,
         sideboard=False,
         mana=ManaProfile(cmc=0.0, cost="", produced=[color]),
-        type_line="Basic Land — Plains",
+        type_line=f"Basic Land — {name}",
         pt="0/0",
         oracle_text="",
     )
@@ -275,14 +297,19 @@ def make_artifact(
     name: str = "Test Artifact",
     cmc: float = 2.0,
     oracle: str = "",
-    mana_cost: str = "{2}",
+    mana_cost: str | None = None,
 ) -> CardInfo:
     """Create an artifact CardInfo."""
+    resolved_cost = mana_cost
+    if resolved_cost is None:
+        resolved_cost = (
+            f"{{{int(cmc)}}}" if cmc == int(cmc) else f"{{{cmc}}}"
+        )
     return make_card(
         name=name,
         type_line="Artifact",
         oracle=oracle,
-        mana_cost=mana_cost,
+        mana_cost=resolved_cost,
         stats=_CardStats(cmc=cmc, pt="0/0"),
     )
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from engine.abilities.keywords.casting.cast_mana import (
     AnnounceCastManaOptions,
     CastManaModifiers,
+    _CastManaOptional,
     resolve_announce_cast_mana,
 )
 from engine.abilities.keywords.casting.kicker import (
@@ -27,7 +28,9 @@ def test_multikicker_paid_multiple_times():
     paid_mana, _life = resolve_announce_cast_mana(
         card,
         AnnounceCastManaOptions(
-            modifiers=CastManaModifiers(kicker_times=3),
+            modifiers=CastManaModifiers(
+                optional=_CastManaOptional(kicker_times=3),
+            ),
         ),
     )
     assert paid_mana == 5

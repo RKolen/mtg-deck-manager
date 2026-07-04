@@ -6,7 +6,7 @@ from engine.abilities.activated.core import activation_mana_cost
 from engine.cards.oracle_parse import is_affordable
 from engine.core.game_object import CardObject
 from engine.game import create_game
-from engine.game.mana_payment import (
+from engine.rules.mana_payment import (
     can_pay_cast_mana,
     can_pay_mana_cost,
     pay_cast_mana,
