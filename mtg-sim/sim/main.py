@@ -239,9 +239,9 @@ async def simulate(req: SimulateRequest) -> dict:
         ),
     )
     logger.info(
-        "Simulation engine=%s matchup=%s vs %s games=%d pilot=%s",
+        "Simulation engine=%s playerDeckId=%s vs archetype=%s games=%d pilot=%s",
         engine,
-        matchup.deck_title,
+        req.playerDeckId,
         req.opponentArchetype,
         req.games,
         pilot_info.get("message"),

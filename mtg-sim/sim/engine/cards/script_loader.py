@@ -13,28 +13,34 @@ if TYPE_CHECKING:
     from engine.core.game_state import GameState
 
 
-def _active_scripts(game: GameState | None) -> dict[str, tuple[CardEffect, ...]]:
-    if game is not None and game.card_scripts:
-        return game.card_scripts
-    return BUILTIN_CARD_SCRIPTS
+def _per_game_scripts(game: GameState | None) -> dict[str, tuple[CardEffect, ...]]:
+    if game is None:
+        return {}
+    return game.card_scripts
 
 
 def has_script(card: CardInfo, game: GameState | None = None) -> bool:
     """Return True when a structured script exists for this card name."""
-    return card.name in _active_scripts(game)
+    return scripted_effects_for(card, game) is not None
 
 
 def scripted_effects_for(
     card: CardInfo,
     game: GameState | None = None,
 ) -> tuple[CardEffect, ...] | None:
-    """Return scripted effects for a card, or None when unscripted."""
-    return _active_scripts(game).get(card.name)
+    """Return scripted effects: per-game cache first, then built-in templates."""
+    per_game = _per_game_scripts(game)
+    effects = per_game.get(card.name)
+    if effects is not None:
+        return effects
+    return BUILTIN_CARD_SCRIPTS.get(card.name)
 
 
 def scripted_card_names(game: GameState | None = None) -> frozenset[str]:
-    """Return all card names that have structured scripts in the active set."""
-    return frozenset(_active_scripts(game))
+    """Return card names with scripts in the active per-game set plus builtins."""
+    names = set(BUILTIN_CARD_SCRIPTS)
+    names.update(_per_game_scripts(game))
+    return frozenset(names)
 
 
 def resolve_scripted_spell(ctx: CardEffectContext) -> str | None:

@@ -43,7 +43,7 @@ def test_sync_deck_scripts_seeds_from_builtins(tmp_path, monkeypatch):
     assert path.exists()
     manifest = json.loads(path.read_text(encoding='utf-8'))
     assert manifest['fingerprint'] == deck_fingerprint(deck)
-    assert manifest['title'] == 'Test Deck'
+    assert 'title' not in manifest
     assert 'Lightning Bolt' in manifest['cards']
 
 
@@ -85,8 +85,8 @@ def test_prepare_game_card_scripts_merges_player_and_meta(tmp_path, monkeypatch)
     assert (tmp_path / 'meta' / 'modern' / 'jund.json').exists()
 
 
-def test_script_loader_uses_game_scripts_over_builtin_fallback():
-    """Per-game scripts drive resolution; builtins apply when game has none."""
+def test_script_loader_prefers_per_game_scripts_and_falls_back_to_builtin():
+    """Per-game scripts override builtins; other cards still use built-in templates."""
     bolt = _instant('Lightning Bolt')
     assert has_script(bolt) is True
     assert bolt.name in scripted_card_names()
@@ -99,6 +99,8 @@ def test_script_loader_uses_game_scripts_over_builtin_fallback():
         stack=Stack(),
     )
     state.card_scripts = {'Only In Deck': BUILTIN_CARD_SCRIPTS['Lightning Bolt']}
-    assert has_script(bolt, state) is False
     assert has_script(_instant('Only In Deck'), state) is True
-    assert scripted_card_names(state) == frozenset({'Only In Deck'})
+    assert has_script(bolt, state) is True
+    assert scripted_card_names(state) == frozenset(
+        {'Only In Deck', *scripted_card_names()},
+    )

@@ -718,3 +718,133 @@ def test_landfall_triggers_when_land_is_played():
     game.action_pass_priority()
     game.action_pass_priority()
     assert game.state.players[0].life == 22
+
+
+def test_boast_draws_after_creature_attacks():
+    """Boast activates in main2 after the creature attacked this turn."""
+    boaster = make_creature(
+        "Boaster",
+        2,
+        2,
+        oracle="{1}: Boast — Draw a card.",
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    perm = place_on_battlefield(boaster, 0, game.state.zones, sick=False)
+    put_lands_on_battlefield(game, 1)
+    game.action_go_to_attack()
+    game.action_toggle_attacker(str(perm.obj_id))
+    game.action_confirm_attack()
+    assert game.phase == "main2"
+    hand_before = len(game.state.zones.player_zones[0].hand)
+    data = game.action_boast(str(perm.obj_id))
+    assert "error" not in data
+    assert len(game.state.zones.player_zones[0].hand) == hand_before + 1
+
+
+def test_ninjutsu_from_hand_during_combat():
+    """Ninjutsu returns an attacker to hand and puts the ninja on the battlefield."""
+    ninja = make_creature("Shinobi", 2, 2, oracle="Ninjutsu {1}{B}")
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    attacker = place_on_battlefield(
+        make_creature("Token", 1, 1),
+        0,
+        game.state.zones,
+        sick=False,
+    )
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=ninja),
+    ]
+    put_lands_on_battlefield(game, 1, land_info=make_land("Forest", "G"))
+    put_lands_on_battlefield(game, 1, land_info=make_land("Swamp", "B"))
+    game.action_go_to_attack()
+    game.action_toggle_attacker(str(attacker.obj_id))
+    data = game.action_ninjutsu(0, str(attacker.obj_id))
+    assert "error" not in data
+    assert attacker.source in game.state.zones.player_zones[0].hand
+    ninja_perm = game.state.zones.battlefield[-1]
+    assert ninja_perm.name == "Shinobi"
+
+
+def test_mentor_puts_counter_on_weaker_attacker():
+    """Mentor adds +1/+1 to another attacking creature with lower power."""
+    mentor = make_creature("Mentor Captain", 3, 3, oracle="Mentor")
+    recruit = make_creature("Recruit", 1, 1)
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    mentor_perm = place_on_battlefield(mentor, 0, game.state.zones, sick=False)
+    recruit_perm = place_on_battlefield(recruit, 0, game.state.zones, sick=False)
+    game.action_go_to_attack()
+    game.action_toggle_attacker(str(mentor_perm.obj_id))
+    game.action_toggle_attacker(str(recruit_perm.obj_id))
+    game.action_confirm_attack()
+    assert recruit_perm.counters.get("+1/+1") == 1
+
+
+def test_enlist_taps_helper_and_draws():
+    """Enlist taps a non-attacking creature; draw clause resolves on attack."""
+    sergeant = make_creature(
+        "Sergeant",
+        3,
+        3,
+        oracle="Enlist\nWhenever this creature attacks, draw a card.",
+    )
+    helper = make_creature("Helper", 1, 1)
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    sergeant_perm = place_on_battlefield(sergeant, 0, game.state.zones, sick=False)
+    helper_perm = place_on_battlefield(helper, 0, game.state.zones, sick=False)
+    game.action_go_to_attack()
+    game.action_toggle_attacker(str(sergeant_perm.obj_id))
+    hand_before = len(game.state.zones.player_zones[0].hand)
+    game.action_confirm_attack()
+    assert helper_perm.tapped
+    assert len(game.state.zones.player_zones[0].hand) == hand_before + 1
+
+
+def test_living_weapon_creates_germ_on_cast():
+    """Living weapon ETB creates a Germ token attached to the equipment."""
+    sword = make_card(
+        "Skullclamp",
+        type_line="Artifact — Equipment",
+        oracle="Living weapon",
+        mana_cost="{2}",
+        stats=_CardStats(cmc=2.0, pt="0/0"),
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    put_lands_on_battlefield(game, 2)
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=sword),
+    ]
+    data = game.action_cast(0)
+    assert "error" not in data
+    while not game.state.stack.is_empty:
+        game.action_pass_priority()
+        game.action_pass_priority()
+    equipment = next(
+        perm for perm in game.state.zones.battlefield if perm.name == "Skullclamp"
+    )
+    assert equipment.attached_to is not None
+    assert len(game.state.zones.battlefield) >= 2
+
+
+def test_companion_deck_violation_logged_at_game_start():
+    """Invalid companion decks log a validation error when the game is created."""
+    companion = make_card(
+        "Lurrus",
+        type_line="Creature — Cat Nightmare",
+        oracle=(
+            "Companion — Your deck contains only creature cards, "
+            "each with mana value 3 or greater."
+        ),
+        stats=_CardStats(cmc=3.0, pt="3/3"),
+    )
+    invalid_deck = [
+        companion,
+        make_instant("Shock", mana_cost="{R}"),
+        make_creature("Bear", 3, 3),
+    ]
+    game = create_game(invalid_deck, make_deck(lands=20))
+    assert any(entry.action == "companion" for entry in game.state.log)

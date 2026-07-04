@@ -1,8 +1,9 @@
 """Per-deck card script cache — synced from Drupal decks at runtime (Phase G).
 
-JSON files live under ``data/deck_scripts/`` (gitignored). When a deck changes in
-the database the fingerprint changes and the cache entry is refreshed, seeding
-new cards from built-in templates while preserving any existing per-card scripts.
+JSON manifests live under ``data/deck_scripts/`` (gitignored). Manifests store
+only ``source_id``, fingerprints, and per-card effect JSON — never player deck
+titles or other personal metadata. Built-in templates in ``builtin_scripts.py``
+use public card names only; user deck lists never belong in git.
 """
 
 from __future__ import annotations
@@ -86,7 +87,6 @@ class DeckScriptManifest:
         """Serialize manifest for on-disk JSON storage."""
         return {
             'source_id': self.source_id,
-            'title': self.title,
             'fingerprint': self.fingerprint,
             'updated_at': self.updated_at,
             'cards': self.cards,
@@ -98,7 +98,7 @@ class DeckScriptManifest:
         """Load manifest from parsed JSON."""
         return cls(
             source_id=str(data['source_id']),
-            title=str(data.get('title', '')),
+            title='',
             fingerprint=str(data['fingerprint']),
             updated_at=str(data.get('updated_at', '')),
             cards={

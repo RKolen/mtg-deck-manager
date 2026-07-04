@@ -15,6 +15,7 @@ from engine.cards.effects import (
     DrainLife,
     DrawCards,
     ExilePermanent,
+    GainLife,
     Mill,
     Modal,
     PumpUntilEOT,
@@ -57,4 +58,8 @@ BUILTIN_CARD_SCRIPTS: dict[str, tuple[CardEffect, ...]] = {
     'Thoughtseize': (DiscardCards(count=1, target='target_player'),),
     'Treasure Hunt': (TreasureHunt(),),
     'Unholy Heat': (DeliriumDealDamage(base_amount=2, delirium_amount=6),),
+    'Swords to Plowshares': (ExilePermanent(),),
+    'Terminate': (DestroyPermanent(),),
+    'Thought Scour': (Mill(count=2, target='target_player'),),
+    'Weather the Storm': (GainLife(amount=3),),
 }

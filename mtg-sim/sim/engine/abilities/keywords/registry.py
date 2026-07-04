@@ -12,6 +12,11 @@ from functools import lru_cache
 from typing import TypedDict
 
 from engine.abilities.keywords.registry_data import KEYWORD_ENTRIES, SCRYFALL_KEYWORD_COUNT
+from engine.abilities.keywords.registry_deferrals import (
+    deferral_phase,
+    entries_routed_to_activated,
+    entries_routed_to_casting,
+)
 from engine.core.oracle_text import oracle_has_keyword
 
 KeywordKind = str  # ability | action | word
@@ -114,3 +119,15 @@ def registry_summary() -> RegistrySummary:
         by_kind=by_kind,
         by_category=by_category,
     )
+
+
+def integration_routing_counts() -> dict[str, int]:
+    """Return counts of catalog routing mismatches and explicit deferrals."""
+    phase_g = sum(1 for entry in all_entries() if deferral_phase(entry.name) == 'G')
+    phase_f = sum(1 for entry in all_entries() if deferral_phase(entry.name) == 'F')
+    return {
+        'casting_routed': len(entries_routed_to_casting()),
+        'activated_routed': len(entries_routed_to_activated()),
+        'phase_g_deferred': phase_g,
+        'phase_f_deferred': phase_f,
+    }

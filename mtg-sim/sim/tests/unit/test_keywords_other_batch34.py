@@ -7,14 +7,18 @@ from engine.abilities.keywords.other.absorb import has_absorb
 from engine.abilities.keywords.other.etb import apply_etb_other_abilities
 from engine.abilities.keywords.other.exploit import apply_exploit_etb, has_exploit
 from engine.abilities.keywords.other.living_weapon import apply_living_weapon, has_living_weapon
-from engine.abilities.keywords.other.modular import apply_modular_etb, has_modular
+from engine.abilities.keywords.other.modular import (
+    apply_modular_etb,
+    apply_modular_on_die,
+    has_modular,
+)
 from engine.abilities.keywords.other.nightbound import (
     apply_nightbound_etb,
     has_nightbound,
     resolve_nightbound_upkeep,
 )
 from engine.abilities.keywords.other.riot import has_riot
-from tests.conftest import fresh_game, make_card, make_creature, place_on_battlefield
+from tests.conftest import _CardStats, fresh_game, make_card, make_creature, place_on_battlefield
 
 
 def test_exploit_sacrifices_on_etb():
@@ -71,6 +75,32 @@ def test_modular_enters_with_counters():
     assert has_modular(worker)
     assert apply_modular_etb(worker) is not None
     assert worker.counters.get('+1/+1') == 3
+
+
+def test_modular_moves_counters_to_another_artifact_on_die():
+    """When a modular artifact dies, its +1/+1 counters move to another artifact."""
+    game = fresh_game()
+    recipient = place_on_battlefield(
+        make_card('Core', type_line='Artifact', oracle='', stats=_CardStats(cmc=1.0, pt='0/0')),
+        0,
+        game.zones,
+    )
+    worker = place_on_battlefield(
+        make_card(
+            'Worker',
+            type_line='Artifact Creature — Construct',
+            oracle='Modular 1',
+            stats=_CardStats(cmc=2.0, pt='0/0'),
+        ),
+        0,
+        game.zones,
+    )
+    worker.counters['+1/+1'] = 3
+    detail = apply_modular_on_die(game, worker)
+    assert detail is not None
+    assert 'modular moved' in detail
+    assert recipient.counters.get('+1/+1') == 3
+    assert worker.counters.get('+1/+1', 0) == 0
 
 
 def test_nightbound_enters_back_and_toggles():

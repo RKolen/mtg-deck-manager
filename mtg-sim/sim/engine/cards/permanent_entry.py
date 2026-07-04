@@ -26,6 +26,26 @@ def is_planeswalker(card: CardInfo) -> bool:
     return 'Planeswalker' in (card.type_line or '')
 
 
+def is_artifact_permanent(card: CardInfo) -> bool:
+    """Return True when the card is a noncreature artifact permanent spell."""
+    type_line = card.type_line or ''
+    return (
+        'Artifact' in type_line
+        and 'Creature' not in type_line
+        and 'Planeswalker' not in type_line
+    )
+
+
+def is_enchantment_permanent(card: CardInfo) -> bool:
+    """Return True when the card is a non-Aura enchantment permanent spell."""
+    type_line = card.type_line or ''
+    return (
+        'Enchantment' in type_line
+        and 'Aura' not in type_line
+        and 'Creature' not in type_line
+    )
+
+
 def starting_loyalty(oracle_text: str) -> int:
     """Parse how many loyalty counters a planeswalker enters with."""
     match = _STARTING_LOYALTY_RE.search(oracle_text or '')

@@ -6,7 +6,9 @@ from deck_registry import CardInfo
 from engine.cards.permanent_entry import (
     apply_planeswalker_entry,
     attach_aura,
+    is_artifact_permanent,
     is_aura,
+    is_enchantment_permanent,
     is_planeswalker,
 )
 from engine.abilities.keywords.actions import (
@@ -204,10 +206,9 @@ class SpellResolveMixin(SpellStackPlacementMixin):
         )
         if detail is not None:
             return detail
-        if is_planeswalker(card_info):
-            return self._resolve_planeswalker_spell(spell)
-        if is_aura(card_info):
-            return self._resolve_aura_spell(spell)
+        permanent_detail = self._resolve_typed_permanent_spell(spell, card_info)
+        if permanent_detail is not None:
+            return permanent_detail
         category = spell_category(card_info)
         resolved = self._resolve_spell_category(spell, card_info, category)
         if resolved is not None:
@@ -219,6 +220,20 @@ class SpellResolveMixin(SpellStackPlacementMixin):
                 return f"{card_info.name}: {extras}"
         self._relocate_resolved_spell(spell, card)
         return f"Cast {card_info.name}"
+
+    def _resolve_typed_permanent_spell(
+        self,
+        spell: SpellOnStack,
+        card_info: CardInfo,
+    ) -> str | None:
+        """Resolve planeswalker, aura, artifact, or enchantment spells onto the battlefield."""
+        if is_planeswalker(card_info):
+            return self._resolve_planeswalker_spell(spell)
+        if is_aura(card_info):
+            return self._resolve_aura_spell(spell)
+        if is_artifact_permanent(card_info) or is_enchantment_permanent(card_info):
+            return self._resolve_permanent_spell(spell)
+        return None
 
     def _apply_awaken_on_resolve(self, spell: SpellOnStack) -> str | None:
         """Animate a land when awaken was paid."""
@@ -369,6 +384,20 @@ class SpellResolveMixin(SpellStackPlacementMixin):
         if loyalty:
             detail = f'{detail} ({loyalty} loyalty)'
         return detail
+
+    def _resolve_permanent_spell(self, spell: SpellOnStack) -> str:
+        """Resolve an artifact or non-Aura enchantment onto the battlefield."""
+        card = spell.source
+        assert card is not None
+        card_info = require_card_info(card)
+        permanent = self.state.zones.enter_battlefield(
+            card,
+            spell.controller_idx,
+            'resolve',
+        )
+        self._register_permanent_triggers(permanent)
+        self.state.check_sbas()
+        return f'Cast {card_info.name}'
 
     def _resolve_creature_etb(
         self,

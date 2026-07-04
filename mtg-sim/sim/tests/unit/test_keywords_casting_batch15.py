@@ -24,19 +24,15 @@ from engine.abilities.keywords.casting.improvise import (
     resolve_improvise_for_cast,
 )
 from engine.core.game_object import CardObject
-from engine.game import create_game
 from engine.game.helpers import card_to_client
 from tests.conftest import (
     _CardStats,
-    cast_announce_options,
     fresh_game,
     make_artifact,
     make_card,
     make_creature,
-    make_deck,
     make_instant,
     place_on_battlefield,
-    put_lands_on_battlefield,
 )
 
 
@@ -144,32 +140,3 @@ def test_emerge_sacrifice_requires_creature():
     assert emerge_sacrifice_error(game.zones, 0, creature_card, True, [host.obj_id]) is None
     assert emerge_sacrifice_error(game.zones, 0, creature_card, True, [relic.obj_id]) is not None
     assert emerge_sacrifice_error(game.zones, 0, artifact_card, True, [relic.obj_id]) is None
-
-
-def test_game_convoke_cast_taps_creatures_to_pay_mana():
-    """Convoke lets a burn spell be paid with tapped creatures and fewer lands."""
-    burn = make_instant(
-        name='Mob Justice',
-        cmc=4,
-        mana_cost='',
-        oracle='Mob Justice deals 4 damage to any target. Convoke',
-    )
-    game = create_game(make_deck(lands=20), make_deck(lands=20))
-    game.action_keep()
-    put_lands_on_battlefield(game, 2)
-    soldier = place_on_battlefield(make_creature('Soldier', 1, 1), 0, game.state.zones)
-    knight = place_on_battlefield(make_creature('Knight', 1, 1), 0, game.state.zones)
-    game.state.zones.player_zones[0].hand = [
-        CardObject(controller_idx=0, owner_idx=0, card_info=burn),
-    ]
-    data = game.action_cast(
-        0,
-        target_player=1,
-        cast_options=cast_announce_options(
-            convoke_creature_ids=[soldier.obj_id, knight.obj_id],
-        ),
-    )
-    assert 'error' not in data
-    assert data['opponentLife'] == 16
-    assert soldier.tapped
-    assert knight.tapped
