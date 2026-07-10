@@ -3,19 +3,21 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import re
 from typing import TYPE_CHECKING, Callable
 
 from engine.rules.continuous import has_creature_keyword
+from engine.core.game_object import Permanent
 from engine.core.zone_types import Zone
 
 if TYPE_CHECKING:
-    from engine.core.game_object import Permanent
     from engine.core.game_state import GameState
 
 _SHIELD_COUNTER = 'shield'
 _REGENERATION_SHIELD = 'regeneration shield'
 _LEYLINE_ORACLE = 'if a card would be put into an opponent'
 _REST_IN_PEACE_ORACLE = 'if a card or token would be put into a graveyard'
+_ABSORB_RE = re.compile(r'absorb\s+(\d+)', re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -25,6 +27,7 @@ class DamageEvent:
     receiver_id: int
     source_id: int | None
     amount: int
+    absorb_applied: bool = False
 
 
 @dataclass
@@ -145,6 +148,26 @@ def resolve_graveyard_destination(game: GameState) -> Zone:
 def _damage_replacement_queue(receiver: Permanent) -> ReplacementQueue:
     queue = ReplacementQueue()
 
+    def absorb_handler(
+        _game: GameState,
+        event: object,
+    ) -> DamageEvent | None:
+        if not isinstance(event, DamageEvent):
+            return None
+        if event.receiver_id != receiver.obj_id:
+            return None
+        if event.absorb_applied:
+            return None
+        reduced = _reduce_absorb_damage(receiver, event.amount)
+        if reduced == event.amount:
+            return None
+        return DamageEvent(
+            event.receiver_id,
+            event.source_id,
+            reduced,
+            absorb_applied=True,
+        )
+
     def shield_handler(
         _game: GameState,
         event: object,
@@ -158,6 +181,7 @@ def _damage_replacement_queue(receiver: Permanent) -> ReplacementQueue:
         receiver.counters[_SHIELD_COUNTER] -= 1
         return DamageEvent(event.receiver_id, event.source_id, 0)
 
+    queue.register(absorb_handler, self_replacement=True, source_obj_id=receiver.obj_id)
     queue.register(shield_handler, self_replacement=True, source_obj_id=receiver.obj_id)
     return queue
 
@@ -174,3 +198,12 @@ def _is_rest_in_peace(perm: Permanent) -> bool:
         perm.name == 'Rest in Peace'
         or _REST_IN_PEACE_ORACLE in perm.oracle_text.lower()
     )
+
+
+def _reduce_absorb_damage(receiver: Permanent, amount: int) -> int:
+    """Reduce damage by Absorb N found on the receiver oracle text."""
+    match = _ABSORB_RE.search(receiver.oracle_text)
+    if match is None:
+        return amount
+    absorb = int(match.group(1))
+    return max(0, amount - absorb)

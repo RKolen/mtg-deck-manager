@@ -32,13 +32,21 @@ _PHASE_G_DEFERRED: frozenset[str] = frozenset({
     'Firebending',
 })
 
-# Layer / replacement depth deferred to Phase F beyond simplified hooks.
+# Layer / replacement depth: simplified hooks in continuous.py, replacement.py,
+# targeting.py, and combat_actions.py; full CR fidelity remains optional.
 _PHASE_F_DEFERRED: frozenset[str] = frozenset({
     'Absorb',
     'Hexproof from',
     'Living metal',
     'Umbra armor',
 })
+
+_PHASE_F_NOTES: dict[str, str] = {
+    'Absorb': 'Damage replacement queue; combat and spell damage',
+    'Hexproof from': 'Targeting filter in can_target_permanent',
+    'Living metal': 'Combat-step animation in combat_actions',
+    'Umbra armor': 'Death replacement via try_keyword_death_replacement',
+}
 
 _PHASE_G_NOTES: dict[str, str] = {
     'Banding': 'Combat damage assignment; use CardEffect for banded attacks',
@@ -116,7 +124,7 @@ def is_phase_g_deferred(keyword: str) -> bool:
 
 def deferral_note(keyword: str) -> str | None:
     """Return a short deferral rationale when one exists."""
-    return _PHASE_G_NOTES.get(keyword)
+    return _PHASE_G_NOTES.get(keyword) or _PHASE_F_NOTES.get(keyword)
 
 
 def implementation_route(keyword: str) -> str | None:

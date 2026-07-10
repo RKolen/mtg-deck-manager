@@ -547,6 +547,8 @@ class CombatActionsMixin(ActivatedActionsKeywordsMixin):
                 attacker_count,
             ):
                 self._log('rules', 'melee', detail)
+                if detail and 'draw' in detail:
+                    self._draw_cards(controller_idx, 1)
             defending_player_idx = 1 - controller_idx
             self._apply_attack_keywords(
                 attacker_ids,

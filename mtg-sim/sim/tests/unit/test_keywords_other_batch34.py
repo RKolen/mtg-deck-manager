@@ -130,5 +130,5 @@ def test_absorb_reduces_incoming_combat_damage():
     )
     attacker = place_on_battlefield(make_creature('Raider', 4, 4), 1, game.zones)
     assert has_absorb(blocker)
-    apply_combat_damage_to_creature(blocker, attacker, 3)
+    apply_combat_damage_to_creature(blocker, attacker, 3, game)
     assert blocker.damage_marked == 1

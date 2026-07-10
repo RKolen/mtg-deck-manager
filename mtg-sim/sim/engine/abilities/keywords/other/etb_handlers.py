@@ -45,6 +45,7 @@ from engine.abilities.keywords.other.living_weapon import (
 )
 from engine.abilities.keywords.other.modular import apply_modular_etb
 from engine.abilities.keywords.other.offspring import apply_offspring_etb
+from engine.abilities.keywords.other.prowl import apply_prowl_on_etb
 from engine.abilities.keywords.other.riot import apply_riot_etb
 from engine.core.game_object import Permanent
 from engine.core.game_state import GameState
@@ -149,6 +150,10 @@ def _augment_detail(game: GameState, permanent: Permanent) -> str | None:
     return apply_augment_etb(game.zones, permanent, game.zones.battlefield)
 
 
+def _prowl_detail(game: GameState, permanent: Permanent) -> str | None:
+    return apply_prowl_on_etb(game, permanent)
+
+
 def _riot_detail(_game: GameState, permanent: Permanent) -> str | None:
     return apply_riot_etb(permanent)
 
@@ -227,6 +232,7 @@ ETB_DETAIL_PRODUCERS: tuple[EtbDetailFn, ...] = (
     _daybound_detail,
     _read_ahead_detail,
     _augment_detail,
+    _prowl_detail,
     _riot_detail,
     _encore_detail,
     _ascend_detail,

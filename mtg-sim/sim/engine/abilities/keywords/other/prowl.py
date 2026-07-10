@@ -30,16 +30,12 @@ def _creature_types(type_line: str) -> set[str]:
     return {part.strip().lower() for part in subtype_part.split() if part.strip()}
 
 
-def prowl_unblockable(attacker: Permanent, game: GameState) -> bool:
-    """Return True when prowl makes the attacker unblockable (simplified)."""
-    if not has_prowl(attacker):
-        return False
-    if attacker.counters.get('prowl_unblocked'):
-        return True
-    attacker_types = _creature_types(attacker.type_line)
+def _prowl_graveyard_satisfied(permanent: Permanent, game: GameState) -> bool:
+    """Return True when the graveyard satisfies prowl's creature-type requirement."""
+    attacker_types = _creature_types(permanent.type_line)
     if not attacker_types:
         return False
-    graveyard = game.zones.player_zones[attacker.controller_idx].graveyard
+    graveyard = game.zones.player_zones[permanent.controller_idx].graveyard
     for card in graveyard:
         if not isinstance(card, CardObject) or card.card_info is None:
             continue
@@ -48,6 +44,25 @@ def prowl_unblockable(attacker: Permanent, game: GameState) -> bool:
         if attacker_types & _creature_types(card.card_info.type_line):
             return True
     return False
+
+
+def prowl_unblockable(attacker: Permanent, game: GameState) -> bool:
+    """Return True when prowl makes the attacker unblockable (simplified)."""
+    if not has_prowl(attacker):
+        return False
+    if attacker.counters.get('prowl_unblocked'):
+        return True
+    return _prowl_graveyard_satisfied(attacker, game)
+
+
+def apply_prowl_on_etb(game: GameState, permanent: Permanent) -> str | None:
+    """Mark prowl satisfied when a matching creature is in the graveyard."""
+    if not has_prowl(permanent):
+        return None
+    if not _prowl_graveyard_satisfied(permanent, game):
+        return None
+    mark_prowl_cast(permanent)
+    return f"prowl {permanent.name} (unblockable)"
 
 
 def mark_prowl_cast(permanent: Permanent) -> None:

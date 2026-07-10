@@ -70,7 +70,7 @@ def test_register_wires_exploit_enters_battlefield_trigger():
 
 def test_etb_handlers_wires_expected_producer_count():
     """ETB handlers expose one producer per wired keyword hook."""
-    assert etb_detail_producer_count() == 36
+    assert etb_detail_producer_count() == 37
 
 
 def test_etb_handlers_runs_soulbond_producer_on_entry():

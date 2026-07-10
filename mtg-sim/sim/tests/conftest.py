@@ -196,6 +196,13 @@ def resolve_player_attacks(
     )
 
 
+def resolve_stack_fully(game: Any) -> None:
+    """Pass priority repeatedly until the stack is empty."""
+    while not game.state.stack.is_empty:
+        game.action_pass_priority()
+        game.action_pass_priority()
+
+
 def put_lands_on_battlefield(
     game: Any,
     count: int,

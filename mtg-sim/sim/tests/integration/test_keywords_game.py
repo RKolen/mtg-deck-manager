@@ -14,6 +14,7 @@ from tests.conftest import (
     make_land,
     place_on_battlefield,
     put_lands_on_battlefield,
+    resolve_stack_fully,
 )
 
 
@@ -820,9 +821,7 @@ def test_living_weapon_creates_germ_on_cast():
     ]
     data = game.action_cast(0)
     assert "error" not in data
-    while not game.state.stack.is_empty:
-        game.action_pass_priority()
-        game.action_pass_priority()
+    resolve_stack_fully(game)
     equipment = next(
         perm for perm in game.state.zones.battlefield if perm.name == "Skullclamp"
     )

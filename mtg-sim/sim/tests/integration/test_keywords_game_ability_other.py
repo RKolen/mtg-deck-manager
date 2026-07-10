@@ -13,6 +13,7 @@ from tests.conftest import (
     make_land,
     place_on_battlefield,
     put_lands_on_battlefield,
+    resolve_stack_fully,
 )
 
 _CASUALTY_SHOCK_ORACLE = (
@@ -540,3 +541,262 @@ def test_blitz_creature_sacrificed_at_end_of_turn():
         and card.card_info.name == "Blitzer"
         for card in game.state.zones.player_zones[0].graveyard
     )
+
+
+def test_graft_moves_counter_from_donor_on_cast():
+    """Graft moves a +1/+1 counter from another creature when the host enters."""
+    donor = make_creature("Donor", 2, 2)
+    graft_host = make_creature("Grafted", 1, 1, oracle="Graft", mana_cost="{G}")
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    donor_perm = place_on_battlefield(donor, 0, game.state.zones)
+    donor_perm.counters["+1/+1"] = 2
+    put_lands_on_battlefield(game, 1, land_info=make_land("Forest", "G"))
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=graft_host),
+    ]
+    data = game.action_cast(0)
+    assert "error" not in data
+    graft_perm = next(perm for perm in game.state.zones.battlefield if perm.name == "Grafted")
+    assert graft_perm.counters.get("+1/+1") == 1
+    assert donor_perm.counters.get("+1/+1") == 1
+
+
+def test_training_puts_counter_when_stronger_ally_attacks():
+    """Training adds +1/+1 when a creature with greater power attacks with this."""
+    trainee = make_creature("Trainee", 2, 2, oracle="Training")
+    veteran = make_creature("Veteran", 4, 4)
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    trainee_perm = place_on_battlefield(trainee, 0, game.state.zones, sick=False)
+    veteran_perm = place_on_battlefield(veteran, 0, game.state.zones, sick=False)
+    game.action_go_to_attack()
+    game.action_toggle_attacker(str(trainee_perm.obj_id))
+    game.action_toggle_attacker(str(veteran_perm.obj_id))
+    data = game.action_confirm_attack()
+    assert "error" not in data
+    assert trainee_perm.counters.get("+1/+1") == 1
+
+
+def test_afflict_drains_defender_on_attack():
+    """Afflict makes the defending player lose 1 life when this creature attacks."""
+    afflictor = make_creature("Afflictor", 2, 2, oracle="Afflict")
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    afflictor_perm = place_on_battlefield(afflictor, 0, game.state.zones, sick=False)
+    game.action_go_to_attack()
+    game.action_toggle_attacker(str(afflictor_perm.obj_id))
+    data = game.action_confirm_attack()
+    assert "error" not in data
+    assert game.state.players[1].life == 17
+    assert any(
+        entry.action == "afflict" or "afflict" in entry.detail.lower()
+        for entry in game.state.log
+    )
+
+
+def test_cipher_triggers_when_instant_cast_in_game_loop():
+    """Cipher puts a trigger on the stack when you cast an instant or sorcery."""
+    host = make_creature("Cipher Host", 1, 1, oracle="Cipher — Draw a card.", mana_cost="{G}")
+    opt = make_instant("Opt", mana_cost="{U}", oracle="Draw a card.")
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    put_lands_on_battlefield(game, 1, land_info=make_land("Forest", "G"))
+    put_lands_on_battlefield(game, 1, land_info=make_land("Island", "U"))
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=host),
+        CardObject(controller_idx=0, owner_idx=0, card_info=opt),
+    ]
+    data = game.action_cast(0)
+    assert "error" not in data
+    data = game.action_cast(0)
+    assert "error" not in data
+    resolve_stack_fully(game)
+    assert any("cipher" in entry.detail.lower() for entry in game.state.log)
+
+
+def test_undying_creature_survives_destruction_in_game_loop():
+    """Undying returns a creature with a +1/+1 counter when it would die."""
+    undying = make_creature("Young Wolf", 1, 1, oracle="Undying")
+    shock = make_instant("Shock", mana_cost="{R}", oracle="Shock deals 2 damage to any target.")
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    wolf_perm = place_on_battlefield(undying, 0, game.state.zones)
+    put_lands_on_battlefield(game, 1, land_info=make_land("Mountain", "R"))
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=shock),
+    ]
+    data = game.action_cast(0, target_uid=str(wolf_perm.obj_id))
+    assert "error" not in data
+    assert wolf_perm in game.state.zones.battlefield
+    assert wolf_perm.counters.get("+1/+1") == 1
+
+
+def test_persist_creature_survives_with_minus_counter_in_game_loop():
+    """Persist returns a creature with a -1/-1 counter when it would die."""
+    persister = make_creature("Safehold", 2, 2, oracle="Persist")
+    shock = make_instant("Shock", mana_cost="{R}", oracle="Shock deals 2 damage to any target.")
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    safe_perm = place_on_battlefield(persister, 0, game.state.zones)
+    put_lands_on_battlefield(game, 1, land_info=make_land("Mountain", "R"))
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=shock),
+    ]
+    data = game.action_cast(0, target_uid=str(safe_perm.obj_id))
+    assert "error" not in data
+    assert safe_perm in game.state.zones.battlefield
+    assert safe_perm.counters.get("-1/-1") == 1
+
+
+def test_ascend_grants_citys_blessing_at_ten_permanents():
+    """Ascend grants City's Blessing when you control ten permanents on ETB."""
+    ascendant = make_creature("Ascendant", 1, 1, oracle="Ascend", mana_cost="{W}")
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    for idx in range(9):
+        place_on_battlefield(make_creature(f"Permanent{idx}", 1, 1), 0, game.state.zones)
+    put_lands_on_battlefield(game, 1, land_info=make_land("Plains", "W"))
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=ascendant),
+    ]
+    data = game.action_cast(0)
+    assert "error" not in data
+    assert game.state.players[0].ascended
+
+
+def test_unleash_creature_enters_with_counter_in_game_loop():
+    """Unleash adds a +1/+1 counter and marks the creature unable to block."""
+    wild = make_creature("Wild", 2, 2, oracle="Unleash", mana_cost="{R}")
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    put_lands_on_battlefield(game, 1, land_info=make_land("Mountain", "R"))
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=wild),
+    ]
+    data = game.action_cast(0)
+    assert "error" not in data
+    wild_perm = next(perm for perm in game.state.zones.battlefield if perm.name == "Wild")
+    assert wild_perm.counters.get("+1/+1") == 1
+    assert wild_perm.counters.get("unleash_no_block") == 1
+
+
+def test_fabricate_servos_enters_when_oracle_requests_artifact_token():
+    """Fabricate creates Servo tokens when the oracle text requests artifact tokens."""
+    welder = make_creature(
+        "Welder",
+        3,
+        3,
+        oracle="Fabricate 1. Create a colorless artifact token.",
+        mana_cost="{4}",
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    put_lands_on_battlefield(game, 4)
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=welder),
+    ]
+    data = game.action_cast(0)
+    assert "error" not in data
+    servos = [perm for perm in game.state.zones.battlefield if perm.name == "Servo"]
+    assert len(servos) == 1
+
+
+def test_prowl_marks_unblockable_when_graveyard_matches_on_cast():
+    """Prowl marks the creature unblockable when a matching creature is in the graveyard."""
+    ally = make_card("Ally", type_line="Creature — Human Warrior", stats=_CardStats(pt="1/1"))
+    ninja = make_card(
+        "Ninja",
+        type_line="Creature — Human Ninja",
+        oracle="Prowl {1}{B}",
+        mana_cost="{1}{B}",
+        stats=_CardStats(cmc=2.0, pt="2/2"),
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    game.state.zones.player_zones[0].graveyard = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=ally),
+    ]
+    put_lands_on_battlefield(game, 2, land_info=make_land("Swamp", "B"))
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=ninja),
+    ]
+    data = game.action_cast(0)
+    assert "error" not in data
+    ninja_perm = next(perm for perm in game.state.zones.battlefield if perm.name == "Ninja")
+    assert ninja_perm.counters.get("prowl_unblocked") == 1
+
+
+def test_decayed_creature_sacrificed_at_end_of_turn():
+    """Decayed creatures are sacrificed when the turn ends."""
+    walker = make_creature("Walker", 2, 2, oracle="Decayed", mana_cost="{B}")
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    put_lands_on_battlefield(game, 1, land_info=make_land("Swamp", "B"))
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=walker),
+    ]
+    data = game.action_cast(0)
+    assert "error" not in data
+    walker_perm = next(perm for perm in game.state.zones.battlefield if perm.name == "Walker")
+    assert walker_perm.counters.get("decayed") == 1
+    data = game.action_end_turn()
+    assert "error" not in data
+    assert not any(perm.name == "Walker" for perm in game.state.zones.battlefield)
+
+
+def test_encore_from_graveyard_creates_token_copy():
+    """Encore exiles a graveyard creature and creates an attacking token copy."""
+    siege = make_creature("Siege", 3, 3, oracle="Encore {2}{B}", mana_cost="{2}{B}")
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    put_lands_on_battlefield(game, 3, land_info=make_land("Swamp", "B"))
+    game.state.zones.player_zones[0].graveyard = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=siege),
+    ]
+    data = game.action_encore(0)
+    assert "error" not in data
+    assert any(perm.name == "Siege" for perm in game.state.zones.battlefield)
+    assert any(
+        isinstance(card, CardObject)
+        and card.card_info is not None
+        and card.card_info.name == "Siege"
+        for card in game.state.zones.player_zones[0].exile
+    )
+
+
+def test_soulbond_pairs_creatures_on_second_cast():
+    """Soulbond pairs two creatures when the second one enters."""
+    first = make_creature("First", 2, 2, oracle="Soulbond", mana_cost="{W}")
+    second = make_creature("Second", 2, 2, oracle="Soulbond", mana_cost="{W}")
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    put_lands_on_battlefield(game, 2, land_info=make_land("Plains", "W"))
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=first),
+        CardObject(controller_idx=0, owner_idx=0, card_info=second),
+    ]
+    data = game.action_cast(0)
+    assert "error" not in data
+    data = game.action_cast(0)
+    assert "error" not in data
+    first_perm = next(perm for perm in game.state.zones.battlefield if perm.name == "First")
+    second_perm = next(perm for perm in game.state.zones.battlefield if perm.name == "Second")
+    assert first_perm.counters.get("soulbond") == second_perm.obj_id
+    assert second_perm.counters.get("soulbond") == first_perm.obj_id
+
+
+def test_offspring_creates_token_on_cast():
+    """Offspring creates a token copy when the creature enters from a cast."""
+    parent = make_creature("Parent", 2, 3, oracle="Offspring {2}", mana_cost="{2}{G}")
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    put_lands_on_battlefield(game, 3, land_info=make_land("Forest", "G"))
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=parent),
+    ]
+    data = game.action_cast(0)
+    assert "error" not in data
+    tokens = [perm for perm in game.state.zones.battlefield if "Token" in perm.name]
+    assert len(tokens) == 1
+    assert any(perm.name == "Parent" for perm in game.state.zones.battlefield)

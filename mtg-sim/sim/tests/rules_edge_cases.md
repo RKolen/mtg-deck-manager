@@ -36,7 +36,8 @@ applies these as separate leave-battlefield replacements (simplified ordering).
 When a modular artifact creature dies, its +1/+1 counters move to another
 artifact you control.
 
-- `tests/unit/test_keywords_other_batch34.py::test_modular_moves_counters_to_another_artifact_on_die`
+- `tests/integration/test_keywords_game_ability_other.py::test_modular_moves_counters_when_creature_dies`
+- `tests/unit/test_keywords_other_batch.py::test_modular_transfers_counters_on_death`
 
 ### Afterlife
 
@@ -95,6 +96,39 @@ When a larger creature enters under your control, evolve sources get +1/+1.
 Fabricate ETB adds +1/+1 counters or Servo tokens depending on oracle text.
 
 - `tests/integration/test_keywords_game_ability_other.py::test_fabricate_creature_enters_with_counters`
+- `tests/integration/test_keywords_game_ability_other.py::test_fabricate_servos_enters_when_oracle_requests_artifact_token`
+
+### Prowl
+
+Prowl marks the creature unblockable when a creature with a shared subtype
+is in your graveyard as it enters.
+
+- `tests/integration/test_keywords_game_ability_other.py::test_prowl_marks_unblockable_when_graveyard_matches_on_cast`
+
+### Decayed
+
+Decayed creatures cannot attack and are sacrificed at end of turn.
+
+- `tests/integration/test_keywords_game_ability_other.py::test_decayed_creature_sacrificed_at_end_of_turn`
+
+### Encore
+
+Encore exiles a creature card from the graveyard and creates attacking token
+copies for each opponent.
+
+- `tests/integration/test_keywords_game_ability_other.py::test_encore_from_graveyard_creates_token_copy`
+
+### Soulbond
+
+Soulbond pairs two unpaired soulbond creatures you control on ETB.
+
+- `tests/integration/test_keywords_game_ability_other.py::test_soulbond_pairs_creatures_on_second_cast`
+
+### Offspring
+
+Offspring creates a token copy when the creature enters.
+
+- `tests/integration/test_keywords_game_ability_other.py::test_offspring_creates_token_on_cast`
 
 ### Extort
 
@@ -118,8 +152,147 @@ Face-down cast uses morph or disguise alternate costs; turn-up is a separate act
 ### Living weapon
 
 Equipment with living weapon creates a Germ token and attaches to it.
+Equipment pump text (`Equipped creature gets +X/+X`) is applied as counters so
+the Germ survives state-based actions.
 
+- `tests/integration/test_keywords_game_ability_other.py::test_living_weapon_cast_creates_germ_host`
 - `tests/integration/test_keywords_game.py::test_living_weapon_creates_germ_on_cast`
+
+### Bloodthirst
+
+Bloodthirst adds +1/+1 counters on ETB when an opponent was dealt damage
+this turn.
+
+- `tests/integration/test_keywords_game_ability_other.py::test_bloodthirst_puts_counters_after_opponent_was_damaged`
+
+### Riot
+
+Riot adds a +1/+1 counter on ETB (simplified: always counter).
+
+- `tests/integration/test_keywords_game_ability_other.py::test_riot_creature_enters_with_counter_in_game_loop`
+
+### Devour
+
+Devour sacrifices other creatures you control on ETB for +1/+1 counters.
+
+- `tests/integration/test_keywords_game_ability_other.py::test_devour_sacrifices_creatures_on_cast`
+
+### Graft
+
+Graft moves one +1/+1 counter from another creature you control on ETB.
+
+- `tests/integration/test_keywords_game_ability_other.py::test_graft_moves_counter_from_donor_on_cast`
+
+### Backup
+
+Backup puts +1/+1 counters on another creature you control on ETB.
+
+- `tests/integration/test_keywords_game_ability_other.py::test_backup_puts_counters_on_ally_in_game_loop`
+
+### Unleash
+
+Unleash adds +1/+1 and marks the creature unable to block (simplified).
+
+- `tests/integration/test_keywords_game_ability_other.py::test_unleash_creature_enters_with_counter_in_game_loop`
+
+### Ascend
+
+Ascend grants City's Blessing when you control ten permanents as the
+ascend permanent enters.
+
+- `tests/integration/test_keywords_game_ability_other.py::test_ascend_grants_citys_blessing_at_ten_permanents`
+
+### Dash / blitz
+
+Dashed creatures return to hand at end of turn; blitzed creatures are
+sacrificed at end of turn.
+
+- `tests/integration/test_keywords_game_ability_other.py::test_dash_creature_returns_to_hand_at_end_of_turn`
+- `tests/integration/test_keywords_game_ability_other.py::test_blitz_creature_sacrificed_at_end_of_turn`
+
+### Cipher
+
+Cipher triggers when you cast an instant or sorcery spell (simplified log).
+
+- `tests/integration/test_keywords_game_ability_other.py::test_cipher_triggers_when_instant_cast_in_game_loop`
+
+### Persist / undying
+
+Persist and undying replace destruction with a counter and cleared damage.
+
+- `tests/integration/test_keywords_game_ability_other.py::test_undying_creature_survives_destruction_in_game_loop`
+- `tests/integration/test_keywords_game_ability_other.py::test_persist_creature_survives_with_minus_counter_in_game_loop`
+- `tests/unit/test_keywords_ext.py::test_persist_returns_creature_without_minus_counter`
+- `tests/unit/test_keywords_ext.py::test_undying_returns_creature_without_plus_counter`
+
+## Combat keywords (ability_other)
+
+### Mentor / training
+
+Mentor buffs a weaker attacking creature; training buffs this creature when a
+stronger ally attacks with it.
+
+- `tests/integration/test_keywords_game_ability_other.py::test_mentor_buffs_smaller_attacker_in_combat`
+- `tests/integration/test_keywords_game_ability_other.py::test_training_puts_counter_when_stronger_ally_attacks`
+
+### Exalted
+
+Exalted grants +1/+1 when this creature attacks alone.
+
+- `tests/integration/test_keywords_game_ability_other.py::test_exalted_solo_attack_adds_counter`
+
+### Annihilator
+
+Annihilator destroys defending permanents when this creature attacks.
+
+- `tests/integration/test_keywords_game_ability_other.py::test_annihilator_destroys_defender_permanents_on_attack`
+
+### Afflict
+
+Afflict makes the defending player lose 1 life when this creature attacks.
+
+- `tests/integration/test_keywords_game_ability_other.py::test_afflict_drains_defender_on_attack`
+
+### Enlist
+
+Enlist taps a non-attacking creature when this creature attacks.
+
+- `tests/integration/test_keywords_game.py::test_enlist_taps_helper_and_draws`
+
+## Combat keywords (ability_other, on-attack / damage)
+
+### Bushido
+
+Bushido adds +1/+1 when the creature blocks or becomes blocked.
+
+- `tests/integration/test_keywords_game_combat_other.py::test_bushido_puts_counter_when_creature_blocks`
+
+### Toxic / ingest
+
+Toxic adds poison counters; ingest exiles the top card of the damaged library.
+
+- `tests/integration/test_keywords_game_combat_other.py::test_toxic_adds_poison_on_unblocked_attack`
+- `tests/integration/test_keywords_game_combat_other.py::test_ingest_exiles_library_card_on_attack`
+
+### Battle cry / melee / dethrone
+
+Battle cry buffs allies; melee rewards wide attacks; dethrone can draw when
+damaging the player with the most life.
+
+- `tests/integration/test_keywords_game_combat_other.py::test_battle_cry_buffs_other_attackers`
+- `tests/integration/test_keywords_game_combat_other.py::test_melee_draws_with_three_attackers`
+- `tests/integration/test_keywords_game_combat_other.py::test_dethrone_draws_when_attacking_highest_life_player`
+
+### Sunburst / echo
+
+Sunburst uses colored mana in the pool on ETB; echo marks upkeep payment owed.
+
+- `tests/integration/test_keywords_game_combat_other.py::test_sunburst_puts_counters_from_mana_pool_on_cast`
+- `tests/integration/test_keywords_game_combat_other.py::test_echo_marks_creature_on_cast`
+
+## Phase E integration gate
+
+Minimum automated bar before Phase G scripting expands (`test_e_integration_gate.py`).
 
 ## Replacement effects (Phase F overlap)
 
@@ -145,3 +318,58 @@ Humility strips creature abilities and sets base P/T to 1/1 (layers 6 + 7b).
 
 - `tests/unit/test_continuous.py::test_humility_makes_creatures_one_one_without_abilities`
 - `tests/unit/test_continuous.py::test_humility_strips_hexproof_for_targeting`
+
+## Phase F integration gate
+
+Minimum automated bar for layers and replacement hooks (`test_f_integration_gate.py`).
+
+### Absorb
+
+Absorb reduces all damage to the permanent (combat and spells) via the damage
+replacement queue.
+
+- `tests/integration/test_phase_f_integration.py::test_absorb_reduces_shock_damage_in_game_loop`
+- `tests/integration/test_phase_f_integration.py::test_absorb_reduces_combat_damage_when_blocking`
+- `tests/unit/test_keywords_other_batch34.py::test_absorb_reduces_incoming_combat_damage`
+
+### Hexproof from
+
+Opponents cannot target with sources matching the stated quality (e.g. instants).
+
+- `tests/integration/test_phase_f_integration.py::test_hexproof_from_instants_blocks_opponent_shock`
+- `tests/unit/test_keywords_other_batch33.py::test_hexproof_from_blocks_creature_targeting`
+
+### Living metal
+
+Artifacts animate as 3/3 creatures during the player's combat phase.
+
+- `tests/integration/test_phase_f_integration.py::test_living_metal_artifact_attacks_for_three_damage`
+- `tests/unit/test_keywords_other_batch26.py::test_living_metal_animates_artifact_for_combat`
+
+### Umbra armor
+
+An umbra armor aura is exiled instead of the enchanted creature dying to damage.
+
+- `tests/integration/test_phase_f_integration.py::test_umbra_armor_saves_creature_from_lethal_shock`
+- `tests/unit/test_keywords_other_batch29.py::test_umbra_armor_saves_enchanted_creature`
+
+### Rest in Peace
+
+Cards that would enter a graveyard are exiled instead.
+
+- `tests/integration/test_phase_f_integration.py::test_rest_in_peace_exiles_creature_destroyed_by_shock`
+- `tests/unit/test_replacement.py::test_leyline_of_void_sends_destroyed_creature_to_exile`
+
+### Regeneration shield
+
+Regeneration replaces destruction from lethal damage; damage is cleared.
+
+- `tests/integration/test_phase_f_integration.py::test_regeneration_shield_survives_lethal_shock`
+- `tests/unit/test_replacement.py::test_regeneration_shield_survives_lethal_damage`
+
+### Humility (layers 6 + 7b)
+
+Humility strips abilities and sets base P/T to 1/1, enabling targeting and removal.
+
+- `tests/integration/test_phase_f_integration.py::test_humility_allows_shock_to_target_hexproof_creature`
+- `tests/unit/test_continuous.py::test_humility_makes_creatures_one_one_without_abilities`

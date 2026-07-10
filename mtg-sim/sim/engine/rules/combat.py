@@ -189,12 +189,14 @@ def _assign_combat_damage(
                 damage,
                 context.defending_player_idx,
             )
-            apply_dethrone_on_combat_damage_to_player(
+            dethrone_detail = apply_dethrone_on_combat_damage_to_player(
                 context.game,
                 attacker,
                 damage,
                 context.defending_player_idx,
             )
+            if dethrone_detail and 'draw' in dethrone_detail:
+                _draw_one_card(context.game, context.attacking_player_idx)
             _apply_lifelink(
                 context.game,
                 context.attacking_player_idx,
@@ -236,12 +238,14 @@ def _assign_combat_damage(
             player_damage,
             context.defending_player_idx,
         )
-        apply_dethrone_on_combat_damage_to_player(
+        dethrone_detail = apply_dethrone_on_combat_damage_to_player(
             context.game,
             attacker,
             player_damage,
             context.defending_player_idx,
         )
+        if dethrone_detail and 'draw' in dethrone_detail:
+            _draw_one_card(context.game, context.attacking_player_idx)
         _apply_lifelink(context.game, context.attacking_player_idx, attacker, damage)
     for blocker in blockers:
         if _deals_in_step(blocker, first_strike_step, context.game):
@@ -357,6 +361,14 @@ def _add_player_damage(context: _CombatContext, attacker: Permanent, damage: int
         context.result.infect_damage_to_player += damage
     else:
         context.result.damage_to_player += damage
+
+
+def _draw_one_card(game: GameState, player_idx: int) -> None:
+    """Move the top library card into hand (simplified draw for combat hooks)."""
+    library = game.zones.player_zones[player_idx].library
+    if not library:
+        return
+    game.zones.player_zones[player_idx].hand.append(library.pop(0))
 
 
 def _find_permanent(game: GameState, uid: str) -> Permanent | None:

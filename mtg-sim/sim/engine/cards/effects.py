@@ -10,6 +10,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
+from engine.abilities.keywords.handlers import apply_damage_to_permanent
 from engine.abilities.keywords.actions.fight import fight_creatures
 from engine.abilities.keywords.actions.library import mill_cards, scry_cards, surveil_cards
 from engine.abilities.keywords.actions.specialty import discard_from_hand
@@ -314,9 +315,9 @@ class DealDamage(CardEffect):
             return ''
         target = ctx.target_creature()
         if target is not None:
-            target.damage_marked += self.amount
+            marked = apply_damage_to_permanent(target, self.amount, ctx.game)
             ctx.game.check_sbas()
-            return f"dealt {self.amount} to {target.name}"
+            return f"dealt {marked} to {target.name}"
         victim = ctx.resolve_player(self.player_target)
         ctx.game.players[victim].life -= self.amount
         ctx.game.mark_player_was_dealt_damage(victim)

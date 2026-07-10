@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from deck_registry import CardInfo
+from engine.abilities.keywords.handlers import apply_damage_to_permanent
 from engine.cards.permanent_entry import (
     apply_planeswalker_entry,
     attach_aura,
@@ -272,8 +273,8 @@ class SpellResolveMixin(SpellStackPlacementMixin):
             else:
                 target = self._find_permanent(target_uid_val)
                 if target is not None:
-                    target.damage_marked += damage
-                    parts.append(f"dealt {damage} to {target.name}")
+                    marked = apply_damage_to_permanent(target, damage, self.state)
+                    parts.append(f"dealt {marked} to {target.name}")
         if spree_mode_is_destroy(effect):
             target_uid_val = target_uid(spell.targets)
             target = self._find_permanent(target_uid_val)
@@ -477,7 +478,7 @@ class SpellResolveMixin(SpellStackPlacementMixin):
         self._relocate_resolved_spell(spell, card)
         if overload_hits_each_creature(card_info):
             for perm in overload_creature_targets(self.state.zones.battlefield):
-                perm.damage_marked += damage
+                apply_damage_to_permanent(perm, damage, self.state)
             self.state.check_sbas()
             return f"{card_info.name} dealt {damage} damage to each creature"
         for idx in overload_opponent_indices(spell.controller_idx):
@@ -501,9 +502,9 @@ class SpellResolveMixin(SpellStackPlacementMixin):
         target = self._find_permanent(target_uid_val)
         if target is None:
             return f"Cast {card_info.name} (no valid target)"
-        target.damage_marked += damage
+        marked = apply_damage_to_permanent(target, damage, self.state)
         self.state.check_sbas()
-        return f"{card_info.name} dealt {damage} damage to {target.name}"
+        return f"{card_info.name} dealt {marked} damage to {target.name}"
 
     def _resolve_burn_to_player(
         self,
