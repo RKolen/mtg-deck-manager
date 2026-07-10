@@ -21,6 +21,7 @@ from engine.cards.effects import (
     PumpUntilEOT,
     Scry,
     SetPowerToughnessUntilEOT,
+    Surveil,
     TreasureHunt,
 )
 
@@ -33,6 +34,9 @@ BUILTIN_CARD_SCRIPTS: dict[str, tuple[CardEffect, ...]] = {
             DrainLife(amount=2),
         )),
     ),
+    'Consider': (Scry(count=1), Surveil(count=1)),
+    'Electrolyze': (DealDamage(amount=2), DrawCards(count=1)),
+    'Faithless Looting': (DrawCards(count=2), DiscardCards(count=2, target='controller')),
     'Doom Blade': (DestroyPermanent(),),
     'Fatal Push': (DestroyIfMaxManaValue(max_mv=2),),
     'Gitaxian Probe': (DrawCards(count=1),),

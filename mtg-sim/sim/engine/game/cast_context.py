@@ -248,16 +248,39 @@ class _SacrificeTargetIds:
 
 
 @dataclass(frozen=True)
+class _CastModeChoiceIds:
+    """Spree, tiered, and scripted modal mode selections."""
+
+    spree_mode_indices: tuple[int, ...] = ()
+    tiered_mode_index: int | None = None
+    modal_mode_index: int | None = None
+
+
+@dataclass(frozen=True)
 class CastTargetingIds:
     """Target and mode indices for optional costs."""
 
     bestow_target_uid: str | None = None
     mutate_target_uid: str | None = None
-    spree_mode_indices: tuple[int, ...] = ()
-    tiered_mode_index: int | None = None
+    modes: _CastModeChoiceIds = field(default_factory=_CastModeChoiceIds)
     harmonize_creature_ids: tuple[int, ...] = ()
     escalate_extra_targets: int = 0
     sacrifices: _SacrificeTargetIds = field(default_factory=_SacrificeTargetIds)
+
+    @property
+    def spree_mode_indices(self) -> tuple[int, ...]:
+        """Spree mode indices chosen when casting."""
+        return self.modes.spree_mode_indices
+
+    @property
+    def tiered_mode_index(self) -> int | None:
+        """Tiered mode index chosen when casting."""
+        return self.modes.tiered_mode_index
+
+    @property
+    def modal_mode_index(self) -> int | None:
+        """Scripted modal mode index chosen when casting."""
+        return self.modes.modal_mode_index
 
     @property
     def emerge_sacrifice_ids(self) -> tuple[int, ...]:

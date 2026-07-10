@@ -313,6 +313,18 @@ def test_effect_serde_roundtrip_scry_and_surveil():
         assert restored == effect
 
 
+def test_effect_serde_roundtrip_effect_list_gain_life_and_modal():
+    """EffectList, GainLife, and nested Modal survive JSON serialization."""
+    samples = (
+        GainLife(amount=3),
+        EffectList((Scry(count=1), DrawCards(count=1))),
+        Modal(modes=(DealDamage(amount=3), DestroyPermanent())),
+    )
+    for effect in samples:
+        restored = effect_from_dict(effect_to_dict(effect))
+        assert restored == effect
+
+
 def test_delirium_deal_damage_uses_higher_amount_with_delirium():
     """DeliriumDealDamage deals more when four graveyard types are met."""
     game = fresh_game()

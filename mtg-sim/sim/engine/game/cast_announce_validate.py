@@ -101,6 +101,10 @@ from engine.abilities.keywords.casting.tiered import (
     normalize_tiered_mode,
     tiered_selection_error,
 )
+from engine.cards.modal_cast import (
+    modal_selection_error,
+    normalize_scripted_modal_mode,
+)
 from engine.core.game_object import CardObject
 from engine.core.game_state import GameState
 from engine.core.zones import ZoneManager
@@ -194,6 +198,7 @@ class PaidCastModifiers:
 
     spree_modes: tuple[int, ...]
     tiered_mode: int | None = None
+    modal_mode: int | None = None
     flat: _FlatCostFlags = field(default_factory=_FlatCostFlags)
     face: _FaceCastFlags = field(default_factory=_FaceCastFlags)
     sac: _SacCastFlags = field(default_factory=_SacCastFlags)
@@ -381,6 +386,11 @@ def _normalized_paid_flags(
         tiered_mode=normalize_tiered_mode(
             card_info,
             opts.modifiers.targeting.tiered_mode_index,
+        ),
+        modal_mode=normalize_scripted_modal_mode(
+            card_info,
+            opts.modifiers.targeting.modal_mode_index,
+            game,
         ),
         flat=_FlatCostFlags(
             entwined=normalize_entwined(card_info, opts.costs.entwined),
@@ -624,6 +634,11 @@ def validate_announce_cast(
         lambda: tiered_selection_error(
             card_info,
             opts.modifiers.targeting.tiered_mode_index,
+        ),
+        lambda: modal_selection_error(
+            card_info,
+            opts.modifiers.targeting.modal_mode_index,
+            ctx.game,
         ),
         lambda: _reject_keyword(opts.costs.paid_casualty, paid.sac.casualty, name, "casualty"),
         lambda: casualty_sacrifice_error(

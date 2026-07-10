@@ -25,6 +25,11 @@ _CRAFT_ORACLE = (
     "{2}, Exile three artifacts you control: Craft this artifact "
     "into a creature."
 )
+_LIVING_WEAPON_ORACLE = (
+    "Living weapon (When this Equipment enters, create a 0/0 black Germ "
+    "creature token, then attach this to it.)\n"
+    "Equipped creature gets +4/+4."
+)
 
 
 def test_scavenge_from_graveyard_puts_counters_on_creature():
@@ -309,3 +314,229 @@ def test_disguise_cast_enters_face_down():
     assert "error" not in data
     spy_perm = next(perm for perm in game.state.zones.battlefield if perm.name == "Spy")
     assert spy_perm.face_down
+
+
+def test_bloodthirst_puts_counters_after_opponent_was_damaged():
+    """Bloodthirst adds +1/+1 counters when the opponent was damaged this turn."""
+    shock = make_instant("Shock", mana_cost="{R}", oracle="Shock deals 2 damage to any target.")
+    gore = make_creature("Gore-House", 2, 2, oracle="Bloodthirst 2", mana_cost="{2}{R}")
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    put_lands_on_battlefield(game, 4, land_info=make_land("Mountain", "R"))
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=shock),
+        CardObject(controller_idx=0, owner_idx=0, card_info=gore),
+    ]
+    data = game.action_cast(0, target_player=1)
+    assert "error" not in data
+    data = game.action_cast(0)
+    assert "error" not in data
+    gore_perm = next(perm for perm in game.state.zones.battlefield if perm.name == "Gore-House")
+    assert gore_perm.counters.get("+1/+1") == 2
+
+
+def test_riot_creature_enters_with_counter_in_game_loop():
+    """Riot puts a +1/+1 counter on the creature when it enters."""
+    goblin = make_creature("Goblin", 1, 1, oracle="Riot", mana_cost="{R}")
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    put_lands_on_battlefield(game, 1, land_info=make_land("Mountain", "R"))
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=goblin),
+    ]
+    data = game.action_cast(0)
+    assert "error" not in data
+    goblin_perm = next(perm for perm in game.state.zones.battlefield if perm.name == "Goblin")
+    assert goblin_perm.counters.get("+1/+1") == 1
+
+
+def test_modular_moves_counters_when_creature_dies():
+    """Modular transfers +1/+1 counters to another artifact when the donor dies."""
+    worker = make_creature("Arcbound Worker", 0, 0, oracle="Modular 2", mana_cost="{4}")
+    recipient = make_card(
+        "Golem",
+        type_line="Artifact Creature — Golem",
+        stats=_CardStats(cmc=2.0, pt="1/1"),
+    )
+    shock = make_instant("Shock", mana_cost="{R}", oracle="Shock deals 2 damage to any target.")
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    place_on_battlefield(recipient, 0, game.state.zones)
+    put_lands_on_battlefield(game, 5)
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=worker),
+        CardObject(controller_idx=0, owner_idx=0, card_info=shock),
+    ]
+    data = game.action_cast(0)
+    assert "error" not in data
+    worker_perm = next(
+        perm for perm in game.state.zones.battlefield if perm.name == "Arcbound Worker"
+    )
+    recipient_perm = next(
+        perm for perm in game.state.zones.battlefield if perm.name == "Golem"
+    )
+    assert worker_perm.counters.get("+1/+1") == 2
+    data = game.action_cast(0, target_uid=str(worker_perm.obj_id))
+    assert "error" not in data
+    assert worker_perm not in game.state.zones.battlefield
+    assert recipient_perm.counters.get("+1/+1") == 2
+
+
+def test_living_weapon_cast_creates_germ_host():
+    """Casting living weapon equipment creates a Germ token and attaches."""
+    batterskull = make_card(
+        "Batterskull",
+        type_line="Artifact — Equipment",
+        oracle=_LIVING_WEAPON_ORACLE,
+        mana_cost="{5}",
+        stats=_CardStats(cmc=5.0, pt="0/0"),
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    put_lands_on_battlefield(game, 5)
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=batterskull),
+    ]
+    data = game.action_cast(0)
+    assert "error" not in data
+    sword = next(perm for perm in game.state.zones.battlefield if perm.name == "Batterskull")
+    assert sword.attached_to is not None
+    host = game.state.zones.find_permanent(sword.attached_to)
+    assert host is not None
+    assert "Germ" in host.type_line
+
+
+def test_devour_sacrifices_creatures_on_cast():
+    """Devour sacrifices other creatures when the host enters from a cast."""
+    dragon = make_creature("Dragon", 4, 4, oracle="Devour 2", mana_cost="{4}{R}{R}")
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    place_on_battlefield(make_creature("Food", 1, 1), 0, game.state.zones)
+    place_on_battlefield(make_creature("Fodder", 1, 1), 0, game.state.zones)
+    put_lands_on_battlefield(game, 6, land_info=make_land("Mountain", "R"))
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=dragon),
+    ]
+    data = game.action_cast(0)
+    assert "error" not in data
+    dragon_perm = next(perm for perm in game.state.zones.battlefield if perm.name == "Dragon")
+    assert dragon_perm.counters.get("+1/+1") == 2
+    assert len(game.state.zones.player_zones[0].graveyard) == 2
+
+
+def test_mentor_buffs_smaller_attacker_in_combat():
+    """Mentor puts +1/+1 on a weaker attacking creature during combat."""
+    mentor = make_creature("Mentor", 4, 4, oracle="Mentor")
+    rookie = make_creature("Rookie", 2, 2)
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    mentor_perm = place_on_battlefield(mentor, 0, game.state.zones, sick=False)
+    rookie_perm = place_on_battlefield(rookie, 0, game.state.zones, sick=False)
+    game.action_go_to_attack()
+    game.action_toggle_attacker(str(mentor_perm.obj_id))
+    game.action_toggle_attacker(str(rookie_perm.obj_id))
+    data = game.action_confirm_attack()
+    assert "error" not in data
+    assert rookie_perm.counters.get("+1/+1") == 1
+
+
+def test_exalted_solo_attack_adds_counter():
+    """Exalted grants +1/+1 when this creature attacks alone."""
+    knight = make_creature("Knight", 2, 2, oracle="Exalted")
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    knight_perm = place_on_battlefield(knight, 0, game.state.zones, sick=False)
+    game.action_go_to_attack()
+    game.action_toggle_attacker(str(knight_perm.obj_id))
+    data = game.action_confirm_attack()
+    assert "error" not in data
+    assert knight_perm.counters.get("+1/+1") == 1
+
+
+def test_annihilator_destroys_defender_permanents_on_attack():
+    """Annihilator destroys defending permanents when the creature attacks."""
+    ulamog = make_creature("Ulamog", 10, 10, oracle="Annihilator 2")
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    ulamog_perm = place_on_battlefield(ulamog, 0, game.state.zones, sick=False)
+    place_on_battlefield(make_land("Mountain"), 1, game.state.zones)
+    place_on_battlefield(make_land("Island"), 1, game.state.zones)
+    game.action_go_to_attack()
+    game.action_toggle_attacker(str(ulamog_perm.obj_id))
+    data = game.action_confirm_attack()
+    assert "error" not in data
+    assert len([perm for perm in game.state.zones.battlefield if perm.controller_idx == 1]) == 0
+
+
+def test_backup_puts_counters_on_ally_in_game_loop():
+    """Backup puts +1/+1 on another creature you control when the host enters."""
+    ally = make_creature("Ally", 1, 1)
+    backup_host = make_creature("Backup Host", 2, 2, oracle="Backup 2", mana_cost="{2}{G}")
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    ally_perm = place_on_battlefield(ally, 0, game.state.zones)
+    put_lands_on_battlefield(game, 3, land_info=make_land("Forest", "G"))
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=backup_host),
+    ]
+    data = game.action_cast(0)
+    assert "error" not in data
+    assert ally_perm.counters.get("+1/+1") == 2
+
+
+def test_dash_creature_returns_to_hand_at_end_of_turn():
+    """Dashed creatures return to hand when the turn ends."""
+    sprinter = make_card(
+        "Sprinter",
+        type_line="Creature — Human Warrior",
+        oracle="Dash {1}{R}\nHaste",
+        mana_cost="{1}{R}",
+        stats=_CardStats(cmc=3.0, pt="2/1"),
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    put_lands_on_battlefield(game, 2, land_info=make_land("Mountain", "R"))
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=sprinter),
+    ]
+    data = game.action_cast(0, cast_options=cast_announce_options(cast_for_dash=True))
+    assert "error" not in data
+    assert any(perm.name == "Sprinter" for perm in game.state.zones.battlefield)
+    data = game.action_end_turn()
+    assert "error" not in data
+    assert any(
+        isinstance(card, CardObject)
+        and card.card_info is not None
+        and card.card_info.name == "Sprinter"
+        for card in game.state.zones.player_zones[0].hand
+    )
+    assert not any(perm.name == "Sprinter" for perm in game.state.zones.battlefield)
+
+
+def test_blitz_creature_sacrificed_at_end_of_turn():
+    """Blitzed creatures are sacrificed when the turn ends."""
+    blitzer = make_card(
+        "Blitzer",
+        type_line="Creature — Human Warrior",
+        oracle="Blitz {1}{R}",
+        mana_cost="{1}{R}",
+        stats=_CardStats(cmc=2.0, pt="2/1"),
+    )
+    game = create_game(make_deck(lands=20), make_deck(lands=20))
+    game.action_keep()
+    put_lands_on_battlefield(game, 2, land_info=make_land("Mountain", "R"))
+    game.state.zones.player_zones[0].hand = [
+        CardObject(controller_idx=0, owner_idx=0, card_info=blitzer),
+    ]
+    data = game.action_cast(0, cast_options=cast_announce_options(cast_for_blitz=True))
+    assert "error" not in data
+    assert any(perm.name == "Blitzer" for perm in game.state.zones.battlefield)
+    data = game.action_end_turn()
+    assert "error" not in data
+    assert not any(perm.name == "Blitzer" for perm in game.state.zones.battlefield)
+    assert any(
+        isinstance(card, CardObject)
+        and card.card_info is not None
+        and card.card_info.name == "Blitzer"
+        for card in game.state.zones.player_zones[0].graveyard
+    )

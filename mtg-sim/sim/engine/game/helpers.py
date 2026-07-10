@@ -175,8 +175,10 @@ from engine.abilities.keywords.other.ninjutsu import (
     has_ninjutsu_card,
     ninjutsu_mana_needed,
 )
+from engine.cards.modal_cast import scripted_modal_mode_count
 from engine.cards.oracle_parse import is_affordable, spell_category
 from engine.cards.permanent_entry import is_aura
+from engine.cards.script_loader import has_script
 from engine.abilities.keywords.other.enchant import has_enchant
 from engine.core.game_object import (
     ActivatedAbilityOnStack,
@@ -259,6 +261,21 @@ def _hand_alt_activation_flags(
         "canPlot": plot_ok,
         "hasMadness": madness_ok,
         "madnessAffordable": madness_ok and available_mana >= madness_mana_needed(card)[0],
+    }
+
+
+def _script_client_flags(
+    card: CardInfo,
+    game: GameState | None,
+) -> dict[str, object]:
+    """Return Phase G script flags for hand-card serialisation."""
+    scripted_modal_modes = scripted_modal_mode_count(card, game)
+    return {
+        "hasScript": has_script(card, game),
+        "hasScriptedModal": (
+            scripted_modal_modes is not None and scripted_modal_modes > 1
+        ),
+        "scriptedModalModes": scripted_modal_modes or 0,
     }
 
 
@@ -466,6 +483,7 @@ def card_to_client(
         "hasBloodrush": has_bloodrush_card(card),
         "hasEquip": has_equip_card(card),
         "hasManaAbility": has_mana_ability_card(card),
+        **_script_client_flags(card, ctx.game),
         "canCycle": can_cycle(card, ctx.phase, ctx.stack_is_empty),
         "canChannel": can_channel(card, ctx.phase, ctx.stack_is_empty),
         "canNinjutsu": can_ninjutsu(card, ctx.phase, ctx.stack_is_empty),

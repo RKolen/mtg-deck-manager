@@ -219,7 +219,11 @@ class SpellStackMixin(GraveyardCastMixin):
         stack_modes = (
             (mods.tiered_mode,)
             if mods.tiered_mode is not None
-            else mods.spree_modes
+            else (
+                (mods.modal_mode,)
+                if mods.modal_mode is not None
+                else mods.spree_modes
+            )
         )
         copies = mods.copy_casts.stack_copies
         resolve_extras = mods.copy_casts.resolve_extras

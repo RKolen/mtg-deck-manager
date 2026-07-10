@@ -10,6 +10,7 @@ from engine.game.cast_context import (
     CastManaReductionIds,
     CastModifierIds,
     CastTargetingIds,
+    _CastModeChoiceIds,
     _PaidCastExtras,
     _SacrificeTargetIds,
     HandAlternateCastChoices,
@@ -97,8 +98,11 @@ def cast_announce_options_from_request(req) -> CastAnnounceOptions:
                 bestow_target_uid=req.bestowTargetUid,
                 mutate_target_uid=req.mutateTargetUid,
                 escalate_extra_targets=req.escalateExtraTargets,
-                spree_mode_indices=tuple(req.spreeModeIndices),
-                tiered_mode_index=req.tieredModeIndex,
+                modes=_CastModeChoiceIds(
+                    spree_mode_indices=tuple(req.spreeModeIndices),
+                    tiered_mode_index=req.tieredModeIndex,
+                    modal_mode_index=req.modalModeIndex,
+                ),
                 harmonize_creature_ids=harmonize_ids,
                 sacrifices=_SacrificeTargetIds(
                     emerge_sacrifice_ids=emerge_ids,

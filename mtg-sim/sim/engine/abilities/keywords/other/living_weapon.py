@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from engine.abilities.keywords.actions.counters import put_plus_counters
 from engine.abilities.keywords.registry import has_registered_keyword
-from engine.cards.oracle_parse import TokenBlueprint
+from engine.cards.oracle_parse import TokenBlueprint, parse_pump
 from engine.core.game_object import Permanent, TokenObject
 from engine.core.zones import ZoneManager
 
@@ -37,4 +38,11 @@ def apply_living_weapon(zones: ZoneManager, equipment: Permanent) -> str:
     )
     host = zones.enter_battlefield(token, equipment.controller_idx, 'living_weapon')
     equipment.attached_to = host.obj_id
+    for line in (equipment.oracle_text or '').splitlines():
+        if 'equipped creature' not in line.lower():
+            continue
+        power, toughness = parse_pump(line)
+        if power == toughness and power > 0:
+            put_plus_counters(host, power)
+        break
     return f"Living weapon created {host.name}"
