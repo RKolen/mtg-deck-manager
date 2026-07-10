@@ -28,7 +28,13 @@ from engine.abilities.keywords.actions.resolve import (
     _HANDLERS,
 )
 from engine.core.game_object import CardObject, effective_power
-from tests.conftest import fresh_game, make_creature, make_instant, place_on_battlefield
+from tests.conftest import (
+    fresh_game,
+    make_creature,
+    make_instant,
+    place_absorb_creature,
+    place_on_battlefield,
+)
 
 
 def test_all_seventy_two_keyword_actions_registered():
@@ -112,8 +118,18 @@ def test_fight_deals_mutual_power_damage():
     game = fresh_game()
     bear = place_on_battlefield(make_creature('Bear', 2, 3), 0, game.zones)
     wolf = place_on_battlefield(make_creature('Wolf', 4, 2), 1, game.zones)
-    fight_creatures(bear, wolf)
+    fight_creatures(bear, wolf, game)
     assert bear.damage_marked == 4
+    assert wolf.damage_marked == 2
+
+
+def test_fight_respects_absorb_when_game_provided():
+    """Fight damage routes through replacements when a game state is available."""
+    game = fresh_game()
+    ward = place_absorb_creature(game)
+    wolf = place_on_battlefield(make_creature('Wolf', 4, 2), 1, game.zones)
+    fight_creatures(ward, wolf, game)
+    assert ward.damage_marked == 2
     assert wolf.damage_marked == 2
 
 

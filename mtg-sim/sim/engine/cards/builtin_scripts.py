@@ -52,6 +52,7 @@ BUILTIN_CARD_SCRIPTS: dict[str, tuple[CardEffect, ...]] = {
     ),
     'Murder': (DestroyPermanent(),),
     'Mutagenic Growth': (PumpUntilEOT(power=2, toughness=2),),
+    'Opt': (Scry(count=1), DrawCards(count=1)),
     'Path to Exile': (ExilePermanent(),),
     "Prey's Vengeance": (PumpUntilEOT(power=2, toughness=2),),
     'Requiting Hex': (DestroyIfMaxManaValue(max_mv=2),),

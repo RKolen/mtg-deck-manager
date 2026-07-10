@@ -6,7 +6,13 @@ from engine.abilities.keywords.casting._hand_discard import pop_hand_to_graveyar
 from engine.core.game_object import CardObject
 from engine.rules.replacement import apply_damage_with_replacements
 from engine.rules.state_based import check_sbas
-from tests.conftest import fresh_game, make_card, make_creature, place_on_battlefield
+from tests.conftest import (
+    fresh_game,
+    make_card,
+    make_creature,
+    place_absorb_creature,
+    place_on_battlefield,
+)
 
 
 def test_regeneration_shield_survives_lethal_damage():
@@ -60,6 +66,15 @@ def test_shield_counter_prevents_lethal_destroy():
     assert not any(e.rule == '704.5g' for e in events)
     assert creature in game.zones.battlefield
     assert creature.counters.get('shield', 0) == 0
+
+
+def test_absorb_reduces_damage_in_replacement_queue():
+    """Absorb is applied once via the damage replacement queue."""
+    game = fresh_game()
+    ward = place_absorb_creature(game)
+    attacker = place_on_battlefield(make_creature('Raider', 3, 3), 1, game.zones)
+    applied = apply_damage_with_replacements(game, ward, attacker, 3)
+    assert applied == 1
 
 
 def test_mill_with_leyline_sends_to_exile():

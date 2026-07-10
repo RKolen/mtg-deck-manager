@@ -24,12 +24,12 @@ def test_phase_f_continuous_layer_coverage():
 
 def test_phase_f_replacement_coverage():
     """Replacement effects: regen, shields, and graveyard routing have unit tests."""
-    assert _count_test_functions(_REPLACEMENT_TESTS) >= 5
+    assert _count_test_functions(_REPLACEMENT_TESTS) >= 6
 
 
 def test_phase_f_game_loop_hooks():
     """F-deferred keywords have simplified hooks exercised in the game loop."""
-    assert _count_test_functions(_PHASE_F_TESTS) >= 7
+    assert _count_test_functions(_PHASE_F_TESTS) >= 8
 
 
 def test_phase_f_deferred_keywords_documented():

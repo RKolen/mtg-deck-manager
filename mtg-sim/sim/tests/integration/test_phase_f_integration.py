@@ -12,14 +12,8 @@ from tests.conftest import (
     make_land,
     place_on_battlefield,
     put_lands_on_battlefield,
+    set_player_hand_single,
 )
-
-
-def _set_hand_to_card(game, card):
-    """Set player hand to one explicit card object."""
-    game.state.zones.player_zones[0].hand = [
-        CardObject(controller_idx=0, owner_idx=0, card_info=card),
-    ]
 
 
 def test_absorb_reduces_shock_damage_in_game_loop():
@@ -37,7 +31,7 @@ def test_absorb_reduces_shock_damage_in_game_loop():
         game.state.zones,
     )
     put_lands_on_battlefield(game, 1, land_info=make_land("Mountain", "R"))
-    _set_hand_to_card(game, shock)
+    set_player_hand_single(game, shock)
     data = game.action_cast(0, target_uid=str(ward.obj_id))
     assert "error" not in data
     assert ward in game.state.zones.battlefield
@@ -64,7 +58,7 @@ def test_absorb_reduces_combat_damage_when_blocking():
     game.action_assign_blocker(str(blocker.obj_id), str(attacker.obj_id))
     data = game.action_confirm_blocks()
     assert data["phase"] == "draw"
-    assert blocker.damage_marked == 0
+    assert blocker.damage_marked == 1
     assert attacker.damage_marked == 2
 
 
@@ -104,6 +98,27 @@ def test_living_metal_artifact_attacks_for_three_damage():
     data = game.action_confirm_attack()
     assert data["opponentLife"] == 17
     assert golem in game.state.zones.battlefield
+    assert golem.counters.get("living_metal", 0) == 0
+    assert golem.counters.get("+1/+1", 0) == 0
+
+
+def test_shield_counter_prevents_shock_damage_in_game_loop():
+    """A shield counter is removed instead of marking damage from a burn spell."""
+    shock = make_instant(
+        "Shock",
+        cmc=0,
+        mana_cost="",
+        oracle="Shock deals 2 damage to any target.",
+    )
+    game = create_game([shock for _ in range(20)], make_deck(lands=20))
+    game.action_keep()
+    defender = place_on_battlefield(make_creature("Defender", 2, 2), 0, game.state.zones)
+    defender.counters["shield"] = 1
+    data = game.action_cast(0, target_uid=str(defender.obj_id))
+    assert "error" not in data
+    assert defender in game.state.zones.battlefield
+    assert defender.damage_marked == 0
+    assert defender.counters.get("shield", 0) == 0
 
 
 def test_humility_allows_shock_to_target_hexproof_creature():

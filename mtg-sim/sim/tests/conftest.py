@@ -11,6 +11,7 @@ from typing import Any
 
 from deck_registry import CardInfo, ManaProfile
 from engine.abilities.keywords import enters_ready
+from engine.cards.builtin_scripts import BUILTIN_CARD_SCRIPTS
 from engine.core.game_object import CardObject, Permanent
 from engine.core.game_state import GameState, PlayerInfo, _PlayerVitals
 from engine.core.turn_structure import TurnRunner
@@ -35,6 +36,7 @@ from engine.game.cast_context import (
 from engine.game.face_alternate_cast import FaceAlternateCastFlags
 from engine.rules.combat import resolve_combat_damage
 from engine.rules.stack import Stack
+from engine.game import create_game
 
 
 # ---------------------------------------------------------------------------
@@ -201,6 +203,33 @@ def resolve_stack_fully(game: Any) -> None:
     while not game.state.stack.is_empty:
         game.action_pass_priority()
         game.action_pass_priority()
+
+
+def set_player_hand_single(game: Any, card_info: CardInfo, player_idx: int = 0) -> CardObject:
+    """Replace a player's hand with one explicit card object."""
+    card = CardObject(
+        controller_idx=player_idx,
+        owner_idx=player_idx,
+        card_info=card_info,
+    )
+    game.state.zones.player_zones[player_idx].hand = [card]
+    return card
+
+
+def place_absorb_creature(
+    game: GameState,
+    player_idx: int = 0,
+    *,
+    power: int = 2,
+    toughness: int = 5,
+    amount: int = 2,
+) -> Permanent:
+    """Place a creature with Absorb N for replacement-effect tests."""
+    return place_on_battlefield(
+        make_creature('Loxodon', power, toughness, oracle=f'Absorb {amount}'),
+        player_idx,
+        game.zones,
+    )
 
 
 def put_lands_on_battlefield(
@@ -423,6 +452,18 @@ def fresh_game(
 # ---------------------------------------------------------------------------
 # Shared card/game setup helpers (used across multiple test modules)
 # ---------------------------------------------------------------------------
+
+def create_scripted_game(
+    player_deck: list[CardInfo] | None = None,
+    opponent_deck: list[CardInfo] | None = None,
+):
+    """Create a game with built-in Phase G card scripts loaded."""
+    return create_game(
+        player_deck or make_deck(lands=20),
+        opponent_deck or make_deck(lands=20),
+        card_scripts=dict(BUILTIN_CARD_SCRIPTS),
+    )
+
 
 def make_entwine_charm(entwine_cost_str: str) -> CardInfo:
     """Return a modal instant with entwine using the given cost string."""

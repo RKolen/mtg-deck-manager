@@ -321,7 +321,17 @@ Humility strips creature abilities and sets base P/T to 1/1 (layers 6 + 7b).
 
 ## Phase F integration gate
 
-Minimum automated bar for layers and replacement hooks (`test_f_integration_gate.py`).
+Phase F delivers simplified layer and replacement hooks for deck-relevant
+keywords deferred from Phase E. Full CR fidelity for niche cases remains
+optional; the automated bar is `test_f_integration_gate.py`.
+
+### Shield counter
+
+A shield counter is removed instead of marking damage or dying to lethal damage.
+
+- `tests/integration/test_phase_f_integration.py::test_shield_counter_prevents_shock_damage_in_game_loop`
+- `tests/unit/test_replacement.py::test_shield_counter_prevents_combat_damage`
+- `tests/unit/test_replacement.py::test_shield_counter_prevents_lethal_destroy`
 
 ### Absorb
 
@@ -345,6 +355,10 @@ Artifacts animate as 3/3 creatures during the player's combat phase.
 
 - `tests/integration/test_phase_f_integration.py::test_living_metal_artifact_attacks_for_three_damage`
 - `tests/unit/test_keywords_other_batch26.py::test_living_metal_animates_artifact_for_combat`
+
+Living metal bonuses clear after combat ends.
+
+- `tests/integration/test_phase_f_integration.py::test_living_metal_artifact_attacks_for_three_damage` (deactivation asserted)
 
 ### Umbra armor
 
@@ -373,3 +387,33 @@ Humility strips abilities and sets base P/T to 1/1, enabling targeting and remov
 
 - `tests/integration/test_phase_f_integration.py::test_humility_allows_shock_to_target_hexproof_creature`
 - `tests/unit/test_continuous.py::test_humility_makes_creatures_one_one_without_abilities`
+
+## Phase G scripting
+
+Structured `CardEffect` scripts resolve before regex oracle handlers. Built-in
+templates (`builtin_scripts.py`) seed public cards; per-deck JSON caches under
+`data/deck_scripts/` (gitignored) sync at runtime from Drupal deck nids only —
+manifests store `source_id` and scripts, never deck titles.
+
+Resolution order: per-game cache, built-ins, oracle infer, LLM (opt-in).
+
+### Modal cast
+
+Choose-one scripts use `modalModeIndex` on cast; hand cards expose
+`hasScript`, `hasScriptedModal`, and `scriptedModalModes`.
+
+- `tests/integration/test_scripted_game.py::test_molten_collapse_modal_damage_mode_in_game_loop`
+- `tests/integration/test_scripted_game.py::test_molten_collapse_modal_destroy_mode_in_game_loop`
+- `tests/integration/test_scripted_game.py::test_invalid_scripted_modal_mode_rejected_at_cast`
+- `tests/integration/test_scripted_game.py::test_card_to_client_exposes_script_and_modal_flags`
+- `tests/unit/test_modal_cast.py`
+
+### Runtime cache and privacy
+
+- `tests/integration/test_scripted_game.py::test_runtime_deck_sync_seeds_builtin_without_persisting_deck_title`
+- `tests/integration/test_scripted_game.py::test_prepare_game_scripts_merges_caches_by_source_id_only`
+- `tests/unit/test_script_coverage.py`
+
+## Phase G integration gate
+
+Minimum automated bar for scripting (`test_g_integration_gate.py`).
