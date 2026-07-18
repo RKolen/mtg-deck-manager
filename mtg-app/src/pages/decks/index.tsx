@@ -235,7 +235,7 @@ const DecksPage: React.FC = () => {
               padding: '3px 8px',
               borderRadius: 2,
               fontSize: 10,
-              color: 'var(--ink-2)',
+              color: 'var(--ink)',
             }}
             title="Toggle reference currency"
           >
@@ -282,7 +282,7 @@ const DecksPage: React.FC = () => {
               <tr
                 style={{
                   borderBottom: '1px solid var(--line)',
-                  color: 'var(--ink-3)',
+                  color: 'var(--ink)',
                   textTransform: 'uppercase',
                   fontSize: 9,
                   letterSpacing: '0.08em',
@@ -319,14 +319,14 @@ const DecksPage: React.FC = () => {
                         sel === i ? '2px solid var(--accent)' : '2px solid transparent',
                     }}
                   >
-                    <td style={{ textAlign: 'right', color: 'var(--ink-3)', paddingRight: 4 }}>
+                    <td style={{ textAlign: 'right', color: 'var(--ink)', paddingRight: 4 }}>
                       {String(i + 1).padStart(2, '0')}
                     </td>
                     <td>
                       <div style={{ fontWeight: 600, color: 'var(--ink)' }}>
                         {d.attributes.title}
                       </div>
-                      <div style={{ color: 'var(--ink-3)', fontSize: 10 }}>
+                      <div style={{ color: 'var(--ink)', fontSize: 10 }}>
                         {notePreview(d.attributes.field_notes)}
                       </div>
                     </td>
@@ -366,7 +366,7 @@ const DecksPage: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => setDeleteConfirm(null)}
-                            style={{ color: 'var(--ink-3)', fontSize: 10 }}
+                            style={{ color: 'var(--ink)', fontSize: 10 }}
                           >
                             NO
                           </button>
@@ -375,7 +375,7 @@ const DecksPage: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => setDeleteConfirm(d.id)}
-                          style={{ color: 'var(--ink-3)', fontSize: 10 }}
+                          style={{ color: 'var(--ink)', fontSize: 10 }}
                           aria-label={`Delete ${d.attributes.title}`}
                         >
                           DEL
@@ -494,7 +494,7 @@ const DecksPage: React.FC = () => {
                     setCreating(false);
                     setTitle('');
                   }}
-                  style={{ color: 'var(--ink-3)', fontSize: 10 }}
+                  style={{ color: 'var(--ink)', fontSize: 10 }}
                 >
                   CANCEL
                 </button>
@@ -565,7 +565,7 @@ function DeckPreview({
           style={{
             fontFamily: 'var(--mono)',
             fontSize: 11,
-            color: 'var(--ink-2)',
+            color: 'var(--ink)',
             marginBottom: 12,
             lineHeight: 1.6,
             maxHeight: 72,

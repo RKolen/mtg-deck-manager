@@ -145,7 +145,7 @@ const CardModal: React.FC<CardModalProps> = ({
             )}
 
           {(card.field_set_name || card.field_rarity) && (
-            <p style={{ margin: '0.25rem 0', fontSize: '0.85rem', color: 'var(--ink-2)' }}>
+            <p style={{ margin: '0.25rem 0', fontSize: '0.85rem', color: 'var(--ink)' }}>
               {card.field_set_name}
               {card.field_rarity && ` · ${card.field_rarity.charAt(0).toUpperCase()}${card.field_rarity.slice(1)}`}
             </p>

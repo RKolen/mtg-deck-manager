@@ -117,7 +117,7 @@ export function TopBar({
               fontFamily: 'var(--mono)',
               fontSize: 11,
               fontWeight: isActive ? 700 : 400,
-              color: isActive ? 'var(--accent)' : 'var(--ink-2)',
+              color: isActive ? 'var(--accent)' : 'var(--ink)',
               borderBottom: isActive ? '2px solid var(--accent)' : '2px solid transparent',
               letterSpacing: '0.08em',
               display: 'flex',
@@ -142,7 +142,7 @@ export function TopBar({
           alignItems: 'center',
           gap: 16,
           fontSize: 11,
-          color: 'var(--ink-2)',
+          color: 'var(--ink)',
           flexShrink: 0,
           whiteSpace: 'nowrap',
         }}
@@ -169,7 +169,7 @@ export function TopBar({
             padding: '2px 6px',
             borderRadius: 3,
             fontSize: 10,
-            color: 'var(--ink-2)',
+            color: 'var(--ink)',
           }}
         >
           {dark ? 'DARK' : 'LIGHT'}

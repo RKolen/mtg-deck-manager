@@ -245,7 +245,7 @@ const MetaDecksPage: React.FC = () => {
                 <td style={{ padding: '0.4rem 0.6rem' }}>
                   {deck.archetypeTags.join(', ')}
                 </td>
-                <td style={{ padding: '0.4rem 0.6rem', color: '#666' }}>
+                <td style={{ padding: '0.4rem 0.6rem', color: 'var(--ink)' }}>
                   {deck.fetchedAt !== null ? new Date(deck.fetchedAt).toLocaleDateString() : '-'}
                 </td>
               </tr>

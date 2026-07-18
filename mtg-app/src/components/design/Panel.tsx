@@ -41,7 +41,7 @@ export function Panel({
             fontSize: 10,
             fontWeight: 700,
             letterSpacing: '0.1em',
-            color: 'var(--ink-2)',
+            color: 'var(--ink)',
             textTransform: 'uppercase',
           }}
         >
@@ -96,7 +96,7 @@ export function Stat({
       {(sub || delta != null) && (
         <div
           className="mono tnum"
-          style={{ fontSize: 10, color: 'var(--ink-3)', display: 'flex', gap: 6 }}
+          style={{ fontSize: 10, color: 'var(--ink)', display: 'flex', gap: 6 }}
         >
           {sub && <span>{sub}</span>}
           {delta != null && (

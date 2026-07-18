@@ -143,9 +143,13 @@ final class CardImageFetcher {
     if ($basename === '' || $basename === '/' || !preg_match('/^[a-f0-9-]{36}\.jpg$/i', $basename)) {
       $basename = preg_replace('/[^a-zA-Z0-9._-]/', '_', $basename ?? '') ?: ('card-' . $nid . '.jpg');
     }
-    $destination = self::DIRECTORY . '/' . strtolower($basename);
+    $directory = self::DIRECTORY;
+    $destination = $directory . '/' . strtolower($basename);
 
-    $this->fileSystem->prepareDirectory(self::DIRECTORY, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS);
+    $this->fileSystem->prepareDirectory(
+      $directory,
+      FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS,
+    );
 
     try {
       $response = $this->httpClient->request('GET', $uri, [

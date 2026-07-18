@@ -27,7 +27,7 @@ html[data-theme='dark'] {
   --line: #1f2731;
   --line-2: #2a3340;
   --ink: #d8dde4;
-  --ink-2: #9aa3ad;
+  --ink-2: var(--ink);
   --ink-3: #5f6973;
   --ink-4: #3a424c;
   --accent: var(--accent-color, #f5a623);
@@ -46,7 +46,7 @@ html[data-theme='light'] {
   --line: #c8bfa9;
   --line-2: #ada392;
   --ink: #1a1714;
-  --ink-2: #4a443a;
+  --ink-2: var(--ink);
   --ink-3: #7a7164;
   --ink-4: #ada392;
   --accent: var(--accent-color, #b25b15);
@@ -98,10 +98,10 @@ body {
   letter-spacing: 0.08em;
 }
 .dim {
-  color: var(--ink-3);
+  color: var(--ink);
 }
 .ink2 {
-  color: var(--ink-2);
+  color: var(--ink);
 }
 .accent {
   color: var(--accent);
@@ -173,7 +173,7 @@ kbd {
   border-bottom-width: 2px;
   border-radius: 3px;
   padding: 1px 5px;
-  color: var(--ink-2);
+  color: var(--ink);
 }
 
 .pip {
@@ -210,8 +210,9 @@ kbd {
   color: #fff;
 }
 .pip.C {
-  background: var(--ink-4);
-  color: var(--bg);
+  background: var(--bg-3);
+  color: var(--ink);
+  border: 1px solid var(--line-2);
 }
 .pip.X,
 .pip.N {
@@ -277,4 +278,78 @@ kbd {
   overflow: auto;
   min-height: 0;
   position: relative;
+}
+
+/* Form controls — native selects/inputs are unreadable on dark without this */
+input,
+select,
+textarea,
+button {
+  font: inherit;
+  color: var(--ink);
+  background: var(--bg-2);
+  border: 1px solid var(--line-2);
+  border-radius: 4px;
+}
+input,
+select,
+textarea {
+  padding: 0.3rem 0.5rem;
+}
+select option {
+  background: var(--bg-2);
+  color: var(--ink);
+}
+button {
+  cursor: pointer;
+  padding: 0.35rem 0.85rem;
+}
+button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+button.btn-accent {
+  background: var(--accent) !important;
+  color: var(--bg) !important;
+  border: 1px solid var(--accent) !important;
+  font-weight: 600;
+}
+
+/* Summary / stat tiles */
+.summary-card {
+  background: var(--bg-2) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+  color: var(--ink) !important;
+}
+.summary-card dt,
+.summary-card dd {
+  color: var(--ink) !important;
+}
+
+/*
+ * Recharts often writes #666/#ccc onto SVG when CSS vars are rejected as stroke/fill.
+ * Force theme colors from CSS so axes stay readable on dark backgrounds.
+ */
+.recharts-cartesian-axis-tick-value,
+.recharts-legend-item-text,
+.recharts-label {
+  fill: var(--ink) !important;
+}
+.recharts-cartesian-axis-line,
+.recharts-cartesian-axis-tick-line {
+  stroke: var(--line-2) !important;
+}
+.recharts-cartesian-grid line {
+  stroke: var(--line) !important;
+}
+.recharts-default-tooltip {
+  background: var(--bg-2) !important;
+  border: 1px solid var(--line) !important;
+  color: var(--ink) !important;
+}
+.recharts-default-tooltip .recharts-tooltip-label,
+.recharts-default-tooltip .recharts-tooltip-item {
+  color: var(--ink) !important;
 }

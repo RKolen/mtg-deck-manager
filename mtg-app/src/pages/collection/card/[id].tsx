@@ -116,7 +116,7 @@ const CollectionCardPage: React.FC = () => {
             </p>
           )}
           {a.field_set_name != null && (
-            <p style={{ margin: '0.25rem 0', fontSize: '0.8rem', color: 'var(--ink-2)' }}>
+            <p style={{ margin: '0.25rem 0', fontSize: '0.8rem', color: 'var(--ink)' }}>
               {a.field_set_name} · {a.field_rarity} · #{a.field_collector_number}
             </p>
           )}
@@ -135,7 +135,7 @@ const CollectionCardPage: React.FC = () => {
 
           <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span style={{ fontSize: '0.8rem', color: 'var(--ink-2)' }}>Regular</span>
+              <span style={{ fontSize: '0.8rem', color: 'var(--ink)' }}>Regular</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <button
                   type="button"
@@ -159,7 +159,7 @@ const CollectionCardPage: React.FC = () => {
             </label>
 
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span style={{ fontSize: '0.8rem', color: 'var(--ink-2)' }}>Foil</span>
+              <span style={{ fontSize: '0.8rem', color: 'var(--ink)' }}>Foil</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <button
                   type="button"
@@ -184,7 +184,7 @@ const CollectionCardPage: React.FC = () => {
           </div>
 
           {(owned > 0 || foil > 0) && (
-            <p style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: '#555' }}>
+            <p style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: 'var(--ink)' }}>
               Total: {owned + foil} ({owned} regular, {foil} foil)
             </p>
           )}

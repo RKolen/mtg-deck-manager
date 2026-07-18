@@ -219,7 +219,7 @@ const CollectionPage: React.FC = () => {
         <h1 style={{ marginTop: 0 }}>
           Collection
           {isLoading && (
-            <span style={{ fontSize: '0.75rem', marginLeft: 8, color: '#888' }}>
+            <span style={{ fontSize: '0.75rem', marginLeft: 8, color: 'var(--ink)' }}>
               loading...
             </span>
           )}

@@ -61,7 +61,7 @@ const IndexPage: React.FC = () => {
         {page?.body != null && (
           <div
             className="mono"
-            style={{ marginTop: 12, color: 'var(--ink-2)', maxWidth: 640, lineHeight: 1.6 }}
+            style={{ marginTop: 12, color: 'var(--ink)', maxWidth: 640, lineHeight: 1.6 }}
           >
             {parse(page.body)}
           </div>
@@ -139,7 +139,7 @@ const IndexPage: React.FC = () => {
                   padding: '8px 10px',
                   border: '1px solid var(--line)',
                   textDecoration: 'none',
-                  color: 'var(--ink-2)',
+                  color: 'var(--ink)',
                   fontFamily: 'var(--mono)',
                   fontSize: 12,
                 }}

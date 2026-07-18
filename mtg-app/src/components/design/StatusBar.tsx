@@ -82,7 +82,7 @@ export function StatusBar({
         fontSize: 10.5,
         padding: '0 10px',
         gap: 16,
-        color: 'var(--ink-3)',
+        color: 'var(--ink)',
       }}
     >
       <button
