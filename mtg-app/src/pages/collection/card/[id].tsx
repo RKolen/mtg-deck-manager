@@ -61,9 +61,18 @@ const CollectionCardPage: React.FC = () => {
       : (a.field_oracle_text as { value?: string } | null)?.value ?? '';
 
   return (
-    <main style={{ padding: '1.5rem', maxWidth: 700 }}>
+    <main
+      style={{
+        padding: '1.5rem',
+        maxWidth: 700,
+        color: 'var(--ink)',
+        background: 'var(--bg)',
+      }}
+    >
       <p style={{ margin: '0 0 1rem' }}>
-        <Link href="/collection">Back to collection</Link>
+        <Link href="/collection" style={{ color: 'var(--accent)' }}>
+          Back to collection
+        </Link>
       </p>
 
       <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
@@ -75,43 +84,58 @@ const CollectionCardPage: React.FC = () => {
           />
         )}
 
-        <div style={{ flex: 1, minWidth: 220 }}>
-          <h1 style={{ marginTop: 0, marginBottom: '0.25rem' }}>{a.title}</h1>
-          <p style={{ margin: '0 0 0.25rem', color: '#666' }}>
+        <div style={{ flex: 1, minWidth: 220, color: 'var(--ink)' }}>
+          <h1 style={{ marginTop: 0, marginBottom: '0.25rem', color: 'var(--ink)' }}>
+            {a.title}
+          </h1>
+          <p style={{ margin: '0 0 0.25rem', color: 'var(--ink)' }}>
             {a.field_type_line}
             {a.field_mana_cost != null && a.field_mana_cost !== '' && (
               <span style={{ marginLeft: 8 }}>{a.field_mana_cost}</span>
             )}
           </p>
           {oracleText !== '' && (
-            <p style={{ margin: '0.5rem 0', fontSize: '0.875rem', whiteSpace: 'pre-line' }}>
+            <p
+              style={{
+                margin: '0.5rem 0',
+                fontSize: '0.875rem',
+                whiteSpace: 'pre-line',
+                color: 'var(--ink)',
+                background: 'var(--bg-2)',
+                border: '1px solid var(--line)',
+                padding: '0.6rem 0.75rem',
+                borderRadius: 4,
+              }}
+            >
               {oracleText}
             </p>
           )}
           {(a.field_power != null || a.field_toughness != null) && (
-            <p style={{ margin: '0.25rem 0', fontSize: '0.875rem' }}>
+            <p style={{ margin: '0.25rem 0', fontSize: '0.875rem', color: 'var(--ink)' }}>
               {a.field_power}/{a.field_toughness}
             </p>
           )}
           {a.field_set_name != null && (
-            <p style={{ margin: '0.25rem 0', fontSize: '0.8rem', color: '#888' }}>
+            <p style={{ margin: '0.25rem 0', fontSize: '0.8rem', color: 'var(--ink-2)' }}>
               {a.field_set_name} · {a.field_rarity} · #{a.field_collector_number}
             </p>
           )}
           {(a.field_price_usd != null || a.field_price_usd_foil != null) && (
-            <p style={{ margin: '0.25rem 0', fontSize: '0.8rem', color: '#555' }}>
+            <p style={{ margin: '0.25rem 0', fontSize: '0.8rem', color: 'var(--ink)' }}>
               {a.field_price_usd != null && `$${a.field_price_usd}`}
               {a.field_price_usd_foil != null && ` · foil $${a.field_price_usd_foil}`}
             </p>
           )}
 
-          <hr style={{ margin: '1rem 0' }} />
+          <hr style={{ margin: '1rem 0', borderColor: 'var(--line)' }} />
 
-          <h2 style={{ margin: '0 0 0.75rem', fontSize: '1rem' }}>My collection</h2>
+          <h2 style={{ margin: '0 0 0.75rem', fontSize: '1rem', color: 'var(--ink)' }}>
+            My collection
+          </h2>
 
           <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span style={{ fontSize: '0.8rem', color: '#666' }}>Regular</span>
+              <span style={{ fontSize: '0.8rem', color: 'var(--ink-2)' }}>Regular</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <button
                   type="button"
@@ -135,7 +159,7 @@ const CollectionCardPage: React.FC = () => {
             </label>
 
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span style={{ fontSize: '0.8rem', color: '#666' }}>Foil</span>
+              <span style={{ fontSize: '0.8rem', color: 'var(--ink-2)' }}>Foil</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <button
                   type="button"

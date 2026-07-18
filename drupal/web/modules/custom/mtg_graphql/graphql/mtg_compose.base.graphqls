@@ -26,6 +26,7 @@ type MtgCard {
   priceUsd: String
   priceUsdFoil: String
   priceEur: String
+  priceEurFoil: String
   setCode: String
   setName: String
   rarity: String

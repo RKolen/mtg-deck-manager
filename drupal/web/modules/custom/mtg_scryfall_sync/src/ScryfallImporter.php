@@ -421,10 +421,16 @@ class ScryfallImporter {
     $node->set('field_legal_formats', $legal_formats);
 
     // Phase 9 fields — pricing and set metadata.
-    $prices = $card['prices'] ?? [];
-    $node->set('field_price_usd', isset($prices['usd']) ? (string) $prices['usd'] : NULL);
-    $node->set('field_price_usd_foil', isset($prices['usd_foil']) ? (string) $prices['usd_foil'] : NULL);
-    $node->set('field_price_eur', isset($prices['eur']) ? (string) $prices['eur'] : NULL);
+    // Scryfall default_cards includes a prices object with usd / usd_foil /
+    // eur / eur_foil (Cardmarket Trend). JSON null means "no listing"; do not
+    // use isset() alone because it is false for null and would skip valid keys.
+    $prices = is_array($card['prices'] ?? NULL) ? $card['prices'] : [];
+    $node->set('field_price_usd', $this->scryfallPrice($prices, 'usd'));
+    $node->set('field_price_usd_foil', $this->scryfallPrice($prices, 'usd_foil'));
+    $node->set('field_price_eur', $this->scryfallPrice($prices, 'eur'));
+    if ($node->hasField('field_price_eur_foil')) {
+      $node->set('field_price_eur_foil', $this->scryfallPrice($prices, 'eur_foil'));
+    }
     $node->set('field_set_code', $card['set'] ?? '');
     $node->set('field_set_name', $card['set_name'] ?? '');
     $node->set('field_rarity', $card['rarity'] ?? '');
@@ -438,6 +444,14 @@ class ScryfallImporter {
       }
     }
     $node->set('field_combo_pieces', $combo_pieces);
+
+    // Long-running Drush sync is one HTTP/CLI request, so Drupal's default
+    // created/changed stamps would stay frozen at sync start. Use wall clock.
+    $now = $this->time->getCurrentTime();
+    if ($node->isNew()) {
+      $node->setCreatedTime($now);
+    }
+    $node->setChangedTime($now);
 
     $node->save();
   }
@@ -602,6 +616,31 @@ class ScryfallImporter {
     ]);
 
     return $updated;
+  }
+
+  /**
+   * Normalises a Scryfall price value for a Drupal decimal field.
+   *
+   * @param array<string, mixed> $prices
+   *   The card's prices object from Scryfall.
+   * @param string $key
+   *   Price key (usd, usd_foil, eur, eur_foil).
+   *
+   * @return string|null
+   *   Two-decimal string suitable for field_price_*, or NULL when unset.
+   */
+  private function scryfallPrice(array $prices, string $key): ?string {
+    if (!array_key_exists($key, $prices)) {
+      return NULL;
+    }
+    $value = $prices[$key];
+    if ($value === NULL || $value === '') {
+      return NULL;
+    }
+    if (!is_numeric($value)) {
+      return NULL;
+    }
+    return number_format((float) $value, 2, '.', '');
   }
 
 }

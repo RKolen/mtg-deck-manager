@@ -63,7 +63,9 @@ const CardModal: React.FC<CardModalProps> = ({
     >
       <div
         style={{
-          background: '#fff',
+          background: 'var(--bg-1)',
+          color: 'var(--ink)',
+          border: '1px solid var(--line-2)',
           borderRadius: 8,
           padding: '1.5rem',
           maxWidth: 560,
@@ -82,26 +84,32 @@ const CardModal: React.FC<CardModalProps> = ({
           />
         )}
 
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, color: 'var(--ink)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <h2 style={{ margin: 0 }}>{card.title}</h2>
+            <h2 style={{ margin: 0, color: 'var(--ink)' }}>{card.title}</h2>
             <button
               type="button"
               onClick={onClose}
               aria-label="Close"
-              style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer' }}
+              style={{
+                background: 'none',
+                border: 'none',
+                fontSize: 20,
+                cursor: 'pointer',
+                color: 'var(--ink)',
+              }}
             >
               x
             </button>
           </div>
 
-          <p style={{ margin: '0.25rem 0', color: '#555' }}>
+          <p style={{ margin: '0.25rem 0', color: 'var(--ink)' }}>
             {card.field_mana_cost ?? ''}{' '}
             {card.field_cmc != null && `(CMC ${card.field_cmc})`}
           </p>
 
           {card.field_type_line != null && (
-            <p style={{ margin: '0.25rem 0', fontStyle: 'italic' }}>
+            <p style={{ margin: '0.25rem 0', fontStyle: 'italic', color: 'var(--ink)' }}>
               {card.field_type_line}
             </p>
           )}
@@ -110,7 +118,9 @@ const CardModal: React.FC<CardModalProps> = ({
             <p
               style={{
                 whiteSpace: 'pre-wrap',
-                background: '#f5f5f0',
+                background: 'var(--bg-2)',
+                color: 'var(--ink)',
+                border: '1px solid var(--line)',
                 padding: '0.5rem',
                 borderRadius: 4,
                 fontSize: '0.9rem',
@@ -121,7 +131,7 @@ const CardModal: React.FC<CardModalProps> = ({
           )}
 
           {card.field_colors != null && card.field_colors.length > 0 && (
-            <p style={{ margin: '0.25rem 0', fontSize: '0.85rem' }}>
+            <p style={{ margin: '0.25rem 0', fontSize: '0.85rem', color: 'var(--ink)' }}>
               <strong>Colors:</strong> {card.field_colors.join(', ')}
             </p>
           )}
@@ -129,28 +139,28 @@ const CardModal: React.FC<CardModalProps> = ({
           {card.field_is_mana_producer === true &&
             card.field_produced_mana != null &&
             card.field_produced_mana.length > 0 && (
-              <p style={{ margin: '0.25rem 0', fontSize: '0.85rem' }}>
+              <p style={{ margin: '0.25rem 0', fontSize: '0.85rem', color: 'var(--ink)' }}>
                 <strong>Produces:</strong> {card.field_produced_mana.join(', ')}
               </p>
             )}
 
           {(card.field_set_name || card.field_rarity) && (
-            <p style={{ margin: '0.25rem 0', fontSize: '0.85rem', color: '#666' }}>
+            <p style={{ margin: '0.25rem 0', fontSize: '0.85rem', color: 'var(--ink-2)' }}>
               {card.field_set_name}
               {card.field_rarity && ` · ${card.field_rarity.charAt(0).toUpperCase()}${card.field_rarity.slice(1)}`}
             </p>
           )}
 
           {(card.field_price_usd || card.field_price_usd_foil) && (
-            <p style={{ margin: '0.25rem 0', fontSize: '0.85rem' }}>
+            <p style={{ margin: '0.25rem 0', fontSize: '0.85rem', color: 'var(--ink)' }}>
               {card.field_price_usd && <><strong>USD:</strong> ${card.field_price_usd}</>}
               {card.field_price_usd && card.field_price_usd_foil && ' · '}
               {card.field_price_usd_foil && <><strong>Foil:</strong> ${card.field_price_usd_foil}</>}
             </p>
           )}
 
-          <hr />
-          <p style={{ margin: 0, fontSize: '0.9rem' }}>
+          <hr style={{ borderColor: 'var(--line)' }} />
+          <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--ink)' }}>
             <strong>Owned:</strong> {quantityOwned}&ensp;
             <strong>Foil:</strong> {quantityFoil}
           </p>

@@ -63,9 +63,18 @@ const CardPage: React.FC = () => {
     attrs.field_type_line.includes('Planeswalker');
 
   return (
-    <main style={{ padding: '1.5rem', maxWidth: 760 }}>
+    <main
+      style={{
+        padding: '1.5rem',
+        maxWidth: 760,
+        color: 'var(--ink)',
+        background: 'var(--bg)',
+      }}
+    >
       <p style={{ margin: '0 0 1.25rem' }}>
-        <Link href="/decks">Back to decks</Link>
+        <Link href="/decks" style={{ color: 'var(--accent)' }}>
+          Back to decks
+        </Link>
       </p>
 
       <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
@@ -83,15 +92,15 @@ const CardPage: React.FC = () => {
           />
         )}
 
-        {/* Card text */}
-        <div style={{ flex: 1, minWidth: 220 }}>
-          <h1 style={{ margin: '0 0 0.25rem' }}>{attrs.title}</h1>
+        {/* Card text — ink on bg so light/dark themes both stay readable */}
+        <div style={{ flex: 1, minWidth: 220, color: 'var(--ink)' }}>
+          <h1 style={{ margin: '0 0 0.25rem', color: 'var(--ink)' }}>{attrs.title}</h1>
 
           {attrs.field_mana_cost != null && attrs.field_mana_cost !== '' && (
-            <p style={{ margin: '0 0 0.25rem', fontSize: '1.05rem' }}>
+            <p style={{ margin: '0 0 0.25rem', fontSize: '1.05rem', color: 'var(--ink)' }}>
               {attrs.field_mana_cost}
               {attrs.field_cmc != null && (
-                <span style={{ marginLeft: 8, color: '#666', fontSize: '0.9rem' }}>
+                <span style={{ marginLeft: 8, color: 'var(--ink)', fontSize: '0.9rem' }}>
                   (CMC {attrs.field_cmc})
                 </span>
               )}
@@ -99,7 +108,13 @@ const CardPage: React.FC = () => {
           )}
 
           {attrs.field_type_line != null && (
-            <p style={{ margin: '0 0 0.75rem', fontStyle: 'italic', color: '#444' }}>
+            <p
+              style={{
+                margin: '0 0 0.75rem',
+                fontStyle: 'italic',
+                color: 'var(--ink)',
+              }}
+            >
               {attrs.field_type_line}
             </p>
           )}
@@ -108,7 +123,9 @@ const CardPage: React.FC = () => {
             <p
               style={{
                 whiteSpace: 'pre-wrap',
-                background: '#f5f5f0',
+                background: 'var(--bg-2)',
+                color: 'var(--ink)',
+                border: '1px solid var(--line)',
                 padding: '0.6rem 0.75rem',
                 borderRadius: 4,
                 fontSize: '0.95rem',
@@ -122,19 +139,19 @@ const CardPage: React.FC = () => {
 
           {isCreature &&
             (attrs.field_power != null || attrs.field_toughness != null) && (
-              <p style={{ margin: '0 0 0.5rem', fontWeight: 'bold' }}>
+              <p style={{ margin: '0 0 0.5rem', fontWeight: 'bold', color: 'var(--ink)' }}>
                 {attrs.field_power ?? '?'} / {attrs.field_toughness ?? '?'}
               </p>
             )}
 
           {isPlaneswalker && attrs.field_loyalty != null && (
-            <p style={{ margin: '0 0 0.5rem', fontWeight: 'bold' }}>
+            <p style={{ margin: '0 0 0.5rem', fontWeight: 'bold', color: 'var(--ink)' }}>
               Loyalty: {attrs.field_loyalty}
             </p>
           )}
 
           {attrs.field_colors != null && attrs.field_colors.length > 0 && (
-            <p style={{ margin: '0 0 0.25rem', fontSize: '0.875rem' }}>
+            <p style={{ margin: '0 0 0.25rem', fontSize: '0.875rem', color: 'var(--ink)' }}>
               <strong>Colors:</strong> {attrs.field_colors.join(', ')}
             </p>
           )}
@@ -142,14 +159,14 @@ const CardPage: React.FC = () => {
           {attrs.field_is_mana_producer === true &&
             attrs.field_produced_mana != null &&
             attrs.field_produced_mana.length > 0 && (
-              <p style={{ margin: '0 0 0.25rem', fontSize: '0.875rem' }}>
+              <p style={{ margin: '0 0 0.25rem', fontSize: '0.875rem', color: 'var(--ink)' }}>
                 <strong>Produces:</strong> {attrs.field_produced_mana.join(', ')}
               </p>
             )}
 
           {attrs.field_legal_formats != null &&
             attrs.field_legal_formats.length > 0 && (
-              <p style={{ margin: '0.5rem 0 0', fontSize: '0.8rem', color: '#666' }}>
+              <p style={{ margin: '0.5rem 0 0', fontSize: '0.8rem', color: 'var(--ink)' }}>
                 <strong>Legal in:</strong> {attrs.field_legal_formats.join(', ')}
               </p>
             )}

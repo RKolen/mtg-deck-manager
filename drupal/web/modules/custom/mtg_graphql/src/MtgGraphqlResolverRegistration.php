@@ -344,6 +344,9 @@ final class MtgGraphqlResolverRegistration {
       'priceUsd'       => fn($n) => $n->get('field_price_usd')->value,
       'priceUsdFoil'   => fn($n) => $n->get('field_price_usd_foil')->value,
       'priceEur'       => fn($n) => $n->get('field_price_eur')->value,
+      'priceEurFoil'   => fn($n) => $n->hasField('field_price_eur_foil')
+        ? $n->get('field_price_eur_foil')->value
+        : NULL,
       'setCode'        => fn($n) => $n->get('field_set_code')->value,
       'setName'        => fn($n) => $n->get('field_set_name')->value,
       'rarity'         => fn($n) => $n->get('field_rarity')->value,

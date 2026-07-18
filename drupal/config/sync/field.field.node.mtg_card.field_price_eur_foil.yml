@@ -1,0 +1,23 @@
+uuid: 9f2b4c6d-1e8a-4c3b-a7d5-0b1e2f3a4c5d
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_price_eur_foil
+    - node.type.mtg_card
+id: node.mtg_card.field_price_eur_foil
+field_name: field_price_eur_foil
+entity_type: node
+bundle: mtg_card
+label: 'Price Foil (EUR)'
+description: 'Scryfall Cardmarket foil trend price.'
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings:
+  min: null
+  max: null
+  prefix: ''
+  suffix: ''
+field_type: decimal

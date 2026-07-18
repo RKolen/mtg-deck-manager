@@ -103,3 +103,32 @@ function mtg_scryfall_sync_update_9001(array &$sandbox): string {
     ? 'Created fields: ' . implode(', ', $created)
     : 'All Phase 9 fields already exist.';
 }
+
+/**
+ * Adds field_price_eur_foil for Scryfall Cardmarket foil trend prices.
+ */
+function mtg_scryfall_sync_update_9002(): string {
+  $name = 'field_price_eur_foil';
+  if (!FieldStorageConfig::loadByName('node', $name)) {
+    FieldStorageConfig::create([
+      'field_name'  => $name,
+      'entity_type' => 'node',
+      'type'        => 'decimal',
+      'cardinality' => 1,
+      'settings'    => ['precision' => 10, 'scale' => 2],
+    ])->save();
+  }
+
+  if (!FieldConfig::loadByName('node', 'mtg_card', $name)) {
+    FieldConfig::create([
+      'field_name'  => $name,
+      'entity_type' => 'node',
+      'bundle'      => 'mtg_card',
+      'label'       => 'Price Foil (EUR)',
+      'required'    => FALSE,
+    ])->save();
+    return 'Created field_price_eur_foil.';
+  }
+
+  return 'field_price_eur_foil already exists.';
+}

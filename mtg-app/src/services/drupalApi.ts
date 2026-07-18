@@ -31,6 +31,7 @@ interface GqlMtgCard {
   priceUsd: string | null;
   priceUsdFoil: string | null;
   priceEur: string | null;
+  priceEurFoil: string | null;
   setCode: string | null;
   setName: string | null;
   rarity: string | null;
@@ -118,6 +119,7 @@ function toCardResource(c: GqlMtgCard): JsonApiResource<MtgCardAttributes> {
       field_price_usd: c.priceUsd ?? null,
       field_price_usd_foil: c.priceUsdFoil ?? null,
       field_price_eur: c.priceEur ?? null,
+      field_price_eur_foil: c.priceEurFoil ?? null,
       field_set_code: c.setCode ?? '',
       field_set_name: c.setName ?? '',
       field_rarity: c.rarity ?? '',
@@ -206,6 +208,7 @@ function toDeckCardWithCard(d: GqlDeckCard): DeckCardWithCard {
       field_price_usd: c.priceUsd ?? null,
       field_price_usd_foil: c.priceUsdFoil ?? null,
       field_price_eur: c.priceEur ?? null,
+      field_price_eur_foil: c.priceEurFoil ?? null,
       field_set_code: c.setCode ?? '',
       field_set_name: c.setName ?? '',
       field_rarity: c.rarity ?? '',
@@ -242,7 +245,7 @@ const CARD_FIELDS = gql`
   fragment CardFields on MtgCard {
     id title manaCost cmc typeLine colors colorIdentity
     oracleText imageUri isManaProducer producedMana legalFormats
-    priceUsd priceUsdFoil priceEur setCode setName rarity collectorNumber
+    priceUsd priceUsdFoil priceEur priceEurFoil setCode setName rarity collectorNumber
   }
 `;
 
@@ -250,7 +253,7 @@ const CARD_DETAIL_FIELDS = gql`
   fragment CardDetailFields on MtgCard {
     id title manaCost cmc typeLine colors colorIdentity
     oracleText imageUri isManaProducer producedMana legalFormats
-    priceUsd priceUsdFoil priceEur setCode setName rarity collectorNumber
+    priceUsd priceUsdFoil priceEur priceEurFoil setCode setName rarity collectorNumber
     power toughness loyalty
   }
 `;
@@ -447,6 +450,7 @@ interface GqlComposeMtgCard {
   priceUsd?: string | null;
   priceUsdFoil?: string | null;
   priceEur?: string | null;
+  priceEurFoil?: string | null;
   setCode?: string | null;
   setName?: string | null;
   rarity?: string | null;
@@ -485,6 +489,7 @@ const COMPOSE_DECK_CARD_FIELDS = gql`
         priceUsd
         priceUsdFoil
         priceEur
+        priceEurFoil
         setCode
         setName
         rarity
@@ -514,6 +519,7 @@ function composeMtgCardToGql(card: GqlComposeMtgCard): GqlMtgCard {
     priceUsd: card.priceUsd ?? null,
     priceUsdFoil: card.priceUsdFoil ?? null,
     priceEur: card.priceEur ?? null,
+    priceEurFoil: card.priceEurFoil ?? null,
     setCode: card.setCode ?? null,
     setName: card.setName ?? null,
     rarity: card.rarity ?? null,

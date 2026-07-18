@@ -58,6 +58,7 @@ export interface MtgCardAttributes {
   field_price_usd: string | null;
   field_price_usd_foil: string | null;
   field_price_eur: string | null;
+  field_price_eur_foil: string | null;
   field_set_code: string;
   field_set_name: string;
   field_rarity: string;

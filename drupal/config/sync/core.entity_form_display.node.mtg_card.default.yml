@@ -16,6 +16,7 @@ dependencies:
     - field.field.node.mtg_card.field_oracle_text
     - field.field.node.mtg_card.field_power
     - field.field.node.mtg_card.field_price_eur
+    - field.field.node.mtg_card.field_price_eur_foil
     - field.field.node.mtg_card.field_price_usd
     - field.field.node.mtg_card.field_price_usd_foil
     - field.field.node.mtg_card.field_produced_mana
@@ -91,6 +92,15 @@ third_party_settings:
       children:
         - field_scryfall_id
         - field_image_uri
+        - field_set_code
+        - field_set_name
+        - field_rarity
+        - field_collector_number
+        - field_price_usd
+        - field_price_usd_foil
+        - field_price_eur
+        - field_price_eur_foil
+        - field_combo_pieces
       label: 'Scryfall Data'
       region: content
       parent_name: group_mtg_card_tabs
@@ -121,6 +131,14 @@ content:
     settings:
       placeholder: ''
     third_party_settings: {  }
+  field_collector_number:
+    type: string_textfield
+    weight: 14
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
   field_color_identity:
     type: string_textfield
     weight: 5
@@ -132,6 +150,14 @@ content:
   field_colors:
     type: string_textfield
     weight: 4
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_combo_pieces:
+    type: string_textfield
+    weight: 19
     region: content
     settings:
       size: 60
@@ -192,6 +218,34 @@ content:
       size: 60
       placeholder: ''
     third_party_settings: {  }
+  field_price_eur:
+    type: number
+    weight: 17
+    region: content
+    settings:
+      placeholder: ''
+    third_party_settings: {  }
+  field_price_eur_foil:
+    type: number
+    weight: 18
+    region: content
+    settings:
+      placeholder: ''
+    third_party_settings: {  }
+  field_price_usd:
+    type: number
+    weight: 15
+    region: content
+    settings:
+      placeholder: ''
+    third_party_settings: {  }
+  field_price_usd_foil:
+    type: number
+    weight: 16
+    region: content
+    settings:
+      placeholder: ''
+    third_party_settings: {  }
   field_produced_mana:
     type: string_textfield
     weight: 8
@@ -200,9 +254,33 @@ content:
       size: 60
       placeholder: ''
     third_party_settings: {  }
+  field_rarity:
+    type: string_textfield
+    weight: 13
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
   field_scryfall_id:
     type: string_textfield
     weight: 9
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_set_code:
+    type: string_textfield
+    weight: 11
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_set_name:
+    type: string_textfield
+    weight: 12
     region: content
     settings:
       size: 60
@@ -257,13 +335,5 @@ content:
       placeholder: ''
     third_party_settings: {  }
 hidden:
-  field_collector_number: true
-  field_combo_pieces: true
-  field_price_eur: true
-  field_price_usd: true
-  field_price_usd_foil: true
-  field_rarity: true
-  field_set_code: true
-  field_set_name: true
   promote: true
   sticky: true

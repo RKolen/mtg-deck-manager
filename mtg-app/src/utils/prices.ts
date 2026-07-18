@@ -7,13 +7,18 @@ export function priceSourceLabel(currency: Currency): string {
 }
 
 export function priceFor(
-  card: Pick<MtgCardAttributes, 'field_price_usd' | 'field_price_usd_foil' | 'field_price_eur'>,
+  card: Pick<
+    MtgCardAttributes,
+    'field_price_usd' | 'field_price_usd_foil' | 'field_price_eur' | 'field_price_eur_foil'
+  >,
   currency: Currency,
   foil = false,
 ): number | null {
   const raw =
     currency === 'EUR'
-      ? card.field_price_eur
+      ? foil
+        ? card.field_price_eur_foil
+        : card.field_price_eur
       : foil
         ? card.field_price_usd_foil
         : card.field_price_usd;
