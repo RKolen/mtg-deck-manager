@@ -9,3 +9,4 @@ dependencies:
   - drupal:node
   - drupal:paragraphs
   - mtg_card_search:mtg_card_search
+  - mtg_card_images:mtg_card_images

@@ -1,0 +1,10 @@
+name: MTG Card Images
+type: module
+description: Lazily downloads Scryfall card art into Drupal media for local use (UI + sim).
+core_version_requirement: ^11
+package: MTG Deck Manager
+dependencies:
+  - drupal:node
+  - drupal:file
+  - drupal:image
+  - drupal:media

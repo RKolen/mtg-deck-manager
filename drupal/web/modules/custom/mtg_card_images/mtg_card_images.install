@@ -1,0 +1,159 @@
+<?php
+
+/**
+ * @file
+ * Install and update hooks for MTG Card Images.
+ */
+
+declare(strict_types=1);
+
+use Drupal\Core\Entity\Entity\EntityFormDisplay;
+use Drupal\Core\Entity\Entity\EntityViewDisplay;
+use Drupal\field\Entity\FieldConfig;
+use Drupal\field\Entity\FieldStorageConfig;
+use Drupal\media\Entity\MediaType;
+
+/**
+ * Implements hook_install().
+ */
+function mtg_card_images_install(): void {
+  mtg_card_images_ensure_schema();
+}
+
+/**
+ * Creates media type, source field, and node reference field if missing.
+ */
+function mtg_card_images_ensure_schema(): void {
+  $media_type_id = 'mtg_card_art';
+  $source_field_name = 'field_media_image';
+
+  $media_type = MediaType::load($media_type_id);
+  if (!$media_type) {
+    $media_type = MediaType::create([
+      'id' => $media_type_id,
+      'label' => 'MTG Card Art',
+      'description' => 'Locally cached Scryfall card face images.',
+      'source' => 'image',
+      'queue_thumbnail_downloads' => FALSE,
+      'new_revision' => FALSE,
+      'source_configuration' => [
+        'source_field' => $source_field_name,
+      ],
+      'field_map' => [
+        'name' => 'name',
+      ],
+    ]);
+    $media_type->save();
+  }
+
+  $source = $media_type->getSource();
+  $field_definition = $source->getSourceFieldDefinition($media_type);
+  if (!$field_definition) {
+    $field_definition = $source->createSourceField($media_type);
+    $storage = $field_definition->getFieldStorageDefinition();
+    if ($storage->isNew()) {
+      $storage->save();
+    }
+    $field_definition->save();
+    $config = $media_type->get('source_configuration');
+    $config['source_field'] = $field_definition->getName();
+    $media_type->set('source_configuration', $config)->save();
+    $source_field_name = $field_definition->getName();
+  }
+  else {
+    $source_field_name = $field_definition->getName();
+  }
+
+  $form_display = EntityFormDisplay::load("media.$media_type_id.default");
+  if (!$form_display) {
+    $form_display = EntityFormDisplay::create([
+      'targetEntityType' => 'media',
+      'bundle' => $media_type_id,
+      'mode' => 'default',
+      'status' => TRUE,
+    ]);
+  }
+  if (!$form_display->getComponent($source_field_name)) {
+    $form_display->setComponent($source_field_name, [
+      'type' => 'image_image',
+      'weight' => 0,
+      'settings' => [
+        'progress_indicator' => 'throbber',
+        'preview_image_style' => 'thumbnail',
+      ],
+    ])->save();
+  }
+
+  $view_display = EntityViewDisplay::load("media.$media_type_id.default");
+  if (!$view_display) {
+    $view_display = EntityViewDisplay::create([
+      'targetEntityType' => 'media',
+      'bundle' => $media_type_id,
+      'mode' => 'default',
+      'status' => TRUE,
+    ]);
+  }
+  if (!$view_display->getComponent($source_field_name)) {
+    $view_display->setComponent($source_field_name, [
+      'type' => 'image',
+      'weight' => 0,
+      'label' => 'hidden',
+      'settings' => [
+        'image_style' => '',
+        'image_link' => '',
+      ],
+    ])->save();
+  }
+
+  $ref = 'field_image_local';
+  if (!FieldStorageConfig::loadByName('node', $ref)) {
+    FieldStorageConfig::create([
+      'field_name' => $ref,
+      'entity_type' => 'node',
+      'type' => 'entity_reference',
+      'cardinality' => 1,
+      'settings' => [
+        'target_type' => 'media',
+      ],
+    ])->save();
+  }
+
+  if (!FieldConfig::loadByName('node', 'mtg_card', $ref)) {
+    FieldConfig::create([
+      'field_name' => $ref,
+      'entity_type' => 'node',
+      'bundle' => 'mtg_card',
+      'label' => 'Local image',
+      'required' => FALSE,
+      'settings' => [
+        'handler' => 'default:media',
+        'handler_settings' => [
+          'target_bundles' => [
+            $media_type_id => $media_type_id,
+          ],
+        ],
+      ],
+    ])->save();
+  }
+
+  $node_form = EntityFormDisplay::load('node.mtg_card.default');
+  if ($node_form && !$node_form->getComponent($ref)) {
+    $node_form->setComponent($ref, [
+      'type' => 'entity_reference_autocomplete',
+      'weight' => 40,
+      'settings' => [
+        'match_operator' => 'CONTAINS',
+        'size' => 60,
+        'placeholder' => '',
+      ],
+    ])->save();
+  }
+}
+
+/**
+ * Ensures media type and field_image_local exist.
+ */
+function mtg_card_images_update_9001(): string {
+  mtg_card_images_ensure_schema();
+  return 'Ensured mtg_card_art media type and field_image_local.';
+}

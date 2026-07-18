@@ -1,0 +1,9 @@
+services:
+  mtg_card_images.commands:
+    class: Drupal\mtg_card_images\Commands\CardImageCommands
+    arguments:
+      - '@mtg_card_images.fetcher'
+      - '@entity_type.manager'
+      - '@queue'
+    tags:
+      - { name: drush.command }

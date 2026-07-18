@@ -1,0 +1,13 @@
+services:
+  mtg_card_images.fetcher:
+    class: Drupal\mtg_card_images\CardImageFetcher
+    arguments:
+      - '@entity_type.manager'
+      - '@http_client'
+      - '@file.repository'
+      - '@file_system'
+      - '@file_url_generator'
+      - '@queue'
+      - '@cache.default'
+      - '@logger.factory'
+      - '@datetime.time'

@@ -1,0 +1,10 @@
+<?php
+
+/**
+ * @file
+ * Hooks for MTG Card Images.
+ *
+ * Image downloads run via the mtg_card_image_fetch queue worker (cron + drush).
+ */
+
+declare(strict_types=1);

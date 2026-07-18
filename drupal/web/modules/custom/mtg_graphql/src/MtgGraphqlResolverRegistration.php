@@ -84,14 +84,25 @@ final class MtgGraphqlResolverRegistration {
 
     $registry->addFieldResolver('Query', 'card',
       $builder->callback(function ($value, array $args): ?NodeInterface {
-        $slug  = $args['slug'];
-        $parts = explode('-', $slug);
-        $first = $parts[0] ?? $slug;
+        $slug = $args['slug'];
+        $parts = array_values(array_filter(explode('-', $slug), static fn(string $p): bool => $p !== ''));
+        if ($parts === []) {
+          return NULL;
+        }
 
-        $prefix = (substr($first, -1) === 's' && strlen($first) > 2)
-          ? substr($first, 0, -1)
-          : $first;
-        $search = ucfirst($prefix);
+        // Build a tight LIKE from every slug segment so common prefixes like
+        // "The%" (1400+ cards) do not truncate the candidate set before a match.
+        // Possessive first segments ("jaces") drop the trailing s to match "Jace's".
+        $likeParts = [];
+        foreach ($parts as $i => $part) {
+          if ($i === 0 && str_ends_with($part, 's') && strlen($part) > 2) {
+            $likeParts[] = ucfirst(substr($part, 0, -1));
+          }
+          else {
+            $likeParts[] = ucfirst($part);
+          }
+        }
+        $search = implode('%', $likeParts);
 
         $storage = \Drupal::entityTypeManager()->getStorage('node');
         $ids = \Drupal::entityQuery('node')
@@ -99,6 +110,7 @@ final class MtgGraphqlResolverRegistration {
           ->condition('status', 1)
           ->condition('title', $search . '%', 'LIKE')
           ->accessCheck(FALSE)
+          ->sort('nid', 'DESC')
           ->range(0, 50)
           ->execute();
 
@@ -339,7 +351,28 @@ final class MtgGraphqlResolverRegistration {
       'cmc'            => fn($n) => $n->get('field_cmc')->value !== NULL ? (float) $n->get('field_cmc')->value : NULL,
       'typeLine'       => fn($n) => $n->get('field_type_line')->value,
       'oracleText'     => fn($n) => $n->get('field_oracle_text')->value,
-      'imageUri'       => fn($n) => $n->get('field_image_uri')->value,
+      'imageUri'       => function ($n) {
+        // Prefer locally cached media once available; otherwise return Scryfall
+        // CDN URI and lazily enqueue a download for the sim / offline path.
+        if (\Drupal::hasService('mtg_card_images.fetcher')) {
+          /** @var \Drupal\mtg_card_images\CardImageFetcher $fetcher */
+          $fetcher = \Drupal::service('mtg_card_images.fetcher');
+          $local = $fetcher->localUrl($n);
+          if ($local !== NULL) {
+            return $local;
+          }
+          $fetcher->enqueueNode($n);
+        }
+        return $n->get('field_image_uri')->value;
+      },
+      'imageLocalUri'  => function ($n) {
+        if (!\Drupal::hasService('mtg_card_images.fetcher')) {
+          return NULL;
+        }
+        /** @var \Drupal\mtg_card_images\CardImageFetcher $fetcher */
+        $fetcher = \Drupal::service('mtg_card_images.fetcher');
+        return $fetcher->localUrl($n);
+      },
       'isManaProducer' => fn($n) => (bool) ($n->get('field_is_mana_producer')->value ?? FALSE),
       'priceUsd'       => fn($n) => $n->get('field_price_usd')->value,
       'priceUsdFoil'   => fn($n) => $n->get('field_price_usd_foil')->value,
