@@ -47,14 +47,16 @@ export function TopBar({
   const router = useRouter();
   const { dark, toggleDark } = useTheme();
   const active = routeToNav(router.pathname);
-  const [now, setNow] = useState(() => new Date());
+  // null until mount — avoids SSR/client clock mismatch hydration errors
+  const [now, setNow] = useState<Date | null>(null);
 
   useEffect(() => {
+    setNow(new Date());
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
 
-  const ts = now.toISOString().slice(11, 19) + 'Z';
+  const ts = now ? now.toISOString().slice(11, 19) + 'Z' : '--:--:--Z';
 
   return (
     <div
@@ -148,7 +150,7 @@ export function TopBar({
         <span>
           UNIQ{' '}
           <span style={{ color: 'var(--ink)' }}>
-            {uniqueCards != null ? uniqueCards.toLocaleString() : '--'}
+            {uniqueCards != null ? uniqueCards.toLocaleString('en-US') : '--'}
           </span>
         </span>
         <span>
