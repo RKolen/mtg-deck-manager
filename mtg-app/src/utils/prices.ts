@@ -49,12 +49,16 @@ export function totalDeckPrice(
   cards: Array<{ quantity: number; card: MtgCardAttributes; isSideboard?: boolean }>,
   currency: Currency,
   includeSideboard = false,
+  foil = false,
 ): number {
   return cards.reduce((sum, slot) => {
     if (!includeSideboard && slot.isSideboard) {
       return sum;
     }
-    const unit = priceFor(slot.card, currency) ?? 0;
+    const unit =
+      (foil ? priceFor(slot.card, currency, true) : null) ??
+      priceFor(slot.card, currency) ??
+      0;
     return sum + unit * slot.quantity;
   }, 0);
 }

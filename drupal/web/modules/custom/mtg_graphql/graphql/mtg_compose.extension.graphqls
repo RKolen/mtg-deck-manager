@@ -19,7 +19,7 @@ extend type Query {
 
   collectionCardByCardId(cardId: ID!): CollectionCard
 
-  collectionValue: Float!
+  collectionValue(currency: String): Float!
 
   pages: [Page!]!
 
@@ -40,9 +40,15 @@ extend type Query {
     colorIdentity: [String!]
     manaProducer: Boolean
     rarity: String
+    setCodes: [String!]
+    setExclude: Boolean
+    deckIds: [ID!]
+    deckExclude: Boolean
     page: Int
     limit: Int
   ): CardSearchResult!
+
+  cardSets(q: String, limit: Int): [CardSet!]!
 }
 
 extend type Mutation {

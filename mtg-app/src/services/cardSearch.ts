@@ -18,8 +18,19 @@ export interface CardSearchParams {
   colorIdentity?: string[];
   manaProducer?: boolean;
   rarity?: string;
+  setCodes?: string[];
+  setExclude?: boolean;
+  /** Deck UUIDs or nids. */
+  deckIds?: string[];
+  deckExclude?: boolean;
   page?: number;
   limit?: number;
+}
+
+export interface CardSetOption {
+  code: string;
+  name: string;
+  count: number;
 }
 
 export interface CardSearchResult {
@@ -71,12 +82,16 @@ export async function searchCards(params: CardSearchParams): Promise<CardSearchR
     query CardSearch(
       $q: String, $type: String, $oracleText: String, $legalIn: String,
       $cmcMin: Float, $cmcMax: Float, $colors: [String!], $colorIdentity: [String!],
-      $manaProducer: Boolean, $rarity: String, $page: Int, $limit: Int
+      $manaProducer: Boolean, $rarity: String, $setCodes: [String!], $setExclude: Boolean,
+      $deckIds: [ID!], $deckExclude: Boolean,
+      $page: Int, $limit: Int
     ) {
       cardSearch(
         q: $q, type: $type, oracleText: $oracleText, legalIn: $legalIn,
         cmcMin: $cmcMin, cmcMax: $cmcMax, colors: $colors, colorIdentity: $colorIdentity,
-        manaProducer: $manaProducer, rarity: $rarity, page: $page, limit: $limit
+        manaProducer: $manaProducer, rarity: $rarity, setCodes: $setCodes, setExclude: $setExclude,
+        deckIds: $deckIds, deckExclude: $deckExclude,
+        page: $page, limit: $limit
       ) {
         count
         pages
@@ -98,6 +113,10 @@ export async function searchCards(params: CardSearchParams): Promise<CardSearchR
     colorIdentity: params.colorIdentity?.length ? params.colorIdentity : null,
     manaProducer: params.manaProducer ?? null,
     rarity: params.rarity || null,
+    setCodes: params.setCodes?.length ? params.setCodes : null,
+    setExclude: params.setCodes?.length ? Boolean(params.setExclude) : null,
+    deckIds: params.deckIds?.length ? params.deckIds : null,
+    deckExclude: params.deckIds?.length ? Boolean(params.deckExclude) : null,
     page: params.page ?? 0,
     limit: params.limit ?? 20,
   });
@@ -109,4 +128,17 @@ export async function searchCards(params: CardSearchParams): Promise<CardSearchR
       pages: data.cardSearch.pages,
     },
   };
+}
+
+export async function fetchCardSets(q = '', limit = 1000): Promise<CardSetOption[]> {
+  const query = gql`
+    query CardSets($q: String, $limit: Int) {
+      cardSets(q: $q, limit: $limit) { code name count }
+    }
+  `;
+  const data = await getGraphQLClient().request<{ cardSets: CardSetOption[] }>(query, {
+    q: q || null,
+    limit,
+  });
+  return data.cardSets;
 }

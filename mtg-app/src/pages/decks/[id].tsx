@@ -140,7 +140,15 @@ interface EditorProps {
 const DeckEditor: React.FC<EditorProps> = ({ deckId, cards }) => {
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<
-    { id: string; title: string }[]
+    {
+      id: string;
+      title: string;
+      setCode: string;
+      setName: string;
+      collectorNumber: string;
+      priceUsd: string | null;
+      priceEur: string | null;
+    }[]
   >([]);
   const [searching, setSearching] = useState(false);
   const qc = useQueryClient();
@@ -179,9 +187,28 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, cards }) => {
     setSearching(true);
     try {
       const results = await findCardsByName(search.trim());
-      setSearchResults(
-        results.map(r => ({ id: r.id, title: r.attributes.title })),
-      );
+      const mapped = results.map(r => ({
+        id: r.id,
+        title: r.attributes.title,
+        setCode: r.attributes.field_set_code ?? '',
+        setName: r.attributes.field_set_name ?? '',
+        collectorNumber: r.attributes.field_collector_number ?? '',
+        priceUsd: r.attributes.field_price_usd,
+        priceEur: r.attributes.field_price_eur,
+      }));
+      // Priced printings first so $0 promos/MTGO don't win by accident.
+      mapped.sort((a, b) => {
+        const pa = Math.max(
+          Number.parseFloat(a.priceUsd ?? '') || 0,
+          Number.parseFloat(a.priceEur ?? '') || 0,
+        );
+        const pb = Math.max(
+          Number.parseFloat(b.priceUsd ?? '') || 0,
+          Number.parseFloat(b.priceEur ?? '') || 0,
+        );
+        return pb - pa;
+      });
+      setSearchResults(mapped);
     } finally {
       setSearching(false);
     }
@@ -213,6 +240,9 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, cards }) => {
       oracleText,
     );
     const atMax = dc.quantity >= maxCopies;
+    const setCode = (dc.card.field_set_code ?? '').toUpperCase();
+    const setName = dc.card.field_set_name ?? '';
+    const setTitle = [setCode, setName].filter(Boolean).join(' — ');
     return (
       <tr key={dc.card.id + String(dc.isSideboard)}>
         <td style={{ padding: '0.25rem 0.5rem' }}>
@@ -222,6 +252,20 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, cards }) => {
           >
             {dc.card.title}
           </Link>
+          {setCode !== '' && (
+            <span
+              title={setTitle}
+              style={{
+                marginLeft: 8,
+                fontSize: '0.75rem',
+                color: 'var(--ink)',
+                opacity: 0.85,
+                fontFamily: 'var(--mono)',
+              }}
+            >
+              [{setCode}]
+            </span>
+          )}
           <span style={{ marginLeft: 8, display: 'inline-flex', verticalAlign: 'middle' }}>
             <ManaCost cost={dc.card.field_mana_cost} size={14} />
           </span>
@@ -329,31 +373,53 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, cards }) => {
             overflowY: 'auto',
           }}
         >
-          {searchResults.map(r => (
-            <li
-              key={r.id}
-              style={{
-                display: 'flex',
-                gap: 8,
-                padding: '0.4rem 0.75rem',
-                borderBottom: '1px solid var(--line)',
-              }}
-            >
-              <span style={{ flex: 1 }}>{r.title}</span>
-              <button
-                type="button"
-                onClick={() => addCard.mutate({ cardId: r.id, cardName: r.title, isSideboard: false })}
+          {searchResults.map(r => {
+            const setLabel = [
+              r.setCode ? r.setCode.toUpperCase() : null,
+              r.setName || null,
+              r.collectorNumber ? `#${r.collectorNumber}` : null,
+            ]
+              .filter(Boolean)
+              .join(' ');
+            const priceBits = [
+              r.priceUsd ? `$${Number.parseFloat(r.priceUsd).toFixed(2)}` : null,
+              r.priceEur ? `€${Number.parseFloat(r.priceEur).toFixed(2)}` : null,
+            ].filter(Boolean);
+            const meta = [setLabel || null, priceBits.join(' / ') || 'no price']
+              .filter(Boolean)
+              .join(' · ');
+            return (
+              <li
+                key={r.id}
+                style={{
+                  display: 'flex',
+                  gap: 8,
+                  padding: '0.4rem 0.75rem',
+                  borderBottom: '1px solid var(--line)',
+                  alignItems: 'center',
+                }}
               >
-                + Main
-              </button>
-              <button
-                type="button"
-                onClick={() => addCard.mutate({ cardId: r.id, cardName: r.title, isSideboard: true })}
-              >
-                + SB
-              </button>
-            </li>
-          ))}
+                <span style={{ flex: 1, color: 'var(--ink)' }}>
+                  <strong>{r.title}</strong>
+                  <span style={{ marginLeft: 8, fontSize: '0.85rem', color: 'var(--ink)' }}>
+                    {meta}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => addCard.mutate({ cardId: r.id, cardName: r.title, isSideboard: false })}
+                >
+                  + Main
+                </button>
+                <button
+                  type="button"
+                  onClick={() => addCard.mutate({ cardId: r.id, cardName: r.title, isSideboard: true })}
+                >
+                  + SB
+                </button>
+              </li>
+            );
+          })}
           <li style={{ padding: '0.25rem 0.75rem' }}>
             <button
               type="button"

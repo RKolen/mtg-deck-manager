@@ -1,0 +1,28 @@
+uuid: e592a1bc-e724-4ca3-bfbb-13a1317e16b2
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_set
+    - node.type.mtg_card
+    - taxonomy.vocabulary.mtg_set
+id: node.mtg_card.field_set
+field_name: field_set
+entity_type: node
+bundle: mtg_card
+label: Set
+description: 'Print set (taxonomy). Prefer this over typing set codes.'
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings:
+  handler: 'default:taxonomy_term'
+  handler_settings:
+    target_bundles:
+      mtg_set: mtg_set
+    sort:
+      field: name
+      direction: asc
+    auto_create: false
+field_type: entity_reference

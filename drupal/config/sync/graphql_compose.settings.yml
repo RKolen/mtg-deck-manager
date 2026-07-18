@@ -1,0 +1,11 @@
+field_config:
+  node:
+    deck:
+      field_format:
+        enabled: true
+      field_notes:
+        enabled: true
+      field_deck_cards:
+        enabled: true
+      field_is_foil:
+        enabled: true

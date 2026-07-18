@@ -1,0 +1,23 @@
+uuid: bc06144a-c909-4aa3-b815-67fc73ce4ea4
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_is_foil
+    - node.type.deck
+id: node.deck.field_is_foil
+field_name: field_is_foil
+entity_type: node
+bundle: deck
+label: 'Foil deck'
+description: 'When enabled, collection sync and deck valuation treat copies as foil.'
+required: false
+translatable: true
+default_value:
+  -
+    value: 0
+default_value_callback: ''
+settings:
+  on_label: Foil
+  off_label: Non-foil
+field_type: boolean

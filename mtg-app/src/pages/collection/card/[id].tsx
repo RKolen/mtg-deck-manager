@@ -12,6 +12,8 @@ import {
   fetchCollectionCardByCardId,
   upsertCollectionCard,
 } from '../../../services/drupalApi';
+import { getOracleText } from '../../../utils/deckAnalysis';
+import { slugify } from '../../../utils/slugify';
 
 const CollectionCardPage: React.FC = () => {
   const router = useRouter();
@@ -55,10 +57,7 @@ const CollectionCardPage: React.FC = () => {
   }
 
   const a = card.attributes;
-  const oracleText =
-    typeof a.field_oracle_text === 'string'
-      ? a.field_oracle_text
-      : (a.field_oracle_text as { value?: string } | null)?.value ?? '';
+  const oracleText = getOracleText(a);
 
   return (
     <main
@@ -69,9 +68,15 @@ const CollectionCardPage: React.FC = () => {
         background: 'var(--bg)',
       }}
     >
-      <p style={{ margin: '0 0 1rem' }}>
+      <p style={{ margin: '0 0 1rem', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
         <Link href="/collection" style={{ color: 'var(--accent)' }}>
           Back to collection
+        </Link>
+        <Link
+          href={`/cards/${slugify(a.title)}${card.id ? `?printing=${card.id}` : ''}`}
+          style={{ color: 'var(--accent)' }}
+        >
+          All printings
         </Link>
       </p>
 
@@ -132,10 +137,13 @@ const CollectionCardPage: React.FC = () => {
           <h2 style={{ margin: '0 0 0.75rem', fontSize: '1rem', color: 'var(--ink)' }}>
             My collection
           </h2>
+          <p style={{ margin: '0 0 0.75rem', fontSize: '0.8rem', color: 'var(--ink)', opacity: 0.85 }}>
+            Regular and foil are counted separately. Total = regular + foil.
+          </p>
 
           <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span style={{ fontSize: '0.8rem', color: 'var(--ink)' }}>Regular</span>
+              <span style={{ fontSize: '0.8rem', color: 'var(--ink)' }}>Regular (non-foil)</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <button
                   type="button"
@@ -145,9 +153,25 @@ const CollectionCardPage: React.FC = () => {
                 >
                   -
                 </button>
-                <span style={{ minWidth: 24, textAlign: 'center', fontWeight: 'bold' }}>
-                  {owned}
-                </span>
+                <input
+                  type="number"
+                  min={0}
+                  value={owned}
+                  onChange={e =>
+                    upsert.mutate({
+                      owned: Math.max(0, Number.parseInt(e.target.value, 10) || 0),
+                      foil,
+                    })
+                  }
+                  style={{
+                    width: 48,
+                    textAlign: 'center',
+                    color: '#000',
+                    background: '#fff',
+                    border: '1px solid #000',
+                    padding: '2px 4px',
+                  }}
+                />
                 <button
                   type="button"
                   style={{ width: 28 }}
@@ -169,9 +193,25 @@ const CollectionCardPage: React.FC = () => {
                 >
                   -
                 </button>
-                <span style={{ minWidth: 24, textAlign: 'center', fontWeight: 'bold' }}>
-                  {foil}
-                </span>
+                <input
+                  type="number"
+                  min={0}
+                  value={foil}
+                  onChange={e =>
+                    upsert.mutate({
+                      owned,
+                      foil: Math.max(0, Number.parseInt(e.target.value, 10) || 0),
+                    })
+                  }
+                  style={{
+                    width: 48,
+                    textAlign: 'center',
+                    color: '#000',
+                    background: '#fff',
+                    border: '1px solid #000',
+                    padding: '2px 4px',
+                  }}
+                />
                 <button
                   type="button"
                   style={{ width: 28 }}

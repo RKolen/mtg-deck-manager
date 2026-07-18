@@ -5,6 +5,46 @@
  * MTG Scryfall Sync module file.
  */
 
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\mtg_scryfall_sync\Plugin\EntityReferenceSelection\MtgCardSelection;
+use Drupal\node\NodeInterface;
+
+/**
+ * Implements hook_field_widget_single_element_form_alter().
+ *
+ * Entity autocomplete normally shows only the node title for selected values.
+ * For MTG card references, show set + price the same way as search matches.
+ */
+function mtg_scryfall_sync_field_widget_single_element_form_alter(array &$element, FormStateInterface $form_state, array $context): void {
+  $widget = $context['widget'] ?? NULL;
+  if ($widget === NULL || $widget->getPluginId() !== 'entity_reference_autocomplete') {
+    return;
+  }
+
+  $items = $context['items'] ?? NULL;
+  if ($items === NULL || $items->getFieldDefinition()->getSetting('handler') !== 'mtg_card:node') {
+    return;
+  }
+
+  // Core wraps the autocomplete in a target_id child.
+  if (!isset($element['target_id']) || !is_array($element['target_id'])) {
+    return;
+  }
+
+  $default = $element['target_id']['#default_value'] ?? NULL;
+  if (!$default instanceof NodeInterface || $default->bundle() !== 'mtg_card') {
+    return;
+  }
+
+  // Keep trailing "(nid)" so EntityAutocomplete can resolve the reference.
+  // Disable core's default label processing so our set/price text is kept.
+  $element['target_id']['#default_value'] = MtgCardSelection::formatLabel($default) . ' (' . $default->id() . ')';
+  $element['target_id']['#process_default_value'] = FALSE;
+  // Labels with set + prices are longer than a bare title.
+  $element['target_id']['#maxlength'] = 2048;
+  $element['target_id']['#size'] = max(80, (int) ($element['target_id']['#size'] ?? 60));
+}
+
 /**
  * Implements hook_entity_type_alter().
  *

@@ -1,0 +1,7 @@
+services:
+  mtg_graphql.commands:
+    class: Drupal\mtg_graphql\Commands\CollectionCommands
+    arguments:
+      - '@mtg_graphql.collection_ensurer'
+    tags:
+      - { name: drush.command }

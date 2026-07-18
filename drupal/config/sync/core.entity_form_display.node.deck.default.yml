@@ -6,6 +6,7 @@ dependencies:
     - field.field.node.deck.field_deck_cards
     - field.field.node.deck.field_format
     - field.field.node.deck.field_format_term
+    - field.field.node.deck.field_is_foil
     - field.field.node.deck.field_notes
     - node.type.deck
   module:
@@ -99,6 +100,13 @@ content:
     weight: 5
     region: content
     settings: {  }
+    third_party_settings: {  }
+  field_is_foil:
+    type: boolean_checkbox
+    weight: 1
+    region: content
+    settings:
+      display_label: true
     third_party_settings: {  }
   field_notes:
     type: text_textarea

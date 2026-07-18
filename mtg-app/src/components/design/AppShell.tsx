@@ -17,8 +17,8 @@ export function AppShell({
   const { currency } = useTheme();
 
   const { data: collectionValue = null } = useQuery({
-    queryKey: ['collectionValue'],
-    queryFn: fetchCollectionValue,
+    queryKey: ['collectionValue', currency],
+    queryFn: () => fetchCollectionValue(currency),
     staleTime: 60_000,
   });
 
@@ -29,7 +29,8 @@ export function AppShell({
   });
 
   const uniqueCards = collectionCards.filter(
-    c => (c.attributes.field_quantity_owned ?? 0) > 0,
+    c =>
+      (c.attributes.field_quantity_owned ?? 0) + (c.attributes.field_quantity_foil ?? 0) > 0,
   ).length;
 
   useEffect(() => {

@@ -131,8 +131,22 @@ final class MtgGraphqlResolverRegistration {
           ->condition('status', 1)
           ->condition('title', $args['name'])
           ->accessCheck(FALSE)
+          ->sort('field_set_name', 'ASC')
+          ->sort('field_collector_number', 'ASC')
           ->execute();
-        return array_values($storage->loadMultiple($ids));
+        $nodes = array_values($storage->loadMultiple($ids));
+        // Prefer printings with a market price when sorting within a set.
+        usort($nodes, static function ($a, $b): int {
+          $sa = (string) ($a->get('field_set_name')->value ?? '');
+          $sb = (string) ($b->get('field_set_name')->value ?? '');
+          if ($sa !== $sb) {
+            return $sa <=> $sb;
+          }
+          $pa = (float) ($a->get('field_price_usd')->value ?? 0);
+          $pb = (float) ($b->get('field_price_usd')->value ?? 0);
+          return $pb <=> $pa;
+        });
+        return $nodes;
       })
     );
 
@@ -175,7 +189,9 @@ final class MtgGraphqlResolverRegistration {
     );
 
     $registry->addFieldResolver('Query', 'collectionValue',
-      $builder->callback(function (): float {
+      $builder->callback(function ($value, array $args): float {
+        $currency = strtoupper((string) ($args['currency'] ?? 'USD'));
+        $useEur = $currency === 'EUR';
         $storage = \Drupal::entityTypeManager()->getStorage('node');
         $ids = \Drupal::entityQuery('node')
           ->condition('type', 'collection_card')
@@ -185,8 +201,9 @@ final class MtgGraphqlResolverRegistration {
 
         $total = 0.0;
         foreach ($storage->loadMultiple($ids) as $cc) {
-          $qty = (int) ($cc->get('field_quantity_owned')->value ?? 0);
-          if ($qty === 0) {
+          $owned = (int) ($cc->get('field_quantity_owned')->value ?? 0);
+          $foil = (int) ($cc->get('field_quantity_foil')->value ?? 0);
+          if ($owned === 0 && $foil === 0) {
             continue;
           }
           $ref = $cc->get('field_card')->first();
@@ -197,8 +214,18 @@ final class MtgGraphqlResolverRegistration {
           if (!$card instanceof FieldableEntityInterface) {
             continue;
           }
-          $price  = (float) ($card->get('field_price_usd')->value ?? 0);
-          $total += $price * $qty;
+          if ($useEur) {
+            $price = (float) ($card->get('field_price_eur')->value ?? 0);
+            $priceFoil = (float) ($card->get('field_price_eur_foil')->value ?? 0);
+          }
+          else {
+            $price = (float) ($card->get('field_price_usd')->value ?? 0);
+            $priceFoil = (float) ($card->get('field_price_usd_foil')->value ?? 0);
+          }
+          if ($priceFoil <= 0) {
+            $priceFoil = $price;
+          }
+          $total += ($price * $owned) + ($priceFoil * $foil);
         }
         return round($total, 2);
       })
@@ -281,6 +308,27 @@ final class MtgGraphqlResolverRegistration {
 
         $cardNodes = $storage->loadByProperties(['type' => 'mtg_card', 'uuid' => $args['cardId']]);
         $cardNode  = reset($cardNodes);
+        if (!$cardNode instanceof NodeInterface) {
+          throw new \InvalidArgumentException('Card not found: ' . $args['cardId']);
+        }
+
+        // Prefer updating an existing collection row for this card (avoid dupes).
+        $existingIds = $storage->getQuery()
+          ->accessCheck(FALSE)
+          ->condition('type', 'collection_card')
+          ->condition('field_card', $cardNode->id())
+          ->range(0, 1)
+          ->execute();
+        if ($existingIds !== []) {
+          $node = $storage->load(reset($existingIds));
+          if ($node instanceof NodeInterface) {
+            $node->set('title', $args['cardName']);
+            $node->set('field_quantity_owned', $args['quantityOwned']);
+            $node->set('field_quantity_foil', $args['quantityFoil'] ?? 0);
+            $node->save();
+            return $node;
+          }
+        }
 
         $node = $storage->create([
           'type'                 => 'collection_card',
@@ -758,6 +806,16 @@ final class MtgGraphqlResolverRegistration {
       })
     );
 
+    $registry->addFieldResolver('Query', 'cardSets',
+      $builder->callback(function ($value, array $args): array {
+        $q = (string) ($args['q'] ?? '');
+        $limit = min(2000, max(1, (int) ($args['limit'] ?? 1000)));
+        /** @var \Drupal\mtg_scryfall_sync\Service\SetTaxonomy $sets */
+        $sets = \Drupal::service('mtg_scryfall_sync.set_taxonomy');
+        return $sets->search($q, $limit);
+      })
+    );
+
     $registry->addFieldResolver('CardSearchResult', 'cards',
       $builder->callback(fn(array $page) => $page['cards'])
     );
@@ -766,6 +824,16 @@ final class MtgGraphqlResolverRegistration {
     );
     $registry->addFieldResolver('CardSearchResult', 'pages',
       $builder->callback(fn(array $page) => $page['pages'])
+    );
+
+    $registry->addFieldResolver('CardSet', 'code',
+      $builder->callback(fn(array $set) => $set['code'])
+    );
+    $registry->addFieldResolver('CardSet', 'name',
+      $builder->callback(fn(array $set) => $set['name'])
+    );
+    $registry->addFieldResolver('CardSet', 'count',
+      $builder->callback(fn(array $set) => $set['count'])
     );
   }
 

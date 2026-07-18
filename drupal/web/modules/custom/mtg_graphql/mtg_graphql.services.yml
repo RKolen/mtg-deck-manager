@@ -1,8 +1,14 @@
 services:
+  mtg_graphql.collection_ensurer:
+    class: Drupal\mtg_graphql\Service\CollectionEnsurer
+    arguments:
+      - '@entity_type.manager'
+
   mtg_graphql.deck_card_mutator:
     class: Drupal\mtg_graphql\Service\DeckCardMutator
     arguments:
       - '@entity.repository'
+      - '@mtg_graphql.collection_ensurer'
 
   mtg_graphql.meta_deck_scraper:
     class: Drupal\mtg_graphql\Service\MetaDeckScraperService

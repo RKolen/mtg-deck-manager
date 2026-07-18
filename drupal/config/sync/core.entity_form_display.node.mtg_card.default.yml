@@ -8,6 +8,7 @@ dependencies:
     - field.field.node.mtg_card.field_color_identity
     - field.field.node.mtg_card.field_colors
     - field.field.node.mtg_card.field_combo_pieces
+    - field.field.node.mtg_card.field_image_local
     - field.field.node.mtg_card.field_image_uri
     - field.field.node.mtg_card.field_is_mana_producer
     - field.field.node.mtg_card.field_legal_formats
@@ -160,6 +161,16 @@ content:
     weight: 19
     region: content
     settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_image_local:
+    type: entity_reference_autocomplete
+    weight: 40
+    region: content
+    settings:
+      match_operator: CONTAINS
+      match_limit: 10
       size: 60
       placeholder: ''
     third_party_settings: {  }

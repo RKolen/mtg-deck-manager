@@ -117,6 +117,12 @@ final class DeckCardsResource extends ResourceBase {
     $deck->setNewRevision(FALSE);
     $deck->save();
 
+    if (\Drupal::hasService('mtg_graphql.collection_ensurer')) {
+      /** @var \Drupal\mtg_graphql\Service\CollectionEnsurer $ensurer */
+      $ensurer = \Drupal::service('mtg_graphql.collection_ensurer');
+      $ensurer->ensureDeckCards($deck);
+    }
+
     return $this->ok([
       'paraUuid'    => $para->uuid(),
       'quantity'    => (int) $para->get('field_quantity')->value,
@@ -141,6 +147,12 @@ final class DeckCardsResource extends ResourceBase {
     // Re-save the deck so entity_reference_revisions tracks the updated vid.
     $deck->setNewRevision(FALSE);
     $deck->save();
+
+    if (\Drupal::hasService('mtg_graphql.collection_ensurer')) {
+      /** @var \Drupal\mtg_graphql\Service\CollectionEnsurer $ensurer */
+      $ensurer = \Drupal::service('mtg_graphql.collection_ensurer');
+      $ensurer->ensureDeckCards($deck);
+    }
 
     return $this->ok([
       'paraUuid' => $para->uuid(),

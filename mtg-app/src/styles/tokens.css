@@ -283,30 +283,34 @@ kbd {
 /* Form controls — native selects/inputs are unreadable on dark without this */
 input,
 select,
-textarea,
-button {
-  font: inherit;
-  color: var(--ink);
-  background: var(--bg-2);
-  border: 1px solid var(--line-2);
-  border-radius: 4px;
-}
-input,
-select,
 textarea {
+  font: inherit;
+  color: #000;
+  background: #fff;
+  border: 1px solid #000;
+  border-radius: 4px;
   padding: 0.3rem 0.5rem;
 }
 select option {
-  background: var(--bg-2);
-  color: var(--ink);
+  background: #fff;
+  color: #000;
 }
+/* Buttons: white / black for contrast on dark backgrounds */
 button {
+  font: inherit;
   cursor: pointer;
   padding: 0.35rem 0.85rem;
+  color: #000;
+  background: #fff;
+  border: 1px solid #000;
+  border-radius: 4px;
 }
 button:disabled {
-  opacity: 0.55;
   cursor: default;
+  color: #000;
+  background: #fff;
+  border-color: #999;
+  opacity: 1;
 }
 button.btn-accent {
   background: var(--accent) !important;

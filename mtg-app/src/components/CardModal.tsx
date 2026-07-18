@@ -1,4 +1,7 @@
 import React, { useEffect } from 'react';
+import Link from 'next/link';
+import { getOracleText } from '../utils/deckAnalysis';
+import { slugify } from '../utils/slugify';
 
 export interface CardData {
   id: string;
@@ -8,7 +11,8 @@ export interface CardData {
   field_cmc?: number | null;
   field_type_line?: string | null;
   field_colors?: string[] | null;
-  field_oracle_text?: string | null;
+  /** Plain string or Drupal text object `{ value, format, processed }`. */
+  field_oracle_text?: string | { value?: string; format?: string | null; processed?: string } | null;
   field_scryfall_id?: string | null;
   field_image_uri?: string | null;
   field_is_mana_producer?: boolean | null;
@@ -26,13 +30,25 @@ interface CardModalProps {
   quantityOwned?: number;
   quantityFoil?: number;
   onClose: () => void;
+  /** When set, shows editable regular/foil quantity controls. */
+  onQuantityChange?: (owned: number, foil: number) => void;
 }
+
+const qtyInputStyle: React.CSSProperties = {
+  width: 48,
+  textAlign: 'center',
+  padding: '2px 4px',
+  color: '#000',
+  background: '#fff',
+  border: '1px solid #000',
+};
 
 const CardModal: React.FC<CardModalProps> = ({
   card,
   quantityOwned = 0,
   quantityFoil = 0,
   onClose,
+  onQuantityChange,
 }) => {
   // Close on Escape key.
   useEffect(() => {
@@ -42,6 +58,9 @@ const CardModal: React.FC<CardModalProps> = ({
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
+
+  const oracleText = getOracleText(card);
+  const total = quantityOwned + quantityFoil;
 
   return (
     <div
@@ -85,7 +104,7 @@ const CardModal: React.FC<CardModalProps> = ({
         )}
 
         <div style={{ flex: 1, color: 'var(--ink)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
             <h2 style={{ margin: 0, color: 'var(--ink)' }}>{card.title}</h2>
             <button
               type="button"
@@ -103,6 +122,18 @@ const CardModal: React.FC<CardModalProps> = ({
             </button>
           </div>
 
+          {card.title != null && card.title !== '' && (
+            <p style={{ margin: '0.5rem 0 0.25rem' }}>
+              <Link
+                href={`/cards/${slugify(card.title)}${card.id ? `?printing=${card.id}` : ''}`}
+                onClick={onClose}
+                style={{ color: 'var(--accent)', fontSize: '0.9rem' }}
+              >
+                View all printings →
+              </Link>
+            </p>
+          )}
+
           <p style={{ margin: '0.25rem 0', color: 'var(--ink)' }}>
             {card.field_mana_cost ?? ''}{' '}
             {card.field_cmc != null && `(CMC ${card.field_cmc})`}
@@ -114,7 +145,7 @@ const CardModal: React.FC<CardModalProps> = ({
             </p>
           )}
 
-          {card.field_oracle_text != null && (
+          {oracleText !== '' && (
             <p
               style={{
                 whiteSpace: 'pre-wrap',
@@ -126,7 +157,7 @@ const CardModal: React.FC<CardModalProps> = ({
                 fontSize: '0.9rem',
               }}
             >
-              {card.field_oracle_text}
+              {oracleText}
             </p>
           )}
 
@@ -160,10 +191,80 @@ const CardModal: React.FC<CardModalProps> = ({
           )}
 
           <hr style={{ borderColor: 'var(--line)' }} />
-          <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--ink)' }}>
-            <strong>Owned:</strong> {quantityOwned}&ensp;
-            <strong>Foil:</strong> {quantityFoil}
-          </p>
+
+          {onQuantityChange ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 64, fontSize: '0.85rem' }}>Regular</span>
+                <button
+                  type="button"
+                  disabled={quantityOwned <= 0}
+                  onClick={() => onQuantityChange(quantityOwned - 1, quantityFoil)}
+                  style={{ width: 28, padding: 0 }}
+                >
+                  -
+                </button>
+                <input
+                  type="number"
+                  min={0}
+                  value={quantityOwned}
+                  onChange={e =>
+                    onQuantityChange(Math.max(0, Number.parseInt(e.target.value, 10) || 0), quantityFoil)
+                  }
+                  style={qtyInputStyle}
+                />
+                <button
+                  type="button"
+                  onClick={() => onQuantityChange(quantityOwned + 1, quantityFoil)}
+                  style={{ width: 28, padding: 0 }}
+                >
+                  +
+                </button>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 64, fontSize: '0.85rem' }}>Foil</span>
+                <button
+                  type="button"
+                  disabled={quantityFoil <= 0}
+                  onClick={() => onQuantityChange(quantityOwned, quantityFoil - 1)}
+                  style={{ width: 28, padding: 0 }}
+                >
+                  -
+                </button>
+                <input
+                  type="number"
+                  min={0}
+                  value={quantityFoil}
+                  onChange={e =>
+                    onQuantityChange(quantityOwned, Math.max(0, Number.parseInt(e.target.value, 10) || 0))
+                  }
+                  style={qtyInputStyle}
+                />
+                <button
+                  type="button"
+                  onClick={() => onQuantityChange(quantityOwned, quantityFoil + 1)}
+                  style={{ width: 28, padding: 0 }}
+                >
+                  +
+                </button>
+              </div>
+              <p style={{ margin: 0, fontSize: '0.85rem' }}>
+                Total: <strong>{total}</strong>
+                {total > 0 && (
+                  <span style={{ opacity: 0.85 }}>
+                    {' '}
+                    ({quantityOwned} regular + {quantityFoil} foil)
+                  </span>
+                )}
+              </p>
+            </div>
+          ) : (
+            <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--ink)' }}>
+              <strong>Regular:</strong> {quantityOwned}&ensp;
+              <strong>Foil:</strong> {quantityFoil}&ensp;
+              <strong>Total:</strong> {total}
+            </p>
+          )}
         </div>
       </div>
     </div>

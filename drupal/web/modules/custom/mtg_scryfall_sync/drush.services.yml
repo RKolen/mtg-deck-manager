@@ -3,5 +3,6 @@ services:
     class: Drupal\mtg_scryfall_sync\Commands\ScryfallCommands
     arguments:
       - '@mtg_scryfall_sync.importer'
+      - '@mtg_scryfall_sync.set_taxonomy'
     tags:
       - { name: drush.command }

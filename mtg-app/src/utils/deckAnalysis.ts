@@ -43,8 +43,8 @@ export function getOracleText(card: { field_oracle_text?: unknown }): string {
   const raw = card.field_oracle_text;
   if (!raw) return '';
   if (typeof raw === 'string') return raw;
-  const obj = raw as { value?: string };
-  return obj.value ?? '';
+  const obj = raw as { value?: string | null; processed?: string | null };
+  return obj.value ?? obj.processed ?? '';
 }
 
 /**

@@ -1,0 +1,19 @@
+uuid: 2c005944-3600-43eb-b691-bebe3242fadd
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.taxonomy_term.field_set_code
+    - taxonomy.vocabulary.mtg_set
+id: taxonomy_term.mtg_set.field_set_code
+field_name: field_set_code
+entity_type: taxonomy_term
+bundle: mtg_set
+label: 'Set code'
+description: 'Scryfall set abbreviation (e.g. mh2).'
+required: true
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: string

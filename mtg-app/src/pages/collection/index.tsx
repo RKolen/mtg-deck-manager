@@ -11,7 +11,7 @@ import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { slugify } from '../../utils/slugify';
 
-import CardFilter, { type FilterState } from '../../components/CardFilter';
+import CardFilter, { EMPTY_FILTER, type FilterState } from '../../components/CardFilter';
 import CardModal, { type CardData } from '../../components/CardModal';
 import CollectionSidebar from '../../components/CollectionSidebar';
 import { searchCards } from '../../services/cardSearch';
@@ -20,6 +20,7 @@ import {
   fetchCollectionValue,
   upsertCollectionCard,
 } from '../../services/drupalApi';
+import { useTheme } from '../../context/ThemeContext';
 import type { CollectionCard, JsonApiResource, MtgCardAttributes } from '../../types/drupal';
 
 type CardResource = JsonApiResource<MtgCardAttributes>;
@@ -29,15 +30,11 @@ type CardResource = JsonApiResource<MtgCardAttributes>;
 // ---------------------------------------------------------------------------
 
 const CollectionPage: React.FC = () => {
+  const { currency } = useTheme();
 
   const [filter, setFilter] = useState<FilterState>({
-    name: '',
+    ...EMPTY_FILTER,
     colors: new Set(),
-    type: 'All',
-    maxCmc: null,
-    legalIn: '',
-    oracleText: '',
-    rarity: '',
   });
   const [modalCard, setModalCard] = useState<CardResource | null>(null);
 
@@ -55,6 +52,8 @@ const CollectionPage: React.FC = () => {
   // Fetch card catalogue page — refetches when debounced filter changes.
   const [page, setPage] = useState(0);
 
+  const setsKey = debouncedFilter.setCodes.slice().sort().join(',');
+  const decksKey = debouncedFilter.deckIds.slice().sort().join(',');
   const filterKey = JSON.stringify({
     name: debouncedFilter.name,
     colors: [...debouncedFilter.colors].sort(),
@@ -63,6 +62,10 @@ const CollectionPage: React.FC = () => {
     legalIn: debouncedFilter.legalIn,
     oracleText: debouncedFilter.oracleText,
     rarity: debouncedFilter.rarity,
+    setCodes: debouncedFilter.setCodes.slice().sort(),
+    setExclude: debouncedFilter.setExclude,
+    deckIds: debouncedFilter.deckIds.slice().sort(),
+    deckExclude: debouncedFilter.deckExclude,
     page,
   });
   const {
@@ -79,6 +82,10 @@ const CollectionPage: React.FC = () => {
         legalIn: debouncedFilter.legalIn || undefined,
         oracleText: debouncedFilter.oracleText || undefined,
         rarity: debouncedFilter.rarity || undefined,
+        setCodes: debouncedFilter.setCodes.length ? debouncedFilter.setCodes : undefined,
+        setExclude: debouncedFilter.setExclude,
+        deckIds: debouncedFilter.deckIds.length ? debouncedFilter.deckIds : undefined,
+        deckExclude: debouncedFilter.deckExclude,
         page,
         limit: 50,
       }),
@@ -99,12 +106,16 @@ const CollectionPage: React.FC = () => {
     debouncedFilter.legalIn,
     debouncedFilter.oracleText,
     debouncedFilter.rarity,
+    debouncedFilter.setExclude,
+    debouncedFilter.deckExclude,
     colorsKey,
+    setsKey,
+    decksKey,
   ]);
 
   const { data: estValue = null } = useQuery<number>({
-    queryKey: ['collectionValue'],
-    queryFn: fetchCollectionValue,
+    queryKey: ['collectionValue', currency],
+    queryFn: () => fetchCollectionValue(currency),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -149,28 +160,32 @@ const CollectionPage: React.FC = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['collectionCards'] }),
   });
 
+  function setQuantities(card: CardResource, owned: number, foil: number): void {
+    const cardId = card.id;
+    if (cardId == null) return;
+    const existing = collectionMap.get(cardId);
+    upsert.mutate({
+      cardId,
+      cardName: card.attributes.title,
+      owned: Math.max(0, owned),
+      foil: Math.max(0, foil),
+      existingId: existing?.id,
+    });
+  }
+
   function handleQuantityChange(
     card: CardResource,
     delta: number,
     field: 'owned' | 'foil',
   ): void {
-    const cardId = card.id;
-    if (cardId == null) return;
-
-    const existing = collectionMap.get(cardId);
+    const existing = collectionMap.get(card.id ?? '');
     const owned = existing?.attributes.field_quantity_owned ?? 0;
     const foil = existing?.attributes.field_quantity_foil ?? 0;
-
-    const nextOwned = field === 'owned' ? Math.max(0, owned + delta) : owned;
-    const nextFoil = field === 'foil' ? Math.max(0, foil + delta) : foil;
-
-    upsert.mutate({
-      cardId,
-      cardName: card.attributes.title,
-      owned: nextOwned,
-      foil: nextFoil,
-      existingId: existing?.id,
-    });
+    setQuantities(
+      card,
+      field === 'owned' ? owned + delta : owned,
+      field === 'foil' ? foil + delta : foil,
+    );
   }
 
   // All filtering is done server-side by Solr; cards is the current page result.
@@ -247,14 +262,16 @@ const CollectionPage: React.FC = () => {
             const title = card.attributes.title ?? '';
             const imageUri = card.attributes.field_image_uri;
 
+            const inCollection = owned > 0 || foil > 0;
             return (
               <div
                 key={card.id}
                 style={{
-                  border: '1px solid #ccc',
+                  border: `1px solid ${inCollection ? 'var(--accent)' : 'var(--line)'}`,
                   borderRadius: 4,
                   overflow: 'hidden',
-                  background: owned > 0 || foil > 0 ? '#fffef0' : '#fff',
+                  background: 'var(--bg-2)',
+                  color: 'var(--ink)',
                 }}
               >
                 {imageUri != null ? (
@@ -277,7 +294,8 @@ const CollectionPage: React.FC = () => {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      background: '#e8e8e8',
+                      background: 'var(--bg-3)',
+                      color: 'var(--ink)',
                       cursor: 'pointer',
                       padding: '0.5rem',
                       textAlign: 'center',
@@ -292,7 +310,8 @@ const CollectionPage: React.FC = () => {
                   style={{
                     padding: '0.5rem',
                     fontSize: '0.75rem',
-                    color: '#000',
+                    color: 'var(--ink)',
+                    background: 'var(--bg-2)',
                   }}
                 >
                   <div
@@ -301,49 +320,95 @@ const CollectionPage: React.FC = () => {
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       marginBottom: 4,
-                      fontWeight: owned > 0 ? 'bold' : 'normal',
-                      color: '#000',
+                      fontWeight: inCollection ? 700 : 400,
                     }}
                     title={title}
                   >
                     <Link
                       href={`/collection/card/${slugify(title)}`}
-                      style={{ color: '#000', textDecoration: 'none' }}
+                      style={{ color: 'var(--ink)', textDecoration: 'none' }}
                     >
                       {title}
                     </Link>
                   </div>
 
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      color: '#000',
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => handleQuantityChange(card, -1, 'owned')}
-                      disabled={owned === 0}
-                      style={{ width: 24, padding: 0, color: '#000' }}
-                    >
-                      -
-                    </button>
-                    <span title="Owned" style={{ color: '#000' }}>
-                      {owned}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleQuantityChange(card, 1, 'owned')}
-                      style={{ width: 24, padding: 0, color: '#000' }}
-                    >
-                      +
-                    </button>
-                    {foil > 0 && (
-                      <span style={{ marginLeft: 4, color: '#333' }} title={`Foil: ${foil}`}>
-                        foil:{foil}
-                      </span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, color: 'var(--ink)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ width: 36, fontSize: 10, opacity: 0.85 }}>Reg</span>
+                      <button
+                        type="button"
+                        onClick={() => handleQuantityChange(card, -1, 'owned')}
+                        disabled={owned === 0}
+                        style={{ width: 24, padding: 0 }}
+                      >
+                        -
+                      </button>
+                      <input
+                        type="number"
+                        min={0}
+                        value={owned}
+                        title="Non-foil copies"
+                        onChange={e => {
+                          const n = Math.max(0, Number.parseInt(e.target.value, 10) || 0);
+                          setQuantities(card, n, foil);
+                        }}
+                        style={{
+                          width: 40,
+                          textAlign: 'center',
+                          padding: '2px 4px',
+                          color: '#000',
+                          background: '#fff',
+                          border: '1px solid #000',
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleQuantityChange(card, 1, 'owned')}
+                        style={{ width: 24, padding: 0 }}
+                      >
+                        +
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ width: 36, fontSize: 10, opacity: 0.85 }}>Foil</span>
+                      <button
+                        type="button"
+                        onClick={() => handleQuantityChange(card, -1, 'foil')}
+                        disabled={foil === 0}
+                        style={{ width: 24, padding: 0 }}
+                      >
+                        -
+                      </button>
+                      <input
+                        type="number"
+                        min={0}
+                        value={foil}
+                        title="Foil copies"
+                        onChange={e => {
+                          const n = Math.max(0, Number.parseInt(e.target.value, 10) || 0);
+                          setQuantities(card, owned, n);
+                        }}
+                        style={{
+                          width: 40,
+                          textAlign: 'center',
+                          padding: '2px 4px',
+                          color: '#000',
+                          background: '#fff',
+                          border: '1px solid #000',
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleQuantityChange(card, 1, 'foil')}
+                        style={{ width: 24, padding: 0 }}
+                      >
+                        +
+                      </button>
+                    </div>
+                    {(owned > 0 || foil > 0) && (
+                      <div style={{ fontSize: 10, opacity: 0.85 }}>
+                        Total {owned + foil}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -375,7 +440,7 @@ const CollectionPage: React.FC = () => {
         )}
       </div>
 
-      <div style={{ padding: '1rem', borderLeft: '1px solid #eee' }}>
+      <div style={{ padding: '1rem', borderLeft: '1px solid var(--line)' }}>
         <CollectionSidebar
           totalCards={totalCards}
           totalUnique={totalUnique}
@@ -383,6 +448,7 @@ const CollectionPage: React.FC = () => {
           filtered={filteredCopies}
           filteredUnique={filteredCards.length}
           estValue={estValue}
+          currency={currency}
         />
       </div>
 
@@ -409,6 +475,7 @@ const CollectionPage: React.FC = () => {
           } as CardData}
           quantityOwned={modalEntry?.attributes.field_quantity_owned}
           quantityFoil={modalEntry?.attributes.field_quantity_foil}
+          onQuantityChange={(owned, foil) => setQuantities(modalCard, owned, foil)}
           onClose={() => setModalCard(null)}
         />
       )}

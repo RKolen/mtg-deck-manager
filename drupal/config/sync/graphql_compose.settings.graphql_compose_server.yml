@@ -27,6 +27,8 @@ field_config:
         enabled: true
       field_deck_cards:
         enabled: true
+      field_is_foil:
+        enabled: true
     mtg_card:
       field_mana_cost:
         enabled: true

@@ -1,0 +1,9 @@
+uuid: 612bf2ad-c78d-43ae-912f-3e6571600477
+langcode: en
+status: true
+dependencies: {  }
+name: 'MTG Set'
+vid: mtg_set
+description: 'Scryfall print sets. Term name is the set name; field_set_code holds the abbreviation.'
+weight: 0
+new_revision: false

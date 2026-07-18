@@ -10,6 +10,12 @@ type CardSearchResult {
   pages: Int!
 }
 
+type CardSet {
+  code: String!
+  name: String!
+  count: Int!
+}
+
 type MtgCard {
   id: ID!
   title: String!

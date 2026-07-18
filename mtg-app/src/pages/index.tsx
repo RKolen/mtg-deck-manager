@@ -34,8 +34,8 @@ const IndexPage: React.FC = () => {
   const { data: pages = [] } = useQuery({ queryKey: ['pages'], queryFn: fetchPages });
   const { data: decks = [] } = useQuery({ queryKey: ['decks'], queryFn: fetchDecks });
   const { data: collectionValue = null } = useQuery({
-    queryKey: ['collectionValue'],
-    queryFn: fetchCollectionValue,
+    queryKey: ['collectionValue', currency],
+    queryFn: () => fetchCollectionValue(currency),
   });
 
   const page = pages.find(n => n.pathAlias === '/') ?? pages[0] ?? null;

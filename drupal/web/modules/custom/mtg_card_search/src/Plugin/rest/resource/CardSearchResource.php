@@ -228,7 +228,8 @@ final class CardSearchResource extends ResourceBase {
 
     $type = trim($request->query->getString('type', ''));
     if ($type !== '') {
-      $conditions->addCondition('field_type_line_string', $type, 'CONTAINS');
+      // Text field: string CONTAINS is exact-match only in Solr.
+      $conditions->addCondition('field_type_line', $type, 'CONTAINS');
       $hasCondition = TRUE;
     }
 
@@ -272,6 +273,30 @@ final class CardSearchResource extends ResourceBase {
     $rarity = trim($request->query->getString('rarity', ''));
     if ($rarity !== '' && in_array($rarity, ['common', 'uncommon', 'rare', 'mythic'], TRUE)) {
       $conditions->addCondition('field_rarity', $rarity);
+      $hasCondition = TRUE;
+    }
+
+    $setCodes = [];
+    foreach ($request->query->all('set_codes') as $code) {
+      $normalized = strtolower(trim((string) $code));
+      if ($normalized !== '' && preg_match('/^[a-z0-9]{2,6}$/', $normalized) && !in_array($normalized, $setCodes, TRUE)) {
+        $setCodes[] = $normalized;
+      }
+    }
+    if ($setCodes !== []) {
+      $exclude = (bool) (int) $request->query->get('set_exclude', '0');
+      if ($exclude) {
+        foreach ($setCodes as $code) {
+          $conditions->addCondition('field_set_code', $code, '<>');
+        }
+      }
+      else {
+        $setGroup = $query->createConditionGroup('OR');
+        foreach ($setCodes as $code) {
+          $setGroup->addCondition('field_set_code', $code);
+        }
+        $conditions->addConditionGroup($setGroup);
+      }
       $hasCondition = TRUE;
     }
 

@@ -7,6 +7,7 @@ namespace Drupal\mtg_graphql\Service;
 use Drupal\Core\Entity\EntityRepositoryInterface;
 use Drupal\node\NodeInterface;
 use Drupal\paragraphs\Entity\Paragraph;
+use Drupal\paragraphs\ParagraphInterface;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -17,6 +18,7 @@ final class DeckCardMutator {
 
   public function __construct(
     private readonly EntityRepositoryInterface $entityRepository,
+    private readonly CollectionEnsurer $collectionEnsurer,
   ) {}
 
   /**
@@ -45,6 +47,12 @@ final class DeckCardMutator {
     $deck->setNewRevision(FALSE);
     $deck->save();
 
+    $this->syncCollectionForDeckCard(
+      $deck,
+      $card,
+      $this->quantityOfCardInDeck($deck, (int) $card->id()),
+    );
+
     return [
       'id' => $para->uuid(),
       'quantity' => $quantity,
@@ -67,11 +75,34 @@ final class DeckCardMutator {
     $para->set('field_quantity', $quantity);
     $para->save();
 
+    // Reload so quantity sums see the updated paragraph values.
+    $deck = $this->loadDeck($deckUuid);
+    $card = $para->get('field_card')->entity;
+    if ($card instanceof NodeInterface) {
+      $this->syncCollectionForDeckCard(
+        $deck,
+        $card,
+        $this->quantityOfCardInDeck($deck, (int) $card->id()),
+      );
+    }
+
     return [
       'id' => $para->uuid(),
       'quantity' => $quantity,
       'isSideboard' => (bool) ($para->get('field_is_sideboard')->value ?? FALSE),
     ];
+  }
+
+  /**
+   * Syncs collection owned/foil qty for a card based on the deck's foil flag.
+   */
+  private function syncCollectionForDeckCard(NodeInterface $deck, NodeInterface $card, int $qty): void {
+    $isFoil = $deck->hasField('field_is_foil') && (bool) $deck->get('field_is_foil')->value;
+    if ($isFoil) {
+      $this->collectionEnsurer->ensureMinFoil($card, $qty);
+      return;
+    }
+    $this->collectionEnsurer->ensureMinOwned($card, $qty);
   }
 
   /**
@@ -95,6 +126,26 @@ final class DeckCardMutator {
     $deck->save();
     $para->delete();
     return TRUE;
+  }
+
+  /**
+   * Sums quantity of a card across all slots in a deck.
+   */
+  private function quantityOfCardInDeck(NodeInterface $deck, int $cardNid): int {
+    $total = 0;
+    foreach ($deck->get('field_deck_cards')->referencedEntities() as $entity) {
+      if (!$entity instanceof ParagraphInterface || !$entity->hasField('field_card')) {
+        continue;
+      }
+      if ($entity->get('field_card')->isEmpty()) {
+        continue;
+      }
+      if ((int) $entity->get('field_card')->target_id !== $cardNid) {
+        continue;
+      }
+      $total += max(1, (int) ($entity->get('field_quantity')->value ?? 1));
+    }
+    return max(1, $total);
   }
 
   /**

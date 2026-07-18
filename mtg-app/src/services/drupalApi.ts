@@ -52,6 +52,7 @@ interface GqlComposeDeck {
   uuid: string;
   title: string;
   format: string;
+  isFoil?: boolean | null;
   notes?: GqlText | null;
   changed?: { timestamp: number } | null;
 }
@@ -147,6 +148,7 @@ function toDeckResourceFromCompose(d: GqlComposeDeck): JsonApiResource<DeckAttri
       title: d.title,
       field_format: d.format,
       field_notes: composePlainText(d.notes),
+      field_is_foil: Boolean(d.isFoil),
       drupal_internal__nid: parseInt(d.id, 10),
       changed: d.changed?.timestamp ?? null,
     },
@@ -260,7 +262,7 @@ const CARD_DETAIL_FIELDS = gql`
 
 const COMPOSE_DECK_FIELDS = gql`
   fragment ComposeDeckFields on NodeDeck {
-    id uuid title format notes { value processed }
+    id uuid title format isFoil notes { value processed }
     changed { timestamp }
   }
 `;
@@ -679,11 +681,15 @@ export async function fetchCollectionCards(): Promise<
   return data.nodeCollectionCards.nodes.map(toCollectionCardFromCompose);
 }
 
-export async function fetchCollectionValue(): Promise<number> {
+export async function fetchCollectionValue(currency: 'USD' | 'EUR' = 'USD'): Promise<number> {
   const query = gql`
-    query GetCollectionValue { collectionValue }
+    query GetCollectionValue($currency: String) {
+      collectionValue(currency: $currency)
+    }
   `;
-  const data = await getGraphQLClient().request<{ collectionValue: number }>(query);
+  const data = await getGraphQLClient().request<{ collectionValue: number }>(query, {
+    currency,
+  });
   return data.collectionValue;
 }
 

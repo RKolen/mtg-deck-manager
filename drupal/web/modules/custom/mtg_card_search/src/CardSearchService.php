@@ -29,7 +29,7 @@ final class CardSearchService {
   /**
    * @param array<string, mixed> $params
    *   Keys: q, type, oracleText, legalIn, cmcMin, cmcMax, colors, colorIdentity,
-   *   manaProducer, rarity, page, limit.
+   *   manaProducer, rarity, setCodes, setExclude, deckIds, deckExclude, page, limit.
    *
    * @return array{cards: \Drupal\node\NodeInterface[], count: int, pages: int}
    */
@@ -86,9 +86,13 @@ final class CardSearchService {
     $q = trim((string) ($params['q'] ?? ''));
     $oracleText = trim((string) ($params['oracleText'] ?? ''));
 
-    if ($q !== '') {
+    // Search API allows one keys() call. Scope each field separately:
+    // - name alone → title only (never oracle)
+    // - oracle alone → oracle only
+    // - both → oracle fulltext here; title constrained via nids in applyConditions
+    if ($q !== '' && $oracleText === '') {
       $query->keys($q);
-      $query->setFulltextFields(['title', 'field_oracle_text']);
+      $query->setFulltextFields(['title']);
     }
     elseif ($oracleText !== '') {
       $query->keys($oracleText);
@@ -103,9 +107,20 @@ final class CardSearchService {
     $conditions = $query->createConditionGroup('AND');
     $hasCondition = FALSE;
 
+    $q = trim((string) ($params['q'] ?? ''));
+    $oracleText = trim((string) ($params['oracleText'] ?? ''));
+    // When both name and oracle are set, constrain title via SQL (keys used for oracle).
+    if ($q !== '' && $oracleText !== '') {
+      $nids = $this->nidsWithTitleContains($q);
+      $conditions->addCondition('nid', $nids === [] ? [-1] : $nids, 'IN');
+      $hasCondition = TRUE;
+    }
+
     $type = trim((string) ($params['type'] ?? ''));
     if ($type !== '') {
-      $conditions->addCondition('field_type_line_string', $type, 'CONTAINS');
+      // Use the text field — Solr string CONTAINS is effectively exact-match only,
+      // so "Land" missed "Basic Land — Mountain".
+      $conditions->addCondition('field_type_line', $type, 'CONTAINS');
       $hasCondition = TRUE;
     }
 
@@ -146,9 +161,141 @@ final class CardSearchService {
       $hasCondition = TRUE;
     }
 
+    $setCodes = $this->sanitizeSetCodes($params['setCodes'] ?? []);
+    if ($setCodes !== []) {
+      $exclude = !empty($params['setExclude']);
+      if ($exclude) {
+        foreach ($setCodes as $code) {
+          $conditions->addCondition('field_set_code', $code, '<>');
+        }
+      }
+      else {
+        $setGroup = $query->createConditionGroup('OR');
+        foreach ($setCodes as $code) {
+          $setGroup->addCondition('field_set_code', $code);
+        }
+        $conditions->addConditionGroup($setGroup);
+      }
+      $hasCondition = TRUE;
+    }
+
+    $deckIds = $this->sanitizeDeckIds($params['deckIds'] ?? []);
+    if ($deckIds !== []) {
+      $cardNids = $this->cardNidsInDecks($deckIds);
+      $excludeDeck = !empty($params['deckExclude']);
+      if (!$excludeDeck) {
+        // Empty deck → no matches.
+        $conditions->addCondition('nid', $cardNids === [] ? [-1] : $cardNids, 'IN');
+      }
+      elseif ($cardNids !== []) {
+        $conditions->addCondition('nid', $cardNids, 'NOT IN');
+      }
+      $hasCondition = TRUE;
+    }
+
     if ($hasCondition) {
       $query->addConditionGroup($conditions);
     }
+  }
+
+  /**
+   * @param mixed $raw
+   *   Raw deck ID list (nids or UUIDs).
+   *
+   * @return string[]
+   */
+  private function sanitizeDeckIds(mixed $raw): array {
+    if (!is_array($raw)) {
+      return [];
+    }
+    $valid = [];
+    foreach ($raw as $id) {
+      $id = trim((string) $id);
+      if ($id === '' || in_array($id, $valid, TRUE)) {
+        continue;
+      }
+      if (ctype_digit($id) || preg_match('/^[a-f0-9-]{36}$/i', $id)) {
+        $valid[] = $id;
+      }
+    }
+    return $valid;
+  }
+
+  /**
+   * @param string[] $deckIds
+   *   Deck nids or UUIDs.
+   *
+   * @return int[]
+   *   Distinct mtg_card node IDs used in those decks.
+   */
+  private function cardNidsInDecks(array $deckIds): array {
+    $storage = $this->entityTypeManager->getStorage('node');
+    $cardNids = [];
+
+    foreach ($deckIds as $deckId) {
+      $deck = NULL;
+      if (ctype_digit($deckId)) {
+        $loaded = $storage->load((int) $deckId);
+        if ($loaded && $loaded->bundle() === 'deck') {
+          $deck = $loaded;
+        }
+      }
+      else {
+        $found = $storage->loadByProperties(['type' => 'deck', 'uuid' => $deckId]);
+        $deck = $found ? reset($found) : NULL;
+      }
+      if ($deck === NULL || !$deck->hasField('field_deck_cards')) {
+        continue;
+      }
+      foreach ($deck->get('field_deck_cards')->referencedEntities() as $para) {
+        if (!$para->hasField('field_card') || $para->get('field_card')->isEmpty()) {
+          continue;
+        }
+        $card = $para->get('field_card')->entity;
+        if ($card !== NULL) {
+          $cardNids[(int) $card->id()] = (int) $card->id();
+        }
+      }
+    }
+
+    return array_values($cardNids);
+  }
+
+  /**
+   * Card node IDs whose title contains $name (DB collation handles case).
+   *
+   * @return int[]
+   */
+  private function nidsWithTitleContains(string $name): array {
+    $ids = $this->entityTypeManager->getStorage('node')->getQuery()
+      ->accessCheck(FALSE)
+      ->condition('type', 'mtg_card')
+      ->condition('status', 1)
+      ->condition('title', $name, 'CONTAINS')
+      ->range(0, 5000)
+      ->execute();
+    return array_map('intval', array_values($ids));
+  }
+
+  /**
+   * @param mixed $raw
+   *   Raw set code list (array or null).
+   *
+   * @return string[]
+   *   Lowercase Scryfall set codes.
+   */
+  private function sanitizeSetCodes(mixed $raw): array {
+    if (!is_array($raw)) {
+      return [];
+    }
+    $valid = [];
+    foreach ($raw as $code) {
+      $normalized = strtolower(trim((string) $code));
+      if ($normalized !== '' && preg_match('/^[a-z0-9]{2,6}$/', $normalized) && !in_array($normalized, $valid, TRUE)) {
+        $valid[] = $normalized;
+      }
+    }
+    return $valid;
   }
 
   /**

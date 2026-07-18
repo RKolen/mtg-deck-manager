@@ -3,10 +3,25 @@ langcode: en
 status: true
 dependencies:
   config:
+    - field.storage.node.field_cmc
+    - field.storage.node.field_color_identity
+    - field.storage.node.field_colors
+    - field.storage.node.field_image_uri
+    - field.storage.node.field_is_mana_producer
+    - field.storage.node.field_legal_formats
+    - field.storage.node.field_mana_cost
+    - field.storage.node.field_oracle_text
+    - field.storage.node.field_power
+    - field.storage.node.field_produced_mana
+    - field.storage.node.field_rarity
+    - field.storage.node.field_scryfall_id
+    - field.storage.node.field_set_code
+    - field.storage.node.field_set_name
+    - field.storage.node.field_toughness
+    - field.storage.node.field_type_line
     - search_api.server.solr_server
   module:
     - node
-    - search_api
     - search_api_solr
 _core:
   default_config_hash: mtg_card_search_index_v1
@@ -20,156 +35,171 @@ field_settings:
     datasource_id: 'entity:node'
     property_path: field_cmc
     type: decimal
-    boost: 1.0
-    type_locked: false
-    dependencies: {  }
-    index_locked: false
+    dependencies:
+      config:
+        - field.storage.node.field_cmc
   field_color_identity:
     label: 'Color Identity'
     datasource_id: 'entity:node'
     property_path: field_color_identity
     type: string
-    boost: 1.0
-    type_locked: false
-    dependencies: {  }
-    index_locked: false
+    dependencies:
+      config:
+        - field.storage.node.field_color_identity
   field_colors:
     label: Colors
     datasource_id: 'entity:node'
     property_path: field_colors
     type: string
-    boost: 1.0
-    type_locked: false
-    dependencies: {  }
-    index_locked: false
+    dependencies:
+      config:
+        - field.storage.node.field_colors
   field_image_uri:
     label: 'Image URI'
     datasource_id: 'entity:node'
     property_path: field_image_uri
     type: string
-    boost: 1.0
-    type_locked: false
-    dependencies: {  }
-    index_locked: false
+    dependencies:
+      config:
+        - field.storage.node.field_image_uri
   field_is_mana_producer:
     label: 'Is Mana Producer'
     datasource_id: 'entity:node'
     property_path: field_is_mana_producer
     type: boolean
-    boost: 1.0
-    type_locked: false
-    dependencies: {  }
-    index_locked: false
+    dependencies:
+      config:
+        - field.storage.node.field_is_mana_producer
   field_legal_formats:
     label: 'Legal Formats'
     datasource_id: 'entity:node'
     property_path: field_legal_formats
     type: string
-    boost: 1.0
-    type_locked: false
-    dependencies: {  }
-    index_locked: false
+    dependencies:
+      config:
+        - field.storage.node.field_legal_formats
   field_mana_cost:
     label: 'Mana Cost'
     datasource_id: 'entity:node'
     property_path: field_mana_cost
     type: string
-    boost: 1.0
-    type_locked: false
-    dependencies: {  }
-    index_locked: false
+    dependencies:
+      config:
+        - field.storage.node.field_mana_cost
   field_oracle_text:
     label: 'Oracle Text'
     datasource_id: 'entity:node'
     property_path: field_oracle_text
     type: text
-    boost: 1.0
-    type_locked: false
-    dependencies: {  }
-    index_locked: false
+    dependencies:
+      config:
+        - field.storage.node.field_oracle_text
   field_power:
     label: Power
     datasource_id: 'entity:node'
     property_path: field_power
     type: string
-    boost: 1.0
-    type_locked: false
-    dependencies: {  }
-    index_locked: false
+    dependencies:
+      config:
+        - field.storage.node.field_power
   field_produced_mana:
     label: 'Produced Mana'
     datasource_id: 'entity:node'
     property_path: field_produced_mana
     type: string
-    boost: 1.0
-    type_locked: false
-    dependencies: {  }
-    index_locked: false
+    dependencies:
+      config:
+        - field.storage.node.field_produced_mana
+  field_rarity:
+    label: Rarity
+    datasource_id: 'entity:node'
+    property_path: field_rarity
+    type: string
+    dependencies:
+      config:
+        - field.storage.node.field_rarity
   field_scryfall_id:
     label: 'Scryfall ID'
     datasource_id: 'entity:node'
     property_path: field_scryfall_id
     type: string
-    boost: 1.0
-    type_locked: false
-    dependencies: {  }
-    index_locked: false
+    dependencies:
+      config:
+        - field.storage.node.field_scryfall_id
+  field_set_code:
+    label: 'Set Code'
+    datasource_id: 'entity:node'
+    property_path: field_set_code
+    type: string
+    dependencies:
+      config:
+        - field.storage.node.field_set_code
+  field_set_name:
+    label: 'Set Name'
+    datasource_id: 'entity:node'
+    property_path: field_set_name
+    type: string
+    dependencies:
+      config:
+        - field.storage.node.field_set_name
   field_toughness:
     label: Toughness
     datasource_id: 'entity:node'
     property_path: field_toughness
     type: string
-    boost: 1.0
-    type_locked: false
-    dependencies: {  }
-    index_locked: false
+    dependencies:
+      config:
+        - field.storage.node.field_toughness
   field_type_line:
     label: 'Type Line'
     datasource_id: 'entity:node'
     property_path: field_type_line
     type: text
     boost: 2.0
-    type_locked: false
-    dependencies: {  }
-    index_locked: false
+    dependencies:
+      config:
+        - field.storage.node.field_type_line
   field_type_line_string:
     label: 'Type Line (string)'
     datasource_id: 'entity:node'
     property_path: field_type_line
     type: string
-    boost: 1.0
-    type_locked: false
-    dependencies: {  }
-    index_locked: false
+    dependencies:
+      config:
+        - field.storage.node.field_type_line
   nid:
     label: 'Node ID'
     datasource_id: 'entity:node'
     property_path: nid
     type: integer
-    boost: 1.0
-    type_locked: false
-    dependencies: {  }
-    index_locked: false
+    dependencies:
+      module:
+        - node
   title:
     label: Title
     datasource_id: 'entity:node'
     property_path: title
     type: text
     boost: 5.0
-    type_locked: false
-    dependencies: {  }
-    index_locked: false
+    dependencies:
+      module:
+        - node
   uuid:
     label: UUID
     datasource_id: 'entity:node'
     property_path: uuid
     type: string
-    boost: 1.0
-    type_locked: false
-    dependencies: {  }
-    index_locked: false
+    dependencies:
+      module:
+        - node
 datasource_settings:
   'entity:node':
+    bundles:
+      default: true
+      selected: {  }
+    languages:
+      default: true
+      selected: {  }
     plugin_id: 'entity:node'
     settings:
       bundles:
@@ -179,14 +209,25 @@ datasource_settings:
       languages:
         default: true
         selected: {  }
-processor_settings: {  }
+processor_settings:
+  add_url: {  }
+  aggregated_field: {  }
+  auto_aggregated_fulltext_field: {  }
+  custom_value: {  }
+  entity_type: {  }
+  language_with_fallback: {  }
+  rendered_item: {  }
+  solr_date_range: {  }
 tracker_settings:
   default:
+    indexing_order: fifo
     plugin_id: default
     settings:
       indexing_order: fifo
 options:
   cron_limit: 50
+  delete_on_fail: true
   index_directly: true
+  track_changes_in_references: true
   track_changes_in_references_enabled: false
 server: solr_server

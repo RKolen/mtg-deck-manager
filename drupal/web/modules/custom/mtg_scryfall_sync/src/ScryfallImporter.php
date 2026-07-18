@@ -8,6 +8,7 @@ use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\State\StateInterface;
+use Drupal\mtg_scryfall_sync\Service\SetTaxonomy;
 use GuzzleHttp\ClientInterface;
 
 /**
@@ -109,6 +110,7 @@ class ScryfallImporter {
     private readonly StateInterface $state,
     private readonly TimeInterface $time,
     private readonly ClientInterface $httpClient,
+    private readonly SetTaxonomy $setTaxonomy,
   ) {}
 
   /**
@@ -431,8 +433,11 @@ class ScryfallImporter {
     if ($node->hasField('field_price_eur_foil')) {
       $node->set('field_price_eur_foil', $this->scryfallPrice($prices, 'eur_foil'));
     }
-    $node->set('field_set_code', $card['set'] ?? '');
-    $node->set('field_set_name', $card['set_name'] ?? '');
+    $this->setTaxonomy->applyToCard(
+      $node,
+      (string) ($card['set'] ?? ''),
+      (string) ($card['set_name'] ?? ''),
+    );
     $node->set('field_rarity', $card['rarity'] ?? '');
     $node->set('field_collector_number', $card['collector_number'] ?? '');
 

@@ -1,0 +1,14 @@
+uuid: 149be626-b491-41a6-821c-d5aac5c6342f
+langcode: en
+status: true
+dependencies: {  }
+id: mtg_card_art
+label: 'MTG Card Art'
+description: 'Locally cached Scryfall card face images.'
+source: image
+queue_thumbnail_downloads: false
+new_revision: false
+source_configuration:
+  source_field: field_media_image
+field_map:
+  name: name

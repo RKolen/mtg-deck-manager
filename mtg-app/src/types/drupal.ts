@@ -71,6 +71,8 @@ export interface DeckAttributes {
   field_format: string;
   field_notes: string | null;
   drupal_internal__nid: number;
+  /** When true, value the deck with foil prices. */
+  field_is_foil?: boolean;
   /** Unix timestamp from Drupal `changed`, when available. */
   changed?: number | null;
 }

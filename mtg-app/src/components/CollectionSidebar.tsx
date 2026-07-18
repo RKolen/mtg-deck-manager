@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatPrice, type Currency } from '../utils/prices';
 
 interface CollectionSidebarProps {
   totalCards: number;
@@ -7,6 +8,7 @@ interface CollectionSidebarProps {
   filtered: number;
   filteredUnique: number;
   estValue: number | null;
+  currency: Currency;
 }
 
 const CollectionSidebar: React.FC<CollectionSidebarProps> = ({
@@ -16,35 +18,36 @@ const CollectionSidebar: React.FC<CollectionSidebarProps> = ({
   filtered,
   filteredUnique,
   estValue,
+  currency,
 }) => (
   <aside
+    className="summary-card"
     style={{
       padding: '1rem',
-      background: '#f5f5f0',
-      borderRadius: 4,
       minWidth: 160,
-      color: '#000',
     }}
   >
-    <h3 style={{ margin: '0 0 0.75rem', color: '#000' }}>Collection</h3>
-    <dl style={{ margin: 0, color: '#000' }}>
-      <dt>Total cards</dt>
-      <dd style={{ marginLeft: 0, fontWeight: 'bold', color: '#000' }}>{totalCards}</dd>
-      <dt>Unique cards</dt>
-      <dd style={{ marginLeft: 0, fontWeight: 'bold', color: '#000' }}>{totalUnique}</dd>
-      <dt>Foil copies</dt>
-      <dd style={{ marginLeft: 0, fontWeight: 'bold', color: '#000' }}>{totalFoil}</dd>
+    <h3 style={{ margin: '0 0 0.75rem', color: 'var(--ink)' }}>Collection</h3>
+    <dl style={{ margin: 0, color: 'var(--ink)' }}>
+      <dt style={{ color: 'var(--ink)' }}>Total cards</dt>
+      <dd style={{ marginLeft: 0, fontWeight: 'bold', color: 'var(--ink)' }}>{totalCards}</dd>
+      <dt style={{ color: 'var(--ink)' }}>Unique cards</dt>
+      <dd style={{ marginLeft: 0, fontWeight: 'bold', color: 'var(--ink)' }}>{totalUnique}</dd>
+      <dt style={{ color: 'var(--ink)' }}>Foil copies</dt>
+      <dd style={{ marginLeft: 0, fontWeight: 'bold', color: 'var(--ink)' }}>{totalFoil}</dd>
       {estValue != null && (
         <>
-          <dt>Est. value (USD)</dt>
-          <dd style={{ marginLeft: 0, fontWeight: 'bold', color: '#000' }}>${estValue.toFixed(2)}</dd>
+          <dt style={{ color: 'var(--ink)' }}>Est. value ({currency})</dt>
+          <dd style={{ marginLeft: 0, fontWeight: 'bold', color: 'var(--ink)' }}>
+            {formatPrice(estValue, currency)}
+          </dd>
         </>
       )}
     </dl>
-    {(filtered !== totalUnique) && (
+    {filtered !== totalUnique && (
       <>
-        <hr />
-        <dl style={{ margin: 0, fontSize: '0.85rem' }}>
+        <hr style={{ borderColor: 'var(--line)' }} />
+        <dl style={{ margin: 0, fontSize: '0.85rem', color: 'var(--ink)' }}>
           <dt>Filtered shown</dt>
           <dd style={{ marginLeft: 0, fontWeight: 'bold' }}>{filteredUnique}</dd>
           <dt>Filtered copies</dt>

@@ -1,0 +1,43 @@
+<?php
+
+/**
+ * @file
+ * Install/update hooks for mtg_graphql.
+ */
+
+use Drupal\field\Entity\FieldConfig;
+use Drupal\field\Entity\FieldStorageConfig;
+
+/**
+ * Adds field_is_foil on deck nodes.
+ */
+function mtg_graphql_update_9001(): string {
+  $storage_name = 'field_is_foil';
+  if (!FieldStorageConfig::loadByName('node', $storage_name)) {
+    FieldStorageConfig::create([
+      'field_name' => $storage_name,
+      'entity_type' => 'node',
+      'type' => 'boolean',
+      'cardinality' => 1,
+    ])->save();
+  }
+
+  if (!FieldConfig::loadByName('node', 'deck', $storage_name)) {
+    FieldConfig::create([
+      'field_name' => $storage_name,
+      'entity_type' => 'node',
+      'bundle' => 'deck',
+      'label' => 'Foil deck',
+      'description' => 'When enabled, collection sync and deck valuation treat copies as foil.',
+      'required' => FALSE,
+      'default_value' => [['value' => 0]],
+      'settings' => [
+        'on_label' => 'Foil',
+        'off_label' => 'Non-foil',
+      ],
+    ])->save();
+    return 'Created field_is_foil on deck.';
+  }
+
+  return 'field_is_foil already exists on deck.';
+}

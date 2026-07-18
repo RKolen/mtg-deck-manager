@@ -150,7 +150,7 @@ const DecksPage: React.FC = () => {
   const totalExpValue = decks.reduce((sum, d) => {
     const cards = cardsByDeckId.get(d.id);
     if (!cards) return sum;
-    return sum + totalDeckPrice(cards, currency);
+    return sum + totalDeckPrice(cards, currency, false, Boolean(d.attributes.field_is_foil));
   }, 0);
 
   const uniqueAcrossDecks = useMemo(() => {
@@ -303,7 +303,9 @@ const DecksPage: React.FC = () => {
                 const cards = cardsByDeckId.get(d.id);
                 const md = cards ? mainDeckCount(cards) : null;
                 const colors = cards ? deckColorIdentity(cards) : [];
-                const value = cards ? totalDeckPrice(cards, currency) : null;
+                const value = cards
+                  ? totalDeckPrice(cards, currency, false, Boolean(d.attributes.field_is_foil))
+                  : null;
                 const legal =
                   md != null && (md === 60 || md === 100 || (d.attributes.field_format === 'EDH' && md >= 100));
                 return (
@@ -631,7 +633,11 @@ function DeckPreview({
       )}
       <div className="mono tnum dim" style={{ fontSize: 10, marginTop: 10 }}>
         MAIN {mainDeckCount(cards)} · VALUE{' '}
-        {formatPriceInt(totalDeckPrice(cards, currency), currency)}
+        {formatPriceInt(
+          totalDeckPrice(cards, currency, false, Boolean(deck.attributes.field_is_foil)),
+          currency,
+        )}
+        {deck.attributes.field_is_foil ? ' FOIL' : ''}
       </div>
     </div>
   );

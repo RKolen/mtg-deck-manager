@@ -1,4 +1,9 @@
 services:
+  mtg_scryfall_sync.set_taxonomy:
+    class: Drupal\mtg_scryfall_sync\Service\SetTaxonomy
+    arguments:
+      - '@entity_type.manager'
+
   mtg_scryfall_sync.importer:
     class: Drupal\mtg_scryfall_sync\ScryfallImporter
     arguments:
@@ -7,3 +12,4 @@ services:
       - '@state'
       - '@datetime.time'
       - '@http_client'
+      - '@mtg_scryfall_sync.set_taxonomy'

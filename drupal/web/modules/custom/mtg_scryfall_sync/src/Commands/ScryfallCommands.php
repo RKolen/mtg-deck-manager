@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\mtg_scryfall_sync\Commands;
 
 use Drupal\mtg_scryfall_sync\ScryfallImporter;
+use Drupal\mtg_scryfall_sync\Service\SetTaxonomy;
 use Drush\Commands\DrushCommands;
 
 /**
@@ -14,6 +15,7 @@ class ScryfallCommands extends DrushCommands {
 
   public function __construct(
     private readonly ScryfallImporter $importer,
+    private readonly SetTaxonomy $setTaxonomy,
   ) {
     parent::__construct();
   }
@@ -202,6 +204,37 @@ class ScryfallCommands extends DrushCommands {
       ));
       $refreshed = $this->importer->refreshLegalitiesByName($result['names']);
       $this->output()->writeln(sprintf('Legality refresh complete: %d nodes updated.', $refreshed));
+    }
+  }
+
+  /**
+   * Syncs mtg_set taxonomy terms from card set codes/names.
+   *
+   * @command mtg:sync-sets
+   * @option backfill Also attach field_set on cards missing the term reference.
+   * @usage ddev drush mtg:sync-sets
+   * @usage ddev drush mtg:sync-sets --backfill
+   */
+  public function syncSets(array $options = ['backfill' => FALSE]): void {
+    $this->output()->writeln('Syncing MTG set taxonomy from cards...');
+    $result = $this->setTaxonomy->syncFromCards();
+    $this->output()->writeln(sprintf(
+      'Sets: %d distinct codes, %d terms created, %d renamed.',
+      $result['total'],
+      $result['created'],
+      $result['updated'],
+    ));
+
+    if (!empty($options['backfill'])) {
+      $total = 0;
+      do {
+        $n = $this->setTaxonomy->backfillCardReferences(500);
+        $total += $n;
+        if ($n > 0) {
+          $this->output()->writeln(sprintf('  Linked %d cards (running total %d)...', $n, $total));
+        }
+      } while ($n > 0);
+      $this->output()->writeln(sprintf('Backfill complete: %d cards linked.', $total));
     }
   }
 
