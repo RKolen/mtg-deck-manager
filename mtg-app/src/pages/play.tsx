@@ -9,6 +9,8 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
+import axios from 'axios';
 import {
   startGame,
   gameAction,
@@ -16,19 +18,48 @@ import {
   type GameState,
   type CardInHand,
   type PermanentOnBoard,
+  type LibraryCardSummary,
 } from '../services/gameApi';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function useQueryParam(name: string): string | null {
-  if (typeof window === 'undefined') return null;
-  return new URLSearchParams(window.location.search).get(name);
-}
-
 function oracleHas(oracle: string, keyword: string): boolean {
   return oracle.toLowerCase().includes(keyword.toLowerCase());
+}
+
+function scriptedModalLabels(oracle: string, count: number): string[] {
+  const bullets = oracle
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('•') || line.startsWith('-'));
+  if (bullets.length >= count) {
+    return bullets.slice(0, count).map((line) => line.replace(/^[\s•-]+/, '').trim());
+  }
+  return Array.from({ length: count }, (_, index) => `Mode ${index + 1}`);
+}
+
+function modalNeedsTarget(label: string): boolean {
+  const lower = label.toLowerCase();
+  return (
+    lower.includes('target')
+    || lower.includes('destroy')
+    || lower.includes('exile')
+    || lower.includes('damage')
+  );
+}
+
+function modalTargetMode(label: string): 'self' | 'opp' {
+  const lower = label.toLowerCase();
+  if (
+    lower.includes('target creature')
+    && !lower.includes('target opponent')
+    && (lower.includes('-/-') || lower.includes('gets '))
+  ) {
+    return 'self';
+  }
+  return 'opp';
 }
 
 type PendingAlt =
@@ -78,6 +109,7 @@ const PHASE_LABELS: Record<string, string> = {
   draw: 'Draw step',
   main1: 'Main phase 1',
   attack: 'Combat',
+  declare_blockers: 'Declare blockers',
   main2: 'Main phase 2',
   end: 'End step',
   opp_turn: 'Opponent\'s turn…',
@@ -94,6 +126,23 @@ const CATEGORY_COLORS: Record<string, string> = {
   aura: '#f39c12',
   spell: '#95a5a6',
 };
+
+function isFetchland(perm: PermanentOnBoard): boolean {
+  return perm.type.includes('Land')
+    && /search your library/i.test(perm.oracle)
+    && /sacrifice/i.test(perm.oracle);
+}
+
+function actionErrorMessage(err: unknown): string {
+  if (axios.isAxiosError(err)) {
+    const detail = err.response?.data?.detail;
+    if (typeof detail === 'string') {
+      return detail;
+    }
+    return err.message;
+  }
+  return String(err);
+}
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -150,7 +199,8 @@ const BoardCard: React.FC<{
   selected?: boolean;
   onClick?: () => void;
   dim?: boolean;
-}> = ({ perm, selected, onClick, dim }) => (
+  statusLabel?: string;
+}> = ({ perm, selected, onClick, dim, statusLabel }) => (
   <div
     onClick={onClick}
     title={perm.oracle}
@@ -174,7 +224,8 @@ const BoardCard: React.FC<{
     {perm.type === 'Creature' && (
       <div style={{ color: '#aaa', fontSize: '0.7rem' }}>{perm.power}/{perm.toughness}{perm.sick ? ' (sick)' : ''}</div>
     )}
-    {selected && <div style={{ color: '#f1c40f', fontSize: '0.7rem' }}>attacking</div>}
+    {statusLabel && <div style={{ color: '#2ecc71', fontSize: '0.7rem' }}>{statusLabel}</div>}
+    {selected && !statusLabel && <div style={{ color: '#f1c40f', fontSize: '0.7rem' }}>attacking</div>}
   </div>
 );
 
@@ -183,16 +234,22 @@ const BoardCard: React.FC<{
 // ---------------------------------------------------------------------------
 
 const PlayPage: React.FC = () => {
-  const deckId    = useQueryParam('deckId');
-  const vsArch    = useQueryParam('vs');
-  const format    = useQueryParam('format') ?? 'Modern';
-  const playFirst = useQueryParam('play') !== '0';
+  const router = useRouter();
+  const deckId = typeof router.query.deckId === 'string' ? router.query.deckId : null;
+  const vsArch = typeof router.query.vs === 'string' ? router.query.vs : null;
+  const format = typeof router.query.format === 'string' ? router.query.format : 'Modern';
+  const playFirst = router.query.play !== '0';
 
   const [gs, setGs] = useState<GameState | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [selectedBlockerUid, setSelectedBlockerUid] = useState<string | null>(null);
+  const [pendingLandPlay, setPendingLandPlay] = useState<number | null>(null);
+  const [pendingFetchChoice, setPendingFetchChoice] = useState<LibraryCardSummary | null>(null);
+  const actionInFlightRef = useRef(false);
 
-  // UI state for casting / targeting
+  const busy = loading;
   const [selectedHandIdx, setSelectedHandIdx] = useState<number | null>(null);
   const [targetMode, setTargetMode] = useState<'none' | 'self' | 'opp'>('none');
   const [waitingTarget, setWaitingTarget] = useState(false);
@@ -213,6 +270,7 @@ const PlayPage: React.FC = () => {
   const [assistMana, setAssistMana] = useState(0);
   const [sneakLandHandIndices, setSneakLandHandIndices] = useState<number[]>([]);
   const [castForMiracle, setCastForMiracle] = useState(false);
+  const [modalModeIndex, setModalModeIndex] = useState(0);
   const [pendingBoardAction, setPendingBoardAction] = useState<PendingBoardAction>(null);
   const [harmonizeCreatureIds, setHarmonizeCreatureIds] = useState<string[]>([]);
   const [pendingCastModifier, setPendingCastModifier] = useState<PendingCastModifier>(null);
@@ -232,19 +290,30 @@ const PlayPage: React.FC = () => {
 
   const logRef = useRef<HTMLDivElement>(null);
 
+  // Clear targeting UI when the phase changes (e.g. into declare blockers).
+  useEffect(() => {
+    setSelectedHandIdx(null);
+    setWaitingTarget(false);
+    setTargetMode('none');
+    setSelectedBlockerUid(null);
+    setPendingLandPlay(null);
+    setPendingFetchChoice(null);
+    setActionError(null);
+  }, [gs?.phase]);
+
   // Auto-scroll log
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [gs?.log]);
 
-  // Start the game on mount
+  // Start the game once route query params are available.
   useEffect(() => {
-    if (!deckId || !vsArch) return;
+    if (!router.isReady || !deckId || !vsArch) return;
     setLoading(true);
     startGame(Number(deckId), vsArch, format, playFirst)
       .then(state => { setGs(state); setLoading(false); })
       .catch(e => { setError(String(e)); setLoading(false); });
-  }, []);
+  }, [router.isReady, deckId, vsArch, format, playFirst]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -252,7 +321,8 @@ const PlayPage: React.FC = () => {
   }, [gs?.gameId]);
 
   const act = useCallback(async (action: string, opts: Record<string, unknown> = {}) => {
-    if (!gs) return;
+    if (!gs || actionInFlightRef.current) return;
+    actionInFlightRef.current = true;
     setLoading(true);
     setSelectedHandIdx(null);
     setTargetMode('none');
@@ -290,12 +360,20 @@ const PlayPage: React.FC = () => {
     setCraftArtifactIds([]);
     setScavengeGyIdx(null);
     setGyCastIdx(null);
+    setModalModeIndex(0);
+    setPendingLandPlay(null);
+    setPendingFetchChoice(null);
+    setActionError(null);
     try {
       const next = await gameAction(gs.gameId, action, opts as Parameters<typeof gameAction>[2]);
       setGs(next);
+      if (next.error) {
+        setActionError(next.error);
+      }
     } catch (e) {
-      setError(String(e));
+      setActionError(actionErrorMessage(e));
     } finally {
+      actionInFlightRef.current = false;
       setLoading(false);
     }
   }, [gs]);
@@ -337,22 +415,48 @@ const PlayPage: React.FC = () => {
   const canEmbalm = gs?.availableActions.includes('embalm');
   const _canAttack = gs?.availableActions.includes('go_to_attack') || phase === 'attack'; void _canAttack;
   const inCombat = phase === 'attack';
+  const inBlocking = phase === 'declare_blockers';
+  const opponentAttackers = gs?.opponentAttackers ?? [];
+  const pendingBlockers = gs?.pendingBlockers ?? {};
+  const canPassPriority = gs?.availableActions.includes('pass_priority') ?? false;
+  const stackCount = gs?.stack?.length ?? 0;
 
-  const selectedCard = selectedHandIdx !== null ? gs?.playerHand[selectedHandIdx] : null;
+  const selectedCard = selectedHandIdx !== null
+    ? gs?.playerHand.find(card => card.idx === selectedHandIdx) ?? null
+    : null;
+
+  const applyScriptedModalTargeting = useCallback((card: CardInHand, modeIndex: number) => {
+    const modeCount = card.scriptedModalModes ?? 0;
+    if (!card.hasScriptedModal || modeCount <= 1) {
+      return;
+    }
+    const label = scriptedModalLabels(card.oracle, modeCount)[modeIndex] ?? '';
+    if (!modalNeedsTarget(label)) {
+      setWaitingTarget(false);
+      setTargetMode('none');
+      return;
+    }
+    setWaitingTarget(true);
+    setTargetMode(modalTargetMode(label));
+  }, []);
 
   // ---- Handlers ----
 
-  function handleHandClick(card: CardInHand, idx: number) {
-    if (pendingCastModifier === 'sneak' && selectedHandIdx !== null && card.isLand && idx !== selectedHandIdx) {
+  function handleHandClick(card: CardInHand) {
+    if (busy) return;
+    if (pendingLandPlay !== null && card.idx !== pendingLandPlay) return;
+    if (pendingFetchChoice !== null) return;
+    const handIdx = card.idx;
+    if (pendingCastModifier === 'sneak' && selectedHandIdx !== null && card.isLand && handIdx !== selectedHandIdx) {
       setSneakLandHandIndices(prev =>
-        prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx],
+        prev.includes(handIdx) ? prev.filter(i => i !== handIdx) : [...prev, handIdx],
       );
       return;
     }
     if (pendingAlt === 'jump_discard' && gyCastIdx !== null) {
       void act('cast_jump_start', {
         handIdx: gyCastIdx,
-        discardHandIdx: idx,
+        discardHandIdx: handIdx,
         targetPlayer: 1,
       });
       return;
@@ -361,18 +465,23 @@ const PlayPage: React.FC = () => {
       if (!card.isLand) return;
       void act('cast_retrace', {
         handIdx: gyCastIdx,
-        discardHandIdx: idx,
+        discardHandIdx: handIdx,
         targetPlayer: 1,
       });
       return;
     }
     if (!(canPlayLand && card.isLand) && !card.affordable && !pendingAlt) return;
     if (card.isLand && canPlayLand) {
-      void act('play_land', { handIdx: idx });
+      if (card.hasShocklandEtb) {
+        setPendingLandPlay(handIdx);
+        setPendingFetchChoice(null);
+        return;
+      }
+      void act('play_land', { handIdx, payShocklandLife: false });
       return;
     }
     if (!canCast) return;
-    if (selectedHandIdx === idx) {
+    if (selectedHandIdx === handIdx) {
       setSelectedHandIdx(null);
       setTargetMode('none');
       setWaitingTarget(false);
@@ -395,10 +504,11 @@ const PlayPage: React.FC = () => {
       setPendingBoardAction(null);
       setPendingAlt(null);
       setPendingGyAction(null);
-    setPendingExileAction(null);
+      setPendingExileAction(null);
+      setModalModeIndex(0);
       return;
     }
-    setSelectedHandIdx(idx);
+    setSelectedHandIdx(handIdx);
     setCastForEvoke(false);
     setCastForEmerge(false);
     setCastForSpectacle(false);
@@ -428,7 +538,10 @@ const PlayPage: React.FC = () => {
     setPendingAlt(null);
     setPendingGyAction(null);
     setPendingExileAction(null);
-    if (['burn', 'pump', 'removal'].includes(card.category)) {
+    if (card.hasScriptedModal && (card.scriptedModalModes ?? 0) > 1) {
+      setModalModeIndex(0);
+      applyScriptedModalTargeting(card, 0);
+    } else if (['burn', 'pump', 'removal'].includes(card.category)) {
       setWaitingTarget(true);
       setTargetMode(card.category === 'pump' ? 'self' : 'opp');
     } else if (
@@ -452,10 +565,9 @@ const PlayPage: React.FC = () => {
       || card.hasBargain
       || card.hasEscalate
       || card.hasDemonstrate
+      || card.hasScriptedModal
     ) {
       // Wait for Cast / options before sending to server
-    } else {
-      void act('cast', { handIdx: idx, targetPlayer: 1, castForEvoke: false });
     }
   }
 
@@ -474,7 +586,7 @@ const PlayPage: React.FC = () => {
   }
 
   function castSelected(opts: { targetUid?: string; targetPlayer?: number }) {
-    if (selectedHandIdx === null) return;
+    if (busy || selectedHandIdx === null || !selectedCard) return;
     if (paidCasualty && !casualtySacrificeUid) {
       setPendingAlt('casualty');
       setWaitingTarget(true);
@@ -518,6 +630,9 @@ const PlayPage: React.FC = () => {
       delveGraveyardIndices,
       improviseArtifactIds,
       emergeSacrificeIds: emergeSacrificeUid ? [emergeSacrificeUid] : [],
+      ...(selectedCard.hasScriptedModal && (selectedCard.scriptedModalModes ?? 0) > 1
+        ? { modalModeIndex }
+        : {}),
     });
   }
 
@@ -533,6 +648,23 @@ const PlayPage: React.FC = () => {
   }
 
   function handlePlayerBoardClick(perm: PermanentOnBoard) {
+    if (busy) return;
+    if (inBlocking) {
+      if (perm.type.includes('Creature')) {
+        if (pendingBlockers[perm.uid]) {
+          void act('unassign_blocker', { blockerUid: perm.uid });
+          return;
+        }
+        setSelectedBlockerUid(perm.uid);
+      }
+      return;
+    }
+    if ((phase === 'main1' || phase === 'main2') && isFetchland(perm) && !perm.tapped) {
+      if (gs?.availableActions.includes('activate')) {
+        void act('activate', { permanentUid: perm.uid, handIdx: 0 });
+      }
+      return;
+    }
     if (pendingAlt === 'bloodrush') {
       if (selectedHandIdx === null) return;
       void act('bloodrush', { handIdx: selectedHandIdx, targetUid: perm.uid });
@@ -625,12 +757,12 @@ const PlayPage: React.FC = () => {
   }
 
   function confirmCraft() {
-    if (!craftHostUid || craftArtifactIds.length === 0) return;
+    if (busy || !craftHostUid || craftArtifactIds.length === 0) return;
     void act('craft', { permanentUid: craftHostUid, craftArtifactIds });
   }
 
   function handleExileClick(idx: number) {
-    if (!pendingExileAction) return;
+    if (busy || !pendingExileAction) return;
     void act(pendingExileAction, { handIdx: idx, targetPlayer: 1 });
   }
 
@@ -663,6 +795,7 @@ const PlayPage: React.FC = () => {
       return;
     }
     if (pendingGyAction === 'cast_harmonize') {
+      if (busy) return;
       void act('cast_harmonize', {
         handIdx: idx,
         targetPlayer: 1,
@@ -670,11 +803,21 @@ const PlayPage: React.FC = () => {
       });
       return;
     }
+    if (busy) return;
     void act(pendingGyAction, { handIdx: idx, targetPlayer: 1 });
   }
 
+  function handleOpponentAttackerClick(perm: PermanentOnBoard) {
+    if (busy || !inBlocking || !selectedBlockerUid) return;
+    void act('assign_blocker', {
+      blockerUid: selectedBlockerUid,
+      attackerUid: perm.uid,
+    });
+    setSelectedBlockerUid(null);
+  }
+
   function handleTargetPermanent(perm: PermanentOnBoard, isOppBoard: boolean) {
-    if (!waitingTarget || selectedHandIdx === null) return;
+    if (busy || !waitingTarget || selectedHandIdx === null) return;
     if (pendingAlt === 'bloodrush' && !isOppBoard) {
       void act('bloodrush', { handIdx: selectedHandIdx, targetUid: perm.uid });
       return;
@@ -741,14 +884,51 @@ const PlayPage: React.FC = () => {
     setCraftArtifactIds([]);
     setScavengeGyIdx(null);
     setGyCastIdx(null);
+    setModalModeIndex(0);
   }
 
   function handleTargetOpponent() {
-    if (!waitingTarget || selectedHandIdx === null || pendingAlt) return;
+    if (busy || !waitingTarget || selectedHandIdx === null || pendingAlt) return;
     castSelected({ targetPlayer: 1 });
   }
 
+  function handleLibraryClick(entry: LibraryCardSummary) {
+    if (busy || !gs?.fetchSearch) return;
+    if (!gs.fetchSearch.fetchableNames.includes(entry.name)) return;
+    if (entry.isShockland) {
+      setPendingFetchChoice(entry);
+      setPendingLandPlay(null);
+      return;
+    }
+    void act('fetch_land', { libraryIdx: entry.libraryIdx, payShocklandLife: false });
+  }
+
+  function confirmLandPlay(payShocklandLife: boolean) {
+    if (busy || pendingLandPlay === null) return;
+    void act('play_land', { handIdx: pendingLandPlay, payShocklandLife });
+    setPendingLandPlay(null);
+  }
+
+  function confirmFetchLand(payShocklandLife: boolean) {
+    if (busy || !pendingFetchChoice) return;
+    void act('fetch_land', {
+      libraryIdx: pendingFetchChoice.libraryIdx,
+      payShocklandLife,
+    });
+    setPendingFetchChoice(null);
+  }
+
+  const libraryTotal = gs?.playerLibrary?.reduce((sum, entry) => sum + entry.count, 0) ?? 0;
+
   // ---- Render ----
+
+  if (!router.isReady) {
+    return (
+      <main style={{ padding: '2rem', color: '#eee', background: '#111', minHeight: '100vh' }}>
+        <p>Loading…</p>
+      </main>
+    );
+  }
 
   if (!deckId || !vsArch) {
     return (
@@ -780,7 +960,7 @@ const PlayPage: React.FC = () => {
   }
 
   return (
-    <main style={{ background: '#111', minHeight: '100vh', color: '#eee', display: 'flex', flexDirection: 'column' }}>
+    <main style={{ background: '#111', minHeight: '100vh', color: '#eee', display: 'flex', flexDirection: 'column', marginRight: 300 }}>
 
       {/* Header bar */}
       <div style={{ background: '#1a1a2e', padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: 16, borderBottom: '1px solid #333' }}>
@@ -824,17 +1004,30 @@ const PlayPage: React.FC = () => {
           <div style={{ minHeight: 80, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'flex-start' }}>
             {gs.opponentBattlefield.length === 0 ? (
               <span style={{ color: '#444', fontSize: '0.8rem', alignSelf: 'center' }}>Empty battlefield</span>
-            ) : gs.opponentBattlefield.map(p => (
+            ) : gs.opponentBattlefield.map(p => {
+              const isAttacking = opponentAttackers.some(attacker => attacker.uid === p.uid);
+              const canAssignBlock = !busy && inBlocking && isAttacking && selectedBlockerUid !== null;
+              const blockedBy = Object.entries(pendingBlockers).find(([, attackerUid]) => attackerUid === p.uid);
+              return (
               <BoardCard
                 key={p.uid}
                 perm={p}
-                dim={waitingTarget && targetMode !== 'opp'}
-                onClick={waitingTarget && targetMode === 'opp' ? () => handleTargetPermanent(p, true) : undefined}
+                dim={waitingTarget && targetMode !== 'opp' && !canAssignBlock}
+                selected={canAssignBlock || Boolean(blockedBy)}
+                statusLabel={blockedBy ? 'blocked' : undefined}
+                onClick={
+                  !busy && canAssignBlock
+                    ? () => handleOpponentAttackerClick(p)
+                    : !busy && waitingTarget && targetMode === 'opp'
+                      ? () => handleTargetPermanent(p, true)
+                      : undefined
+                }
               />
-            ))}
+            );})}
             {/* "Target opponent player" button when in burn mode */}
             {waitingTarget && targetMode === 'opp' && (
               <button type="button"
+                disabled={busy}
                 onClick={handleTargetOpponent}
                 style={{ alignSelf: 'center', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: 4, padding: '0.3rem 0.6rem', cursor: 'pointer', fontSize: '0.8rem' }}
               >
@@ -888,6 +1081,12 @@ const PlayPage: React.FC = () => {
               {pendingCastModifier === 'harmonize' && 'Harmonize: click a creature to tap for cost reduction'}
               {pendingCastModifier === 'sneak' && 'Sneak: click lands in hand to exile for mana'}
               {pendingBoardAction === 'turn_up_morph' && 'Morph/Disguise: click a face-down creature to turn face up'}
+              {inBlocking && 'Click your creature, then an attacker to block (click assigned blocker to remove)'}
+            </span>
+          )}
+          {actionError && (
+            <span style={{ marginLeft: 'auto', color: '#e74c3c', fontSize: '0.82rem' }}>
+              {actionError}
             </span>
           )}
           {selectedCard && waitingTarget && !pendingAlt && !pendingGyAction && (
@@ -908,12 +1107,33 @@ const PlayPage: React.FC = () => {
         <div style={{ minHeight: 90, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'flex-start' }}>
           {gs.playerBattlefield.length === 0 ? (
             <span style={{ color: '#444', fontSize: '0.8rem', alignSelf: 'center' }}>Your battlefield is empty</span>
-          ) : gs.playerBattlefield.map(p => (
+          ) : gs.playerBattlefield.map(p => {
+            const blockingAttackerUid = pendingBlockers[p.uid];
+            const blockingAttacker = blockingAttackerUid
+              ? opponentAttackers.find(attacker => attacker.uid === blockingAttackerUid)
+              : null;
+            const boardInteractive = !busy && (
+              pendingAlt
+              || pendingCastModifier
+              || pendingBoardAction
+              || inBlocking
+              || (waitingTarget && targetMode === 'self')
+              || (inCombat && p.canAttack)
+              || (
+                (phase === 'main1' || phase === 'main2')
+                && isFetchland(p)
+                && !p.tapped
+                && gs.availableActions.includes('activate')
+              )
+            );
+            return (
             <BoardCard
               key={p.uid}
               perm={p}
               selected={
                 gs.pendingAttackers.includes(p.uid)
+                || selectedBlockerUid === p.uid
+                || Boolean(blockingAttackerUid)
                 || craftArtifactIds.includes(p.uid)
                 || craftHostUid === p.uid
                 || convokeCreatureIds.includes(p.uid)
@@ -921,17 +1141,14 @@ const PlayPage: React.FC = () => {
                 || emergeSacrificeUid === p.uid
                 || harmonizeCreatureIds.includes(p.uid)
               }
-              onClick={
-                pendingAlt
-                || pendingCastModifier
-                || pendingBoardAction
-                || (waitingTarget && targetMode === 'self')
-                || (inCombat && p.canAttack)
-                  ? () => handlePlayerBoardClick(p)
+              statusLabel={
+                blockingAttacker
+                  ? `blocking ${blockingAttacker.name}`
                   : undefined
               }
+              onClick={boardInteractive ? () => handlePlayerBoardClick(p) : undefined}
             />
-          ))}
+          );})}
         </div>
 
         {(gs.playerExileCards?.length ?? 0) > 0 && pendingExileAction && (
@@ -978,18 +1195,29 @@ const PlayPage: React.FC = () => {
         {/* Action buttons */}
         {!isDone && !isOppTurn && (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {canPassPriority && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void act('pass_priority')}
+                style={btnStyle('#9b59b6')}
+              >
+                Pass priority{stackCount > 0 ? ` (${stackCount} on stack)` : ''}
+              </button>
+            )}
+
             {isMulligan && <>
-              <button type="button" onClick={() => void act('keep')} style={btnStyle('#27ae60')}>
+              <button type="button" disabled={busy} onClick={() => void act('keep')} style={btnStyle('#27ae60')}>
                 Keep hand ({gs.playerHand.length} cards)
               </button>
-              <button type="button" onClick={() => void act('mulligan')} disabled={gs.playerHand.length <= 4} style={btnStyle('#e67e22')}>
+              <button type="button" onClick={() => void act('mulligan')} disabled={busy || gs.playerHand.length <= 4} style={btnStyle('#e67e22')}>
                 Mulligan to {gs.playerHand.length - 1}
               </button>
             </>}
 
             {phase === 'draw' && (
               <>
-                <button type="button" onClick={() => void act('draw')} style={btnStyle('#4a90d9')}>
+                <button type="button" disabled={busy} onClick={() => void act('draw')} style={btnStyle('#4a90d9')}>
                   Draw card
                 </button>
                 {canDredge && (
@@ -1002,31 +1230,91 @@ const PlayPage: React.FC = () => {
 
             {phase === 'main1' && <>
               {!waitingTarget && (
-                <button type="button" onClick={() => void act('go_to_attack')} style={btnStyle('#e67e22')}>
+                <button type="button" disabled={busy} onClick={() => void act('go_to_attack')} style={btnStyle('#e67e22')}>
                   Go to combat
                 </button>
               )}
-              <button type="button" onClick={() => void act('end_turn')} style={btnStyle('#555')}>
+              <button type="button" disabled={busy} onClick={() => void act('end_turn')} style={btnStyle('#555')}>
                 End turn
               </button>
             </>}
 
             {inCombat && <>
-              <button type="button" onClick={() => void act('confirm_attack')} style={btnStyle('#e74c3c')} disabled={gs.pendingAttackers.length === 0}>
+              <button type="button" onClick={() => void act('confirm_attack')} style={btnStyle('#e74c3c')} disabled={busy || gs.pendingAttackers.length === 0}>
                 Attack ({gs.pendingAttackers.length} creatures)
               </button>
-              <button type="button" onClick={() => void act('skip_attack')} style={btnStyle('#555')}>
+              <button type="button" disabled={busy} onClick={() => void act('skip_attack')} style={btnStyle('#555')}>
                 Skip combat
               </button>
             </>}
 
             {phase === 'main2' && (
-              <button type="button" onClick={() => void act('end_turn')} style={btnStyle('#555')}>
+              <button type="button" disabled={busy} onClick={() => void act('end_turn')} style={btnStyle('#555')}>
                 End turn
               </button>
             )}
 
-            {selectedCard && !isMulligan && (
+            {inBlocking && (
+              <>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void act('confirm_blocks')}
+                  style={btnStyle('#27ae60')}
+                >
+                  Confirm blocks
+                </button>
+                {selectedBlockerUid && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedBlockerUid(null)}
+                    style={btnStyle('#555')}
+                  >
+                    Clear blocker
+                  </button>
+                )}
+              </>
+            )}
+
+            {pendingLandPlay !== null && (
+              <>
+                <button type="button" disabled={busy} onClick={() => confirmLandPlay(false)} style={btnStyle('#8fbc8f')}>
+                  Play tapped
+                </button>
+                <button
+                  type="button"
+                  onClick={() => confirmLandPlay(true)}
+                  disabled={busy || (gs?.playerLife ?? 0) <= 2}
+                  style={btnStyle('#27ae60')}
+                >
+                  Pay 2 life (untapped)
+                </button>
+                <button type="button" onClick={() => setPendingLandPlay(null)} style={btnStyle('#555')}>
+                  Cancel
+                </button>
+              </>
+            )}
+
+            {pendingFetchChoice && (
+              <>
+                <button type="button" disabled={busy} onClick={() => confirmFetchLand(false)} style={btnStyle('#8fbc8f')}>
+                  Fetch {pendingFetchChoice.name} tapped
+                </button>
+                <button
+                  type="button"
+                  onClick={() => confirmFetchLand(true)}
+                  disabled={busy || (gs?.playerLife ?? 0) <= 2}
+                  style={btnStyle('#27ae60')}
+                >
+                  Pay 2 life (untapped)
+                </button>
+                <button type="button" onClick={() => setPendingFetchChoice(null)} style={btnStyle('#555')}>
+                  Cancel
+                </button>
+              </>
+            )}
+
+            {selectedCard && !isMulligan && !pendingLandPlay && !pendingFetchChoice && (
               <>
                 {selectedCard.hasEvoke && canCast && (
                   <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', color: '#ddd' }}>
@@ -1266,10 +1554,40 @@ const PlayPage: React.FC = () => {
                     Pick emerge sacrifice
                   </button>
                 )}
+                {canCast && selectedCard.hasScriptedModal && (selectedCard.scriptedModalModes ?? 0) > 1 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxWidth: 360 }}>
+                    <span style={{ fontSize: '0.85rem', color: '#ddd' }}>Choose mode</span>
+                    {scriptedModalLabels(selectedCard.oracle, selectedCard.scriptedModalModes ?? 0).map(
+                      (label, index) => (
+                        <label
+                          key={`modal-${index}`}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: 6,
+                            fontSize: '0.85rem',
+                            color: '#ddd',
+                          }}
+                        >
+                          <input
+                            type="radio"
+                            name="scriptedModalMode"
+                            checked={modalModeIndex === index}
+                            onChange={() => {
+                              setModalModeIndex(index);
+                              applyScriptedModalTargeting(selectedCard, index);
+                            }}
+                          />
+                          {label}
+                        </label>
+                      ),
+                    )}
+                  </div>
+                )}
                 {canCast && !waitingTarget && !selectedCard.isLand && (
                   <button
                     type="button"
-                    disabled={!selectedCard.affordable}
+                    disabled={busy || !selectedCard.affordable}
                     onClick={() => castSelected({ targetPlayer: 1 })}
                     style={btnStyle('#2980b9')}
                   >
@@ -1299,6 +1617,7 @@ const PlayPage: React.FC = () => {
                 {selectedCard.canCycle && canCycle && (
                   <button
                     type="button"
+                    disabled={busy}
                     onClick={() => void act('cycle', { handIdx: selectedHandIdx! })}
                     style={btnStyle('#7f8c8d')}
                   >
@@ -1308,6 +1627,7 @@ const PlayPage: React.FC = () => {
                 {selectedCard.canForecast && canForecast && (
                   <button
                     type="button"
+                    disabled={busy}
                     onClick={() => void act('forecast', { handIdx: selectedHandIdx! })}
                     style={btnStyle('#1f618d')}
                   >
@@ -1317,6 +1637,7 @@ const PlayPage: React.FC = () => {
                 {selectedCard.hasEmbalm && canEmbalm && selectedHandIdx !== null && (
                   <button
                     type="button"
+                    disabled={busy}
                     onClick={() => void act('embalm', { handIdx: selectedHandIdx })}
                     style={btnStyle('#7f8c8d')}
                   >
@@ -1326,6 +1647,7 @@ const PlayPage: React.FC = () => {
                 {selectedCard.canChannel && canChannel && (
                   <button
                     type="button"
+                    disabled={busy}
                     onClick={() => void act('channel', { handIdx: selectedHandIdx!, targetPlayer: 1 })}
                     style={btnStyle('#16a085')}
                   >
@@ -1335,7 +1657,7 @@ const PlayPage: React.FC = () => {
                 {selectedCard.canSuspend && canSuspend && (
                   <button
                     type="button"
-                    disabled={!selectedCard.suspendAffordable}
+                    disabled={busy || !selectedCard.suspendAffordable}
                     onClick={() => void act('suspend', { handIdx: selectedHandIdx! })}
                     style={btnStyle('#5b2c6f')}
                   >
@@ -1345,6 +1667,7 @@ const PlayPage: React.FC = () => {
                 {selectedCard.canForetell && canForetell && (
                   <button
                     type="button"
+                    disabled={busy}
                     onClick={() => void act('foretell', { handIdx: selectedHandIdx! })}
                     style={btnStyle('#1f618d')}
                   >
@@ -1354,6 +1677,7 @@ const PlayPage: React.FC = () => {
                 {selectedCard.canPlot && canPlot && (
                   <button
                     type="button"
+                    disabled={busy}
                     onClick={() => void act('plot', { handIdx: selectedHandIdx! })}
                     style={btnStyle('#117a65')}
                   >
@@ -1363,7 +1687,7 @@ const PlayPage: React.FC = () => {
                 {selectedCard.hasMadness && canCastMadness && (
                   <button
                     type="button"
-                    disabled={!selectedCard.madnessAffordable}
+                    disabled={busy || !selectedCard.madnessAffordable}
                     onClick={() => void act('cast_madness', { handIdx: selectedHandIdx!, targetPlayer: 1 })}
                     style={btnStyle('#922b21')}
                   >
@@ -1476,7 +1800,7 @@ const PlayPage: React.FC = () => {
             {pendingAlt === 'craft_artifacts' && (
               <button
                 type="button"
-                disabled={!craftHostUid || craftArtifactIds.length === 0}
+                disabled={busy || !craftHostUid || craftArtifactIds.length === 0}
                 onClick={confirmCraft}
                 style={btnStyle('#16a085')}
               >
@@ -1515,19 +1839,22 @@ const PlayPage: React.FC = () => {
             Your hand ({gs.playerHand.length}) — {isMulligan ? 'Preview' : 'Click to play'}
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {gs.playerHand.map((card, idx) => {
-              const isSelectable = isMulligan
+            {gs.playerHand.map((card) => {
+              const handIdx = card.idx;
+              const isSelectable = !busy && (
+                isMulligan
                 || pendingAlt === 'jump_discard'
                 || (pendingAlt === 'retrace_discard' && card.isLand)
                 || (canPlayLand && card.isLand)
-                || (!card.isLand && card.affordable);
+                || (!card.isLand && card.affordable)
+              );
               return (
                 <CardChip
-                  key={`${card.name}-${idx}`}
+                  key={`${card.name}-${handIdx}`}
                   card={card}
-                  selected={selectedHandIdx === idx || sneakLandHandIndices.includes(idx)}
+                  selected={selectedHandIdx === handIdx || sneakLandHandIndices.includes(handIdx)}
                   dimmed={!isMulligan && !isSelectable}
-                  onClick={!isMulligan && isSelectable ? () => handleHandClick(card, idx) : undefined}
+                  onClick={!isMulligan && isSelectable ? () => handleHandClick(card) : undefined}
                 />
               );
             })}
@@ -1536,12 +1863,118 @@ const PlayPage: React.FC = () => {
 
       </div>
 
-      {/* Log sidebar — floating on the right */}
+      {/* Library + log sidebar */}
       <div style={{
         position: 'fixed', right: 0, top: 0, bottom: 0,
-        width: 260, background: '#161620', borderLeft: '1px solid #2a2a3a',
+        width: 300, background: '#161620', borderLeft: '1px solid #2a2a3a',
         display: 'flex', flexDirection: 'column', fontSize: '0.75rem',
       }}>
+        <div style={{
+          padding: '0.4rem 0.6rem',
+          borderBottom: '1px solid #2a2a3a',
+          color: '#888',
+          fontWeight: 600,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}>
+          <span>Library ({libraryTotal})</span>
+          {gs.fetchSearch && (
+            <span style={{ color: '#2ecc71', fontSize: '0.7rem' }}>Search active</span>
+          )}
+        </div>
+        <div style={{ maxHeight: '42vh', overflow: 'auto', padding: '0.35rem 0.5rem', borderBottom: '1px solid #2a2a3a' }}>
+          {(gs.playerLibrary ?? []).length === 0 ? (
+            <div style={{ color: '#555', padding: '0.25rem 0.35rem' }}>Library empty</div>
+          ) : (gs.playerLibrary ?? []).map(entry => {
+            const fetchable = gs.fetchSearch?.fetchableNames.includes(entry.name) ?? false;
+            const selected = pendingFetchChoice?.name === entry.name;
+            const clickable = !busy && Boolean(gs.fetchSearch && fetchable);
+            return (
+              <div
+                key={entry.name}
+                onClick={clickable ? () => handleLibraryClick(entry) : undefined}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                  padding: '0.28rem 0.4rem',
+                  borderRadius: 4,
+                  cursor: clickable ? 'pointer' : 'default',
+                  background: selected ? '#3a3000' : fetchable ? '#1a2a1a' : 'transparent',
+                  border: selected ? '1px solid #f1c40f' : fetchable ? '1px solid #2ecc71' : '1px solid transparent',
+                  color: fetchable ? '#ddd' : '#888',
+                  marginBottom: 2,
+                }}
+              >
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.name}</span>
+                <span style={{ color: '#aaa', flexShrink: 0 }}>{entry.count}</span>
+              </div>
+            );
+          })}
+        </div>
+        {gs.fetchSearch && (
+          <div style={{ padding: '0.35rem 0.6rem', borderBottom: '1px solid #2a2a3a', color: '#2ecc71', fontSize: '0.72rem' }}>
+            Click a highlighted land to fetch. Shocklands can enter untapped for 2 life.
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void act('cancel_fetch')}
+              style={{ ...btnStyle('#555'), marginTop: 6, width: '100%', fontSize: '0.72rem' }}
+            >
+              Cancel search
+            </button>
+          </div>
+        )}
+        {(gs.stack ?? []).length > 0 && (
+          <div style={{ borderBottom: '1px solid #2a2a3a' }}>
+            <div style={{
+              padding: '0.4rem 0.6rem',
+              color: '#888',
+              fontWeight: 600,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}>
+              <span>Stack ({gs.stack!.length})</span>
+              {canPassPriority && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void act('pass_priority')}
+                  style={{ ...btnStyle('#9b59b6'), padding: '0.15rem 0.45rem', fontSize: '0.68rem' }}
+                >
+                  Pass
+                </button>
+              )}
+            </div>
+            <div style={{ maxHeight: '18vh', overflow: 'auto', padding: '0 0.5rem 0.35rem' }}>
+              {(gs.stack ?? []).map((entry, i) => {
+                const who = entry.controller === 0 ? 'You' : 'Opponent';
+                const label = entry.name ?? entry.type;
+                return (
+                  <div
+                    key={`${label}-${i}`}
+                    style={{
+                      padding: '0.28rem 0.4rem',
+                      marginBottom: 2,
+                      borderRadius: 4,
+                      background: entry.controller === 0 ? '#1a2a3a' : '#2a1a1a',
+                      border: `1px solid ${entry.controller === 0 ? '#4a90d9' : '#e74c3c'}`,
+                      color: '#ddd',
+                    }}
+                  >
+                    <span style={{ color: entry.controller === 0 ? '#4a90d9' : '#e74c3c', fontWeight: 600 }}>
+                      {who}
+                    </span>
+                    {' — '}
+                    {label}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
         <div style={{ padding: '0.4rem 0.6rem', borderBottom: '1px solid #2a2a3a', color: '#888', fontWeight: 600 }}>
           Game log
         </div>

@@ -288,7 +288,13 @@ const CollectionPage: React.FC = () => {
                   </div>
                 )}
 
-                <div style={{ padding: '0.5rem', fontSize: '0.75rem' }}>
+                <div
+                  style={{
+                    padding: '0.5rem',
+                    fontSize: '0.75rem',
+                    color: '#000',
+                  }}
+                >
                   <div
                     style={{
                       whiteSpace: 'nowrap',
@@ -296,36 +302,46 @@ const CollectionPage: React.FC = () => {
                       textOverflow: 'ellipsis',
                       marginBottom: 4,
                       fontWeight: owned > 0 ? 'bold' : 'normal',
+                      color: '#000',
                     }}
                     title={title}
                   >
                     <Link
                       href={`/collection/card/${slugify(title)}`}
-                      style={{ color: 'inherit', textDecoration: 'none' }}
+                      style={{ color: '#000', textDecoration: 'none' }}
                     >
                       {title}
                     </Link>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      color: '#000',
+                    }}
+                  >
                     <button
                       type="button"
                       onClick={() => handleQuantityChange(card, -1, 'owned')}
                       disabled={owned === 0}
-                      style={{ width: 24, padding: 0 }}
+                      style={{ width: 24, padding: 0, color: '#000' }}
                     >
                       -
                     </button>
-                    <span title="Owned">{owned}</span>
+                    <span title="Owned" style={{ color: '#000' }}>
+                      {owned}
+                    </span>
                     <button
                       type="button"
                       onClick={() => handleQuantityChange(card, 1, 'owned')}
-                      style={{ width: 24, padding: 0 }}
+                      style={{ width: 24, padding: 0, color: '#000' }}
                     >
                       +
                     </button>
                     {foil > 0 && (
-                      <span style={{ marginLeft: 4, color: '#888' }} title={`Foil: ${foil}`}>
+                      <span style={{ marginLeft: 4, color: '#333' }} title={`Foil: ${foil}`}>
                         foil:{foil}
                       </span>
                     )}

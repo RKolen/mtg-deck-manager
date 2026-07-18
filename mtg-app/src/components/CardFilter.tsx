@@ -58,9 +58,17 @@ const CardFilter: React.FC<CardFilterProps> = ({ filter, onChange }) => {
   }
 
   return (
-    <aside style={{ padding: '1rem', borderRight: '1px solid #ccc', minWidth: 180 }}>
+    <aside
+      style={{
+        padding: '1rem',
+        borderRight: '1px solid #ccc',
+        minWidth: 180,
+        color: '#000',
+        background: '#f5f5f0',
+      }}
+    >
       <div style={{ marginBottom: '1rem' }}>
-        <label htmlFor="card-search">
+        <label htmlFor="card-search" style={{ color: '#000' }}>
           <strong>Name</strong>
         </label>
         <br />
@@ -70,12 +78,19 @@ const CardFilter: React.FC<CardFilterProps> = ({ filter, onChange }) => {
           value={filter.name}
           onChange={e => onChange({ ...filter, name: e.target.value })}
           placeholder="Search..."
-          style={{ width: '100%', marginTop: 4 }}
+          style={{
+            width: '100%',
+            marginTop: 4,
+            color: '#000',
+            background: '#fff',
+            border: '1px solid #aaa',
+            padding: '4px 6px',
+          }}
         />
       </div>
 
       <div style={{ marginBottom: '1rem' }}>
-        <strong>Color</strong>
+        <strong style={{ color: '#000' }}>Color</strong>
         <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
           {COLORS.map(c => (
             <button
@@ -93,6 +108,7 @@ const CardFilter: React.FC<CardFilterProps> = ({ filter, onChange }) => {
                   : '1px solid #aaa',
                 borderRadius: 4,
                 background: filter.colors.has(c.value) ? '#e8e0d0' : '#f5f5f5',
+                color: '#000',
               }}
             >
               {c.symbol}
@@ -102,7 +118,7 @@ const CardFilter: React.FC<CardFilterProps> = ({ filter, onChange }) => {
       </div>
 
       <div style={{ marginBottom: '1rem' }}>
-        <label htmlFor="oracle-text">
+        <label htmlFor="oracle-text" style={{ color: '#000' }}>
           <strong>Oracle Text</strong>
         </label>
         <br />
@@ -112,12 +128,19 @@ const CardFilter: React.FC<CardFilterProps> = ({ filter, onChange }) => {
           value={filter.oracleText}
           onChange={e => onChange({ ...filter, oracleText: e.target.value })}
           placeholder="Contains..."
-          style={{ width: '100%', marginTop: 4 }}
+          style={{
+            width: '100%',
+            marginTop: 4,
+            color: '#000',
+            background: '#fff',
+            border: '1px solid #aaa',
+            padding: '4px 6px',
+          }}
         />
       </div>
 
       <div style={{ marginBottom: '1rem' }}>
-        <label htmlFor="type-select">
+        <label htmlFor="type-select" style={{ color: '#000' }}>
           <strong>Type</strong>
         </label>
         <br />
@@ -125,7 +148,14 @@ const CardFilter: React.FC<CardFilterProps> = ({ filter, onChange }) => {
           id="type-select"
           value={filter.type}
           onChange={e => onChange({ ...filter, type: e.target.value })}
-          style={{ width: '100%', marginTop: 4 }}
+          style={{
+            width: '100%',
+            marginTop: 4,
+            color: '#000',
+            background: '#fff',
+            border: '1px solid #aaa',
+            padding: '4px 6px',
+          }}
         >
           {TYPES.map(t => (
             <option key={t} value={t}>
@@ -136,7 +166,7 @@ const CardFilter: React.FC<CardFilterProps> = ({ filter, onChange }) => {
       </div>
 
       <div style={{ marginBottom: '1rem' }}>
-        <label htmlFor="format-select">
+        <label htmlFor="format-select" style={{ color: '#000' }}>
           <strong>Legal In</strong>
         </label>
         <br />
@@ -144,7 +174,14 @@ const CardFilter: React.FC<CardFilterProps> = ({ filter, onChange }) => {
           id="format-select"
           value={filter.legalIn}
           onChange={e => onChange({ ...filter, legalIn: e.target.value })}
-          style={{ width: '100%', marginTop: 4 }}
+          style={{
+            width: '100%',
+            marginTop: 4,
+            color: '#000',
+            background: '#fff',
+            border: '1px solid #aaa',
+            padding: '4px 6px',
+          }}
         >
           {FORMATS.map(f => (
             <option key={f} value={f}>
@@ -155,7 +192,7 @@ const CardFilter: React.FC<CardFilterProps> = ({ filter, onChange }) => {
       </div>
 
       <div style={{ marginBottom: '1rem' }}>
-        <label htmlFor="cmc-select">
+        <label htmlFor="cmc-select" style={{ color: '#000' }}>
           <strong>Max CMC</strong>
         </label>
         <br />
@@ -168,7 +205,14 @@ const CardFilter: React.FC<CardFilterProps> = ({ filter, onChange }) => {
               maxCmc: e.target.value === '' ? null : Number(e.target.value),
             })
           }
-          style={{ width: '100%', marginTop: 4 }}
+          style={{
+            width: '100%',
+            marginTop: 4,
+            color: '#000',
+            background: '#fff',
+            border: '1px solid #aaa',
+            padding: '4px 6px',
+          }}
         >
           <option value="">Any</option>
           {[0, 1, 2, 3, 4, 5, 6, 7].map(n => (
@@ -180,7 +224,7 @@ const CardFilter: React.FC<CardFilterProps> = ({ filter, onChange }) => {
       </div>
 
       <div style={{ marginBottom: '1rem' }}>
-        <label htmlFor="rarity-select">
+        <label htmlFor="rarity-select" style={{ color: '#000' }}>
           <strong>Rarity</strong>
         </label>
         <br />
@@ -188,7 +232,14 @@ const CardFilter: React.FC<CardFilterProps> = ({ filter, onChange }) => {
           id="rarity-select"
           value={filter.rarity}
           onChange={e => onChange({ ...filter, rarity: e.target.value })}
-          style={{ width: '100%', marginTop: 4 }}
+          style={{
+            width: '100%',
+            marginTop: 4,
+            color: '#000',
+            background: '#fff',
+            border: '1px solid #aaa',
+            padding: '4px 6px',
+          }}
         >
           <option value="">Any</option>
           <option value="common">Common</option>
@@ -203,7 +254,13 @@ const CardFilter: React.FC<CardFilterProps> = ({ filter, onChange }) => {
         onClick={() =>
           onChange({ name: '', colors: new Set(), type: 'All', maxCmc: null, legalIn: '', oracleText: '', rarity: '' })
         }
-        style={{ width: '100%' }}
+        style={{
+          width: '100%',
+          color: '#000',
+          background: '#fff',
+          border: '1px solid #aaa',
+          padding: '6px 8px',
+        }}
       >
         Clear filters
       </button>

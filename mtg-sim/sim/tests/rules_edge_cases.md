@@ -400,7 +400,9 @@ Resolution order: per-game cache, built-ins, oracle infer, LLM (opt-in).
 ### Modal cast
 
 Choose-one scripts use `modalModeIndex` on cast; hand cards expose
-`hasScript`, `hasScriptedModal`, and `scriptedModalModes`.
+`hasScript`, `hasScriptedModal`, and `scriptedModalModes`. The interactive
+play UI (`mtg-app/src/pages/play.tsx`) sends `modalModeIndex` via
+`gameApi.ts` when casting scripted modal spells.
 
 - `tests/integration/test_scripted_game.py::test_molten_collapse_modal_damage_mode_in_game_loop`
 - `tests/integration/test_scripted_game.py::test_molten_collapse_modal_destroy_mode_in_game_loop`

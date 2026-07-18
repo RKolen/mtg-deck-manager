@@ -70,6 +70,10 @@ export interface CardInHand {
   hasEmbalm?: boolean;
   hasFreerunning?: boolean;
   freerunningAvailable?: boolean;
+  hasScript?: boolean;
+  hasScriptedModal?: boolean;
+  scriptedModalModes?: number;
+  hasShocklandEtb?: boolean;
 }
 
 export interface GraveyardCard {
@@ -81,6 +85,24 @@ export interface ExileCard {
   idx: number;
   name: string;
   castMode?: string;
+}
+
+export interface FetchSearchOption {
+  libraryIdx: number;
+  name: string;
+  typeLine: string;
+}
+
+export interface LibraryCardSummary {
+  name: string;
+  count: number;
+  libraryIdx: number;
+  isShockland: boolean;
+}
+
+export interface FetchSearchState {
+  sourceUid: string;
+  fetchableNames: string[];
 }
 
 export interface PermanentOnBoard {
@@ -103,6 +125,13 @@ export interface LogEntry {
   actor: 'player' | 'opponent' | 'system';
   action: string;
   detail: string;
+}
+
+export interface StackEntry {
+  type: string;
+  controller: number;
+  name?: string;
+  targets: Array<{ objId?: number; playerIdx?: number }>;
 }
 
 export interface GameState {
@@ -129,6 +158,11 @@ export interface GameState {
 
   log: LogEntry[];
   pendingAttackers: string[];
+  opponentAttackers?: PermanentOnBoard[];
+  pendingBlockers?: Record<string, string>;
+  fetchSearch?: FetchSearchState | null;
+  playerLibrary?: LibraryCardSummary[];
+  stack?: StackEntry[];
   availableActions: string[];
   error?: string;
 }
@@ -138,6 +172,10 @@ export interface GameActionOpts {
   targetUid?: string;
   targetPlayer?: number;
   permanentUid?: string;
+  attackerUid?: string;
+  blockerUid?: string;
+  libraryIdx?: number;
+  payShocklandLife?: boolean;
   discardHandIdx?: number;
   castForEvoke?: boolean;
   castForEmerge?: boolean;
@@ -165,6 +203,7 @@ export interface GameActionOpts {
   sneakLandHandIndices?: number[];
   craftArtifactIds?: string[];
   kickerTimes?: number;
+  modalModeIndex?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -195,6 +234,10 @@ export async function gameAction(
     targetUid: opts.targetUid,
     targetPlayer: opts.targetPlayer,
     permanentUid: opts.permanentUid,
+    attackerUid: opts.attackerUid,
+    blockerUid: opts.blockerUid,
+    libraryIdx: opts.libraryIdx,
+    payShocklandLife: opts.payShocklandLife ?? false,
     discardHandIdx: opts.discardHandIdx,
     castForEvoke: opts.castForEvoke ?? false,
     castForEmerge: opts.castForEmerge ?? false,
@@ -222,6 +265,7 @@ export async function gameAction(
     sneakLandHandIndices: opts.sneakLandHandIndices ?? [],
     craftArtifactIds: opts.craftArtifactIds ?? [],
     kickerTimes: opts.kickerTimes ?? 0,
+    modalModeIndex: opts.modalModeIndex,
   });
   return r.data;
 }

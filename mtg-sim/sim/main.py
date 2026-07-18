@@ -429,6 +429,8 @@ class GameActionRequest(BaseModel):
     permanentUid: str | None = None
     blockerUid: str | None = None
     attackerUid: str | None = None
+    libraryIdx: int | None = None
+    payShocklandLife: bool = False
 
 
 @app.post("/game/start")

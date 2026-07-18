@@ -66,6 +66,7 @@ mtg-sim/**/.venv/
 mtg-sim/**/model.joblib
 # Python sim runtime caches (deck scripts, etc.)
 mtg-sim/data/
+mtg-sim/sim/data/deck_scripts/**/*.json
 mtg-sim/**/*.pyc
 # ============================================================
 # OS & editor

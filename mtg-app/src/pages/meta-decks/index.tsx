@@ -147,7 +147,7 @@ const MetaDecksPage: React.FC = () => {
       <h1 style={{ marginTop: 0 }}>Meta Decks</h1>
 
       <nav style={{ marginBottom: '1.5rem' }}>
-        <a href="/" style={{ marginRight: '1rem' }}>Home</a>
+        <a href="/" style={{ marginRight: '1rem', color: '#fff' }}>Home</a>
       </nav>
 
       {formatsLoading && <p>Loading formats...</p>}

@@ -70,6 +70,8 @@ export interface DeckAttributes {
   field_format: string;
   field_notes: string | null;
   drupal_internal__nid: number;
+  /** Unix timestamp from Drupal `changed`, when available. */
+  changed?: number | null;
 }
 
 // Deck cards are stored as paragraph--deck_card entities embedded in

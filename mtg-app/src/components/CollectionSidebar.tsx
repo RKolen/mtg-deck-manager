@@ -23,20 +23,21 @@ const CollectionSidebar: React.FC<CollectionSidebarProps> = ({
       background: '#f5f5f0',
       borderRadius: 4,
       minWidth: 160,
+      color: '#000',
     }}
   >
-    <h3 style={{ margin: '0 0 0.75rem' }}>Collection</h3>
-    <dl style={{ margin: 0 }}>
+    <h3 style={{ margin: '0 0 0.75rem', color: '#000' }}>Collection</h3>
+    <dl style={{ margin: 0, color: '#000' }}>
       <dt>Total cards</dt>
-      <dd style={{ marginLeft: 0, fontWeight: 'bold' }}>{totalCards}</dd>
+      <dd style={{ marginLeft: 0, fontWeight: 'bold', color: '#000' }}>{totalCards}</dd>
       <dt>Unique cards</dt>
-      <dd style={{ marginLeft: 0, fontWeight: 'bold' }}>{totalUnique}</dd>
+      <dd style={{ marginLeft: 0, fontWeight: 'bold', color: '#000' }}>{totalUnique}</dd>
       <dt>Foil copies</dt>
-      <dd style={{ marginLeft: 0, fontWeight: 'bold' }}>{totalFoil}</dd>
+      <dd style={{ marginLeft: 0, fontWeight: 'bold', color: '#000' }}>{totalFoil}</dd>
       {estValue != null && (
         <>
           <dt>Est. value (USD)</dt>
-          <dd style={{ marginLeft: 0, fontWeight: 'bold' }}>${estValue.toFixed(2)}</dd>
+          <dd style={{ marginLeft: 0, fontWeight: 'bold', color: '#000' }}>${estValue.toFixed(2)}</dd>
         </>
       )}
     </dl>

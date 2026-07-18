@@ -148,6 +148,11 @@ def _dispatch_simple(game: InteractiveGame, req) -> dict | None:
             req.secondAgendaName,
         ),
         "reveal_double_agenda": game.action_reveal_double_agenda,
+        "fetch_land": lambda: game.action_fetch_land(
+            req.libraryIdx if req.libraryIdx is not None else -1,
+            pay_shockland_life=req.payShocklandLife,
+        ),
+        "cancel_fetch": game.action_cancel_fetch,
     }
     handler = simple.get(req.action)
     return handler() if handler is not None else None
@@ -155,7 +160,10 @@ def _dispatch_simple(game: InteractiveGame, req) -> dict | None:
 
 def _dispatch_hand_actions(game: InteractiveGame, req) -> dict | None:
     handlers: dict[str, Callable[[], dict]] = {
-        "play_land": lambda: game.action_play_land(req.handIdx),
+        "play_land": lambda: game.action_play_land(
+            req.handIdx,
+            pay_shockland_life=req.payShocklandLife,
+        ),
         "cast": lambda: game.action_cast(
             req.handIdx,
             req.targetUid,

@@ -2,9 +2,18 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from deck_registry import CardInfo
 from engine.abilities import activated
 from engine.abilities.activated.core import _ActivationCall
+from engine.abilities.activated.fetchland import (
+    PendingFetchland,
+    complete_fetchland_at_index,
+    fetchland_life_cost,
+    is_fetchland_spec,
+    list_fetch_search_options,
+)
 from engine.abilities.keywords.other.forecast import can_forecast, forecast_draws_card
 from engine.abilities.keywords.other.encore import sacrifice_encore_tokens
 from engine.abilities.activated import ActivationSpeed
@@ -17,9 +26,15 @@ from engine.core.zones import Zone
 from engine.game._hand_card import load_hand_card_for_action, run_with_hand_card
 from engine.game.runtime import GameRuntimeMixin
 
+if TYPE_CHECKING:
+    from engine.game.interactive import _GameSetup
+
 
 class ActivatedActionsMixin(GameRuntimeMixin):
     """Cycling, channel, crew, unearth, level up, and permanent activations."""
+
+    if TYPE_CHECKING:
+        _setup: _GameSetup
 
     def _resolve_equip_activation(
         self,
@@ -51,6 +66,112 @@ class ActivatedActionsMixin(GameRuntimeMixin):
             return activated.ActivationResult(ok=False, detail="Cannot activate now")
         detail = activated.activate_mana_ability(self.state, perm, spec)
         return activated.ActivationResult(ok=bool(detail), detail=detail)
+
+    def _resolve_fetchland_activation(
+        self,
+        perm: Permanent,
+        spec: activated.ActivatedAbilitySpec,
+        speed: activated.ActivationSpeed,
+    ) -> activated.ActivationResult:
+        """Pay costs, sacrifice, and resolve a fetchland search immediately."""
+        if not activated.can_activate(perm, spec, self.state, 0, speed):
+            return activated.ActivationResult(ok=False, detail="Cannot activate now")
+        mana_needed = activated.activation_mana_value(spec.cost_text)
+        if mana_needed and not self._pay_mana_for_action(0, cost_text=spec.cost_text):
+            return activated.ActivationResult(ok=False, detail=f"Need {mana_needed} mana")
+        life_cost = fetchland_life_cost(spec.cost_text)
+        if life_cost > 0:
+            player = self.state.players[0]
+            if player.life <= life_cost:
+                return activated.ActivationResult(ok=False, detail="Not enough life")
+            player.life -= life_cost
+        did_tap = False
+        if activated.requires_tap(spec.cost_text):
+            perm.tapped = True
+            did_tap = True
+        self._setup.pending_fetchland = PendingFetchland(
+            source_uid=str(perm.obj_id),
+            effect_text=spec.effect_text,
+            life_paid=life_cost,
+            did_tap=did_tap,
+        )
+        option_count = len(list_fetch_search_options(
+            self._zones(0).library,
+            spec.effect_text,
+        ))
+        if option_count == 0:
+            self._cancel_pending_fetchland()
+            return activated.ActivationResult(
+                ok=False,
+                detail="No matching lands in your library",
+            )
+        return activated.ActivationResult(
+            ok=True,
+            detail=f"Search your library ({option_count} lands)",
+            used_stack=False,
+        )
+
+    def _cancel_pending_fetchland(self) -> None:
+        """Refund a pending fetchland activation and clear the search state."""
+        pending = self._setup.pending_fetchland
+        if pending is None:
+            return
+        perm = self._find_permanent(pending.source_uid)
+        if perm is not None:
+            if pending.did_tap:
+                perm.tapped = False
+            if pending.life_paid > 0:
+                self.state.players[0].life += pending.life_paid
+        self._setup.pending_fetchland = None
+
+    def action_fetch_land(
+        self,
+        library_idx: int,
+        *,
+        pay_shockland_life: bool = False,
+    ) -> dict:
+        """Complete a pending fetchland search with the chosen library card."""
+        pending = self._setup.pending_fetchland
+        if pending is None:
+            return self._client_error("No fetchland search in progress")
+        if library_idx < 0:
+            return self._client_error("Choose a land from your library")
+        perm = self._find_permanent(pending.source_uid)
+        if perm is None:
+            self._setup.pending_fetchland = None
+            return self._client_error("Fetchland source not found")
+        detail = complete_fetchland_at_index(
+            self.state,
+            perm,
+            pending.effect_text,
+            library_idx,
+            pay_shockland_life=pay_shockland_life,
+        )
+        if detail is None:
+            return self._client_error("Invalid land choice")
+        self._setup.pending_fetchland = None
+        self.state.check_sbas()
+        self._log("player", "fetch", detail)
+        return self.to_client()
+
+    def action_cancel_fetch(self) -> dict:
+        """Cancel a pending fetchland search and refund its costs."""
+        if self._setup.pending_fetchland is None:
+            return self._client_error("No fetchland search in progress")
+        self._cancel_pending_fetchland()
+        self._log("player", "fetch", "Cancelled fetchland search")
+        return self.to_client()
+
+    def _fetch_search_to_client(self) -> dict | None:
+        """Serialise pending fetchland search options for the play UI."""
+        pending = self._setup.pending_fetchland
+        if pending is None:
+            return None
+        options = list_fetch_search_options(self._zones(0).library, pending.effect_text)
+        return {
+            "sourceUid": pending.source_uid,
+            "fetchableNames": [option.name for option in options],
+        }
 
     def _resolve_stack_activation(
         self,
@@ -100,6 +221,8 @@ class ActivatedActionsMixin(GameRuntimeMixin):
             result = self._resolve_equip_activation(perm, spec, host_uid)
         elif spec.mana_ability:
             result = self._resolve_mana_activation(perm, spec)
+        elif is_fetchland_spec(spec):
+            result = self._resolve_fetchland_activation(perm, spec, speed)
         else:
             result = self._resolve_stack_activation(perm, spec, ability_idx, speed)
         if not result.ok:

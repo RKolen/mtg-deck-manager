@@ -52,6 +52,8 @@ field_config:
         enabled: true
       field_price_usd_foil:
         enabled: true
+      field_price_eur:
+        enabled: true
       field_set_code:
         enabled: true
       field_set_name:

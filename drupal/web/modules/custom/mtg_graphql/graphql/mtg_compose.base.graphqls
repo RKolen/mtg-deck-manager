@@ -25,6 +25,7 @@ type MtgCard {
   legalFormats: [String!]!
   priceUsd: String
   priceUsdFoil: String
+  priceEur: String
   setCode: String
   setName: String
   rarity: String

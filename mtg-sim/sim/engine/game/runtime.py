@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from deck_registry import CardInfo
 from engine.cards.oracle_parse import is_affordable
+from engine.abilities.keywords.other.shockland import has_shockland_etb
 from engine.core.game_object import CardObject, Permanent, Target
 from engine.core.mana import ManaCost
 from engine.core.game_object import SpellOnStack
@@ -71,6 +72,10 @@ class GameRuntimeMixin:
             """Pass priority once and return the updated client state."""
             return {}
 
+        def _fetch_search_to_client(self) -> dict | None:
+            """Serialise pending fetchland search options (ActivatedActionsMixin)."""
+            return None
+
     state: GameState
     phase: str
     pending_attackers: list[str]
@@ -116,6 +121,8 @@ class GameRuntimeMixin:
                 if str(p.obj_id) in self.pending_opp_attackers
             ],
             "pendingBlockers": self.pending_blockers,
+            "fetchSearch": self._fetch_search_to_client(),
+            "playerLibrary": self._library_summary_to_client(0),
             "stack": self.state.stack.to_client(),
             "availableActions": self._available_actions(),
         }
@@ -168,6 +175,27 @@ class GameRuntimeMixin:
                     entry["castMode"] = card.exiled_cast_mode
                 cards.append(entry)
         return cards
+
+    def _library_summary_to_client(self, player_idx: int) -> list[dict]:
+        """Aggregate the player's library by card name for the play UI."""
+        groups: dict[str, list[int]] = {}
+        shockland_flags: dict[str, bool] = {}
+        for idx, card in enumerate(self._zones(player_idx).library):
+            if not isinstance(card, CardObject) or card.card_info is None:
+                continue
+            name = card.card_info.name
+            groups.setdefault(name, []).append(idx)
+            if name not in shockland_flags:
+                shockland_flags[name] = has_shockland_etb(card.card_info)
+        return [
+            {
+                "name": name,
+                "count": len(groups[name]),
+                "libraryIdx": groups[name][0],
+                "isShockland": shockland_flags.get(name, False),
+            }
+            for name in sorted(groups.keys(), key=str.lower)
+        ]
 
     def _is_card_castable(self, card: CardObject) -> bool:
         """Return whether the player can currently afford to cast the card."""

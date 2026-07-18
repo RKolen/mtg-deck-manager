@@ -56,6 +56,7 @@ from engine.abilities.keywords.casting.plot import (
     has_plot_card,
     is_plottable_sorcery,
 )
+from engine.abilities.keywords.other.shockland import has_shockland_etb
 from engine.abilities.keywords.casting.suspend import (
     can_suspend,
     has_suspend_card,
@@ -317,6 +318,7 @@ def card_to_client(
         "category": spell_category(card),
         "isLand": card.is_land,
         "isCreature": card.is_creature,
+        "hasShocklandEtb": has_shockland_etb(card),
         "requiresAuraTarget": is_aura(card) and has_enchant(card),
         "affordable": affordable,
         "hasEvoke": has_evoke_kw,

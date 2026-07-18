@@ -30,6 +30,7 @@ interface GqlMtgCard {
   legalFormats: string[];
   priceUsd: string | null;
   priceUsdFoil: string | null;
+  priceEur: string | null;
   setCode: string | null;
   setName: string | null;
   rarity: string | null;
@@ -51,6 +52,7 @@ interface GqlComposeDeck {
   title: string;
   format: string;
   notes?: GqlText | null;
+  changed?: { timestamp: number } | null;
 }
 
 /** Custom MTG schema Deck (mutations). */
@@ -115,7 +117,7 @@ function toCardResource(c: GqlMtgCard): JsonApiResource<MtgCardAttributes> {
       field_legal_formats: c.legalFormats,
       field_price_usd: c.priceUsd ?? null,
       field_price_usd_foil: c.priceUsdFoil ?? null,
-      field_price_eur: null,
+      field_price_eur: c.priceEur ?? null,
       field_set_code: c.setCode ?? '',
       field_set_name: c.setName ?? '',
       field_rarity: c.rarity ?? '',
@@ -144,6 +146,7 @@ function toDeckResourceFromCompose(d: GqlComposeDeck): JsonApiResource<DeckAttri
       field_format: d.format,
       field_notes: composePlainText(d.notes),
       drupal_internal__nid: parseInt(d.id, 10),
+      changed: d.changed?.timestamp ?? null,
     },
   };
 }
@@ -200,17 +203,17 @@ function toDeckCardWithCard(d: GqlDeckCard): DeckCardWithCard {
       field_is_mana_producer: c.isManaProducer,
       field_produced_mana: c.producedMana,
       field_legal_formats: c.legalFormats,
-      field_price_usd: null,
-      field_price_usd_foil: null,
-      field_price_eur: null,
-      field_set_code: '',
-      field_set_name: '',
-      field_rarity: '',
-      field_collector_number: '',
+      field_price_usd: c.priceUsd ?? null,
+      field_price_usd_foil: c.priceUsdFoil ?? null,
+      field_price_eur: c.priceEur ?? null,
+      field_set_code: c.setCode ?? '',
+      field_set_name: c.setName ?? '',
+      field_rarity: c.rarity ?? '',
+      field_collector_number: c.collectorNumber ?? '',
       field_combo_pieces: [],
-      field_power: null,
-      field_toughness: null,
-      field_loyalty: null,
+      field_power: c.power ?? null,
+      field_toughness: c.toughness ?? null,
+      field_loyalty: c.loyalty ?? null,
     },
   };
 }
@@ -239,7 +242,7 @@ const CARD_FIELDS = gql`
   fragment CardFields on MtgCard {
     id title manaCost cmc typeLine colors colorIdentity
     oracleText imageUri isManaProducer producedMana legalFormats
-    priceUsd priceUsdFoil setCode setName rarity collectorNumber
+    priceUsd priceUsdFoil priceEur setCode setName rarity collectorNumber
   }
 `;
 
@@ -247,7 +250,7 @@ const CARD_DETAIL_FIELDS = gql`
   fragment CardDetailFields on MtgCard {
     id title manaCost cmc typeLine colors colorIdentity
     oracleText imageUri isManaProducer producedMana legalFormats
-    priceUsd priceUsdFoil setCode setName rarity collectorNumber
+    priceUsd priceUsdFoil priceEur setCode setName rarity collectorNumber
     power toughness loyalty
   }
 `;
@@ -255,6 +258,7 @@ const CARD_DETAIL_FIELDS = gql`
 const COMPOSE_DECK_FIELDS = gql`
   fragment ComposeDeckFields on NodeDeck {
     id uuid title format notes { value processed }
+    changed { timestamp }
   }
 `;
 
@@ -440,6 +444,16 @@ interface GqlComposeMtgCard {
   isManaProducer: boolean;
   producedMana: string[];
   legalFormats: string[];
+  priceUsd?: string | null;
+  priceUsdFoil?: string | null;
+  priceEur?: string | null;
+  setCode?: string | null;
+  setName?: string | null;
+  rarity?: string | null;
+  collectorNumber?: string | null;
+  power?: string | null;
+  toughness?: string | null;
+  loyalty?: string | null;
 }
 
 interface GqlComposeDeckCard {
@@ -468,6 +482,16 @@ const COMPOSE_DECK_CARD_FIELDS = gql`
         isManaProducer
         producedMana
         legalFormats
+        priceUsd
+        priceUsdFoil
+        priceEur
+        setCode
+        setName
+        rarity
+        collectorNumber
+        power
+        toughness
+        loyalty
       }
     }
   }
@@ -487,15 +511,16 @@ function composeMtgCardToGql(card: GqlComposeMtgCard): GqlMtgCard {
     isManaProducer: card.isManaProducer,
     producedMana: card.producedMana,
     legalFormats: card.legalFormats,
-    priceUsd: null,
-    priceUsdFoil: null,
-    setCode: null,
-    setName: null,
-    rarity: null,
-    collectorNumber: null,
-    power: null,
-    toughness: null,
-    loyalty: null,
+    priceUsd: card.priceUsd ?? null,
+    priceUsdFoil: card.priceUsdFoil ?? null,
+    priceEur: card.priceEur ?? null,
+    setCode: card.setCode ?? null,
+    setName: card.setName ?? null,
+    rarity: card.rarity ?? null,
+    collectorNumber: card.collectorNumber ?? null,
+    power: card.power ?? null,
+    toughness: card.toughness ?? null,
+    loyalty: card.loyalty ?? null,
   };
 }
 

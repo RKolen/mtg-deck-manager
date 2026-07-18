@@ -1,0 +1,280 @@
+/* Design system tokens — ported from MTG Design System/index.html */
+
+:root {
+  --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  --sans: 'Inter Tight', ui-sans-serif, system-ui, sans-serif;
+  --serif: 'Newsreader', ui-serif, Georgia, serif;
+
+  --w: #efe5c2;
+  --u: #4b7fb8;
+  --b: #6a5f72;
+  --r: #c0584a;
+  --g: #6a8c5a;
+  --w-ink: #8a7e4e;
+  --u-ink: #2c4f78;
+  --b-ink: #3b3344;
+  --r-ink: #8a3a30;
+  --g-ink: #436038;
+
+  --accent-color: #f5a623;
+}
+
+html[data-theme='dark'] {
+  --bg: #0a0d10;
+  --bg-1: #0e1216;
+  --bg-2: #131820;
+  --bg-3: #1a2029;
+  --line: #1f2731;
+  --line-2: #2a3340;
+  --ink: #d8dde4;
+  --ink-2: #9aa3ad;
+  --ink-3: #5f6973;
+  --ink-4: #3a424c;
+  --accent: var(--accent-color, #f5a623);
+  --accent-2: #2a3340;
+  --pos: #5fb37d;
+  --neg: #d96b5f;
+  --warn: #e8b04c;
+  --hl: rgba(245, 166, 35, 0.1);
+}
+
+html[data-theme='light'] {
+  --bg: #f4efe6;
+  --bg-1: #ece6da;
+  --bg-2: #e2dccd;
+  --bg-3: #d4ccb9;
+  --line: #c8bfa9;
+  --line-2: #ada392;
+  --ink: #1a1714;
+  --ink-2: #4a443a;
+  --ink-3: #7a7164;
+  --ink-4: #ada392;
+  --accent: var(--accent-color, #b25b15);
+  --accent-2: #d4ccb9;
+  --pos: #3d7a4f;
+  --neg: #a84236;
+  --warn: #a87a1c;
+  --hl: rgba(178, 91, 21, 0.1);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#__next {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+body {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.45;
+  font-feature-settings: 'ss01', 'ss02', 'cv01', 'tnum';
+  -webkit-font-smoothing: antialiased;
+}
+
+.mono {
+  font-family: var(--mono);
+}
+.sans {
+  font-family: var(--sans);
+}
+.serif {
+  font-family: var(--serif);
+}
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+.uc {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.dim {
+  color: var(--ink-3);
+}
+.ink2 {
+  color: var(--ink-2);
+}
+.accent {
+  color: var(--accent);
+}
+
+.hr {
+  height: 1px;
+  background: var(--line);
+  margin: 0;
+  border: 0;
+}
+.vr {
+  width: 1px;
+  background: var(--line);
+  align-self: stretch;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line-2);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-3);
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+button {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+th,
+td {
+  text-align: left;
+  padding: 4px 8px;
+  vertical-align: middle;
+}
+
+kbd {
+  font-family: var(--mono);
+  font-size: 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  padding: 1px 5px;
+  color: var(--ink-2);
+}
+
+.pip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 50%;
+  font-family: var(--mono);
+  color: #1a1714;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.pip.W {
+  background: var(--w);
+}
+.pip.U {
+  background: var(--u);
+  color: #fff;
+}
+.pip.B {
+  background: var(--b);
+  color: #fff;
+}
+.pip.R {
+  background: var(--r);
+  color: #fff;
+}
+.pip.G {
+  background: var(--g);
+  color: #fff;
+}
+.pip.C {
+  background: var(--ink-4);
+  color: var(--bg);
+}
+.pip.X,
+.pip.N {
+  background: var(--bg-2);
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+.pip-dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  font-size: 0;
+  border-radius: 50%;
+}
+.pip-wedge {
+  border-radius: 3px;
+}
+.pip-sq {
+  border-radius: 0;
+}
+
+@keyframes blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
+}
+.caret {
+  display: inline-block;
+  width: 8px;
+  height: 1em;
+  background: var(--accent);
+  vertical-align: text-bottom;
+  animation: blink 1s infinite;
+  margin-left: 2px;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+.pulse-dot {
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100vh;
+  overflow: hidden;
+}
+.app-shell-main {
+  overflow: auto;
+  min-height: 0;
+  position: relative;
+}

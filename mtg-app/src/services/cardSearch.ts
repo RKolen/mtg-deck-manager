@@ -45,6 +45,7 @@ interface GqlSearchCard {
   legalFormats: string[];
   priceUsd: string | null;
   priceUsdFoil: string | null;
+  priceEur: string | null;
   setCode: string | null;
   setName: string | null;
   rarity: string | null;
@@ -58,7 +59,7 @@ const SEARCH_CARD_FIELDS = gql`
   fragment SearchCardFields on MtgCard {
     id title manaCost cmc typeLine colors colorIdentity
     oracleText imageUri isManaProducer producedMana legalFormats
-    priceUsd priceUsdFoil setCode setName rarity collectorNumber
+    priceUsd priceUsdFoil priceEur setCode setName rarity collectorNumber
     power toughness loyalty
   }
 `;

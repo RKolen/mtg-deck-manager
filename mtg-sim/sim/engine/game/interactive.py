@@ -12,9 +12,14 @@ import random
 from dataclasses import dataclass, field
 
 from engine.abilities import activated
+from engine.abilities.activated.fetchland import PendingFetchland
 from engine.abilities.activated.bloodrush import can_bloodrush
 from engine.abilities.keywords.other.battle_cry import clear_battle_cry_counters
 from engine.rules.modifiers import clear_until_end_of_turn_modifiers
+from engine.abilities.keywords.other.shockland import (
+    apply_shockland_etb,
+    has_shockland_etb,
+)
 from engine.abilities.keywords.other.boast import can_boast
 from engine.abilities.keywords.other.craft import has_craft
 from engine.abilities.keywords.casting.delayed_exile_cast import _CastTiming
@@ -71,11 +76,12 @@ from engine.game.combat_actions import CombatActionsMixin
 from engine.game.spell_stack import SpellStackMixin, _HandCastRequest
 
 
-@dataclass(frozen=True)
+@dataclass
 class _GameSetup:
     on_the_play: bool = True
     pilot_prompt: str = ""
     player_pilot_prompt: str = ""
+    pending_fetchland: PendingFetchland | None = None
 
 
 @dataclass
@@ -209,7 +215,12 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
         self.phase = "main1"
         return self.to_client()
 
-    def action_play_land(self, hand_idx: int) -> dict:
+    def action_play_land(
+        self,
+        hand_idx: int,
+        *,
+        pay_shockland_life: bool = False,
+    ) -> dict:
         """Play a land from the player's hand onto the battlefield."""
         assert self.phase in ("main1", "main2")
         assert not self.state.players[0].land_played
@@ -217,9 +228,20 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
         assert isinstance(card, CardObject)
         card_info = require_card_info(card)
         assert card_info.is_land
-        self.state.zones.enter_battlefield(card, 0, "play_land", Zone.HAND)
+        perm = self.state.zones.enter_battlefield(card, 0, "play_land", Zone.HAND)
         self.state.players[0].land_played = True
-        self._log("player", "land", card_info.name)
+        detail = card_info.name
+        if has_shockland_etb(card_info):
+            player = self.state.players[0]
+            etb_detail, player.life = apply_shockland_etb(
+                perm,
+                card_info,
+                pay_life=pay_shockland_life,
+                player_life=player.life,
+            )
+            if etb_detail:
+                detail = f"{detail} ({etb_detail})"
+        self._log("player", "land", detail)
         return self.to_client()
 
     def action_cast(
@@ -316,6 +338,8 @@ class InteractiveGame(SpellStackMixin, CombatActionsMixin):
 
     def _available_actions(self) -> list[str]:
         """Return action names legal in the current phase."""
+        if self._setup.pending_fetchland is not None:
+            return ["fetch_land", "cancel_fetch"]
         if not self.state.stack.is_empty:
             actions = self._stack_actions()
         elif self.phase == "mulligan":
