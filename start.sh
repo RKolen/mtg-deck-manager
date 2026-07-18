@@ -100,18 +100,26 @@ if [[ "${1:-}" == "--fresh" ]]; then
   FRESH_START=true
 fi
 
-# Kill every process listening on a TCP port.
+# PIDs of processes bound in LISTEN state on a TCP port (not clients).
+# Plain `lsof -ti :PORT` also matches browsers with ESTABLISHED tabs to that
+# port — killing those takes down Chrome/Firefox. Restrict to LISTEN only.
+listen_pids_on_port() {
+  local port="$1"
+  lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true
+}
+
+# Kill every process listening on a TCP port (servers only).
 stop_port_listeners() {
   local port="$1"
   local pids
-  pids=$(lsof -ti :"$port" 2>/dev/null || true)
+  pids=$(listen_pids_on_port "$port")
   if [[ -z "$pids" ]]; then
     return 0
   fi
   # shellcheck disable=SC2086
   kill $pids 2>/dev/null || true
   sleep 1
-  pids=$(lsof -ti :"$port" 2>/dev/null || true)
+  pids=$(listen_pids_on_port "$port")
   if [[ -n "$pids" ]]; then
     # shellcheck disable=SC2086
     kill -9 $pids 2>/dev/null || true
@@ -124,13 +132,13 @@ wait_for_port_free() {
   local attempts="${2:-30}"
   local i
   for ((i = 1; i <= attempts; i++)); do
-    if ! lsof -ti :"$port" > /dev/null 2>&1; then
+    if [[ -z "$(listen_pids_on_port "$port")" ]]; then
       return 0
     fi
     sleep 1
   done
   echo "ERROR: port $port is still in use after ${attempts}s"
-  lsof -i :"$port" 2>/dev/null || true
+  lsof -iTCP:"$port" -sTCP:LISTEN 2>/dev/null || true
   return 1
 }
 
@@ -156,7 +164,7 @@ wait_for_frontend_ready() {
 # ---------------------------------------------------------------------------
 if [[ "${1:-}" == "--stop" ]]; then
   echo "==> Stopping Next.js dev server..."
-  if lsof -ti :"$GATSBY_PORT" > /dev/null 2>&1; then
+  if [[ -n "$(listen_pids_on_port "$GATSBY_PORT")" ]]; then
     stop_port_listeners "$GATSBY_PORT"
     if wait_for_port_free "$GATSBY_PORT" 10; then
       echo "    Next.js stopped."
@@ -168,25 +176,28 @@ if [[ "${1:-}" == "--stop" ]]; then
   fi
 
   echo "==> Stopping AI sidecar..."
-  OLD_SIDECAR=$(lsof -ti :"$SIDECAR_PORT" 2>/dev/null || true)
+  OLD_SIDECAR=$(listen_pids_on_port "$SIDECAR_PORT")
   if [[ -n "$OLD_SIDECAR" ]]; then
-    kill "$OLD_SIDECAR" 2>/dev/null && echo "    Sidecar stopped."
+    # shellcheck disable=SC2086
+    kill $OLD_SIDECAR 2>/dev/null && echo "    Sidecar stopped."
   else
     echo "    Sidecar was not running."
   fi
 
   echo "==> Stopping sim service..."
-  OLD_SIM=$(lsof -ti :"$SIM_PORT" 2>/dev/null || true)
+  OLD_SIM=$(listen_pids_on_port "$SIM_PORT")
   if [[ -n "$OLD_SIM" ]]; then
-    kill "$OLD_SIM" 2>/dev/null && echo "    Sim service stopped."
+    # shellcheck disable=SC2086
+    kill $OLD_SIM 2>/dev/null && echo "    Sim service stopped."
   else
     echo "    Sim service was not running."
   fi
 
   echo "==> Stopping deck deduction classifier..."
-  OLD_CLASSIFIER=$(lsof -ti :"$CLASSIFIER_PORT" 2>/dev/null || true)
+  OLD_CLASSIFIER=$(listen_pids_on_port "$CLASSIFIER_PORT")
   if [[ -n "$OLD_CLASSIFIER" ]]; then
-    kill "$OLD_CLASSIFIER" 2>/dev/null && echo "    Classifier stopped."
+    # shellcheck disable=SC2086
+    kill $OLD_CLASSIFIER 2>/dev/null && echo "    Classifier stopped."
   else
     echo "    Classifier was not running."
   fi
@@ -240,7 +251,7 @@ echo "    Ollama:  http://localhost:$OLLAMA_PORT"
 echo ""
 echo "==> Starting MTG AI sidecar..."
 SIM_DIR="$SCRIPT_DIR/mtg-sim"
-if lsof -ti :"$SIDECAR_PORT" > /dev/null 2>&1; then
+if [[ -n "$(listen_pids_on_port "$SIDECAR_PORT")" ]]; then
   echo "    Sidecar already running on port $SIDECAR_PORT."
 elif [[ ! -f "$SIM_DIR/.venv/bin/python" ]]; then
   echo "    WARNING: $SIM_DIR/.venv not found — sidecar not started."
@@ -263,7 +274,7 @@ echo "    Sidecar: http://localhost:$SIDECAR_PORT/health"
 # ---------------------------------------------------------------------------
 echo ""
 echo "==> Starting Python simulation service..."
-if lsof -ti :"$SIM_PORT" > /dev/null 2>&1; then
+if [[ -n "$(listen_pids_on_port "$SIM_PORT")" ]]; then
   echo "    Sim service already running on port $SIM_PORT."
 elif [[ ! -f "$SIM_DIR/.venv/bin/python" ]]; then
   echo "    WARNING: $SIM_DIR/.venv not found."
@@ -284,7 +295,7 @@ echo "    Sim API:  http://localhost:$SIM_PORT/health"
 # ---------------------------------------------------------------------------
 echo ""
 echo "==> Starting deck deduction classifier..."
-if lsof -ti :"$CLASSIFIER_PORT" > /dev/null 2>&1; then
+if [[ -n "$(listen_pids_on_port "$CLASSIFIER_PORT")" ]]; then
   echo "    Classifier already running on port $CLASSIFIER_PORT."
 elif [[ ! -f "$SIM_DIR/.venv/bin/python" ]]; then
   echo "    WARNING: $SIM_DIR/.venv not found — classifier not started."
