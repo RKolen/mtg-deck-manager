@@ -88,20 +88,124 @@ export function landProducesMana(
   return fetchlandColors(getOracleText(card)).length > 0;
 }
 
+/** Normalize a deck format label for comparisons. */
+export function normalizeFormat(format: string | null | undefined): string {
+  return (format ?? '').trim().toLowerCase().replace(/[:\-]+/g, ' ').replace(/\s+/g, ' ');
+}
+
+/** True for Commander / EDH format labels (100-card singleton). */
+export function isCommanderFormat(format: string | null | undefined): boolean {
+  const normalized = normalizeFormat(format);
+  return normalized === 'edh' || normalized === 'commander';
+}
+
+/**
+ * True for Tiny Leaders / Tiny Leaders: Reborn (TLR) labels (50-card singleton).
+ */
+export function isTinyLeadersFormat(format: string | null | undefined): boolean {
+  const normalized = normalizeFormat(format);
+  return (
+    normalized === 'tiny leaders'
+    || normalized === 'tinyleaders'
+    || normalized === 'tlr'
+    || normalized === 'tiny leaders reborn'
+  );
+}
+
+/** True for singleton commander-style formats (EDH / Commander / Tiny Leaders / TLR). */
+export function isSingletonFormat(format: string | null | undefined): boolean {
+  return isCommanderFormat(format) || isTinyLeadersFormat(format);
+}
+
+/** Tiny Leaders / TLR mana-value cap (Rule of 3). */
+export const TINY_LEADERS_MAX_MANA_VALUE = 3;
+
+/**
+ * Format mana-value cap for nonland cards, or null when unrestricted.
+ * Tiny Leaders / TLR: every nonland card must have mana value ≤ 3.
+ */
+export function maxManaValueForFormat(
+  format: string | null | undefined,
+): number | null {
+  return isTinyLeadersFormat(format) ? TINY_LEADERS_MAX_MANA_VALUE : null;
+}
+
+/**
+ * Whether a card's mana value is legal for the format.
+ * Lands are always allowed; nonlands must respect the format MV cap.
+ */
+export function isLegalManaValue(
+  typeLine: string,
+  cmc: number | null | undefined,
+  format: string | null | undefined,
+): boolean {
+  const maxMv = maxManaValueForFormat(format);
+  if (maxMv == null) {
+    return true;
+  }
+  if (isLand(typeLine)) {
+    return true;
+  }
+  return (cmc ?? 0) <= maxMv;
+}
+
+export interface DeckListAllowance {
+  /** Soft minimum / target main-deck size shown in the UI. */
+  mainTarget: number;
+  /**
+   * Soft sideboard guidance size, or null when the format has no official
+   * sideboard (Commander). Oversized boards are allowed either way.
+   */
+  sideboardSoftMax: number | null;
+  /** Nonland mana-value cap, or null when unrestricted. */
+  maxManaValue: number | null;
+}
+
+/**
+ * Format-aware decklist size guidance (soft UI targets, not hard blocks).
+ * Constructed: min 60, no maximum. Commander: 100. Tiny Leaders / TLR: 50
+ * with a soft 10-card sideboard and MV ≤ 3 for nonlands.
+ */
+export function deckListAllowance(format: string | null | undefined): DeckListAllowance {
+  if (isCommanderFormat(format)) {
+    return { mainTarget: 100, sideboardSoftMax: null, maxManaValue: null };
+  }
+  if (isTinyLeadersFormat(format)) {
+    return {
+      mainTarget: 50,
+      sideboardSoftMax: 10,
+      maxManaValue: TINY_LEADERS_MAX_MANA_VALUE,
+    };
+  }
+  return { mainTarget: 60, sideboardSoftMax: 15, maxManaValue: null };
+}
+
+/** True when main-deck count meets the soft size target for the format. */
+export function isMainDeckSizeOk(
+  format: string | null | undefined,
+  mainCount: number,
+): boolean {
+  return mainCount >= deckListAllowance(format).mainTarget;
+}
+
 /**
  * Returns the maximum number of copies of a card allowed in a deck, based on
- * the four-copy rule with these exceptions (matching Drupal's DeckCopyLimit):
+ * constructed / singleton rules with these exceptions (matching Drupal's
+ * DeckCopyLimit):
  *
- *  1. "Basic Land" in type line             → unlimited (Infinity)
+ *  1. "Basic Land" in type line              → unlimited (Infinity)
  *  2. "a deck can have any number" in oracle → unlimited (Infinity)
- *  3. "a deck can have up to N" in oracle    → N copies
- *  4. Default                               → 4 copies
+ *  3. "a deck can have up to N" in oracle     → N copies
+ *  4. "a deck can have only one" in oracle    → 1 copy
+ *  5. Commander / EDH / Tiny Leaders / TLR   → 1 copy (singleton)
+ *  6. Default constructed                    → 4 copies
  *
  * This rule does NOT apply to collection cards — call this only for deck cards.
  */
 export function maxCopiesAllowed(
   typeLine: string,
   oracleText: string,
+  format: string | null | undefined = null,
 ): number {
   if (/\bBasic\b.*\bLand\b/i.test(typeLine)) {
     return Infinity;
@@ -113,7 +217,10 @@ export function maxCopiesAllowed(
   if (customMatch) {
     return parseInt(customMatch[1], 10);
   }
-  return 4;
+  if (/a deck can have only one/i.test(oracleText)) {
+    return 1;
+  }
+  return isSingletonFormat(format) ? 1 : 4;
 }
 
 // ---------------------------------------------------------------------------

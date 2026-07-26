@@ -27,6 +27,7 @@ from engine.cards.effects import (
     Scry,
     SetPowerToughnessUntilEOT,
     Surveil,
+    SwitchPowerToughnessUntilEOT,
     TreasureHunt,
 )
 from engine.cards.oracle_parse import TokenBlueprint
@@ -150,6 +151,10 @@ def _serialize_set_pt_until_eot(effect: SetPowerToughnessUntilEOT) -> EffectDict
     }
 
 
+def _serialize_switch_pt_until_eot(_effect: SwitchPowerToughnessUntilEOT) -> EffectDict:
+    return {'type': 'SwitchPowerToughnessUntilEOT'}
+
+
 def _serialize_destroy_if_max_mv(effect: DestroyIfMaxManaValue) -> EffectDict:
     return {'type': 'DestroyIfMaxManaValue', 'max_mv': effect.max_mv}
 
@@ -215,6 +220,7 @@ _EFFECT_BUILDERS: dict[str, EffectBuilder] = {
         toughness=int(d['toughness']),
     ),
     'Surveil': lambda d: Surveil(count=int(d['count'])),
+    'SwitchPowerToughnessUntilEOT': lambda _: SwitchPowerToughnessUntilEOT(),
     'TreasureHunt': lambda _: TreasureHunt(),
 }
 
@@ -238,6 +244,7 @@ _EFFECT_SERIALIZERS: dict[type[CardEffect], EffectSerializer] = {
     Scry: _serialize_scry,
     SetPowerToughnessUntilEOT: _serialize_set_pt_until_eot,
     Surveil: _serialize_surveil,
+    SwitchPowerToughnessUntilEOT: _serialize_switch_pt_until_eot,
     TreasureHunt: lambda _: {'type': 'TreasureHunt'},
     EffectList: _serialize_effect_list,
 }

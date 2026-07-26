@@ -194,7 +194,17 @@ const ImportPage: React.FC = () => {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const FORMATS = [
-    'Standard', 'Modern', 'Legacy', 'Vintage', 'Pioneer', 'Pauper', 'EDH', 'Other',
+    'Standard',
+    'Modern',
+    'Legacy',
+    'Vintage',
+    'Pioneer',
+    'Pauper',
+    'EDH',
+    'Commander',
+    'Tiny Leaders',
+    'TLR',
+    'Other',
   ];
 
   // ----- Step 1: File parsing + name matching -----

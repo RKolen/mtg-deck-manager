@@ -2,16 +2,25 @@
 
 from engine.core.game_object import (
     CardObject,
-    Modifier,
-    _ModifierLayer,
-    _ModifierPt,
     effective_power,
     effective_toughness,
 )
+from engine.core.modifier import Modifier, _ModifierLayer, _ModifierPt
 from engine.abilities.keywords.combat import has_deathtouch, lethal_damage_needed
 from engine.abilities.keywords.targeting import can_target_permanent
-from engine.rules.continuous import abilities_suppressed, has_creature_keyword
+from engine.rules.continuous import (
+    abilities_suppressed,
+    effective_colors,
+    effective_controller,
+    effective_type_line,
+    has_creature_keyword,
+)
 from engine.rules.modifiers import (
+    add_color_modifier,
+    add_control_modifier,
+    add_keyword_grant_modifier,
+    add_switch_pt_modifier,
+    add_type_modifier,
     add_until_eot_pt_modifier,
     clear_until_end_of_turn_modifiers,
 )
@@ -157,3 +166,71 @@ def test_until_eot_modifier_applies_and_clears():
     assert effective_power(bear, game) == 2
     assert effective_toughness(bear, game) == 2
     assert not bear.modifiers
+
+
+def test_humility_suppresses_tarmogoyf_cda():
+    """Layer 6 removes CDAs before layer 7a: Humility makes Tarmogoyf 1/1."""
+    game = fresh_game()
+    _humility(game)
+    for idx in range(5):
+        game.zones.player_zones[0].graveyard.append(
+            CardObject(
+                controller_idx=0,
+                owner_idx=0,
+                card_info=make_creature(f'Card {idx}', 1, 1),
+            )
+        )
+    goyf = place_on_battlefield(
+        make_creature(
+            name='Tarmogoyf',
+            power=0,
+            toughness=0,
+            oracle='*+1',
+        ),
+        0,
+        game.zones,
+    )
+    assert effective_power(goyf, game) == 1
+    assert effective_toughness(goyf, game) == 1
+    assert abilities_suppressed(game, goyf)
+
+
+def test_layer_7e_switch_applies_after_counters():
+    """Layer 7e switches P/T after 7c modifiers and 7d counters."""
+    game = fresh_game()
+    bear = place_on_battlefield(make_creature('Bear', 2, 5), 0, game.zones)
+    add_until_eot_pt_modifier(bear, power_delta=1, toughness_delta=0)
+    bear.counters['+1/+1'] = 1
+    add_switch_pt_modifier(bear)
+    # 2/5 -> +1/+0 = 3/5 -> +1/+1 counter = 4/6 -> switch = 6/4
+    assert effective_power(bear, game) == 6
+    assert effective_toughness(bear, game) == 4
+
+
+def test_layer_2_control_and_layer_4_type_and_layer_5_color():
+    """Layers 2/4/5 update controller, types, and colors via modifiers."""
+    game = fresh_game()
+    bear = place_on_battlefield(
+        make_creature('Bear', 2, 2, mana_cost='{G}'),
+        0,
+        game.zones,
+    )
+    add_control_modifier(bear, 1)
+    add_type_modifier(bear, added_types=('Artifact',), removed_types=())
+    add_color_modifier(bear, ('U',))
+    add_keyword_grant_modifier(bear, ('Flying',))
+    assert effective_controller(bear) == 1
+    assert 'Artifact' in effective_type_line(bear)
+    assert 'Creature' in effective_type_line(bear)
+    assert effective_colors(bear) == ('U',)
+    assert has_creature_keyword(game, bear, 'Flying')
+
+
+def test_humility_strips_granted_keywords():
+    """Layer 6 ability removal suppresses keywords granted by other layer-6 effects."""
+    game = fresh_game()
+    _humility(game)
+    bear = place_on_battlefield(make_creature('Bear', 2, 2), 0, game.zones)
+    add_keyword_grant_modifier(bear, ('Flying',))
+    assert abilities_suppressed(game, bear)
+    assert not has_creature_keyword(game, bear, 'Flying')

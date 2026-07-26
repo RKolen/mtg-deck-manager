@@ -22,6 +22,7 @@ from engine.cards.effects import (
     Scry,
     SetPowerToughnessUntilEOT,
     Surveil,
+    SwitchPowerToughnessUntilEOT,
     TreasureHunt,
 )
 
@@ -62,6 +63,7 @@ BUILTIN_CARD_SCRIPTS: dict[str, tuple[CardEffect, ...]] = {
     'Sleight of Hand': (DrawCards(count=1),),
     'Thoughtseize': (DiscardCards(count=1, target='target_player'),),
     'Treasure Hunt': (TreasureHunt(),),
+    'Twisted Image': (SwitchPowerToughnessUntilEOT(),),
     'Unholy Heat': (DeliriumDealDamage(base_amount=2, delirium_amount=6),),
     'Swords to Plowshares': (ExilePermanent(),),
     'Terminate': (DestroyPermanent(),),

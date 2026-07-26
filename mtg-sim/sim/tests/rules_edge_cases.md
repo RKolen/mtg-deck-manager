@@ -319,6 +319,21 @@ Humility strips creature abilities and sets base P/T to 1/1 (layers 6 + 7b).
 - `tests/unit/test_continuous.py::test_humility_makes_creatures_one_one_without_abilities`
 - `tests/unit/test_continuous.py::test_humility_strips_hexproof_for_targeting`
 
+### Humility vs Tarmogoyf (layer dependency)
+
+Tarmogoyf's CDA is an ability. Under Humility, layer 6 removes it before layer
+7a, so Tarmogoyf is 1/1 regardless of graveyard size.
+
+- `tests/unit/test_continuous.py::test_humility_suppresses_tarmogoyf_cda`
+
+### Layer 7e switch / layers 2–5 modifiers
+
+Power/toughness switch applies after counters (7d). Control, type, color, and
+keyword grants are applied via continuous modifiers.
+
+- `tests/unit/test_continuous.py::test_layer_7e_switch_applies_after_counters`
+- `tests/unit/test_continuous.py::test_layer_2_control_and_layer_4_type_and_layer_5_color`
+
 ## Phase F integration gate
 
 Phase F delivers simplified layer and replacement hooks for deck-relevant
@@ -381,6 +396,14 @@ Regeneration replaces destruction from lethal damage; damage is cleared.
 - `tests/integration/test_phase_f_integration.py::test_regeneration_shield_survives_lethal_shock`
 - `tests/unit/test_replacement.py::test_regeneration_shield_survives_lethal_damage`
 
+### Replacement chains (CR 614.5)
+
+Self-replacements apply before other effects. Multiple self-replacements chain
+until the event stabilizes (e.g. Absorb then shield counter).
+
+- `tests/unit/test_replacement.py::test_replacement_chain_absorb_then_shield`
+- `tests/unit/test_replacement.py::test_self_replacement_applies_before_other_effects`
+
 ### Humility (layers 6 + 7b)
 
 Humility strips abilities and sets base P/T to 1/1, enabling targeting and removal.
@@ -409,6 +432,13 @@ play UI (`mtg-app/src/pages/play.tsx`) sends `modalModeIndex` via
 - `tests/integration/test_scripted_game.py::test_invalid_scripted_modal_mode_rejected_at_cast`
 - `tests/integration/test_scripted_game.py::test_card_to_client_exposes_script_and_modal_flags`
 - `tests/unit/test_modal_cast.py`
+
+### Layer 7e switch scripts
+
+`SwitchPowerToughnessUntilEOT` applies a until-EOT layer-7e switch (Twisted Image).
+
+- `tests/integration/test_scripted_game.py::test_twisted_image_switches_power_and_toughness`
+- `tests/unit/test_effects.py::test_switch_power_toughness_until_eot`
 
 ### Runtime cache and privacy
 

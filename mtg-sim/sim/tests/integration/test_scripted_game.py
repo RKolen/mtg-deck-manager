@@ -7,7 +7,7 @@ from engine.cards.deck_script_store import (
     prepare_game_card_scripts,
     sync_deck_scripts,
 )
-from engine.core.game_object import CardObject
+from engine.core.game_object import CardObject, effective_power, effective_toughness
 from engine.game.helpers import HandCastContext, card_to_client
 from tests.conftest import (
     cast_announce_options,
@@ -81,6 +81,24 @@ def test_path_to_exile_script_exiles_creature():
     assert len(game.state.zones.player_zones[1].exile) == 1
 
 
+def test_twisted_image_switches_power_and_toughness():
+    """Twisted Image builtin switches target P/T via layer 7e until EOT."""
+    twisted = make_instant(
+        "Twisted Image",
+        mana_cost="{U}",
+        oracle="Switch target creature's power and toughness until end of turn.",
+    )
+    game = create_scripted_game()
+    game.action_keep()
+    bear = place_on_battlefield(make_creature("Bear", 2, 5), 1, game.state.zones)
+    put_lands_on_battlefield(game, 1, land_info=make_land("Island", "U"))
+    set_player_hand_single(game, twisted)
+    data = game.action_cast(0, target_uid=str(bear.obj_id))
+    assert "error" not in data
+    assert effective_power(bear, game.state) == 5
+    assert effective_toughness(bear, game.state) == 2
+
+
 def test_serum_visions_script_scrys_and_draws():
     """Serum Visions script scries then draws through the game loop."""
     serum = make_instant(
@@ -95,7 +113,9 @@ def test_serum_visions_script_scrys_and_draws():
     set_player_hand_single(game, serum)
     data = game.action_cast(0)
     assert "error" not in data
-    assert len(game.state.zones.player_zones[0].library) == library_before - 3
+    # Scry reorders; only the draw removes a card from the library.
+    assert len(game.state.zones.player_zones[0].library) == library_before - 1
+    assert len(game.state.zones.player_zones[0].hand) == 1
 
 
 def test_faithless_looting_script_cycles_cards():
@@ -111,7 +131,9 @@ def test_faithless_looting_script_cycles_cards():
     set_player_hand_single(game, looting)
     data = game.action_cast(0)
     assert "error" not in data
-    assert len(game.state.zones.player_zones[0].graveyard) == 2
+    # Two discarded cards plus the resolved Faithless Looting.
+    assert len(game.state.zones.player_zones[0].graveyard) == 3
+    assert len(game.state.zones.player_zones[0].hand) == 0
 
 
 def test_runtime_deck_sync_seeds_builtin_without_persisting_deck_title(

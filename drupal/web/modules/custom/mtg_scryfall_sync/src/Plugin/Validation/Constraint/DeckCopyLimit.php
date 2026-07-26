@@ -7,14 +7,17 @@ namespace Drupal\mtg_scryfall_sync\Plugin\Validation\Constraint;
 use Symfony\Component\Validator\Constraint;
 
 /**
- * Enforces MTG deck construction rules on the deck node.
+ * Enforces MTG per-card copy limits on the deck node.
  *
  * Reads card slots from field_deck_cards (paragraph--deck_card entities).
- * - Sideboard may not exceed 15 cards.
  * - Basic lands are unlimited.
  * - Cards with "a deck can have any number" in oracle are unlimited.
  * - Cards with "a deck can have up to N" in oracle allow N copies.
- * - All other cards are limited to 4 copies (main + sideboard combined).
+ * - Cards with "a deck can have only one" in oracle allow 1 copy.
+ * - Commander / EDH / Tiny Leaders / TLR decks default to singleton (1 copy).
+ * - Tiny Leaders / TLR nonland cards must have mana value 3 or less.
+ * - All other constructed decks default to 4 copies (main + sideboard).
+ * - Deck and sideboard total sizes are not hard-blocked (soft UI guidance only).
  *
  * @Constraint(
  *   id = "DeckCopyLimit",
@@ -26,6 +29,6 @@ class DeckCopyLimit extends Constraint {
 
   public string $tooManyCopies = 'The deck contains %count copies of "%name", but the maximum allowed is %max.';
 
-  public string $sideboardTooLarge = 'The sideboard contains %count cards, but the maximum is %max.';
+  public string $manaValueTooHigh = '"%name" has mana value %cmc, but %format allows a maximum of %max for nonland cards.';
 
 }

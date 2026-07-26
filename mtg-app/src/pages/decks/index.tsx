@@ -23,6 +23,7 @@ import {
   priceSourceLabel,
   totalDeckPrice,
 } from '../../utils/prices';
+import { isMainDeckSizeOk } from '../../utils/deckAnalysis';
 
 const FORMATS = [
   'Standard',
@@ -32,6 +33,9 @@ const FORMATS = [
   'Pioneer',
   'Pauper',
   'EDH',
+  'Commander',
+  'Tiny Leaders',
+  'TLR',
   'Other',
 ];
 
@@ -307,7 +311,7 @@ const DecksPage: React.FC = () => {
                   ? totalDeckPrice(cards, currency, false, Boolean(d.attributes.field_is_foil))
                   : null;
                 const legal =
-                  md != null && (md === 60 || md === 100 || (d.attributes.field_format === 'EDH' && md >= 100));
+                  md != null && isMainDeckSizeOk(d.attributes.field_format, md);
                 return (
                   <tr
                     key={d.id}

@@ -4,7 +4,11 @@ from engine.abilities.keywords.handlers import grant_regeneration_shield
 from engine.abilities.keywords.actions.library import mill_cards
 from engine.abilities.keywords.casting._hand_discard import pop_hand_to_graveyard
 from engine.core.game_object import CardObject
-from engine.rules.replacement import apply_damage_with_replacements
+from engine.rules.replacement import (
+    DamageEvent,
+    ReplacementQueue,
+    apply_damage_with_replacements,
+)
 from engine.rules.state_based import check_sbas
 from tests.conftest import (
     fresh_game,
@@ -118,3 +122,41 @@ def test_discard_with_leyline_sends_to_exile():
     pop_hand_to_graveyard(game.zones, 0, 0, game)
     assert len(game.zones.player_zones[0].graveyard) == 0
     assert len(game.zones.player_zones[0].exile) == 1
+
+
+def test_replacement_chain_absorb_then_shield():
+    """Self-replacements chain: Absorb reduces, then shield prevents the rest."""
+    game = fresh_game()
+    ward = place_absorb_creature(game)
+    ward.counters['shield'] = 1
+    attacker = place_on_battlefield(make_creature('Raider', 5, 5), 1, game.zones)
+    applied = apply_damage_with_replacements(game, ward, attacker, 3)
+    assert applied == 0
+    assert ward.counters.get('shield', 0) == 0
+
+
+def test_self_replacement_applies_before_other_effects():
+    """CR 614.5: self-replacements apply before other replacement effects."""
+    game = fresh_game()
+    receiver = place_on_battlefield(make_creature('Target', 3, 3), 0, game.zones)
+    order: list[str] = []
+
+    def self_halve(_game, event: object) -> DamageEvent | None:
+        if not isinstance(event, DamageEvent) or event.amount != 4:
+            return None
+        order.append('self')
+        return DamageEvent(event.receiver_id, event.source_id, 2)
+
+    def other_prevent(_game, event: object) -> DamageEvent | None:
+        if not isinstance(event, DamageEvent) or event.amount != 2:
+            return None
+        order.append('other')
+        return DamageEvent(event.receiver_id, event.source_id, 0)
+
+    queue = ReplacementQueue()
+    queue.register(other_prevent, self_replacement=False, source_obj_id=1)
+    queue.register(self_halve, self_replacement=True, source_obj_id=receiver.obj_id)
+    result = queue.apply(game, DamageEvent(receiver.obj_id, None, 4))
+    assert isinstance(result, DamageEvent)
+    assert result.amount == 0
+    assert order == ['self', 'other']

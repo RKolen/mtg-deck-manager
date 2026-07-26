@@ -77,6 +77,9 @@ import {
   manaHandProbability,
   manaColoredCardRatio,
   maxCopiesAllowed,
+  deckListAllowance,
+  isMainDeckSizeOk,
+  isLegalManaValue,
   isLand,
   type MtgColor,
   classifyType,
@@ -135,9 +138,10 @@ const TABLE_ROW_BORDER: React.CSSProperties = {
 interface EditorProps {
   deckId: string;
   cards: DeckCardWithCard[];
+  format: string;
 }
 
-const DeckEditor: React.FC<EditorProps> = ({ deckId, cards }) => {
+const DeckEditor: React.FC<EditorProps> = ({ deckId, cards, format }) => {
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<
     {
@@ -148,6 +152,8 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, cards }) => {
       collectorNumber: string;
       priceUsd: string | null;
       priceEur: string | null;
+      cmc: number;
+      typeLine: string;
     }[]
   >([]);
   const [searching, setSearching] = useState(false);
@@ -195,6 +201,8 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, cards }) => {
         collectorNumber: r.attributes.field_collector_number ?? '',
         priceUsd: r.attributes.field_price_usd,
         priceEur: r.attributes.field_price_eur,
+        cmc: r.attributes.field_cmc ?? 0,
+        typeLine: r.attributes.field_type_line ?? '',
       }));
       // Priced printings first so $0 promos/MTGO don't win by accident.
       mapped.sort((a, b) => {
@@ -218,6 +226,14 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, cards }) => {
   const sb = sideboard(cards);
   const mainCount = totalCount(main);
   const sbCount = totalCount(sb);
+  const allowance = deckListAllowance(format);
+  const mainOk = isMainDeckSizeOk(format, mainCount);
+  const sbSoftMax = allowance.sideboardSoftMax;
+  const sbOverSoft = sbSoftMax != null && sbCount > sbSoftMax;
+  const maxMv = allowance.maxManaValue;
+  const illegalMvCount = cards.filter(
+    dc => !isLegalManaValue(dc.card.field_type_line ?? '', dc.card.field_cmc, format),
+  ).length;
 
   // Group main deck cards into sections.
   const GROUPS: { label: string; types: string[] }[] = [
@@ -238,8 +254,14 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, cards }) => {
     const maxCopies = maxCopiesAllowed(
       dc.card.field_type_line ?? '',
       oracleText,
+      format,
     );
     const atMax = dc.quantity >= maxCopies;
+    const mvLegal = isLegalManaValue(
+      dc.card.field_type_line ?? '',
+      dc.card.field_cmc,
+      format,
+    );
     const setCode = (dc.card.field_set_code ?? '').toUpperCase();
     const setName = dc.card.field_set_name ?? '';
     const setTitle = [setCode, setName].filter(Boolean).join(' — ');
@@ -248,7 +270,16 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, cards }) => {
         <td style={{ padding: '0.25rem 0.5rem' }}>
           <Link
             href={`/cards/${slugify(dc.card.title)}`}
-            style={{ color: 'inherit', textDecoration: 'none', fontWeight: 'bold' }}
+            style={{
+              color: mvLegal ? 'inherit' : 'var(--neg)',
+              textDecoration: 'none',
+              fontWeight: 'bold',
+            }}
+            title={
+              mvLegal
+                ? undefined
+                : `Mana value ${dc.card.field_cmc ?? 0} exceeds format max ${maxMv}`
+            }
           >
             {dc.card.title}
           </Link>
@@ -319,29 +350,37 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, cards }) => {
 
   return (
     <div>
-      {/* Card count banner */}
+      {/* Card count banner — soft guidance only; oversized lists are allowed. */}
       <p style={{ fontWeight: 'bold', margin: '0 0 0.75rem' }}>
-        <span
-          style={{
-            color:
-              mainCount >= 60
-                ? mainCount > 60
-                  ? 'var(--neg)'
-                  : 'var(--pos)'
-                : 'var(--ink)',
-          }}
-        >
-          Main: {mainCount} / 60
+        <span style={{ color: mainOk ? 'var(--pos)' : 'var(--ink)' }}>
+          Main: {mainCount} / {allowance.mainTarget}+
         </span>
         {'  |  '}
         <span
           style={{
-            color:
-              sbCount > 15 ? 'var(--neg)' : sbCount > 0 ? 'var(--pos)' : 'var(--ink)',
+            color: sbOverSoft
+              ? 'var(--warn)'
+              : sbCount > 0
+                ? 'var(--pos)'
+                : 'var(--ink)',
           }}
         >
-          Sideboard: {sbCount} / 15
+          {sbSoftMax == null
+            ? `Sideboard: ${sbCount}`
+            : `Sideboard: ${sbCount} / ${sbSoftMax}`}
         </span>
+        {maxMv != null && (
+          <>
+            {'  |  '}
+            <span
+              style={{ color: illegalMvCount > 0 ? 'var(--neg)' : 'var(--pos)' }}
+              title="Tiny Leaders / TLR: nonland cards must have mana value 3 or less"
+            >
+              MV ≤ {maxMv}
+              {illegalMvCount > 0 ? ` (${illegalMvCount} over)` : ''}
+            </span>
+          </>
+        )}
       </p>
 
       {/* Search */}
@@ -385,9 +424,18 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, cards }) => {
               r.priceUsd ? `$${Number.parseFloat(r.priceUsd).toFixed(2)}` : null,
               r.priceEur ? `€${Number.parseFloat(r.priceEur).toFixed(2)}` : null,
             ].filter(Boolean);
-            const meta = [setLabel || null, priceBits.join(' / ') || 'no price']
+            const mvLegal = isLegalManaValue(r.typeLine, r.cmc, format);
+            const meta = [
+              setLabel || null,
+              `CMC ${r.cmc}`,
+              priceBits.join(' / ') || 'no price',
+            ]
               .filter(Boolean)
               .join(' · ');
+            const illegalTitle =
+              maxMv != null && !mvLegal
+                ? `Mana value ${r.cmc} exceeds format max ${maxMv}`
+                : undefined;
             return (
               <li
                 key={r.id}
@@ -399,20 +447,24 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, cards }) => {
                   alignItems: 'center',
                 }}
               >
-                <span style={{ flex: 1, color: 'var(--ink)' }}>
+                <span style={{ flex: 1, color: mvLegal ? 'var(--ink)' : 'var(--neg)' }}>
                   <strong>{r.title}</strong>
-                  <span style={{ marginLeft: 8, fontSize: '0.85rem', color: 'var(--ink)' }}>
+                  <span style={{ marginLeft: 8, fontSize: '0.85rem' }}>
                     {meta}
                   </span>
                 </span>
                 <button
                   type="button"
+                  disabled={!mvLegal}
+                  title={illegalTitle}
                   onClick={() => addCard.mutate({ cardId: r.id, cardName: r.title, isSideboard: false })}
                 >
                   + Main
                 </button>
                 <button
                   type="button"
+                  disabled={!mvLegal}
+                  title={illegalTitle}
                   onClick={() => addCard.mutate({ cardId: r.id, cardName: r.title, isSideboard: true })}
                 >
                   + SB
@@ -1947,7 +1999,17 @@ interface DeckHeaderProps {
 }
 
 const FORMATS = [
-  'Standard', 'Modern', 'Legacy', 'Vintage', 'Pioneer', 'Pauper', 'EDH', 'Other',
+  'Standard',
+  'Modern',
+  'Legacy',
+  'Vintage',
+  'Pioneer',
+  'Pauper',
+  'EDH',
+  'Commander',
+  'Tiny Leaders',
+  'TLR',
+  'Other',
 ];
 
 const DeckHeader: React.FC<DeckHeaderProps> = ({ deckId, title, format }) => {
@@ -2133,7 +2195,11 @@ const DeckPage: React.FC = () => {
       ) : cardsLoading && tab === 'editor' ? (
         <p>Loading cards...</p>
       ) : tab === 'editor' ? (
-        <DeckEditor deckId={deckId!} cards={deckCards} />
+        <DeckEditor
+          deckId={deckId!}
+          cards={deckCards}
+          format={deck.attributes.field_format}
+        />
       ) : tab === 'analysis' ? (
         <DeckAnalysis cards={deckCards} format={deck.attributes.field_format} deckTitle={deck.attributes.title} />
       ) : tab === 'suggestions' ? (

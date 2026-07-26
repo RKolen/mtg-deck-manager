@@ -33,6 +33,7 @@ from engine.cards.effects import (
     Scry,
     SetPowerToughnessUntilEOT,
     Surveil,
+    SwitchPowerToughnessUntilEOT,
 )
 from engine.cards.oracle_parse import (
     parse_damage,
@@ -50,6 +51,10 @@ from engine.cards.oracle_parse import (
 )
 
 _MILL_TARGET_RE = re.compile(r"target player", re.IGNORECASE)
+_SWITCH_PT_RE = re.compile(
+    r"switch\s+(?:target\s+)?(?:creature'?s?\s+)?power\s+and\s+toughness",
+    re.IGNORECASE,
+)
 
 
 def _clause_card(clause: str) -> CardInfo:
@@ -116,6 +121,11 @@ def _infer_category_effects(text: str, category: str) -> list[CardEffect]:
 
 
 def _append_supplemental_effects(effects: list[CardEffect], text: str) -> None:
+    if _SWITCH_PT_RE.search(text) and not any(
+        isinstance(effect, SwitchPowerToughnessUntilEOT) for effect in effects
+    ):
+        effects.append(SwitchPowerToughnessUntilEOT())
+
     mill_amount = mill_count(text)
     if mill_amount > 0 and not any(isinstance(effect, Mill) for effect in effects):
         effects.append(Mill(count=mill_amount, target=_infer_mill_target(text)))

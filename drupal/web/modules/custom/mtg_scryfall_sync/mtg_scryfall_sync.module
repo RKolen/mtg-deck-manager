@@ -49,8 +49,11 @@ function mtg_scryfall_sync_field_widget_single_element_form_alter(array &$elemen
  * Implements hook_entity_type_alter().
  *
  * Attaches the DeckCopyLimit validation constraint to the deck node bundle.
- * This enforces the four-copy rule (with exceptions for basic lands and
- * "any number" cards) on every deck save, including direct JSON:API writes.
+ * This enforces per-card copy limits (4-of, or singleton for Commander/EDH
+ * and Tiny Leaders/TLR) with exceptions for basic lands and oracle
+ * "any number" / "up to N" cards, plus the Tiny Leaders MV <= 3 rule,
+ * on every deck save including direct JSON:API writes. Deck and
+ * sideboard totals are not hard-blocked.
  *
  * @param array<string, \Drupal\Core\Entity\EntityTypeInterface> $entity_types
  *   The master entity type list, keyed by entity type ID.

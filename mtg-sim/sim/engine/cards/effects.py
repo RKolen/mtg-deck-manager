@@ -20,7 +20,12 @@ from engine.cards.oracle_parse import TokenBlueprint
 from engine.abilities.keywords.actions.targets import find_creature_by_uid
 from engine.core.game_object import CardObject, Permanent
 from engine.core.zones import Zone
-from engine.rules.modifiers import add_until_eot_pt_modifier, add_until_eot_set_pt_modifier
+from engine.rules.modifiers import (
+    DURATION_UNTIL_EOT,
+    add_switch_pt_modifier,
+    add_until_eot_pt_modifier,
+    add_until_eot_set_pt_modifier,
+)
 
 if TYPE_CHECKING:
     from engine.core.game_state import GameState
@@ -230,6 +235,23 @@ class SetPowerToughnessUntilEOT(CardEffect):
             source_obj_id=ctx.source.obj_id,
         )
         return f"set {target.name} to {self.power}/{self.toughness}"
+
+
+@dataclass(frozen=True)
+class SwitchPowerToughnessUntilEOT(CardEffect):
+    """Switch target creature's power and toughness until end of turn (layer 7e)."""
+
+    def apply(self, ctx: CardEffectContext) -> str:
+        """Apply a until-end-of-turn power/toughness switch."""
+        target = ctx.target_creature()
+        if target is None:
+            return 'no valid target'
+        add_switch_pt_modifier(
+            target,
+            duration=DURATION_UNTIL_EOT,
+            source_obj_id=ctx.source.obj_id,
+        )
+        return f"switched {target.name} power and toughness"
 
 
 @dataclass(frozen=True)

@@ -13,17 +13,23 @@ use Symfony\Component\Validator\ConstraintValidator;
  *
  * Reads card slots from field_deck_cards (paragraph--deck_card entities).
  * Rules enforced:
- *   1. Sideboard total must not exceed 15 cards.
- *   2. "Basic Land" in field_type_line          -> unlimited copies
- *   3. "A deck can have any number" in oracle   -> unlimited copies
- *   4. "A deck can have up to N" in oracle      -> N copies
- *   5. Default                                  -> 4 copies (main + sideboard combined).
+ *   1. "Basic Land" in field_type_line          -> unlimited copies
+ *   2. "A deck can have any number" in oracle   -> unlimited copies
+ *   3. "A deck can have up to N" in oracle      -> N copies
+ *   4. "A deck can have only one" in oracle     -> 1 copy
+ *   5. Commander / EDH / Tiny Leaders / TLR     -> 1 copy (singleton)
+ *   6. Tiny Leaders / TLR nonlands              -> mana value <= 3
+ *   7. Default constructed                      -> 4 copies (main + sideboard)
+ *
+ * Deck / sideboard total sizes are intentionally not hard-blocked so oversized
+ * lists and casual wishboards remain editable.
  */
 class DeckCopyLimitValidator extends ConstraintValidator {
 
   private const ANY_NUMBER_PATTERN = '/a deck can have any number/i';
   private const CUSTOM_LIMIT_PATTERN = '/a deck can have up to (\d+)/i';
-  private const MAX_SIDEBOARD = 15;
+  private const ONLY_ONE_PATTERN = '/a deck can have only one/i';
+  private const TINY_LEADERS_MAX_MANA_VALUE = 3;
 
   /**
    * {@inheritdoc}
@@ -44,9 +50,8 @@ class DeckCopyLimitValidator extends ConstraintValidator {
 
     /** @var \Drupal\mtg_scryfall_sync\Plugin\Validation\Constraint\DeckCopyLimit $constraint */
 
-    // Aggregate quantity per card (main+sideboard combined) and total sideboard count.
+    // Aggregate quantity per card (main+sideboard combined).
     $cardQuantities = [];
-    $sideboardTotal = 0;
 
     foreach ($entity->get('field_deck_cards') as $item) {
       /** @var \Drupal\paragraphs\Entity\Paragraph|null $para */
@@ -56,7 +61,6 @@ class DeckCopyLimitValidator extends ConstraintValidator {
       }
 
       $qty = (int) ($para->hasField('field_quantity') ? $para->get('field_quantity')->value : 1);
-      $isSideboard = (bool) ($para->hasField('field_is_sideboard') ? $para->get('field_is_sideboard')->value : FALSE);
       $cardRef = $para->hasField('field_card') ? $para->get('field_card') : NULL;
       if ($cardRef === NULL || $cardRef->isEmpty()) {
         continue;
@@ -64,25 +68,16 @@ class DeckCopyLimitValidator extends ConstraintValidator {
 
       $cardId = (int) $cardRef->target_id;
       $cardQuantities[$cardId] = ($cardQuantities[$cardId] ?? 0) + $qty;
-
-      if ($isSideboard) {
-        $sideboardTotal += $qty;
-      }
     }
 
-    // Rule 1: sideboard size.
-    if ($sideboardTotal > self::MAX_SIDEBOARD) {
-      $this->context->addViolation($constraint->sideboardTooLarge, [
-        '%count' => $sideboardTotal,
-        '%max' => self::MAX_SIDEBOARD,
-      ]);
-    }
-
-    // Rules 2-5: per-card copy limits.
-    if (empty($cardQuantities)) {
+    if ($cardQuantities === []) {
       return;
     }
 
+    $formatLabel = $this->formatLabel($entity);
+    $normalizedFormat = $this->normalizeFormat($formatLabel);
+    $defaultMax = $this->isSingletonFormat($normalizedFormat) ? 1 : 4;
+    $enforceMaxMv = $this->isTinyLeadersFormat($normalizedFormat);
     $cards = \Drupal::entityTypeManager()->getStorage('node')->loadMultiple(array_keys($cardQuantities));
 
     foreach ($cardQuantities as $cardId => $totalQty) {
@@ -90,7 +85,8 @@ class DeckCopyLimitValidator extends ConstraintValidator {
       if (!$card instanceof ContentEntityInterface) {
         continue;
       }
-      $max = $this->maxAllowed($card);
+
+      $max = $this->maxAllowed($card, $defaultMax);
       if ($totalQty > $max) {
         $this->context->addViolation($constraint->tooManyCopies, [
           '%count' => $totalQty,
@@ -98,10 +94,67 @@ class DeckCopyLimitValidator extends ConstraintValidator {
           '%max' => $max === PHP_INT_MAX ? 'unlimited' : $max,
         ]);
       }
+
+      if ($enforceMaxMv && !$this->isLegalManaValue($card)) {
+        $cmc = $card->hasField('field_cmc') ? (float) $card->get('field_cmc')->value : 0.0;
+        $this->context->addViolation($constraint->manaValueTooHigh, [
+          '%name' => $card->label(),
+          '%cmc' => $cmc,
+          '%format' => $formatLabel !== '' ? $formatLabel : 'Tiny Leaders',
+          '%max' => self::TINY_LEADERS_MAX_MANA_VALUE,
+        ]);
+      }
     }
   }
 
-  private function maxAllowed(ContentEntityInterface $card): int {
+  /**
+   * Raw format label from the deck node.
+   */
+  private function formatLabel(ContentEntityInterface $deck): string {
+    if ($deck->hasField('field_format') && !$deck->get('field_format')->isEmpty()) {
+      return (string) $deck->get('field_format')->value;
+    }
+    return '';
+  }
+
+  /**
+   * Normalize a format label for comparisons.
+   */
+  private function normalizeFormat(string $format): string {
+    $normalized = strtolower(trim(preg_replace('/[:\-]+/', ' ', $format) ?? $format));
+    return preg_replace('/\s+/', ' ', $normalized) ?? $normalized;
+  }
+
+  private function isSingletonFormat(string $normalized): bool {
+    return in_array($normalized, [
+      'edh',
+      'commander',
+      'tiny leaders',
+      'tinyleaders',
+      'tlr',
+      'tiny leaders reborn',
+    ], TRUE);
+  }
+
+  private function isTinyLeadersFormat(string $normalized): bool {
+    return in_array($normalized, [
+      'tiny leaders',
+      'tinyleaders',
+      'tlr',
+      'tiny leaders reborn',
+    ], TRUE);
+  }
+
+  private function isLegalManaValue(ContentEntityInterface $card): bool {
+    $type_line = (string) $card->get('field_type_line')->value;
+    if (preg_match('/\bland\b/i', $type_line)) {
+      return TRUE;
+    }
+    $cmc = $card->hasField('field_cmc') ? (float) $card->get('field_cmc')->value : 0.0;
+    return $cmc <= self::TINY_LEADERS_MAX_MANA_VALUE;
+  }
+
+  private function maxAllowed(ContentEntityInterface $card, int $defaultMax): int {
     $type_line = (string) $card->get('field_type_line')->value;
     $oracle = (string) $card->get('field_oracle_text')->value;
 
@@ -114,7 +167,10 @@ class DeckCopyLimitValidator extends ConstraintValidator {
     if (preg_match(self::CUSTOM_LIMIT_PATTERN, $oracle, $matches)) {
       return (int) $matches[1];
     }
-    return 4;
+    if (preg_match(self::ONLY_ONE_PATTERN, $oracle)) {
+      return 1;
+    }
+    return $defaultMax;
   }
 
 }

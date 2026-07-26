@@ -146,6 +146,12 @@ def resolve_graveyard_destination(game: GameState) -> Zone:
 
 
 def _damage_replacement_queue(receiver: Permanent) -> ReplacementQueue:
+    """Build the damage replacement chain for one receiver.
+
+    Self-replacements (Absorb, shield counters) apply before other effects
+    (CR 614.5). Multiple self-replacements chain until the event stabilizes:
+    Absorb reduces first, then a shield counter may prevent the remainder.
+    """
     queue = ReplacementQueue()
 
     def absorb_handler(
@@ -175,6 +181,8 @@ def _damage_replacement_queue(receiver: Permanent) -> ReplacementQueue:
         if not isinstance(event, DamageEvent):
             return None
         if event.receiver_id != receiver.obj_id:
+            return None
+        if event.amount <= 0:
             return None
         if receiver.counters.get(_SHIELD_COUNTER, 0) <= 0:
             return None

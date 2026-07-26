@@ -24,12 +24,14 @@ from engine.cards.effects import (
     PumpUntilEOT,
     Scry,
     Surveil,
+    SwitchPowerToughnessUntilEOT,
     TreasureHunt,
 )
 from engine.cards.effect_serde import effect_from_dict, effect_to_dict
 from engine.cards.oracle_parse import TokenBlueprint
 from engine.cards.script_loader import has_script, resolve_scripted_spell, scripted_card_names
-from engine.core.game_object import CardObject
+from engine.core.game_object import CardObject, effective_power, effective_toughness
+from engine.rules.modifiers import clear_until_end_of_turn_modifiers
 from tests.conftest import (
     add_to_library,
     fresh_game,
@@ -247,6 +249,28 @@ def test_treasure_hunt_puts_revealed_cards_in_hand():
     detail = TreasureHunt().apply(_ctx(game))
     assert '2 card' in detail
     assert len(game.zones.player_zones[0].hand) == 2
+
+
+def test_switch_power_toughness_until_eot():
+    """SwitchPowerToughnessUntilEOT swaps layered P/T until cleanup."""
+    game = fresh_game()
+    bear = place_on_battlefield(make_creature('Bear', 2, 5), 0, game.zones)
+    detail = SwitchPowerToughnessUntilEOT().apply(
+        _ctx(game, target_creature_uid=str(bear.obj_id)),
+    )
+    assert 'switched Bear' in detail
+    assert effective_power(bear, game) == 5
+    assert effective_toughness(bear, game) == 2
+    clear_until_end_of_turn_modifiers(game)
+    assert effective_power(bear, game) == 2
+    assert effective_toughness(bear, game) == 5
+
+
+def test_effect_serde_roundtrip_switch_pt():
+    """SwitchPowerToughnessUntilEOT survives JSON serialization."""
+    effect = SwitchPowerToughnessUntilEOT()
+    restored = effect_from_dict(effect_to_dict(effect))
+    assert restored == effect
 
 
 def test_collective_brutality_drain_mode():

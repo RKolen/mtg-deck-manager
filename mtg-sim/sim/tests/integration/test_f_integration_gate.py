@@ -18,13 +18,13 @@ def _count_test_functions(path: Path) -> int:
 
 
 def test_phase_f_continuous_layer_coverage():
-    """Continuous effects: Humility, CDA, and layer 7b/7c have unit tests."""
-    assert _count_test_functions(_CONTINUOUS_TESTS) >= 6
+    """Continuous effects: layers 2/4-7, Humility/CDA dependency, and switch."""
+    assert _count_test_functions(_CONTINUOUS_TESTS) >= 10
 
 
 def test_phase_f_replacement_coverage():
-    """Replacement effects: regen, shields, and graveyard routing have unit tests."""
-    assert _count_test_functions(_REPLACEMENT_TESTS) >= 6
+    """Replacement effects: regen, shields, GY routing, and replacement chains."""
+    assert _count_test_functions(_REPLACEMENT_TESTS) >= 8
 
 
 def test_phase_f_game_loop_hooks():
