@@ -24,6 +24,9 @@ use GuzzleHttp\Exception\GuzzleException;
  */
 class MatchupAdvisor {
 
+  /**
+   * Node storage used to load decks and meta decks.
+   */
   private readonly EntityStorageInterface $nodeStorage;
 
   public function __construct(
@@ -73,6 +76,7 @@ class MatchupAdvisor {
    *   Deck node ID.
    *
    * @return array{list: string, avgCmc: float, colors: list<string>, landCount: int, oneDrop: int}
+   *   Main-deck summary used in the matchup prompt.
    */
   private function loadDeckCards(int $deckNid): array {
     /** @var \Drupal\node\NodeInterface|null $deck */
@@ -89,23 +93,17 @@ class MatchupAdvisor {
     $landCount = 0;
     $oneDrop = 0;
 
-    foreach ($deck->get('field_deck_cards') as $item) {
-      /** @var \Drupal\paragraphs\Entity\Paragraph|null $para */
-      $para = $item->entity;
-      if ($para === NULL) {
-        continue;
-      }
+    foreach ($deck->get('field_deck_cards')->referencedEntities() as $para) {
       $isSideboard = (bool) ($para->hasField('field_is_sideboard') ? $para->get('field_is_sideboard')->value : FALSE);
       if ($isSideboard) {
         continue;
       }
-      $cardRef = $para->hasField('field_card') ? $para->get('field_card') : NULL;
-      if ($cardRef === NULL || $cardRef->isEmpty()) {
+      if (!$para->hasField('field_card') || $para->get('field_card')->isEmpty()) {
         continue;
       }
-      /** @var \Drupal\node\NodeInterface|null $card */
-      $card = $cardRef->entity;
-      if ($card === NULL) {
+      $referenced = $para->get('field_card')->referencedEntities();
+      $card = $referenced[0] ?? NULL;
+      if (!$card instanceof NodeInterface) {
         continue;
       }
       $qty = (int) ($para->hasField('field_quantity') ? $para->get('field_quantity')->value : 1);
@@ -150,6 +148,7 @@ class MatchupAdvisor {
    *   MTG format name.
    *
    * @return \Drupal\node\NodeInterface|null
+   *   The matching meta deck, or NULL if none exists.
    */
   private function loadMetaDeck(string $archetype, string $format): ?NodeInterface {
     $nids = $this->nodeStorage
@@ -198,7 +197,7 @@ class MatchupAdvisor {
       $playerCards['oneDrop'] > 0 ? "{$playerCards['oneDrop']} one-drops" : '',
     ]));
 
-    // Opponent archetype — field_cards_json holds a JSON array of {name, quantity, sideboard}.
+    // Opponent list from field_cards_json: name, quantity, sideboard.
     $rawJson = (string) ($metaDeck->get('field_cards_json')->value ?? '[]');
     $cardEntries = json_decode($rawJson, TRUE) ?? [];
     $opponentCards = implode(', ', array_map(
@@ -211,10 +210,8 @@ class MatchupAdvisor {
 
     // Key threats: oracle text of the key_cards entity references.
     $keyThreatLines = [];
-    foreach ($metaDeck->get('field_key_cards') as $ref) {
-      /** @var \Drupal\node\NodeInterface|null $keyCard */
-      $keyCard = $ref->entity;
-      if ($keyCard === NULL) {
+    foreach ($metaDeck->get('field_key_cards')->referencedEntities() as $keyCard) {
+      if (!$keyCard instanceof NodeInterface) {
         continue;
       }
       $oracle = (string) ($keyCard->get('field_oracle_text')->value ?? '');
@@ -265,6 +262,7 @@ PROMPT;
    * Requires MTG_AI_SIDECAR_URL and OLLAMA_CHAT_MODEL env vars.
    *
    * @return array{dynamic: string, threats: list<string>, sideboard: array{in: list<string>, out: list<string>}, keyPlay: string}
+   *   Parsed advice, or a fallback error structure.
    */
   private function runOllama(string $prompt): array {
     $model = getenv('OLLAMA_CHAT_MODEL');
@@ -298,6 +296,7 @@ PROMPT;
    * Extracts the JSON advice object from the raw LLM output.
    *
    * @return array{dynamic: string, threats: list<string>, sideboard: array{in: list<string>, out: list<string>}, keyPlay: string}
+   *   Parsed advice object.
    */
   private function parseAdvice(string $text): array {
     // Strip qwen3/deepseek thinking blocks before extracting JSON.
@@ -337,6 +336,7 @@ PROMPT;
    * Returns a failure advice structure with the given error in 'dynamic'.
    *
    * @return array{dynamic: string, threats: list<string>, sideboard: array{in: list<string>, out: list<string>}, keyPlay: string}
+   *   Failure payload with the error in dynamic.
    */
   private function errorAdvice(string $message): array {
     return [

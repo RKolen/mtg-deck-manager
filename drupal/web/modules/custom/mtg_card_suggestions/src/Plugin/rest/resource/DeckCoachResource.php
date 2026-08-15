@@ -16,7 +16,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 /**
  * REST resource for AI-powered deck coaching.
  *
- * POST /api/deck-coach
+ * POST /api/deck-coach.
  *
  * Accepts pre-computed analysis metrics from the Gatsby frontend and asks
  * Ollama to interpret them in the context of the deck's format. The numbers
@@ -28,7 +28,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  *   metrics      - output of deckAnalysis.ts (avgCmc, colorSourcePct, etc.)
  *
  * Response:
- *   { coaching: "<four paragraphs of plain-language coaching>" }
+ *   { coaching: "<four paragraphs of plain-language coaching>" }.
  *
  * @RestResource(
  *   id = "deck_coach",
@@ -113,19 +113,6 @@ final class DeckCoachResource extends ResourceBase {
   }
 
   /**
-   * Builds the structured coaching prompt from the analysis metrics.
-   *
-   * @param string $format
-   *   MTG format name.
-   * @param string $deckTitle
-   *   Deck title for context.
-   * @param array<string, mixed> $metrics
-   *   Analysis metrics from deckAnalysis.ts.
-   *
-   * @return string
-   *   The prompt string for Ollama.
-   */
-  /**
    * Classifies the deck's archetype from metrics and card list.
    *
    * @param array<string, mixed> $metrics
@@ -138,9 +125,8 @@ final class DeckCoachResource extends ResourceBase {
    */
   private function detectArchetype(array $metrics, array $cards): array {
     $avgCmc = (float) ($metrics['avgCmc'] ?? 2.5);
-    $landCount = (int) ($metrics['landCount'] ?? 24);
 
-    // Detect keywords from card list
+    // Detect keywords from the card list.
     $keywords = [];
     foreach ($cards as $card) {
       $oracle = strtolower((string) ($card['oracle'] ?? $card['oracle_text'] ?? ''));
@@ -194,6 +180,21 @@ final class DeckCoachResource extends ResourceBase {
     ];
   }
 
+  /**
+   * Builds the structured coaching prompt from the analysis metrics.
+   *
+   * @param string $format
+   *   MTG format name.
+   * @param string $deckTitle
+   *   Deck title for context.
+   * @param array<string, mixed> $metrics
+   *   Analysis metrics from deckAnalysis.ts.
+   * @param array<string, string> $archetype
+   *   Archetype descriptor from detectArchetype().
+   *
+   * @return string
+   *   The prompt string for Ollama.
+   */
   private function buildPrompt(string $format, string $deckTitle, array $metrics, array $archetype): string {
     $avgCmc = number_format((float) ($metrics['avgCmc'] ?? 0), 1);
     $landCount = (int) ($metrics['landCount'] ?? 0);
@@ -211,7 +212,7 @@ final class DeckCoachResource extends ResourceBase {
     }
     $colorBlock = $colorLines !== [] ? implode("\n", $colorLines) : '  (no significant coloured sources)';
 
-    // Mana hand probabilities — only for main colours.
+    // Mana hand probabilities: only for main colours.
     $manaHandProb = is_array($metrics['manaHandProb'] ?? NULL) ? $metrics['manaHandProb'] : [];
     $handLines = [];
     foreach ($manaHandProb as $c => $turns) {
@@ -224,7 +225,7 @@ final class DeckCoachResource extends ResourceBase {
     }
     $handBlock = $handLines !== [] ? implode("\n", $handLines) : '  (no data)';
 
-    // Curve.
+    // Mana curve histogram.
     $histogram = is_array($metrics['cmcHistogram'] ?? NULL) ? $metrics['cmcHistogram'] : [];
     $curveParts = [];
     for ($i = 0; $i <= 5; $i++) {
@@ -297,9 +298,20 @@ PROMPT;
 
     try {
       $provider = $this->aiProvider->createInstance($default['provider_id']);
+      $chat = [$provider, 'chat'];
+      if (!is_callable($chat)) {
+        return 'AI provider does not support chat.';
+      }
       $input = new ChatInput([new ChatMessage('user', $prompt)]);
-      $output = $provider->chat($input, (string) $default['model_id']);
-      return (string) $output->getNormalized()->getText();
+      $output = $chat($input, (string) $default['model_id']);
+      if (!is_object($output) || !method_exists($output, 'getNormalized')) {
+        return 'AI provider returned an unexpected chat response.';
+      }
+      $normalized = $output->getNormalized();
+      if (!is_object($normalized) || !method_exists($normalized, 'getText')) {
+        return 'AI provider returned an unexpected chat response.';
+      }
+      return (string) $normalized->getText();
     }
     catch (\Throwable $e) {
       $this->logger->warning('Deck coach Ollama call failed: @msg', ['@msg' => $e->getMessage()]);

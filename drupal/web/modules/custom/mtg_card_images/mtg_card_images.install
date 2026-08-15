@@ -51,7 +51,7 @@ function mtg_card_images_ensure_schema(): void {
   if (!$field_definition) {
     $field_definition = $source->createSourceField($media_type);
     $storage = $field_definition->getFieldStorageDefinition();
-    if ($storage->isNew()) {
+    if ($storage instanceof FieldStorageConfig && $storage->isNew()) {
       $storage->save();
     }
     $field_definition->save();

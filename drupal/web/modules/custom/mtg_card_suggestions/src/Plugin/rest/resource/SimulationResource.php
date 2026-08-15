@@ -110,7 +110,10 @@ final class SimulationResource extends ResourceBase {
 
     $simBase = rtrim($simServiceUrl, '/');
     try {
-      $this->httpClient->get($simBase . '/health', ['timeout' => 5, 'connect_timeout' => 3]);
+      $this->httpClient->request('GET', $simBase . '/health', [
+        'timeout' => 5,
+        'connect_timeout' => 3,
+      ]);
     }
     catch (GuzzleException $e) {
       $this->logger->error('Simulation service health check failed: @msg', ['@msg' => $e->getMessage()]);
@@ -122,7 +125,8 @@ final class SimulationResource extends ResourceBase {
     }
 
     try {
-      $httpResponse = $this->httpClient->post(
+      $httpResponse = $this->httpClient->request(
+        'POST',
         $simBase . '/simulate',
         [
           'json'             => $payload,

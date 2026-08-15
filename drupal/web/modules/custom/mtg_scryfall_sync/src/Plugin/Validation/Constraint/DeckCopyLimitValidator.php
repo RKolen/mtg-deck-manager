@@ -53,20 +53,16 @@ class DeckCopyLimitValidator extends ConstraintValidator {
     // Aggregate quantity per card (main+sideboard combined).
     $cardQuantities = [];
 
-    foreach ($entity->get('field_deck_cards') as $item) {
-      /** @var \Drupal\paragraphs\Entity\Paragraph|null $para */
-      $para = $item->entity;
-      if ($para === NULL) {
-        continue;
-      }
-
+    foreach ($entity->get('field_deck_cards')->referencedEntities() as $para) {
       $qty = (int) ($para->hasField('field_quantity') ? $para->get('field_quantity')->value : 1);
-      $cardRef = $para->hasField('field_card') ? $para->get('field_card') : NULL;
-      if ($cardRef === NULL || $cardRef->isEmpty()) {
+      if (!$para->hasField('field_card') || $para->get('field_card')->isEmpty()) {
         continue;
       }
-
-      $cardId = (int) $cardRef->target_id;
+      $cardIds = $para->get('field_card')->getValue();
+      $cardId = (int) ($cardIds[0]['target_id'] ?? 0);
+      if ($cardId < 1) {
+        continue;
+      }
       $cardQuantities[$cardId] = ($cardQuantities[$cardId] ?? 0) + $qty;
     }
 
@@ -125,6 +121,9 @@ class DeckCopyLimitValidator extends ConstraintValidator {
     return preg_replace('/\s+/', ' ', $normalized) ?? $normalized;
   }
 
+  /**
+   * Whether the format is singleton (one copy of each card).
+   */
   private function isSingletonFormat(string $normalized): bool {
     return in_array($normalized, [
       'edh',
@@ -136,6 +135,9 @@ class DeckCopyLimitValidator extends ConstraintValidator {
     ], TRUE);
   }
 
+  /**
+   * Whether the format is Tiny Leaders or Tiny Leaders Reborn.
+   */
   private function isTinyLeadersFormat(string $normalized): bool {
     return in_array($normalized, [
       'tiny leaders',
@@ -145,6 +147,9 @@ class DeckCopyLimitValidator extends ConstraintValidator {
     ], TRUE);
   }
 
+  /**
+   * Whether a card is legal for Tiny Leaders mana-value rules.
+   */
   private function isLegalManaValue(ContentEntityInterface $card): bool {
     $type_line = (string) $card->get('field_type_line')->value;
     if (preg_match('/\bland\b/i', $type_line)) {
@@ -154,6 +159,9 @@ class DeckCopyLimitValidator extends ConstraintValidator {
     return $cmc <= self::TINY_LEADERS_MAX_MANA_VALUE;
   }
 
+  /**
+   * Maximum copies allowed for a card in the current format.
+   */
   private function maxAllowed(ContentEntityInterface $card, int $defaultMax): int {
     $type_line = (string) $card->get('field_type_line')->value;
     $oracle = (string) $card->get('field_oracle_text')->value;

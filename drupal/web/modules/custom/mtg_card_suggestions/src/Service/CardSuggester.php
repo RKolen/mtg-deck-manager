@@ -8,6 +8,7 @@ use Drupal\Core\Entity\EntityStorageInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Logger\LoggerChannelInterface;
 use Drupal\mtg_card_suggestions\Support\SidecarUrl;
+use Drupal\node\NodeInterface;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\GuzzleException;
 
@@ -106,30 +107,24 @@ class CardSuggester {
     }
 
     $cards = [];
-    foreach ($deck->get('field_deck_cards') as $item) {
-      /** @var \Drupal\paragraphs\Entity\Paragraph|null $para */
-      $para = $item->entity;
-      if ($para === NULL) {
-        continue;
-      }
+    foreach ($deck->get('field_deck_cards')->referencedEntities() as $para) {
       $isSideboard = (bool) ($para->hasField('field_is_sideboard') ? $para->get('field_is_sideboard')->value : FALSE);
       if ($isSideboard) {
         continue;
       }
-      $cardRef = $para->hasField('field_card') ? $para->get('field_card') : NULL;
-      if ($cardRef === NULL || $cardRef->isEmpty()) {
+      if (!$para->hasField('field_card') || $para->get('field_card')->isEmpty()) {
         continue;
       }
-      /** @var \Drupal\node\NodeInterface|null $card */
-      $card = $cardRef->entity;
-      if ($card === NULL) {
+      $referenced = $para->get('field_card')->referencedEntities();
+      $card = $referenced[0] ?? NULL;
+      if (!$card instanceof NodeInterface) {
         continue;
       }
       $qty = (int) ($para->hasField('field_quantity') ? $para->get('field_quantity')->value : 1);
       $colors = [];
       if ($card->hasField('field_colors')) {
-        foreach ($card->get('field_colors') as $colorItem) {
-          $colors[] = (string) $colorItem->value;
+        foreach ($card->get('field_colors')->getValue() as $colorItem) {
+          $colors[] = (string) ($colorItem['value'] ?? '');
         }
       }
       $cards[] = [
@@ -160,28 +155,18 @@ class CardSuggester {
    *   Archetype descriptor: speed, colors, win_condition, key_roles, label.
    */
   private function detectArchetype(array $deckCards): array {
-    $totalQty = 0;
     $totalCmc = 0.0;
     $nonLandQty = 0;
-    $creatureQty = 0;
-    $instantSorcQty = 0;
     $colorCounts = [];
 
     foreach ($deckCards as $card) {
       $qty = (int) ($card['quantity'] ?? 1);
-      $totalQty += $qty;
       $cmc = (float) ($card['cmc'] ?? 0);
       $typeLine = (string) ($card['type_line'] ?? '');
 
       if (stripos($typeLine, 'Land') === FALSE) {
         $totalCmc += $cmc * $qty;
         $nonLandQty += $qty;
-        if (stripos($typeLine, 'Creature') !== FALSE) {
-          $creatureQty += $qty;
-        }
-        if (stripos($typeLine, 'Instant') !== FALSE || stripos($typeLine, 'Sorcery') !== FALSE) {
-          $instantSorcQty += $qty;
-        }
       }
 
       foreach (($card['colors'] ?? []) as $color) {
@@ -193,11 +178,15 @@ class CardSuggester {
     arsort($colorCounts);
     $deckColors = array_keys($colorCounts);
 
-    // Classify by speed
+    // Classify by speed.
     if ($avgCmc < 1.6) {
       $speed = 'ultra-fast aggro';
       $winCondition = 'attack for lethal by turns 3–4 before the opponent stabilises';
-      $keyRoles = ['aggressive 1-drop and 2-drop creatures', 'cheap pump spells that trigger heroic or prowess', 'targeted removal to clear blockers'];
+      $keyRoles = [
+        'aggressive 1-drop and 2-drop creatures',
+        'cheap pump spells that trigger heroic or prowess',
+        'targeted removal to clear blockers',
+      ];
       $keyConstraints = 'Low CMC is a feature, not a bug. Do NOT suggest cards above CMC 3. Do NOT suggest mana fixing or ramp. Do NOT suggest late-game threats.';
     }
     elseif ($avgCmc < 2.2) {
@@ -219,11 +208,11 @@ class CardSuggester {
       $keyConstraints = 'Balance is key — avoid cards that are too slow or too narrow.';
     }
 
-    // Map color codes to names
+    // Map color codes to names.
     $colorNames = ['W' => 'White', 'U' => 'Blue', 'B' => 'Black', 'R' => 'Red', 'G' => 'Green'];
     $colorLabel = implode('/', array_map(static fn($c) => $colorNames[$c] ?? $c, $deckColors));
 
-    // Detect key keywords from oracle text
+    // Detect key keywords from oracle text.
     $keywords = [];
     $keywordCounts = [];
     $keywordMap = [
@@ -296,8 +285,8 @@ class CardSuggester {
         continue;
       }
       $cardColors = [];
-      foreach ($node->get('field_color_identity') as $item) {
-        $cardColors[] = (string) $item->value;
+      foreach ($node->get('field_color_identity')->getValue() as $item) {
+        $cardColors[] = (string) ($item['value'] ?? '');
       }
       $colorMap[$nid] = $cardColors;
     }
@@ -330,17 +319,10 @@ class CardSuggester {
   }
 
   /**
-   * Builds a short semantic query string from the deck's card names and types.
+   * Builds a Milvus semantic query that encodes the deck's game plan.
    *
-   * @param list<array{nid: int, name: string, oracle_text: string, type_line: string}> $deckCards
-   *   Deck card data.
-   *
-   * @return string
-   *   A space-joined string of card names and type lines.
-   */
-  /**
-   * Builds a Milvus semantic query that encodes the deck's game plan,
-   * not just card names, so vector search finds strategically relevant cards.
+   * Uses more than card names so vector search finds strategically
+   * relevant cards.
    *
    * @param list<array<string, mixed>> $deckCards
    *   Enriched deck card data.
@@ -351,14 +333,14 @@ class CardSuggester {
    *   Query string for the Milvus embedding search.
    */
   private function buildSemanticQuery(array $deckCards, array $archetype): string {
-    // Lead with the archetype so the embedding captures the strategic intent.
+    // Lead with the archetype so the embedding captures strategic intent.
     $parts = [
       $archetype['label'],
       $archetype['winCondition'],
       implode(' ', $archetype['keywords']),
     ];
 
-    // Add the deck's key non-land card names (those with highest quantity first).
+    // Add the deck's key non-land card names (highest quantity first).
     usort($deckCards, static fn($a, $b) => ($b['quantity'] ?? 1) <=> ($a['quantity'] ?? 1));
     foreach (array_slice($deckCards, 0, 15) as $card) {
       if (stripos((string) ($card['type_line'] ?? ''), 'Land') === FALSE) {
@@ -467,6 +449,8 @@ class CardSuggester {
    *   Semantically similar cards to evaluate.
    * @param int $limit
    *   Max suggestions to return.
+   * @param array<string, mixed> $archetype
+   *   Archetype descriptor from detectArchetype().
    *
    * @return list<array{card: array<string, mixed>, reason: string, score: float}>
    *   Ranked suggestions.
@@ -511,6 +495,9 @@ class CardSuggester {
 
   /**
    * Returns the system prompt for the Ollama ranking call.
+   *
+   * @param array<string, mixed> $archetype
+   *   Archetype descriptor from detectArchetype().
    *
    * @return string
    *   The system prompt.
@@ -557,7 +544,7 @@ PROMPT;
    *   The user prompt.
    */
   private function buildUserPrompt(array $deckCards, array $candidates, int $limit, array $archetype = []): string {
-    // Show the deck's key spells (non-lands, by quantity desc) to anchor context.
+    // Show key non-land spells by quantity to anchor context.
     $keyCards = array_filter($deckCards, static fn($c) => stripos((string) ($c['type_line'] ?? ''), 'Land') === FALSE);
     usort($keyCards, static fn($a, $b) => ($b['quantity'] ?? 1) <=> ($a['quantity'] ?? 1));
     $keyCardLines = [];

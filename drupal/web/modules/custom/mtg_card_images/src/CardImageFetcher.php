@@ -12,6 +12,7 @@ use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\File\FileUrlGeneratorInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\Queue\QueueFactory;
+use Drupal\file\FileInterface;
 use Drupal\file\FileRepositoryInterface;
 use Drupal\media\MediaInterface;
 use Drupal\node\NodeInterface;
@@ -38,8 +39,14 @@ final class CardImageFetcher {
 
   private const DIRECTORY = 'public://mtg_cards';
 
+  /**
+   * Channel logger for image fetch failures.
+   */
   private readonly LoggerInterface $logger;
 
+  /**
+   * Microsecond timestamp of the last outbound Scryfall request.
+   */
   private static ?int $lastFetchAt = NULL;
 
   public function __construct(
@@ -70,8 +77,9 @@ final class CardImageFetcher {
     if (!$media->hasField('field_media_image') || $media->get('field_media_image')->isEmpty()) {
       return NULL;
     }
-    $file = $media->get('field_media_image')->entity;
-    if ($file === NULL) {
+    $files = $media->get('field_media_image')->referencedEntities();
+    $file = $files[0] ?? NULL;
+    if (!$file instanceof FileInterface) {
       return NULL;
     }
     return $this->fileUrlGenerator->generateAbsoluteString($file->getFileUri());
@@ -97,6 +105,7 @@ final class CardImageFetcher {
    * Queues many node IDs; returns how many were newly queued.
    *
    * @param list<int|string> $nids
+   *   Node IDs to consider for enqueueing.
    */
   public function enqueueNids(array $nids): int {
     $queued = 0;
@@ -141,7 +150,8 @@ final class CardImageFetcher {
     $path = (string) (parse_url($uri, PHP_URL_PATH) ?? '');
     $basename = basename($path);
     if ($basename === '' || $basename === '/' || !preg_match('/^[a-f0-9-]{36}\.jpg$/i', $basename)) {
-      $basename = preg_replace('/[^a-zA-Z0-9._-]/', '_', $basename ?? '') ?: ('card-' . $nid . '.jpg');
+      $safe = preg_replace('/[^a-zA-Z0-9._-]/', '_', $basename);
+      $basename = ($safe !== NULL && $safe !== '') ? $safe : ('card-' . $nid . '.jpg');
     }
     $directory = self::DIRECTORY;
     $destination = $directory . '/' . strtolower($basename);

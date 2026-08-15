@@ -3,24 +3,43 @@
  *
  * Route: /cards/:slug
  * Resolves one printing by slug, then lists every printing with the same title.
+ * When opened from a deck (?deck=&slot=), choosing another printing updates
+ * that deck slot and the collection (replace or add, regular or foil).
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useQuery } from '@tanstack/react-query';
-import { fetchCardBySlug, findCardsByName } from '../../services/drupalApi';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  fetchCardBySlug,
+  findCardsByName,
+  replaceDeckCardPrinting,
+} from '../../services/drupalApi';
+import PrintingSwapDialog, {
+  type CollectionSwapMode,
+  type PrintingSwapTarget,
+} from '../../components/PrintingSwapDialog';
 import { getOracleText } from '../../utils/deckAnalysis';
-import { slugify } from '../../utils/slugify';
+import { cardPrintingsPath } from '../../utils/slugify';
 import { useTheme } from '../../context/ThemeContext';
 import { formatPrice, priceFor } from '../../utils/prices';
+import type { MtgCard } from '../../types/drupal';
 
 const CardPage: React.FC = () => {
   const router = useRouter();
+  const qc = useQueryClient();
   const { currency } = useTheme();
   const slug = typeof router.query.slug === 'string' ? router.query.slug : '';
   const highlightId =
     typeof router.query.printing === 'string' ? router.query.printing : '';
+  const deckId = typeof router.query.deck === 'string' ? router.query.deck : '';
+  const slotId = typeof router.query.slot === 'string' ? router.query.slot : '';
+  const fromSlug = typeof router.query.from === 'string' ? router.query.from : '';
+  const fromDeck = deckId !== '' && slotId !== '';
+
+  const [pending, setPending] = useState<PrintingSwapTarget | null>(null);
+  const [swapError, setSwapError] = useState<string | null>(null);
 
   const { data: card, isLoading, isError } = useQuery({
     queryKey: ['card', slug],
@@ -49,6 +68,76 @@ const CardPage: React.FC = () => {
     });
   }, [printings, currency]);
 
+  const displayed: MtgCard | undefined = useMemo(() => {
+    if (highlightId !== '') {
+      const match = printings.find(p => p.id === highlightId);
+      if (match != null) {
+        return match;
+      }
+    }
+    return card ?? undefined;
+  }, [card, printings, highlightId]);
+
+  const currentPrinting: PrintingSwapTarget | null = displayed != null
+    ? { id: displayed.id, attributes: displayed.attributes }
+    : null;
+
+  const swap = useMutation({
+    mutationFn: ({
+      nextId,
+      mode,
+      foil,
+    }: {
+      nextId: string;
+      mode: CollectionSwapMode;
+      foil: boolean;
+    }) => replaceDeckCardPrinting(deckId, slotId, nextId, mode, foil),
+    onSuccess: async (_data, vars) => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['deckCards', deckId] }),
+        qc.invalidateQueries({ queryKey: ['collectionByCard'] }),
+        qc.invalidateQueries({ queryKey: ['collection'] }),
+      ]);
+      setPending(null);
+      setSwapError(null);
+      const nextTitle = pending?.attributes.title ?? title;
+      await router.replace(
+        cardPrintingsPath(nextTitle, {
+          printing: vars.nextId,
+          deckId,
+          slotId,
+          from: fromSlug,
+        }),
+        undefined,
+        { shallow: true },
+      );
+    },
+    onError: (err: unknown) => {
+      setSwapError(err instanceof Error ? err.message : 'Could not update the deck.');
+    },
+  });
+
+  function keepDeckContext(printingId: string): string {
+    return cardPrintingsPath(title !== '' ? title : slug, {
+      printing: printingId,
+      deckId: fromDeck ? deckId : undefined,
+      slotId: fromDeck ? slotId : undefined,
+      from: fromDeck ? fromSlug : undefined,
+    });
+  }
+
+  function handlePrintingClick(
+    event: React.MouseEvent<HTMLAnchorElement>,
+    printing: MtgCard,
+  ): void {
+    if (!fromDeck || currentPrinting == null || printing.id === currentPrinting.id) {
+      return;
+    }
+    event.preventDefault();
+    setSwapError(null);
+    setPending({ id: printing.id, attributes: printing.attributes });
+  }
+
   if (isLoading) {
     return (
       <main style={{ padding: '1.5rem' }}>
@@ -57,7 +146,7 @@ const CardPage: React.FC = () => {
     );
   }
 
-  if (isError || card == null) {
+  if (isError || card == null || displayed == null) {
     return (
       <main style={{ padding: '1.5rem' }}>
         <p style={{ color: '#c00' }}>Card not found.</p>
@@ -68,12 +157,14 @@ const CardPage: React.FC = () => {
     );
   }
 
-  const attrs = card.attributes;
+  const attrs = displayed.attributes;
   const oracleText = getOracleText(attrs);
   const isCreature =
     attrs.field_type_line != null && attrs.field_type_line.includes('Creature');
   const isPlaneswalker =
     attrs.field_type_line != null && attrs.field_type_line.includes('Planeswalker');
+  const backHref = fromSlug !== '' ? `/decks/${fromSlug}` : '/collection';
+  const backLabel = fromSlug !== '' ? 'Back to deck' : 'Back to collection';
 
   return (
     <main
@@ -85,10 +176,18 @@ const CardPage: React.FC = () => {
       }}
     >
       <p style={{ margin: '0 0 1.25rem' }}>
-        <Link href="/collection" style={{ color: 'var(--accent)' }}>
-          Back to collection
+        <Link href={backHref} style={{ color: 'var(--accent)' }}>
+          {backLabel}
         </Link>
       </p>
+
+      {fromDeck && (
+        <p style={{ margin: '0 0 1rem', fontSize: 13, opacity: 0.9 }}>
+          Choosing another printing updates this deck
+          {fromSlug !== '' ? ` (${fromSlug.replace(/-/g, ' ')})` : ''}
+          {' '}and your collection.
+        </p>
+      )}
 
       <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', marginBottom: '2rem' }}>
         {attrs.field_image_uri != null && attrs.field_image_uri !== '' && (
@@ -192,13 +291,14 @@ const CardPage: React.FC = () => {
         >
           {sortedPrintings.map(p => {
             const a = p.attributes;
-            const active = p.id === card.id || p.id === highlightId;
+            const active = p.id === displayed.id || p.id === highlightId;
             const price = priceFor(a, currency);
             const foil = priceFor(a, currency, true);
             return (
               <Link
                 key={p.id}
-                href={`/cards/${slugify(a.title)}?printing=${p.id}`}
+                href={keepDeckContext(p.id)}
+                onClick={e => handlePrintingClick(e, p)}
                 style={{
                   textDecoration: 'none',
                   color: 'var(--ink)',
@@ -206,6 +306,7 @@ const CardPage: React.FC = () => {
                   borderRadius: 6,
                   overflow: 'hidden',
                   background: 'var(--bg-2)',
+                  cursor: fromDeck && !active ? 'pointer' : undefined,
                 }}
               >
                 {a.field_image_uri ? (
@@ -251,6 +352,25 @@ const CardPage: React.FC = () => {
           })}
         </div>
       </section>
+
+      {pending != null && currentPrinting != null && (
+        <PrintingSwapDialog
+          current={currentPrinting}
+          next={pending}
+          currency={currency}
+          isSaving={swap.isPending}
+          error={swapError}
+          onCancel={() => {
+            if (!swap.isPending) {
+              setPending(null);
+              setSwapError(null);
+            }
+          }}
+          onConfirm={(mode, foil) => {
+            swap.mutate({ nextId: pending.id, mode, foil });
+          }}
+        />
+      )}
     </main>
   );
 };

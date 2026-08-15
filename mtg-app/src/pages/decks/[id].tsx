@@ -60,7 +60,7 @@ import {
   type ArchetypeProbability,
 } from '../../services/metaApi';
 import type { DeckCardWithCard } from '../../types/drupal';
-import { slugify } from '../../utils/slugify';
+import { cardPrintingsPath } from '../../utils/slugify';
 import {
   ALL_COLORS,
   COLOR_LABEL,
@@ -137,11 +137,12 @@ const TABLE_ROW_BORDER: React.CSSProperties = {
 
 interface EditorProps {
   deckId: string;
+  deckSlug: string;
   cards: DeckCardWithCard[];
   format: string;
 }
 
-const DeckEditor: React.FC<EditorProps> = ({ deckId, cards, format }) => {
+const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format }) => {
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<
     {
@@ -269,7 +270,12 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, cards, format }) => {
       <tr key={dc.card.id + String(dc.isSideboard)}>
         <td style={{ padding: '0.25rem 0.5rem' }}>
           <Link
-            href={`/cards/${slugify(dc.card.title)}`}
+            href={cardPrintingsPath(dc.card.title, {
+              printing: dc.card.id,
+              deckId,
+              slotId: dc.id,
+              from: deckSlug,
+            })}
             style={{
               color: mvLegal ? 'inherit' : 'var(--neg)',
               textDecoration: 'none',
@@ -2197,6 +2203,7 @@ const DeckPage: React.FC = () => {
       ) : tab === 'editor' ? (
         <DeckEditor
           deckId={deckId!}
+          deckSlug={slug}
           cards={deckCards}
           format={deck.attributes.field_format}
         />

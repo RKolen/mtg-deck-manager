@@ -600,6 +600,33 @@ async function deckCardUpdate(
   await getGraphQLClient().request(mutation, { deckId, slotId, quantity });
 }
 
+export async function replaceDeckCardPrinting(
+  deckId: string,
+  slotId: string,
+  cardId: string,
+  collectionMode: 'replace' | 'add',
+  foil: boolean,
+): Promise<void> {
+  const mutation = gql`
+    mutation DeckCardReplacePrinting(
+      $deckId: ID!, $slotId: ID!, $cardId: ID!,
+      $collectionMode: String!, $foil: Boolean
+    ) {
+      deckCardReplacePrinting(
+        deckId: $deckId, slotId: $slotId, cardId: $cardId,
+        collectionMode: $collectionMode, foil: $foil
+      ) { id }
+    }
+  `;
+  await getGraphQLClient().request(mutation, {
+    deckId,
+    slotId,
+    cardId,
+    collectionMode,
+    foil,
+  });
+}
+
 async function deckCardRemove(deckId: string, slotId: string): Promise<void> {
   const mutation = gql`
     mutation DeckCardRemove($deckId: ID!, $slotId: ID!) {

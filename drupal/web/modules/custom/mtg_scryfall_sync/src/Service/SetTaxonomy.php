@@ -163,6 +163,13 @@ final class SetTaxonomy {
   }
 
   /**
+   * Searches set terms by name or code.
+   *
+   * @param string $q
+   *   Optional name or set-code fragment.
+   * @param int $limit
+   *   Maximum terms to return.
+   *
    * @return list<array{code: string, name: string, count: int, tid: int}>
    *   Set options for autocomplete UIs.
    */
@@ -215,6 +222,9 @@ final class SetTaxonomy {
     return $rows;
   }
 
+  /**
+   * Loads a set term by Scryfall set code.
+   */
   private function loadByCode(string $code): ?TermInterface {
     $ids = $this->entityTypeManager->getStorage('taxonomy_term')->getQuery()
       ->accessCheck(FALSE)
@@ -230,9 +240,13 @@ final class SetTaxonomy {
   }
 
   /**
+   * Counts published cards per set code.
+   *
    * @param string[] $codes
+   *   Lowercase Scryfall set codes.
    *
    * @return array<string, int>
+   *   Map of set code to card count.
    */
   private function countsByCode(array $codes): array {
     if ($codes === []) {

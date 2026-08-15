@@ -90,9 +90,10 @@ final class MtgGraphqlResolverRegistration {
           return NULL;
         }
 
-        // Build a tight LIKE from every slug segment so common prefixes like
-        // "The%" (1400+ cards) do not truncate the candidate set before a match.
-        // Possessive first segments ("jaces") drop the trailing s to match "Jace's".
+        // Build a tight LIKE from every slug segment so common prefixes
+        // like "The%" (1400+ cards) do not truncate the candidate set
+        // before a match. Possessive first segments ("jaces") drop the
+        // trailing s to match "Jace's".
         $likeParts = [];
         foreach ($parts as $i => $part) {
           if ($i === 0 && str_ends_with($part, 's') && strlen($part) > 2) {
@@ -312,7 +313,7 @@ final class MtgGraphqlResolverRegistration {
           throw new \InvalidArgumentException('Card not found: ' . $args['cardId']);
         }
 
-        // Prefer updating an existing collection row for this card (avoid dupes).
+        // Prefer updating an existing collection row for this card.
         $existingIds = $storage->getQuery()
           ->accessCheck(FALSE)
           ->condition('type', 'collection_card')
@@ -362,6 +363,18 @@ final class MtgGraphqlResolverRegistration {
           (string) $args['deckId'],
           (string) $args['slotId'],
           (int) $args['quantity'],
+        );
+      })
+    );
+
+    $registry->addFieldResolver('Mutation', 'deckCardReplacePrinting',
+      $builder->callback(function ($value, array $args) use ($mutator): array {
+        return $mutator->replacePrinting(
+          (string) $args['deckId'],
+          (string) $args['slotId'],
+          (string) $args['cardId'],
+          (string) $args['collectionMode'],
+          (bool) ($args['foil'] ?? FALSE),
         );
       })
     );

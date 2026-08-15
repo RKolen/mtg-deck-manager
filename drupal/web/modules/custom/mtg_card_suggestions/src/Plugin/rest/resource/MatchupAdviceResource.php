@@ -15,7 +15,7 @@ use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 /**
  * REST resource for LLM-powered matchup advice.
  *
- * POST /api/matchup-advice
+ * POST /api/matchup-advice.
  *
  * Request body:
  *   playerDeckId  (int)    - Drupal node ID of the player's deck
@@ -24,7 +24,7 @@ use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
  *   format        (string) - MTG format, e.g. "Modern"
  *
  * Response:
- *   { dynamic, threats[], sideboard: { in[], out[] }, keyPlay }
+ *   { dynamic, threats[], sideboard: { in[], out[] }, keyPlay }.
  *
  * @RestResource(
  *   id = "matchup_advice",

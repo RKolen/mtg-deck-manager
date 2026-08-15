@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Drupal\mtg_graphql\Commands;
 
+use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\mtg_graphql\Service\CollectionEnsurer;
+use Drupal\node\NodeInterface;
 use Drush\Commands\DrushCommands;
 
 /**
@@ -14,6 +16,7 @@ final class CollectionCommands extends DrushCommands {
 
   public function __construct(
     private readonly CollectionEnsurer $ensurer,
+    private readonly EntityTypeManagerInterface $entityTypeManager,
   ) {
     parent::__construct();
   }
@@ -42,15 +45,16 @@ final class CollectionCommands extends DrushCommands {
   /**
    * Marks a deck as foil and moves its collection copies to foil qty.
    *
-   * @command mtg:collection-deck-foil
    * @param int $nid
    *   Deck node ID.
+   *
+   * @command mtg:collection-deck-foil
    * @usage ddev drush mtg:collection-deck-foil 108404
    */
   public function deckFoil(int $nid): void {
-    $storage = \Drupal::entityTypeManager()->getStorage('node');
+    $storage = $this->entityTypeManager->getStorage('node');
     $deck = $storage->load($nid);
-    if (!$deck || $deck->bundle() !== 'deck') {
+    if (!$deck instanceof NodeInterface || $deck->bundle() !== 'deck') {
       throw new \InvalidArgumentException("Node $nid is not a deck.");
     }
     if ($deck->hasField('field_is_foil')) {

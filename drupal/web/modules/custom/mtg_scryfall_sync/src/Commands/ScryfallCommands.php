@@ -166,6 +166,8 @@ class ScryfallCommands extends DrushCommands {
    *
    * @param string $setCode
    *   Scryfall set code, e.g. "mh3" or "dsk".
+   * @param array<string, mixed> $options
+   *   Drush option bag. Supported key: skip-legality.
    *
    * @command mtg:import-set
    * @aliases mtg-set

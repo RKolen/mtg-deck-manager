@@ -6,7 +6,6 @@ namespace Drupal\mtg_card_suggestions\Plugin\rest\resource;
 
 use Drupal\Core\Cache\CacheableMetadata;
 use Drupal\Core\Entity\EntityRepositoryInterface;
-use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\node\NodeInterface;
 use Drupal\paragraphs\Entity\Paragraph;
 use Drupal\rest\Plugin\ResourceBase;
@@ -19,7 +18,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 /**
  * REST resource for deck card slot mutations.
  *
- * POST /api/deck-cards
+ * POST /api/deck-cards.
  *
  * All mutations go through a single POST with an 'action' field so Drupal
  * routing stays trivial and CSRF is bypassed via Basic Auth.
@@ -35,7 +34,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  *
  *   remove {deckUuid, paraUuid}
  *          → removes paragraph from deck and deletes it
- *          → returns {}
+ *          → returns {}.
  *
  * @RestResource(
  *   id = "deck_cards",
@@ -54,11 +53,13 @@ final class DeckCardsResource extends ResourceBase {
     array $serializer_formats,
     LoggerInterface $logger,
     private readonly EntityRepositoryInterface $entityRepository,
-    private readonly EntityTypeManagerInterface $entityTypeManager,
   ) {
     parent::__construct($configuration, $plugin_id, $plugin_definition, $serializer_formats, $logger);
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public static function create(
     ContainerInterface $container,
     array $configuration,
@@ -72,10 +73,18 @@ final class DeckCardsResource extends ResourceBase {
       $container->getParameter('serializer.formats'),
       $container->get('logger.factory')->get('mtg_card_suggestions'),
       $container->get('entity.repository'),
-      $container->get('entity_type.manager'),
     );
   }
 
+  /**
+   * Handles POST /api/deck-cards.
+   *
+   * @param mixed $data
+   *   Deserialized request body.
+   *
+   * @return \Drupal\rest\ResourceResponse
+   *   Mutation result payload.
+   */
   public function post(mixed $data): ResourceResponse {
     if (!is_array($data) || empty($data['action']) || empty($data['deckUuid'])) {
       throw new BadRequestHttpException('Body must include action and deckUuid.');
@@ -91,6 +100,17 @@ final class DeckCardsResource extends ResourceBase {
     };
   }
 
+  /**
+   * Adds a card slot to a deck.
+   *
+   * @param \Drupal\node\NodeInterface $deck
+   *   The deck node.
+   * @param array<string, mixed> $data
+   *   Request body.
+   *
+   * @return \Drupal\rest\ResourceResponse
+   *   The created slot.
+   */
   private function actionAdd(NodeInterface $deck, array $data): ResourceResponse {
     if (empty($data['cardUuid']) || !isset($data['quantity']) || !isset($data['isSideboard'])) {
       throw new BadRequestHttpException('add requires cardUuid, quantity, and isSideboard.');
@@ -130,13 +150,24 @@ final class DeckCardsResource extends ResourceBase {
     ]);
   }
 
+  /**
+   * Updates quantity on an existing deck slot.
+   *
+   * @param \Drupal\node\NodeInterface $deck
+   *   The deck node.
+   * @param array<string, mixed> $data
+   *   Request body.
+   *
+   * @return \Drupal\rest\ResourceResponse
+   *   The updated slot.
+   */
   private function actionUpdate(NodeInterface $deck, array $data): ResourceResponse {
     if (empty($data['paraUuid']) || !isset($data['quantity'])) {
       throw new BadRequestHttpException('update requires paraUuid and quantity.');
     }
 
     $para = $this->entityRepository->loadEntityByUuid('paragraph', (string) $data['paraUuid']);
-    if ($para === NULL) {
+    if (!$para instanceof Paragraph) {
       throw new NotFoundHttpException('Card slot not found: ' . $data['paraUuid']);
     }
 
@@ -160,20 +191,32 @@ final class DeckCardsResource extends ResourceBase {
     ]);
   }
 
+  /**
+   * Removes a card slot from a deck.
+   *
+   * @param \Drupal\node\NodeInterface $deck
+   *   The deck node.
+   * @param array<string, mixed> $data
+   *   Request body.
+   *
+   * @return \Drupal\rest\ResourceResponse
+   *   Empty success payload.
+   */
   private function actionRemove(NodeInterface $deck, array $data): ResourceResponse {
     if (empty($data['paraUuid'])) {
       throw new BadRequestHttpException('remove requires paraUuid.');
     }
 
     $para = $this->entityRepository->loadEntityByUuid('paragraph', (string) $data['paraUuid']);
-    if ($para === NULL) {
+    if (!$para instanceof Paragraph) {
       throw new NotFoundHttpException('Card slot not found: ' . $data['paraUuid']);
     }
 
     // Remove the item from the field before deleting the paragraph.
     $items = $deck->get('field_deck_cards');
     foreach ($items as $delta => $item) {
-      if ((int) $item->target_id === (int) $para->id()) {
+      $value = $item->getValue();
+      if ((int) ($value['target_id'] ?? 0) === (int) $para->id()) {
         $items->removeItem($delta);
         break;
       }
@@ -186,6 +229,9 @@ final class DeckCardsResource extends ResourceBase {
     return $this->ok([]);
   }
 
+  /**
+   * Loads a deck node by UUID.
+   */
   private function loadDeck(string $uuid): NodeInterface {
     $deck = $this->entityRepository->loadEntityByUuid('node', $uuid);
     if (!$deck instanceof NodeInterface || $deck->bundle() !== 'deck') {
@@ -194,6 +240,12 @@ final class DeckCardsResource extends ResourceBase {
     return $deck;
   }
 
+  /**
+   * Builds an uncached JSON success response.
+   *
+   * @param array<string, mixed> $payload
+   *   Response body.
+   */
   private function ok(array $payload): ResourceResponse {
     $response = new ResourceResponse($payload, 200);
     $cache = new CacheableMetadata();

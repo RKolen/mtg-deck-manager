@@ -61,10 +61,11 @@ final class CardImageCommands extends DrushCommands {
         return;
       }
       if ($deck->hasField('field_deck_cards')) {
-        foreach ($deck->get('field_deck_cards') as $item) {
-          $paragraph = $item->entity;
-          if ($paragraph && $paragraph->hasField('field_card') && !$paragraph->get('field_card')->isEmpty()) {
-            $card = $paragraph->get('field_card')->entity;
+        foreach ($deck->get('field_deck_cards')->referencedEntities() as $paragraph) {
+          if (!$paragraph->hasField('field_card') || $paragraph->get('field_card')->isEmpty()) {
+            continue;
+          }
+          foreach ($paragraph->get('field_card')->referencedEntities() as $card) {
             if ($card instanceof NodeInterface) {
               $nids[] = (int) $card->id();
             }

@@ -75,6 +75,14 @@ extend type Mutation {
 
   deckCardUpdate(deckId: ID!, slotId: ID!, quantity: Int!): DeckCardSlot!
 
+  deckCardReplacePrinting(
+    deckId: ID!
+    slotId: ID!
+    cardId: ID!
+    collectionMode: String!
+    foil: Boolean
+  ): DeckCardSlot!
+
   deckCardRemove(deckId: ID!, slotId: ID!): Boolean!
 
   scrapeMetaDecks(format: String!, limit: Int): ScrapeMetaDecksResult!

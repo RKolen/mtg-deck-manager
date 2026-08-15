@@ -9,6 +9,7 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\State\StateInterface;
 use Drupal\mtg_scryfall_sync\Service\SetTaxonomy;
+use Drupal\node\NodeInterface;
 use GuzzleHttp\ClientInterface;
 
 /**
@@ -361,13 +362,19 @@ class ScryfallImporter {
     }
 
     $existing = $storage->loadByProperties(['field_scryfall_id' => $scryfall_id]);
-    $node = $existing ? reset($existing) : NULL;
-
-    if ($node === NULL) {
-      $node = $storage->create([
+    $loaded = $existing !== [] ? reset($existing) : NULL;
+    if ($loaded instanceof NodeInterface) {
+      $node = $loaded;
+    }
+    else {
+      $created = $storage->create([
         'type' => 'mtg_card',
         'status' => 1,
       ]);
+      if (!$created instanceof NodeInterface) {
+        return;
+      }
+      $node = $created;
     }
 
     // Double-faced cards (transform, modal_dfc, etc.) store mana_cost,

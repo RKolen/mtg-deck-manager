@@ -17,7 +17,8 @@ use Symfony\Component\Validator\Constraint;
  * - Commander / EDH / Tiny Leaders / TLR decks default to singleton (1 copy).
  * - Tiny Leaders / TLR nonland cards must have mana value 3 or less.
  * - All other constructed decks default to 4 copies (main + sideboard).
- * - Deck and sideboard total sizes are not hard-blocked (soft UI guidance only).
+ * - Deck and sideboard total sizes are not hard-blocked
+ *   (soft UI guidance only).
  *
  * @Constraint(
  *   id = "DeckCopyLimit",
@@ -27,8 +28,14 @@ use Symfony\Component\Validator\Constraint;
  */
 class DeckCopyLimit extends Constraint {
 
+  /**
+   * Violation when a card exceeds the format copy limit.
+   */
   public string $tooManyCopies = 'The deck contains %count copies of "%name", but the maximum allowed is %max.';
 
+  /**
+   * Violation when a Tiny Leaders nonland exceeds mana value 3.
+   */
   public string $manaValueTooHigh = '"%name" has mana value %cmc, but %format allows a maximum of %max for nonland cards.';
 
 }

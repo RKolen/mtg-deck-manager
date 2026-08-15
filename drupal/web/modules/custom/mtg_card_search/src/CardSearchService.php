@@ -27,11 +27,15 @@ final class CardSearchService {
   ) {}
 
   /**
+   * Runs a filtered Solr card search.
+   *
    * @param array<string, mixed> $params
-   *   Keys: q, type, oracleText, legalIn, cmcMin, cmcMax, colors, colorIdentity,
-   *   manaProducer, rarity, setCodes, setExclude, deckIds, deckExclude, page, limit.
+   *   Keys: q, type, oracleText, legalIn, cmcMin, cmcMax, colors,
+   *   colorIdentity, manaProducer, rarity, setCodes, setExclude,
+   *   deckIds, deckExclude, page, limit.
    *
    * @return array{cards: \Drupal\node\NodeInterface[], count: int, pages: int}
+   *   Matching cards plus result counts.
    */
   public function search(array $params): array {
     $index = $this->loadIndex();
@@ -69,6 +73,9 @@ final class CardSearchService {
     ];
   }
 
+  /**
+   * Loads the Search API card index.
+   */
   private function loadIndex(): ?IndexInterface {
     $storage = $this->entityTypeManager->getStorage('search_api_index');
     $index = $storage->load(self::INDEX_ID);
@@ -80,16 +87,20 @@ final class CardSearchService {
   }
 
   /**
+   * Applies name and oracle fulltext keys to the query.
+   *
+   * @param \Drupal\search_api\Query\QueryInterface $query
+   *   Search API query.
    * @param array<string, mixed> $params
+   *   Search parameters.
    */
   private function applyFulltextSearch(QueryInterface $query, array $params): void {
     $q = trim((string) ($params['q'] ?? ''));
     $oracleText = trim((string) ($params['oracleText'] ?? ''));
 
     // Search API allows one keys() call. Scope each field separately:
-    // - name alone → title only (never oracle)
-    // - oracle alone → oracle only
-    // - both → oracle fulltext here; title constrained via nids in applyConditions
+    // name alone uses title only; oracle alone uses oracle only; both
+    // use oracle fulltext here and constrain title via nids later.
     if ($q !== '' && $oracleText === '') {
       $query->keys($q);
       $query->setFulltextFields(['title']);
@@ -101,7 +112,12 @@ final class CardSearchService {
   }
 
   /**
+   * Applies structured filters to the Search API query.
+   *
+   * @param \Drupal\search_api\Query\QueryInterface $query
+   *   Search API query.
    * @param array<string, mixed> $params
+   *   Search parameters.
    */
   private function applyConditions(QueryInterface $query, array $params): void {
     $conditions = $query->createConditionGroup('AND');
@@ -109,7 +125,7 @@ final class CardSearchService {
 
     $q = trim((string) ($params['q'] ?? ''));
     $oracleText = trim((string) ($params['oracleText'] ?? ''));
-    // When both name and oracle are set, constrain title via SQL (keys used for oracle).
+    // When both name and oracle are set, constrain title via SQL.
     if ($q !== '' && $oracleText !== '') {
       $nids = $this->nidsWithTitleContains($q);
       $conditions->addCondition('nid', $nids === [] ? [-1] : $nids, 'IN');
@@ -118,8 +134,8 @@ final class CardSearchService {
 
     $type = trim((string) ($params['type'] ?? ''));
     if ($type !== '') {
-      // Use the text field — Solr string CONTAINS is effectively exact-match only,
-      // so "Land" missed "Basic Land — Mountain".
+      // Use the text field. Solr string CONTAINS is exact-match only,
+      // so "Land" missed "Basic Land - Mountain".
       $conditions->addCondition('field_type_line', $type, 'CONTAINS');
       $hasCondition = TRUE;
     }
@@ -199,10 +215,13 @@ final class CardSearchService {
   }
 
   /**
+   * Normalizes a raw deck ID list to nids or UUIDs.
+   *
    * @param mixed $raw
    *   Raw deck ID list (nids or UUIDs).
    *
    * @return string[]
+   *   Unique valid deck identifiers.
    */
   private function sanitizeDeckIds(mixed $raw): array {
     if (!is_array($raw)) {
@@ -222,6 +241,8 @@ final class CardSearchService {
   }
 
   /**
+   * Collects distinct card node IDs used in the given decks.
+   *
    * @param string[] $deckIds
    *   Deck nids or UUIDs.
    *
@@ -251,8 +272,7 @@ final class CardSearchService {
         if (!$para->hasField('field_card') || $para->get('field_card')->isEmpty()) {
           continue;
         }
-        $card = $para->get('field_card')->entity;
-        if ($card !== NULL) {
+        foreach ($para->get('field_card')->referencedEntities() as $card) {
           $cardNids[(int) $card->id()] = (int) $card->id();
         }
       }
@@ -265,6 +285,7 @@ final class CardSearchService {
    * Card node IDs whose title contains $name (DB collation handles case).
    *
    * @return int[]
+   *   Matching mtg_card node IDs.
    */
   private function nidsWithTitleContains(string $name): array {
     $ids = $this->entityTypeManager->getStorage('node')->getQuery()
@@ -278,6 +299,8 @@ final class CardSearchService {
   }
 
   /**
+   * Normalizes a raw set-code list.
+   *
    * @param mixed $raw
    *   Raw set code list (array or null).
    *
@@ -299,9 +322,13 @@ final class CardSearchService {
   }
 
   /**
+   * Keeps only valid WUBRG color letters.
+   *
    * @param mixed[] $colors
+   *   Raw color values.
    *
    * @return string[]
+   *   Unique WUBRG letters.
    */
   private function sanitizeColors(array $colors): array {
     $valid = [];

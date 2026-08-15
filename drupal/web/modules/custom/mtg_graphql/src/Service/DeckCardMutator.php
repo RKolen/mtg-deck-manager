@@ -106,6 +106,145 @@ final class DeckCardMutator {
   }
 
   /**
+   * Replaces the printing on a deck slot and updates the collection.
+   *
+   * @param string $deckUuid
+   *   Deck node UUID.
+   * @param string $slotUuid
+   *   Deck card paragraph UUID.
+   * @param string $cardUuid
+   *   New mtg_card printing UUID.
+   * @param string $collectionMode
+   *   Replace moves collection copies from the old printing to the new
+   *   one. Add keeps the old collection row and ensures the new printing.
+   * @param bool $foil
+   *   TRUE to treat the copies as foil in the collection.
+   *
+   * @return array{id: string, quantity: int, isSideboard: bool}
+   *   The resulting deck slot data.
+   */
+  public function replacePrinting(
+    string $deckUuid,
+    string $slotUuid,
+    string $cardUuid,
+    string $collectionMode,
+    bool $foil,
+  ): array {
+    $mode = strtolower(trim($collectionMode));
+    if (!in_array($mode, ['replace', 'add'], TRUE)) {
+      throw new BadRequestHttpException('collectionMode must be replace or add');
+    }
+
+    $deck = $this->loadDeck($deckUuid);
+    $para = $this->loadParagraphOnDeck($deck, $slotUuid);
+    $newCard = $this->loadCard($cardUuid);
+    $oldRef = $para->get('field_card')->entity;
+    $oldCard = $oldRef instanceof NodeInterface ? $oldRef : NULL;
+    $qty = max(1, (int) ($para->get('field_quantity')->value ?? 1));
+    $isSideboard = (bool) ($para->get('field_is_sideboard')->value ?? FALSE);
+
+    if ($oldCard instanceof NodeInterface && $oldCard->uuid() === $newCard->uuid()) {
+      throw new BadRequestHttpException('That printing is already in this slot');
+    }
+
+    $merged = $this->findMergeTarget($deck, $para, $newCard, $isSideboard);
+    if ($merged instanceof Paragraph) {
+      $mergedQty = max(1, (int) ($merged->get('field_quantity')->value ?? 1)) + $qty;
+      $merged->set('field_quantity', $mergedQty);
+      $merged->setNewRevision(FALSE);
+      $merged->save();
+      $this->remove($deckUuid, $slotUuid);
+      $this->applyCollectionChange($oldCard, $newCard, $qty, $mode, $foil);
+      return [
+        'id' => $merged->uuid(),
+        'quantity' => $mergedQty,
+        'isSideboard' => $isSideboard,
+      ];
+    }
+
+    $para->set('field_card', ['target_id' => $newCard->id()]);
+    $para->setNewRevision(FALSE);
+    $para->save();
+    $this->pointDeckAtParagraphRevision($deck, $para);
+
+    $this->applyCollectionChange($oldCard, $newCard, $qty, $mode, $foil);
+
+    return [
+      'id' => $para->uuid(),
+      'quantity' => $qty,
+      'isSideboard' => $isSideboard,
+    ];
+  }
+
+  /**
+   * Applies replace or add collection updates for a printing swap.
+   */
+  private function applyCollectionChange(
+    ?NodeInterface $oldCard,
+    NodeInterface $newCard,
+    int $qty,
+    string $mode,
+    bool $foil,
+  ): void {
+    if ($mode === 'replace' && $oldCard instanceof NodeInterface) {
+      $this->collectionEnsurer->removeCopies($oldCard, $qty, $foil);
+    }
+    if ($this->collectionEnsurer->loadByCard($newCard) === NULL) {
+      $this->collectionEnsurer->addCopies($newCard, $qty, $foil);
+      return;
+    }
+    if ($foil) {
+      $this->collectionEnsurer->ensureMinFoil($newCard, $qty);
+      return;
+    }
+    $this->collectionEnsurer->ensureMinOwned($newCard, $qty);
+  }
+
+  /**
+   * Finds another slot on the deck that already uses this printing.
+   */
+  private function findMergeTarget(
+    NodeInterface $deck,
+    Paragraph $current,
+    NodeInterface $newCard,
+    bool $isSideboard,
+  ): ?Paragraph {
+    foreach ($deck->get('field_deck_cards')->referencedEntities() as $entity) {
+      if (!$entity instanceof Paragraph || $entity->id() === $current->id()) {
+        continue;
+      }
+      if ((bool) ($entity->get('field_is_sideboard')->value ?? FALSE) !== $isSideboard) {
+        continue;
+      }
+      if ((int) ($entity->get('field_card')->target_id ?? 0) !== (int) $newCard->id()) {
+        continue;
+      }
+      return $entity;
+    }
+    return NULL;
+  }
+
+  /**
+   * Updates the deck paragraph reference to the latest revision.
+   */
+  private function pointDeckAtParagraphRevision(NodeInterface $deck, Paragraph $para): void {
+    $items = $deck->get('field_deck_cards');
+    foreach ($items as $item) {
+      $value = $item->getValue();
+      if ((int) ($value['target_id'] ?? 0) !== (int) $para->id()) {
+        continue;
+      }
+      $item->setValue([
+        'target_id' => $para->id(),
+        'target_revision_id' => $para->getRevisionId(),
+      ]);
+      break;
+    }
+    $deck->setNewRevision(FALSE);
+    $deck->save();
+  }
+
+  /**
    * Removes a deck slot from a deck and deletes the paragraph.
    *
    * @return bool

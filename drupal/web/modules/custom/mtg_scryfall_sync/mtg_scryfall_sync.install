@@ -206,9 +206,10 @@ function mtg_scryfall_sync_update_9003(): string {
   /** @var \Drupal\mtg_scryfall_sync\Service\SetTaxonomy $sets */
   $sets = \Drupal::service('mtg_scryfall_sync.set_taxonomy');
   $result = $sets->syncFromCards();
-  $messages[] = sprintf('synced %d set terms (%d new)', $result['total'], $result['created']);
-
-  return $messages === []
-    ? 'mtg_set taxonomy already present.'
-    : 'Created/updated: ' . implode(', ', $messages) . '.';
+  $sync_note = sprintf('synced %d set terms (%d new)', $result['total'], $result['created']);
+  if ($messages === []) {
+    return 'mtg_set taxonomy already present; ' . $sync_note . '.';
+  }
+  $messages[] = $sync_note;
+  return 'Created/updated: ' . implode(', ', $messages) . '.';
 }
