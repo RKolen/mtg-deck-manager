@@ -213,3 +213,62 @@ function mtg_scryfall_sync_update_9003(): string {
   $messages[] = $sync_note;
   return 'Created/updated: ' . implode(', ', $messages) . '.';
 }
+
+/**
+ * Adds Scryfall full_art and border_color fields on mtg_card.
+ */
+function mtg_scryfall_sync_update_9004(): string {
+  $created = [];
+
+  if (!FieldStorageConfig::loadByName('node', 'field_full_art')) {
+    FieldStorageConfig::create([
+      'field_name' => 'field_full_art',
+      'entity_type' => 'node',
+      'type' => 'boolean',
+      'cardinality' => 1,
+    ])->save();
+    $created[] = 'field_full_art storage';
+  }
+  if (!FieldConfig::loadByName('node', 'mtg_card', 'field_full_art')) {
+    FieldConfig::create([
+      'field_name' => 'field_full_art',
+      'entity_type' => 'node',
+      'bundle' => 'mtg_card',
+      'label' => 'Full art',
+      'description' => 'Scryfall full_art flag.',
+      'required' => FALSE,
+      'default_value' => [['value' => 0]],
+      'settings' => [
+        'on_label' => 'Full art',
+        'off_label' => 'Standard',
+      ],
+    ])->save();
+    $created[] = 'field_full_art';
+  }
+
+  if (!FieldStorageConfig::loadByName('node', 'field_border_color')) {
+    FieldStorageConfig::create([
+      'field_name' => 'field_border_color',
+      'entity_type' => 'node',
+      'type' => 'string',
+      'cardinality' => 1,
+      'settings' => ['max_length' => 16],
+    ])->save();
+    $created[] = 'field_border_color storage';
+  }
+  if (!FieldConfig::loadByName('node', 'mtg_card', 'field_border_color')) {
+    FieldConfig::create([
+      'field_name' => 'field_border_color',
+      'entity_type' => 'node',
+      'bundle' => 'mtg_card',
+      'label' => 'Border color',
+      'description' => 'Scryfall border_color (black, white, borderless, silver, gold).',
+      'required' => FALSE,
+    ])->save();
+    $created[] = 'field_border_color';
+  }
+
+  return $created === []
+    ? 'field_full_art and field_border_color already exist.'
+    : 'Created: ' . implode(', ', $created) . '.';
+}

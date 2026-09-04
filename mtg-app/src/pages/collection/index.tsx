@@ -20,6 +20,7 @@ import {
   fetchCollectionValue,
   upsertCollectionCard,
 } from '../../services/drupalApi';
+import { invalidateInventoryQueries } from '../../services/queryCache';
 import { useTheme } from '../../context/ThemeContext';
 import type { CollectionCard, JsonApiResource, MtgCardAttributes } from '../../types/drupal';
 
@@ -157,7 +158,9 @@ const CollectionPage: React.FC = () => {
       foil: number;
       existingId?: string;
     }) => upsertCollectionCard(cardId, cardName, owned, foil, existingId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['collectionCards'] }),
+    onSuccess: () => {
+      void invalidateInventoryQueries(qc);
+    },
   });
 
   function setQuantities(card: CardResource, owned: number, foil: number): void {

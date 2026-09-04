@@ -12,6 +12,7 @@ use Drupal\graphql\GraphQL\Execution\ResolveContext;
 use Drupal\graphql\GraphQL\ResolverBuilder;
 use Drupal\graphql\GraphQL\ResolverRegistryInterface;
 use GraphQL\Type\Definition\ResolveInfo;
+use Drupal\mtg_graphql\Service\DeckCardMutator;
 use Drupal\node\NodeInterface;
 
 /**
@@ -190,7 +191,12 @@ final class MtgGraphqlResolverRegistration {
     );
 
     $registry->addFieldResolver('Query', 'collectionValue',
-      $builder->callback(function ($value, array $args): float {
+      $builder->callback(function ($value, array $args, ResolveContext $context, ResolveInfo $info, FieldContext $fieldContext): float {
+        // Drop the cached total when collection rows or card prices change.
+        $fieldContext->addCacheTags([
+          'node_list:collection_card',
+          'node_list:mtg_card',
+        ]);
         $currency = strtoupper((string) ($args['currency'] ?? 'USD'));
         $useEur = $currency === 'EUR';
         $storage = \Drupal::entityTypeManager()->getStorage('node');
@@ -348,11 +354,15 @@ final class MtgGraphqlResolverRegistration {
 
     $registry->addFieldResolver('Mutation', 'deckCardAdd',
       $builder->callback(function ($value, array $args) use ($mutator): array {
+        $foil = array_key_exists('foil', $args) && $args['foil'] !== NULL
+          ? (bool) $args['foil']
+          : NULL;
         return $mutator->add(
           (string) $args['deckId'],
           (string) $args['cardId'],
           (int) $args['quantity'],
           (bool) $args['isSideboard'],
+          $foil,
         );
       })
     );
@@ -363,6 +373,16 @@ final class MtgGraphqlResolverRegistration {
           (string) $args['deckId'],
           (string) $args['slotId'],
           (int) $args['quantity'],
+        );
+      })
+    );
+
+    $registry->addFieldResolver('Mutation', 'deckCardSetFoil',
+      $builder->callback(function ($value, array $args) use ($mutator): array {
+        return $mutator->setFoil(
+          (string) $args['deckId'],
+          (string) $args['slotId'],
+          (bool) $args['foil'],
         );
       })
     );
@@ -448,6 +468,12 @@ final class MtgGraphqlResolverRegistration {
       'power'          => fn($n) => $n->get('field_power')->value,
       'toughness'      => fn($n) => $n->get('field_toughness')->value,
       'loyalty'        => fn($n) => $n->get('field_loyalty')->value,
+      'fullArt'        => fn($n) => $n->hasField('field_full_art')
+        ? (bool) $n->get('field_full_art')->value
+        : FALSE,
+      'borderColor'    => fn($n) => $n->hasField('field_border_color')
+        ? $n->get('field_border_color')->value
+        : NULL,
     ];
 
     foreach ($scalar as $field => $fn) {
@@ -499,6 +525,9 @@ final class MtgGraphqlResolverRegistration {
     );
     $registry->addFieldResolver('DeckCard', 'isSideboard',
       $builder->callback(fn($p) => (bool) ($p->get('field_is_sideboard')->value ?? FALSE))
+    );
+    $registry->addFieldResolver('DeckCard', 'isFoil',
+      $builder->callback(fn($p) => DeckCardMutator::fieldIsOn($p, 'field_is_foil'))
     );
     $registry->addFieldResolver('DeckCard', 'card',
       $builder->callback(function ($p): ?NodeInterface {
@@ -865,6 +894,9 @@ final class MtgGraphqlResolverRegistration {
     );
     $registry->addFieldResolver('DeckCardSlot', 'isSideboard',
       $builder->callback(fn(array $slot) => $slot['isSideboard'])
+    );
+    $registry->addFieldResolver('DeckCardSlot', 'isFoil',
+      $builder->callback(fn(array $slot) => (bool) ($slot['isFoil'] ?? FALSE))
     );
   }
 

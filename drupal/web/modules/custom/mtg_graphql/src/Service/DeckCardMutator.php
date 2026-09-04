@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\mtg_graphql\Service;
 
 use Drupal\Core\Entity\EntityRepositoryInterface;
+use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\node\NodeInterface;
 use Drupal\paragraphs\Entity\Paragraph;
 use Drupal\paragraphs\ParagraphInterface;
@@ -24,18 +25,28 @@ final class DeckCardMutator {
   /**
    * Adds a card to a deck.
    *
-   * @return array{id: string, quantity: int, isSideboard: bool}
+   * Does not change collection quantities. NULL $foil uses the deck default.
+   *
+   * @return array{id: string, quantity: int, isSideboard: bool, isFoil: bool}
    *   The new deck slot data.
    */
-  public function add(string $deckUuid, string $cardUuid, int $quantity, bool $isSideboard): array {
+  public function add(
+    string $deckUuid,
+    string $cardUuid,
+    int $quantity,
+    bool $isSideboard,
+    ?bool $foil = NULL,
+  ): array {
     $deck = $this->loadDeck($deckUuid);
     $card = $this->loadCard($cardUuid);
+    $isFoil = $foil ?? $this->deckDefaultFoil($deck);
 
     $para = Paragraph::create([
       'type' => 'deck_card',
       'field_card' => ['target_id' => $card->id()],
       'field_quantity' => $quantity,
       'field_is_sideboard' => $isSideboard,
+      'field_is_foil' => $isFoil,
     ]);
     $para->setNewRevision(FALSE);
     $para->save();
@@ -47,23 +58,15 @@ final class DeckCardMutator {
     $deck->setNewRevision(FALSE);
     $deck->save();
 
-    $this->syncCollectionForDeckCard(
-      $deck,
-      $card,
-      $this->quantityOfCardInDeck($deck, (int) $card->id()),
-    );
-
-    return [
-      'id' => $para->uuid(),
-      'quantity' => $quantity,
-      'isSideboard' => $isSideboard,
-    ];
+    return $this->slotPayload($para, $quantity, $isSideboard, $isFoil);
   }
 
   /**
    * Updates the quantity of a deck slot.
    *
-   * @return array{id: string, quantity: int, isSideboard: bool}
+   * Does not change collection quantities.
+   *
+   * @return array{id: string, quantity: int, isSideboard: bool, isFoil: bool}
    *   The updated deck slot data.
    */
   public function update(string $deckUuid, string $slotUuid, int $quantity): array {
@@ -73,40 +76,47 @@ final class DeckCardMutator {
     $deck = $this->loadDeck($deckUuid);
     $para = $this->loadParagraphOnDeck($deck, $slotUuid);
     $para->set('field_quantity', $quantity);
+    $para->setNewRevision(FALSE);
     $para->save();
+    $this->pointDeckAtParagraphRevision($deck, $para);
 
-    // Reload so quantity sums see the updated paragraph values.
-    $deck = $this->loadDeck($deckUuid);
-    $card = $para->get('field_card')->entity;
-    if ($card instanceof NodeInterface) {
-      $this->syncCollectionForDeckCard(
-        $deck,
-        $card,
-        $this->quantityOfCardInDeck($deck, (int) $card->id()),
-      );
-    }
-
-    return [
-      'id' => $para->uuid(),
-      'quantity' => $quantity,
-      'isSideboard' => (bool) ($para->get('field_is_sideboard')->value ?? FALSE),
-    ];
+    return $this->slotPayload(
+      $para,
+      $quantity,
+      (bool) ($para->get('field_is_sideboard')->value ?? FALSE),
+      $this->slotIsFoil($para),
+    );
   }
 
   /**
-   * Syncs collection owned/foil qty for a card based on the deck's foil flag.
+   * Sets the foil flag on a deck slot without touching the collection.
+   *
+   * @return array{id: string, quantity: int, isSideboard: bool, isFoil: bool}
+   *   The updated deck slot data.
    */
-  private function syncCollectionForDeckCard(NodeInterface $deck, NodeInterface $card, int $qty): void {
-    $isFoil = $deck->hasField('field_is_foil') && (bool) $deck->get('field_is_foil')->value;
-    if ($isFoil) {
-      $this->collectionEnsurer->ensureMinFoil($card, $qty);
-      return;
+  public function setFoil(string $deckUuid, string $slotUuid, bool $foil): array {
+    $deck = $this->loadDeck($deckUuid);
+    $para = $this->loadParagraphOnDeck($deck, $slotUuid);
+    if ($para->hasField('field_is_foil')) {
+      $para->set('field_is_foil', $foil);
     }
-    $this->collectionEnsurer->ensureMinOwned($card, $qty);
+    $para->setNewRevision(FALSE);
+    $para->save();
+    $this->pointDeckAtParagraphRevision($deck, $para);
+
+    return $this->slotPayload(
+      $para,
+      max(1, (int) ($para->get('field_quantity')->value ?? 1)),
+      (bool) ($para->get('field_is_sideboard')->value ?? FALSE),
+      $foil,
+    );
   }
 
   /**
-   * Replaces the printing on a deck slot and updates the collection.
+   * Replaces the printing on a deck slot.
+   *
+   * Collection updates run only for replace or add. none changes the list
+   * entry only. The foil argument is written onto the slot either way.
    *
    * @param string $deckUuid
    *   Deck node UUID.
@@ -115,12 +125,12 @@ final class DeckCardMutator {
    * @param string $cardUuid
    *   New mtg_card printing UUID.
    * @param string $collectionMode
-   *   Replace moves collection copies from the old printing to the new
-   *   one. Add keeps the old collection row and ensures the new printing.
+   *   None leaves collection unchanged. Replace moves copies from the old
+   *   printing. Add keeps the old row and ensures the new printing.
    * @param bool $foil
-   *   TRUE to treat the copies as foil in the collection.
+   *   Foil flag stored on the slot (and used for collection replace/add).
    *
-   * @return array{id: string, quantity: int, isSideboard: bool}
+   * @return array{id: string, quantity: int, isSideboard: bool, isFoil: bool}
    *   The resulting deck slot data.
    */
   public function replacePrinting(
@@ -131,8 +141,8 @@ final class DeckCardMutator {
     bool $foil,
   ): array {
     $mode = strtolower(trim($collectionMode));
-    if (!in_array($mode, ['replace', 'add'], TRUE)) {
-      throw new BadRequestHttpException('collectionMode must be replace or add');
+    if (!in_array($mode, ['none', 'replace', 'add'], TRUE)) {
+      throw new BadRequestHttpException('collectionMode must be none, replace, or add');
     }
 
     $deck = $this->loadDeck($deckUuid);
@@ -144,36 +154,50 @@ final class DeckCardMutator {
     $isSideboard = (bool) ($para->get('field_is_sideboard')->value ?? FALSE);
 
     if ($oldCard instanceof NodeInterface && $oldCard->uuid() === $newCard->uuid()) {
-      throw new BadRequestHttpException('That printing is already in this slot');
+      if ($this->slotIsFoil($para) === $foil && $mode === 'none') {
+        throw new BadRequestHttpException('That printing is already in this slot');
+      }
+      if ($para->hasField('field_is_foil')) {
+        $para->set('field_is_foil', $foil);
+      }
+      $para->setNewRevision(FALSE);
+      $para->save();
+      $this->pointDeckAtParagraphRevision($deck, $para);
+      if ($mode !== 'none') {
+        $this->applyCollectionChange($oldCard, $newCard, $qty, $mode, $foil);
+      }
+      return $this->slotPayload($para, $qty, $isSideboard, $foil);
     }
 
     $merged = $this->findMergeTarget($deck, $para, $newCard, $isSideboard);
     if ($merged instanceof Paragraph) {
       $mergedQty = max(1, (int) ($merged->get('field_quantity')->value ?? 1)) + $qty;
       $merged->set('field_quantity', $mergedQty);
+      if ($merged->hasField('field_is_foil')) {
+        $merged->set('field_is_foil', $foil);
+      }
       $merged->setNewRevision(FALSE);
       $merged->save();
       $this->remove($deckUuid, $slotUuid);
-      $this->applyCollectionChange($oldCard, $newCard, $qty, $mode, $foil);
-      return [
-        'id' => $merged->uuid(),
-        'quantity' => $mergedQty,
-        'isSideboard' => $isSideboard,
-      ];
+      if ($mode !== 'none') {
+        $this->applyCollectionChange($oldCard, $newCard, $qty, $mode, $foil);
+      }
+      return $this->slotPayload($merged, $mergedQty, $isSideboard, $foil);
     }
 
     $para->set('field_card', ['target_id' => $newCard->id()]);
+    if ($para->hasField('field_is_foil')) {
+      $para->set('field_is_foil', $foil);
+    }
     $para->setNewRevision(FALSE);
     $para->save();
     $this->pointDeckAtParagraphRevision($deck, $para);
 
-    $this->applyCollectionChange($oldCard, $newCard, $qty, $mode, $foil);
+    if ($mode !== 'none') {
+      $this->applyCollectionChange($oldCard, $newCard, $qty, $mode, $foil);
+    }
 
-    return [
-      'id' => $para->uuid(),
-      'quantity' => $qty,
-      'isSideboard' => $isSideboard,
-    ];
+    return $this->slotPayload($para, $qty, $isSideboard, $foil);
   }
 
   /**
@@ -268,26 +292,6 @@ final class DeckCardMutator {
   }
 
   /**
-   * Sums quantity of a card across all slots in a deck.
-   */
-  private function quantityOfCardInDeck(NodeInterface $deck, int $cardNid): int {
-    $total = 0;
-    foreach ($deck->get('field_deck_cards')->referencedEntities() as $entity) {
-      if (!$entity instanceof ParagraphInterface || !$entity->hasField('field_card')) {
-        continue;
-      }
-      if ($entity->get('field_card')->isEmpty()) {
-        continue;
-      }
-      if ((int) $entity->get('field_card')->target_id !== $cardNid) {
-        continue;
-      }
-      $total += max(1, (int) ($entity->get('field_quantity')->value ?? 1));
-    }
-    return max(1, $total);
-  }
-
-  /**
    * Loads a deck node by UUID, throwing if not found.
    */
   private function loadDeck(string $deckUuid): NodeInterface {
@@ -319,6 +323,56 @@ final class DeckCardMutator {
       }
     }
     throw new NotFoundHttpException('Deck slot not found: ' . $slotUuid);
+  }
+
+  /**
+   * Reads a Drupal boolean field as true only when the stored value is 1.
+   *
+   * Drupal stores off as the string 0, which (bool) casts to TRUE.
+   */
+  public static function fieldIsOn(FieldableEntityInterface $entity, string $field): bool {
+    if (!$entity->hasField($field)) {
+      return FALSE;
+    }
+    $item = $entity->get($field);
+    if ($item->isEmpty()) {
+      return FALSE;
+    }
+    return (int) $item->value === 1;
+  }
+
+  /**
+   * Default foil flag for newly added slots.
+   */
+  private function deckDefaultFoil(NodeInterface $deck): bool {
+    return self::fieldIsOn($deck, 'field_is_foil');
+  }
+
+  /**
+   * Reads the foil flag on a deck_card paragraph.
+   */
+  private function slotIsFoil(ParagraphInterface $para): bool {
+    return self::fieldIsOn($para, 'field_is_foil');
+  }
+
+  /**
+   * Builds the GraphQL DeckCardSlot payload.
+   *
+   * @return array{id: string, quantity: int, isSideboard: bool, isFoil: bool}
+   *   Slot fields for mutation responses.
+   */
+  private function slotPayload(
+    ParagraphInterface $para,
+    int $quantity,
+    bool $isSideboard,
+    bool $isFoil,
+  ): array {
+    return [
+      'id' => $para->uuid(),
+      'quantity' => $quantity,
+      'isSideboard' => $isSideboard,
+      'isFoil' => $isFoil,
+    ];
   }
 
 }

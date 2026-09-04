@@ -4,7 +4,7 @@
  * Route: /cards/:slug
  * Resolves one printing by slug, then lists every printing with the same title.
  * When opened from a deck (?deck=&slot=), choosing another printing updates
- * that deck slot and the collection (replace or add, regular or foil).
+ * that deck slot. Collection changes only if you pick Replace or Add.
  */
 
 import React, { useMemo, useState } from 'react';
@@ -16,6 +16,7 @@ import {
   findCardsByName,
   replaceDeckCardPrinting,
 } from '../../services/drupalApi';
+import { invalidateInventoryQueries } from '../../services/queryCache';
 import PrintingSwapDialog, {
   type CollectionSwapMode,
   type PrintingSwapTarget,
@@ -23,6 +24,10 @@ import PrintingSwapDialog, {
 import { getOracleText } from '../../utils/deckAnalysis';
 import { cardPrintingsPath } from '../../utils/slugify';
 import { useTheme } from '../../context/ThemeContext';
+import PrintingFilter, {
+  EMPTY_PRINTING_FILTER,
+  matchesPrintingFilter,
+} from '../../components/PrintingFilter';
 import { formatPrice, priceFor } from '../../utils/prices';
 import type { MtgCard } from '../../types/drupal';
 
@@ -36,10 +41,12 @@ const CardPage: React.FC = () => {
   const deckId = typeof router.query.deck === 'string' ? router.query.deck : '';
   const slotId = typeof router.query.slot === 'string' ? router.query.slot : '';
   const fromSlug = typeof router.query.from === 'string' ? router.query.from : '';
+  const deckIsFoil = router.query.foil === '1' || router.query.foil === 'true';
   const fromDeck = deckId !== '' && slotId !== '';
 
   const [pending, setPending] = useState<PrintingSwapTarget | null>(null);
   const [swapError, setSwapError] = useState<string | null>(null);
+  const [printingFilter, setPrintingFilter] = useState(EMPTY_PRINTING_FILTER);
 
   const { data: card, isLoading, isError } = useQuery({
     queryKey: ['card', slug],
@@ -68,6 +75,11 @@ const CardPage: React.FC = () => {
     });
   }, [printings, currency]);
 
+  const filteredPrintings = useMemo(
+    () => sortedPrintings.filter(p => matchesPrintingFilter(p.attributes, printingFilter)),
+    [sortedPrintings, printingFilter],
+  );
+
   const displayed: MtgCard | undefined = useMemo(() => {
     if (highlightId !== '') {
       const match = printings.find(p => p.id === highlightId);
@@ -93,11 +105,7 @@ const CardPage: React.FC = () => {
       foil: boolean;
     }) => replaceDeckCardPrinting(deckId, slotId, nextId, mode, foil),
     onSuccess: async (_data, vars) => {
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ['deckCards', deckId] }),
-        qc.invalidateQueries({ queryKey: ['collectionByCard'] }),
-        qc.invalidateQueries({ queryKey: ['collection'] }),
-      ]);
+      await invalidateInventoryQueries(qc, { deckId });
       setPending(null);
       setSwapError(null);
       const nextTitle = pending?.attributes.title ?? title;
@@ -107,6 +115,7 @@ const CardPage: React.FC = () => {
           deckId,
           slotId,
           from: fromSlug,
+          foil: deckIsFoil,
         }),
         undefined,
         { shallow: true },
@@ -123,6 +132,7 @@ const CardPage: React.FC = () => {
       deckId: fromDeck ? deckId : undefined,
       slotId: fromDeck ? slotId : undefined,
       from: fromDeck ? fromSlug : undefined,
+      foil: fromDeck ? deckIsFoil : undefined,
     });
   }
 
@@ -185,7 +195,7 @@ const CardPage: React.FC = () => {
         <p style={{ margin: '0 0 1rem', fontSize: 13, opacity: 0.9 }}>
           Choosing another printing updates this deck
           {fromSlug !== '' ? ` (${fromSlug.replace(/-/g, ' ')})` : ''}
-          {' '}and your collection.
+          . Collection changes only if you pick Replace or Add.
         </p>
       )}
 
@@ -275,12 +285,18 @@ const CardPage: React.FC = () => {
           All printings
           {!printingsLoading && (
             <span style={{ fontWeight: 400, fontSize: '0.9rem', marginLeft: 8, opacity: 0.85 }}>
-              ({sortedPrintings.length})
+              ({filteredPrintings.length}
+              {filteredPrintings.length !== sortedPrintings.length
+                ? ` of ${sortedPrintings.length}`
+                : ''}
+              )
             </span>
           )}
         </h2>
 
-        {printingsLoading && <p>Loading printings…</p>}
+        <PrintingFilter value={printingFilter} onChange={setPrintingFilter} />
+
+        {printingsLoading && <p>Loading printings...</p>}
 
         <div
           style={{
@@ -289,7 +305,7 @@ const CardPage: React.FC = () => {
             gap: '0.75rem',
           }}
         >
-          {sortedPrintings.map(p => {
+          {filteredPrintings.map(p => {
             const a = p.attributes;
             const active = p.id === displayed.id || p.id === highlightId;
             const price = priceFor(a, currency);
@@ -358,6 +374,7 @@ const CardPage: React.FC = () => {
           current={currentPrinting}
           next={pending}
           currency={currency}
+          deckIsFoil={deckIsFoil}
           isSaving={swap.isPending}
           error={swapError}
           onCancel={() => {

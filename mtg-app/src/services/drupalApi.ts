@@ -39,6 +39,8 @@ interface GqlMtgCard {
   power: string | null;
   toughness: string | null;
   loyalty: string | null;
+  fullArt?: boolean | null;
+  borderColor?: string | null;
 }
 
 interface GqlText {
@@ -71,13 +73,26 @@ interface GqlComposeCollectionCard {
   uuid: string;
   quantityOwned: number;
   quantityFoil: number;
-  card?: { uuid: string } | null;
+  card?: {
+    uuid: string;
+    title?: string | null;
+    setCode?: string | null;
+    setName?: string | null;
+    collectorNumber?: string | null;
+    typeLine?: string | null;
+    cmc?: number | null;
+    priceUsd?: string | null;
+    priceEur?: string | null;
+    fullArt?: boolean | null;
+    borderColor?: string | null;
+  } | null;
 }
 
 interface GqlDeckCard {
   id: string;
   quantity: number;
   isSideboard: boolean;
+  isFoil?: boolean | null;
   card: GqlMtgCard;
 }
 
@@ -129,6 +144,8 @@ function toCardResource(c: GqlMtgCard): JsonApiResource<MtgCardAttributes> {
       field_power: c.power ?? null,
       field_toughness: c.toughness ?? null,
       field_loyalty: c.loyalty ?? null,
+      field_full_art: Boolean(c.fullArt),
+      field_border_color: c.borderColor ?? '',
     },
   };
 }
@@ -177,6 +194,16 @@ function toCollectionCardFromCompose(
     attributes: {
       field_quantity_owned: cc.quantityOwned,
       field_quantity_foil: cc.quantityFoil,
+      field_card_title: cc.card?.title ?? '',
+      field_set_code: cc.card?.setCode ?? '',
+      field_set_name: cc.card?.setName ?? '',
+      field_collector_number: cc.card?.collectorNumber ?? '',
+      field_type_line: cc.card?.typeLine ?? '',
+      field_cmc: cc.card?.cmc ?? 0,
+      field_price_usd: cc.card?.priceUsd ?? null,
+      field_price_eur: cc.card?.priceEur ?? null,
+      field_full_art: Boolean(cc.card?.fullArt),
+      field_border_color: cc.card?.borderColor ?? '',
     },
     relationships: {
       field_card: {
@@ -192,6 +219,7 @@ function toDeckCardWithCard(d: GqlDeckCard): DeckCardWithCard {
     id: d.id,
     quantity: d.quantity,
     isSideboard: d.isSideboard,
+    isFoil: Boolean(d.isFoil),
     card: {
       id: c.id,
       title: c.title,
@@ -219,6 +247,8 @@ function toDeckCardWithCard(d: GqlDeckCard): DeckCardWithCard {
       field_power: c.power ?? null,
       field_toughness: c.toughness ?? null,
       field_loyalty: c.loyalty ?? null,
+      field_full_art: Boolean(c.fullArt),
+      field_border_color: c.borderColor ?? '',
     },
   };
 }
@@ -248,6 +278,7 @@ const CARD_FIELDS = gql`
     id title manaCost cmc typeLine colors colorIdentity
     oracleText imageUri isManaProducer producedMana legalFormats
     priceUsd priceUsdFoil priceEur priceEurFoil setCode setName rarity collectorNumber
+    fullArt borderColor
   }
 `;
 
@@ -257,6 +288,7 @@ const CARD_DETAIL_FIELDS = gql`
     oracleText imageUri isManaProducer producedMana legalFormats
     priceUsd priceUsdFoil priceEur priceEurFoil setCode setName rarity collectorNumber
     power toughness loyalty
+    fullArt borderColor
   }
 `;
 
@@ -460,12 +492,15 @@ interface GqlComposeMtgCard {
   power?: string | null;
   toughness?: string | null;
   loyalty?: string | null;
+  fullArt?: boolean | null;
+  borderColor?: string | null;
 }
 
 interface GqlComposeDeckCard {
   uuid: string;
   quantity: number;
   isSideboard: boolean;
+  isFoil?: boolean | null;
   card: GqlComposeMtgCard | null;
 }
 
@@ -474,6 +509,7 @@ const COMPOSE_DECK_CARD_FIELDS = gql`
     uuid
     quantity
     isSideboard
+    isFoil
     card {
       ... on NodeMtgCard {
         uuid
@@ -499,6 +535,8 @@ const COMPOSE_DECK_CARD_FIELDS = gql`
         power
         toughness
         loyalty
+        fullArt
+        borderColor
       }
     }
   }
@@ -529,6 +567,8 @@ function composeMtgCardToGql(card: GqlComposeMtgCard): GqlMtgCard {
     power: card.power ?? null,
     toughness: card.toughness ?? null,
     loyalty: card.loyalty ?? null,
+    fullArt: card.fullArt ?? null,
+    borderColor: card.borderColor ?? null,
   };
 }
 
@@ -540,6 +580,7 @@ function toDeckCardFromCompose(slot: GqlComposeDeckCard): DeckCardWithCard {
     id: slot.uuid,
     quantity: slot.quantity,
     isSideboard: slot.isSideboard,
+    isFoil: Boolean(slot.isFoil),
     card: composeMtgCardToGql(slot.card),
   });
   return mapped;
@@ -574,17 +615,25 @@ async function deckCardAdd(
   cardId: string,
   quantity: number,
   isSideboard: boolean,
+  foil?: boolean,
 ): Promise<void> {
   const mutation = gql`
     mutation DeckCardAdd(
-      $deckId: ID!, $cardId: ID!, $quantity: Int!, $isSideboard: Boolean!
+      $deckId: ID!, $cardId: ID!, $quantity: Int!, $isSideboard: Boolean!, $foil: Boolean
     ) {
       deckCardAdd(
-        deckId: $deckId, cardId: $cardId, quantity: $quantity, isSideboard: $isSideboard
+        deckId: $deckId, cardId: $cardId, quantity: $quantity,
+        isSideboard: $isSideboard, foil: $foil
       ) { id }
     }
   `;
-  await getGraphQLClient().request(mutation, { deckId, cardId, quantity, isSideboard });
+  await getGraphQLClient().request(mutation, {
+    deckId,
+    cardId,
+    quantity,
+    isSideboard,
+    foil: foil ?? null,
+  });
 }
 
 async function deckCardUpdate(
@@ -600,11 +649,24 @@ async function deckCardUpdate(
   await getGraphQLClient().request(mutation, { deckId, slotId, quantity });
 }
 
+export async function setDeckCardFoil(
+  deckId: string,
+  slotId: string,
+  foil: boolean,
+): Promise<void> {
+  const mutation = gql`
+    mutation DeckCardSetFoil($deckId: ID!, $slotId: ID!, $foil: Boolean!) {
+      deckCardSetFoil(deckId: $deckId, slotId: $slotId, foil: $foil) { id }
+    }
+  `;
+  await getGraphQLClient().request(mutation, { deckId, slotId, foil });
+}
+
 export async function replaceDeckCardPrinting(
   deckId: string,
   slotId: string,
   cardId: string,
-  collectionMode: 'replace' | 'add',
+  collectionMode: 'none' | 'replace' | 'add',
   foil: boolean,
 ): Promise<void> {
   const mutation = gql`
@@ -638,10 +700,16 @@ async function deckCardRemove(deckId: string, slotId: string): Promise<void> {
 
 export async function importCardToDeck(
   deckId: string,
-  cards: { cardId: string; quantity: number; isSideboard: boolean; cardName: string }[],
+  cards: {
+    cardId: string;
+    quantity: number;
+    isSideboard: boolean;
+    cardName: string;
+    isFoil?: boolean;
+  }[],
 ): Promise<void> {
   for (const c of cards) {
-    await deckCardAdd(deckId, c.cardId, c.quantity, c.isSideboard);
+    await deckCardAdd(deckId, c.cardId, c.quantity, c.isSideboard, c.isFoil);
   }
 }
 
@@ -651,6 +719,7 @@ export async function addCardToDeck(
   isSideboard = false,
   existingSlots: DeckCardWithCard[] = [],
   _cardName = '',
+  foil?: boolean,
 ): Promise<void> {
   const existing = existingSlots.find(
     s => s.card.id === cardId && s.isSideboard === isSideboard,
@@ -661,7 +730,7 @@ export async function addCardToDeck(
     return;
   }
 
-  await deckCardAdd(deckId, cardId, 1, isSideboard);
+  await deckCardAdd(deckId, cardId, 1, isSideboard, foil);
 }
 
 export async function setCardQuantityInDeck(
@@ -693,19 +762,61 @@ export async function fetchCollectionCards(): Promise<
   JsonApiResource<CollectionCardAttributes>[]
 > {
   const query = gql`
-    query GetCollectionCards {
-      nodeCollectionCards(first: 500) {
+    query GetCollectionCards($after: Cursor) {
+      nodeCollectionCards(first: 100, after: $after) {
         nodes {
           id uuid quantityOwned quantityFoil
-          card { uuid }
+          card {
+            ... on NodeMtgCard {
+              uuid
+              title
+              setCode
+              setName
+              collectorNumber
+              typeLine
+              cmc
+              priceUsd
+              priceEur
+              fullArt
+              borderColor
+            }
+          }
         }
+        pageInfo { hasNextPage endCursor }
       }
     }
   `;
-  const data = await getGraphQLClient().request<{
-    nodeCollectionCards: { nodes: GqlComposeCollectionCard[] };
-  }>(query);
-  return data.nodeCollectionCards.nodes.map(toCollectionCardFromCompose);
+  const out: JsonApiResource<CollectionCardAttributes>[] = [];
+  let after: string | null = null;
+  for (let page = 0; page < 50; page += 1) {
+    const data = await getGraphQLClient().request<{
+      nodeCollectionCards: {
+        nodes: GqlComposeCollectionCard[];
+        pageInfo: { hasNextPage: boolean; endCursor?: string | null };
+      };
+    }>(query, { after });
+    const conn = data.nodeCollectionCards;
+    out.push(...conn.nodes.map(toCollectionCardFromCompose));
+    if (!conn.pageInfo.hasNextPage || conn.pageInfo.endCursor == null) {
+      break;
+    }
+    after = conn.pageInfo.endCursor;
+  }
+  return out;
+}
+
+export function collectionPrintingId(
+  cc: JsonApiResource<CollectionCardAttributes>,
+): string | null {
+  const rel = cc.relationships?.field_card?.data;
+  const id = Array.isArray(rel) ? rel[0]?.id : rel?.id;
+  return id ?? null;
+}
+
+export function collectionOwnedQty(
+  cc: JsonApiResource<CollectionCardAttributes>,
+): number {
+  return (cc.attributes.field_quantity_owned ?? 0) + (cc.attributes.field_quantity_foil ?? 0);
 }
 
 export async function fetchCollectionValue(currency: 'USD' | 'EUR' = 'USD'): Promise<number> {

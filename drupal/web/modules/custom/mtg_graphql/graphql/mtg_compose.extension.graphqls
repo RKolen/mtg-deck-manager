@@ -71,9 +71,12 @@ extend type Mutation {
     cardId: ID!
     quantity: Int!
     isSideboard: Boolean!
+    foil: Boolean
   ): DeckCardSlot!
 
   deckCardUpdate(deckId: ID!, slotId: ID!, quantity: Int!): DeckCardSlot!
+
+  deckCardSetFoil(deckId: ID!, slotId: ID!, foil: Boolean!): DeckCardSlot!
 
   deckCardReplacePrinting(
     deckId: ID!

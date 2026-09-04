@@ -4,6 +4,7 @@ status: true
 dependencies:
   config:
     - field.field.paragraph.deck_card.field_card
+    - field.field.paragraph.deck_card.field_is_foil
     - field.field.paragraph.deck_card.field_is_sideboard
     - field.field.paragraph.deck_card.field_quantity
     - paragraphs.paragraphs_type.deck_card
@@ -21,6 +22,13 @@ content:
       match_limit: 25
       size: 60
       placeholder: ''
+    third_party_settings: {  }
+  field_is_foil:
+    type: boolean_checkbox
+    weight: 3
+    region: content
+    settings:
+      display_label: true
     third_party_settings: {  }
   field_is_sideboard:
     type: boolean_checkbox

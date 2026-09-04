@@ -12,6 +12,7 @@ import {
   fetchCollectionCardByCardId,
   upsertCollectionCard,
 } from '../../../services/drupalApi';
+import { invalidateInventoryQueries } from '../../../services/queryCache';
 import { getOracleText } from '../../../utils/deckAnalysis';
 import { slugify } from '../../../utils/slugify';
 
@@ -43,7 +44,9 @@ const CollectionCardPage: React.FC = () => {
         foil,
         cc?.id,
       ),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['collectionCard', cardId] }),
+    onSuccess: () => {
+      void invalidateInventoryQueries(qc);
+    },
   });
 
   const owned = cc?.attributes.field_quantity_owned ?? 0;

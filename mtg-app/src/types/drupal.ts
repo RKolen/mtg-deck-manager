@@ -64,6 +64,8 @@ export interface MtgCardAttributes {
   field_rarity: string;
   field_collector_number: string;
   field_combo_pieces: string[];
+  field_full_art?: boolean;
+  field_border_color?: string;
 }
 
 export interface DeckAttributes {
@@ -83,6 +85,17 @@ export interface DeckAttributes {
 export interface CollectionCardAttributes {
   field_quantity_owned: number;
   field_quantity_foil: number;
+  /** Printing title when the collection query includes card fields. */
+  field_card_title?: string;
+  field_set_code?: string;
+  field_set_name?: string;
+  field_collector_number?: string;
+  field_type_line?: string;
+  field_cmc?: number;
+  field_price_usd?: string | null;
+  field_price_eur?: string | null;
+  field_full_art?: boolean;
+  field_border_color?: string;
 }
 
 // Convenience resource types
@@ -98,5 +111,6 @@ export interface DeckCardWithCard {
   id: string;
   quantity: number;
   isSideboard: boolean;
+  isFoil: boolean;
   card: MtgCardAttributes & { id: string };
 }

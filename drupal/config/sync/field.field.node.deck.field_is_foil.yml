@@ -10,7 +10,7 @@ field_name: field_is_foil
 entity_type: node
 bundle: deck
 label: 'Foil deck'
-description: 'When enabled, collection sync and deck valuation treat copies as foil.'
+description: 'Default foil flag for newly added deck slots.'
 required: false
 translatable: true
 default_value:

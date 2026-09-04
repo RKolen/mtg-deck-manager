@@ -7,6 +7,9 @@
 
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
+use Drupal\mtg_graphql\Service\DeckCardMutator;
+use Drupal\node\NodeInterface;
+use Drupal\paragraphs\ParagraphInterface;
 
 /**
  * Adds field_is_foil on deck nodes.
@@ -40,4 +43,98 @@ function mtg_graphql_update_9001(): string {
   }
 
   return 'field_is_foil already exists on deck.';
+}
+
+/**
+ * Adds field_is_foil on deck_card paragraphs and copies the deck flag.
+ */
+function mtg_graphql_update_9002(): string {
+  $name = 'field_is_foil';
+  $created = [];
+
+  if (!FieldStorageConfig::loadByName('paragraph', $name)) {
+    FieldStorageConfig::create([
+      'field_name' => $name,
+      'entity_type' => 'paragraph',
+      'type' => 'boolean',
+      'cardinality' => 1,
+    ])->save();
+    $created[] = 'paragraph storage';
+  }
+
+  if (!FieldConfig::loadByName('paragraph', 'deck_card', $name)) {
+    FieldConfig::create([
+      'field_name' => $name,
+      'entity_type' => 'paragraph',
+      'bundle' => 'deck_card',
+      'label' => 'Foil',
+      'description' => 'When enabled, this slot is a foil copy.',
+      'required' => FALSE,
+      'default_value' => [['value' => 0]],
+      'settings' => [
+        'on_label' => 'Foil',
+        'off_label' => 'Non-foil',
+      ],
+    ])->save();
+    $created[] = 'deck_card field';
+  }
+
+  $storage = \Drupal::entityTypeManager()->getStorage('node');
+  $ids = $storage->getQuery()
+    ->accessCheck(FALSE)
+    ->condition('type', 'deck')
+    ->execute();
+  $slots = 0;
+  foreach ($storage->loadMultiple($ids) as $deck) {
+    if (!$deck instanceof NodeInterface || !$deck->hasField('field_deck_cards')) {
+      continue;
+    }
+    $foil = DeckCardMutator::fieldIsOn($deck, 'field_is_foil');
+    foreach ($deck->get('field_deck_cards')->referencedEntities() as $para) {
+      if (!$para instanceof ParagraphInterface || !$para->hasField($name)) {
+        continue;
+      }
+      $para->set($name, $foil);
+      $para->setNewRevision(FALSE);
+      $para->save();
+      $slots++;
+    }
+  }
+
+  $prefix = $created === []
+    ? 'field_is_foil already present on deck_card.'
+    : 'Created ' . implode(', ', $created) . '.';
+  return $prefix . ' Backfilled foil on ' . $slots . ' slots.';
+}
+
+/**
+ * Re-copies deck foil onto slots using a strict boolean (not (bool) "0").
+ */
+function mtg_graphql_update_9003(): string {
+  $storage = \Drupal::entityTypeManager()->getStorage('node');
+  $ids = $storage->getQuery()
+    ->accessCheck(FALSE)
+    ->condition('type', 'deck')
+    ->execute();
+  $slots = 0;
+  $foil_slots = 0;
+  foreach ($storage->loadMultiple($ids) as $deck) {
+    if (!$deck instanceof NodeInterface || !$deck->hasField('field_deck_cards')) {
+      continue;
+    }
+    $foil = DeckCardMutator::fieldIsOn($deck, 'field_is_foil');
+    foreach ($deck->get('field_deck_cards')->referencedEntities() as $para) {
+      if (!$para instanceof ParagraphInterface || !$para->hasField('field_is_foil')) {
+        continue;
+      }
+      $para->set('field_is_foil', $foil);
+      $para->setNewRevision(FALSE);
+      $para->save();
+      $slots++;
+      if ($foil) {
+        $foil_slots++;
+      }
+    }
+  }
+  return 'Re-backfilled foil on ' . $slots . ' slots (' . $foil_slots . ' foil).';
 }

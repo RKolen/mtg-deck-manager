@@ -24,6 +24,7 @@ export function cardPrintingsPath(
     deckId?: string;
     slotId?: string;
     from?: string;
+    foil?: boolean;
   },
 ): string {
   const params = new URLSearchParams();
@@ -38,6 +39,9 @@ export function cardPrintingsPath(
   }
   if (opts?.from != null && opts.from !== '') {
     params.set('from', opts.from);
+  }
+  if (opts?.foil) {
+    params.set('foil', '1');
   }
   const query = params.toString();
   return `/cards/${slugify(title)}${query !== '' ? `?${query}` : ''}`;

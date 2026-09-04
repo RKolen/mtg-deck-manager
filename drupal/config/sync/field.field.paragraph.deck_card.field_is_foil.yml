@@ -1,0 +1,23 @@
+uuid: c95bf865-30c2-47d4-8383-6f4f64b2d9a1
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.paragraph.field_is_foil
+    - paragraphs.paragraphs_type.deck_card
+id: paragraph.deck_card.field_is_foil
+field_name: field_is_foil
+entity_type: paragraph
+bundle: deck_card
+label: Foil
+description: 'When enabled, this slot is a foil copy.'
+required: false
+translatable: true
+default_value:
+  -
+    value: 0
+default_value_callback: ''
+settings:
+  on_label: Foil
+  off_label: Non-foil
+field_type: boolean

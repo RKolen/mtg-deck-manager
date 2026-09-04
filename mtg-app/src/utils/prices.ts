@@ -6,6 +6,18 @@ export function priceSourceLabel(currency: Currency): string {
   return currency === 'EUR' ? 'CARDMARKET TREND' : 'TCGPLAYER MARKET';
 }
 
+function parsePrice(raw: string | number | null | undefined): number | null {
+  if (raw == null || raw === '') {
+    return null;
+  }
+  const n = typeof raw === 'number' ? raw : Number.parseFloat(raw);
+  // Scryfall stores "no listing" as null; Drupal decimals may come through as 0.
+  if (!Number.isFinite(n) || n <= 0) {
+    return null;
+  }
+  return n;
+}
+
 export function priceFor(
   card: Pick<
     MtgCardAttributes,
@@ -22,11 +34,7 @@ export function priceFor(
       : foil
         ? card.field_price_usd_foil
         : card.field_price_usd;
-  if (raw == null || raw === '') {
-    return null;
-  }
-  const n = Number.parseFloat(raw);
-  return Number.isFinite(n) ? n : null;
+  return parsePrice(raw);
 }
 
 export function formatPrice(value: number | null | undefined, currency: Currency): string {
@@ -46,19 +54,32 @@ export function formatPriceInt(value: number | null | undefined, currency: Curre
 }
 
 export function totalDeckPrice(
-  cards: Array<{ quantity: number; card: MtgCardAttributes; isSideboard?: boolean }>,
+  cards: Array<{
+    quantity: number;
+    card: MtgCardAttributes;
+    isSideboard?: boolean;
+    isFoil?: boolean;
+  }>,
   currency: Currency,
   includeSideboard = false,
-  foil = false,
 ): number {
+  const other: Currency = currency === 'EUR' ? 'USD' : 'EUR';
   return cards.reduce((sum, slot) => {
     if (!includeSideboard && slot.isSideboard) {
       return sum;
     }
-    const unit =
-      (foil ? priceFor(slot.card, currency, true) : null) ??
-      priceFor(slot.card, currency) ??
-      0;
+    const foil = Boolean(slot.isFoil);
+    // Never fall back from regular to foil: serialized/SLD foil listings can
+    // be thousands while the non-foil printing has no Cardmarket price.
+    const unit = foil
+      ? priceFor(slot.card, currency, true) ??
+        priceFor(slot.card, other, true) ??
+        priceFor(slot.card, currency, false) ??
+        priceFor(slot.card, other, false) ??
+        0
+      : priceFor(slot.card, currency, false) ??
+        priceFor(slot.card, other, false) ??
+        0;
     return sum + unit * slot.quantity;
   }, 0);
 }

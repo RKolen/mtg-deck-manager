@@ -6,6 +6,7 @@ namespace Drupal\mtg_card_suggestions\Plugin\rest\resource;
 
 use Drupal\Core\Cache\CacheableMetadata;
 use Drupal\Core\Entity\EntityRepositoryInterface;
+use Drupal\mtg_graphql\Service\DeckCardMutator;
 use Drupal\node\NodeInterface;
 use Drupal\paragraphs\Entity\Paragraph;
 use Drupal\rest\Plugin\ResourceBase;
@@ -24,9 +25,9 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  * routing stays trivial and CSRF is bypassed via Basic Auth.
  *
  * Actions:
- *   add    {deckUuid, cardUuid, quantity, isSideboard}
+ *   add    {deckUuid, cardUuid, quantity, isSideboard, foil?}
  *          → creates a paragraph--deck_card, appends to deck
- *          → returns {paraUuid, quantity, isSideboard}
+ *          → returns {paraUuid, quantity, isSideboard, isFoil}
  *
  *   update {deckUuid, paraUuid, quantity}
  *          → updates field_quantity on the paragraph
@@ -121,11 +122,16 @@ final class DeckCardsResource extends ResourceBase {
       throw new NotFoundHttpException('Card not found: ' . $data['cardUuid']);
     }
 
+    $foil = array_key_exists('foil', $data)
+      ? (bool) $data['foil']
+      : DeckCardMutator::fieldIsOn($deck, 'field_is_foil');
+
     $para = Paragraph::create([
       'type' => 'deck_card',
       'field_card' => ['target_id' => $card->id()],
       'field_quantity' => (int) $data['quantity'],
       'field_is_sideboard' => (bool) $data['isSideboard'],
+      'field_is_foil' => $foil,
     ]);
     $para->setNewRevision(FALSE);
     $para->save();
@@ -137,16 +143,11 @@ final class DeckCardsResource extends ResourceBase {
     $deck->setNewRevision(FALSE);
     $deck->save();
 
-    if (\Drupal::hasService('mtg_graphql.collection_ensurer')) {
-      /** @var \Drupal\mtg_graphql\Service\CollectionEnsurer $ensurer */
-      $ensurer = \Drupal::service('mtg_graphql.collection_ensurer');
-      $ensurer->ensureDeckCards($deck);
-    }
-
     return $this->ok([
       'paraUuid'    => $para->uuid(),
       'quantity'    => (int) $para->get('field_quantity')->value,
       'isSideboard' => (bool) $para->get('field_is_sideboard')->value,
+      'isFoil'      => $foil,
     ]);
   }
 
@@ -178,12 +179,6 @@ final class DeckCardsResource extends ResourceBase {
     // Re-save the deck so entity_reference_revisions tracks the updated vid.
     $deck->setNewRevision(FALSE);
     $deck->save();
-
-    if (\Drupal::hasService('mtg_graphql.collection_ensurer')) {
-      /** @var \Drupal\mtg_graphql\Service\CollectionEnsurer $ensurer */
-      $ensurer = \Drupal::service('mtg_graphql.collection_ensurer');
-      $ensurer->ensureDeckCards($deck);
-    }
 
     return $this->ok([
       'paraUuid' => $para->uuid(),

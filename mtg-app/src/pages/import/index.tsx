@@ -343,6 +343,7 @@ const ImportPage: React.FC = () => {
           cardName: row.matchTitle ?? row.name,
           quantity: row.quantity,
           isSideboard: row.isSideboard,
+          isFoil: row.isFoil,
         })),
       );
 

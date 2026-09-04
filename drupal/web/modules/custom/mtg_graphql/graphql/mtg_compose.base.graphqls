@@ -41,6 +41,8 @@ type MtgCard {
   power: String
   toughness: String
   loyalty: String
+  fullArt: Boolean
+  borderColor: String
 }
 
 type Deck {
@@ -55,6 +57,7 @@ type DeckCard {
   id: ID!
   quantity: Int!
   isSideboard: Boolean!
+  isFoil: Boolean!
   card: MtgCard!
 }
 
@@ -62,6 +65,7 @@ type DeckCardSlot {
   id: ID!
   quantity: Int!
   isSideboard: Boolean!
+  isFoil: Boolean!
 }
 
 type Page {

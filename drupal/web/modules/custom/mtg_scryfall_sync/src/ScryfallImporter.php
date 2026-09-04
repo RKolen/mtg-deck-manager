@@ -447,6 +447,13 @@ class ScryfallImporter {
     );
     $node->set('field_rarity', $card['rarity'] ?? '');
     $node->set('field_collector_number', $card['collector_number'] ?? '');
+    if ($node->hasField('field_full_art')) {
+      $node->set('field_full_art', !empty($card['full_art']));
+    }
+    if ($node->hasField('field_border_color')) {
+      $border = $card['border_color'] ?? '';
+      $node->set('field_border_color', is_string($border) ? $border : '');
+    }
 
     // Combo pieces: Scryfall IDs of cards sharing a known combo relationship.
     $combo_pieces = [];

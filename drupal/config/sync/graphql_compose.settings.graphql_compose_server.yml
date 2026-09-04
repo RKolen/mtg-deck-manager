@@ -66,6 +66,10 @@ field_config:
         enabled: true
       field_collector_number:
         enabled: true
+      field_full_art:
+        enabled: true
+      field_border_color:
+        enabled: true
       field_power:
         enabled: true
       field_toughness:
@@ -86,6 +90,8 @@ field_config:
       field_quantity:
         enabled: true
       field_is_sideboard:
+        enabled: true
+      field_is_foil:
         enabled: true
 settings:
   exclude_unpublished: true

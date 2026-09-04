@@ -1,0 +1,19 @@
+uuid: 27bc28b1-1c00-483b-aa31-819e81d63354
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_border_color
+    - node.type.mtg_card
+id: node.mtg_card.field_border_color
+field_name: field_border_color
+entity_type: node
+bundle: mtg_card
+label: 'Border color'
+description: 'Scryfall border_color (black, white, borderless, silver, gold).'
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: string

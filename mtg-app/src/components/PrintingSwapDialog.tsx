@@ -4,7 +4,7 @@ import { fetchCollectionCardByCardId } from '../services/drupalApi';
 import type { MtgCardAttributes } from '../types/drupal';
 import { priceFor, formatPrice, type Currency } from '../utils/prices';
 
-export type CollectionSwapMode = 'replace' | 'add';
+export type CollectionSwapMode = 'none' | 'replace' | 'add';
 
 export interface PrintingSwapTarget {
   id: string;
@@ -15,6 +15,8 @@ interface PrintingSwapDialogProps {
   current: PrintingSwapTarget;
   next: PrintingSwapTarget;
   currency: Currency;
+  /** When true, default the foil checkbox on (foil decks). */
+  deckIsFoil?: boolean;
   onCancel: () => void;
   onConfirm: (mode: CollectionSwapMode, foil: boolean) => void;
   isSaving: boolean;
@@ -55,6 +57,7 @@ const PrintingSwapDialog: React.FC<PrintingSwapDialogProps> = ({
   current,
   next,
   currency,
+  deckIsFoil = false,
   onCancel,
   onConfirm,
   isSaving,
@@ -73,14 +76,13 @@ const PrintingSwapDialog: React.FC<PrintingSwapDialogProps> = ({
   const currentFoil = currentCol?.attributes.field_quantity_foil ?? 0;
   const nextOwned = nextCol?.attributes.field_quantity_owned ?? 0;
   const nextFoilQty = nextCol?.attributes.field_quantity_foil ?? 0;
-  const currentInCollection = currentOwned + currentFoil > 0;
   const nextInCollection = nextOwned + nextFoilQty > 0;
   const hasFoilPrice = priceFor(next.attributes, currency, true) != null;
 
-  const [mode, setMode] = useState<CollectionSwapMode>(
-    currentInCollection ? 'replace' : 'add',
+  const [mode, setMode] = useState<CollectionSwapMode>('none');
+  const [foil, setFoil] = useState(
+    deckIsFoil || (currentFoil > 0 && currentOwned < 1),
   );
-  const [foil, setFoil] = useState(currentFoil > 0 && currentOwned < 1);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
@@ -93,12 +95,12 @@ const PrintingSwapDialog: React.FC<PrintingSwapDialogProps> = ({
   }, [isSaving, onCancel]);
 
   useEffect(() => {
-    setMode(currentInCollection ? 'replace' : 'add');
-  }, [currentInCollection, next.id]);
+    setMode('none');
+  }, [next.id]);
 
   useEffect(() => {
-    setFoil(currentFoil > 0 && currentOwned < 1);
-  }, [currentFoil, currentOwned, next.id]);
+    setFoil(deckIsFoil || (currentFoil > 0 && currentOwned < 1));
+  }, [deckIsFoil, currentFoil, currentOwned, next.id]);
 
   const foilPrice = priceFor(next.attributes, currency, true);
   const regularPrice = priceFor(next.attributes, currency);
@@ -173,12 +175,27 @@ const PrintingSwapDialog: React.FC<PrintingSwapDialogProps> = ({
             <input
               type="radio"
               name="collectionMode"
+              checked={mode === 'none'}
+              onChange={() => setMode('none')}
+              disabled={isSaving}
+            />
+            <span>
+              <strong>Deck only</strong>
+              <span style={{ display: 'block', opacity: 0.85, fontSize: 12 }}>
+                Change the list printing and foil flag. Collection stays as-is.
+              </span>
+            </span>
+          </label>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 8, cursor: 'pointer' }}>
+            <input
+              type="radio"
+              name="collectionMode"
               checked={mode === 'replace'}
               onChange={() => setMode('replace')}
               disabled={isSaving}
             />
             <span>
-              <strong>Replace collection card</strong>
+              <strong>Replace collection copies</strong>
               <span style={{ display: 'block', opacity: 0.85, fontSize: 12 }}>
                 Move this deck&apos;s copies from the old printing to the new one.
               </span>
@@ -193,7 +210,7 @@ const PrintingSwapDialog: React.FC<PrintingSwapDialogProps> = ({
               disabled={isSaving}
             />
             <span>
-              <strong>Add collection card</strong>
+              <strong>Add to collection</strong>
               <span style={{ display: 'block', opacity: 0.85, fontSize: 12 }}>
                 {nextInCollection
                   ? 'Keep the old printing. Deck uses the new one (already owned).'

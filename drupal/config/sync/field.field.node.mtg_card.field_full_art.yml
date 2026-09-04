@@ -1,0 +1,23 @@
+uuid: ed63ccd3-712a-4319-8f01-ab0f66146488
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_full_art
+    - node.type.mtg_card
+id: node.mtg_card.field_full_art
+field_name: field_full_art
+entity_type: node
+bundle: mtg_card
+label: 'Full art'
+description: 'Scryfall full_art flag.'
+required: false
+translatable: true
+default_value:
+  -
+    value: 0
+default_value_callback: ''
+settings:
+  on_label: 'Full art'
+  off_label: Standard
+field_type: boolean

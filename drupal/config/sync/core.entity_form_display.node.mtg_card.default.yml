@@ -7,7 +7,9 @@ dependencies:
     - field.field.node.mtg_card.field_collector_number
     - field.field.node.mtg_card.field_color_identity
     - field.field.node.mtg_card.field_colors
+    - field.field.node.mtg_card.field_border_color
     - field.field.node.mtg_card.field_combo_pieces
+    - field.field.node.mtg_card.field_full_art
     - field.field.node.mtg_card.field_image_local
     - field.field.node.mtg_card.field_image_uri
     - field.field.node.mtg_card.field_is_mana_producer
@@ -97,6 +99,8 @@ third_party_settings:
         - field_set_name
         - field_rarity
         - field_collector_number
+        - field_full_art
+        - field_border_color
         - field_price_usd
         - field_price_usd_foil
         - field_price_eur
@@ -156,6 +160,14 @@ content:
       size: 60
       placeholder: ''
     third_party_settings: {  }
+  field_border_color:
+    type: string_textfield
+    weight: 16
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
   field_combo_pieces:
     type: string_textfield
     weight: 19
@@ -163,6 +175,13 @@ content:
     settings:
       size: 60
       placeholder: ''
+    third_party_settings: {  }
+  field_full_art:
+    type: boolean_checkbox
+    weight: 15
+    region: content
+    settings:
+      display_label: true
     third_party_settings: {  }
   field_image_local:
     type: entity_reference_autocomplete

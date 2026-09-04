@@ -28,13 +28,26 @@ import {
 import {
   fetchDeckBySlug,
   fetchDeckCardsWithCards,
+  fetchCollectionCards,
+  collectionPrintingId,
+  collectionOwnedQty,
+  upsertCollectionCard,
   findCardsByName,
   addCardToDeck,
   setCardQuantityInDeck,
+  setDeckCardFoil,
   removeCardFromDeck,
   updateDeck,
 } from '../../services/drupalApi';
+import { invalidateInventoryQueries } from '../../services/queryCache';
 import { ManaCost } from '../../components/design/Mana';
+import PrintingFilter, {
+  EMPTY_PRINTING_FILTER,
+  matchesPrintingFilter,
+} from '../../components/PrintingFilter';
+import { useTheme } from '../../context/ThemeContext';
+import { cardImageSrc } from '../../utils/cardImage';
+import { formatPrice, priceFor } from '../../utils/prices';
 import {
   chartAxisProps,
   chartTooltipProps,
@@ -59,7 +72,7 @@ import {
   type MatchupAdvice,
   type ArchetypeProbability,
 } from '../../services/metaApi';
-import type { DeckCardWithCard } from '../../types/drupal';
+import type { CollectionCard, DeckCardWithCard } from '../../types/drupal';
 import { cardPrintingsPath } from '../../utils/slugify';
 import {
   ALL_COLORS,
@@ -140,9 +153,53 @@ interface EditorProps {
   deckSlug: string;
   cards: DeckCardWithCard[];
   format: string;
+  deckIsFoil: boolean;
 }
 
-const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format }) => {
+function FoilToggle({
+  isFoil,
+  disabled,
+  onToggle,
+  flush = false,
+}: {
+  isFoil: boolean;
+  disabled?: boolean;
+  onToggle: () => void;
+  flush?: boolean;
+}): React.ReactElement {
+  return (
+    <button
+      type="button"
+      aria-pressed={isFoil}
+      disabled={disabled}
+      onClick={e => {
+        e.stopPropagation();
+        onToggle();
+      }}
+      title={
+        isFoil
+          ? 'Foil. Click to use the regular finish.'
+          : 'Regular finish. Click to mark this slot as foil.'
+      }
+      style={{
+        marginLeft: flush ? 0 : 8,
+        fontSize: 10,
+        fontWeight: 700,
+        letterSpacing: '0.06em',
+        padding: '2px 7px',
+        border: isFoil ? '1px solid var(--accent)' : '1px dashed var(--line-2)',
+        background: isFoil ? 'var(--accent)' : 'transparent',
+        color: isFoil ? 'var(--bg)' : 'var(--ink)',
+        cursor: disabled ? 'wait' : 'pointer',
+      }}
+    >
+      {isFoil ? 'FOIL' : 'REGULAR'}
+    </button>
+  );
+}
+
+const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format, deckIsFoil }) => {
+  const { currency } = useTheme();
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<
     {
@@ -155,35 +212,158 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format }) 
       priceEur: string | null;
       cmc: number;
       typeLine: string;
+      fullArt: boolean;
+      borderColor: string;
     }[]
   >([]);
   const [searching, setSearching] = useState(false);
+  const [printingFilter, setPrintingFilter] = useState(EMPTY_PRINTING_FILTER);
+  const [addAsOwned, setAddAsOwned] = useState(false);
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const qc = useQueryClient();
+
+  const { data: collectionCards = [] } = useQuery<CollectionCard[]>({
+    queryKey: ['collectionCards'],
+    queryFn: fetchCollectionCards,
+    staleTime: 60_000,
+  });
+
+  const ownedByCardId = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const cc of collectionCards) {
+      const cardId = collectionPrintingId(cc);
+      if (cardId == null) {
+        continue;
+      }
+      map.set(cardId, collectionOwnedQty(cc));
+    }
+    return map;
+  }, [collectionCards]);
+
+  const selectedSlot = cards.find(c => c.id === selectedSlotId) ?? null;
+
+  function collectionEntry(cardId: string): CollectionCard | undefined {
+    return collectionCards.find(cc => collectionPrintingId(cc) === cardId);
+  }
+
+  async function writeCollectionOwnership(
+    cardId: string,
+    cardName: string,
+    own: boolean,
+    quantity: number,
+    foil: boolean,
+  ): Promise<void> {
+    const existing = collectionEntry(cardId);
+    let nextOwned = existing?.attributes.field_quantity_owned ?? 0;
+    let nextFoil = existing?.attributes.field_quantity_foil ?? 0;
+    if (own) {
+      if (foil) {
+        nextFoil = Math.max(nextFoil, quantity);
+      } else {
+        nextOwned = Math.max(nextOwned, quantity);
+      }
+    } else if (foil) {
+      nextFoil = 0;
+    } else {
+      nextOwned = 0;
+    }
+    await upsertCollectionCard(
+      cardId,
+      cardName,
+      nextOwned,
+      nextFoil,
+      existing?.id,
+    );
+  }
+
+  async function addCollectionCopies(
+    cardId: string,
+    cardName: string,
+    quantity: number,
+    foil: boolean,
+  ): Promise<void> {
+    const existing = collectionEntry(cardId);
+    let nextOwned = existing?.attributes.field_quantity_owned ?? 0;
+    let nextFoil = existing?.attributes.field_quantity_foil ?? 0;
+    if (foil) {
+      nextFoil += quantity;
+    } else {
+      nextOwned += quantity;
+    }
+    await upsertCollectionCard(
+      cardId,
+      cardName,
+      nextOwned,
+      nextFoil,
+      existing?.id,
+    );
+  }
 
   const updateQty = useMutation({
     mutationFn: ({ slotId, qty }: { slotId: string; qty: number }) =>
       setCardQuantityInDeck(slotId, qty, deckId, cards),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['deckCards', deckId] }),
+    onSuccess: () => {
+      void invalidateInventoryQueries(qc, { deckId });
+    },
   });
 
   const remove = useMutation({
     mutationFn: ({ slotId }: { slotId: string }) =>
       removeCardFromDeck(slotId, deckId, cards),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['deckCards', deckId] }),
+    onSuccess: (_data, vars) => {
+      if (selectedSlotId === vars.slotId) {
+        setSelectedSlotId(null);
+      }
+      void invalidateInventoryQueries(qc, { deckId });
+    },
   });
 
-  const addCard = useMutation({
+  const setFoil = useMutation({
+    mutationFn: ({ slotId, foil }: { slotId: string; foil: boolean }) =>
+      setDeckCardFoil(deckId, slotId, foil),
+    onSuccess: () => {
+      void invalidateInventoryQueries(qc, { deckId });
+    },
+  });
+
+  const setOwned = useMutation({
     mutationFn: ({
       cardId,
       cardName,
+      own,
+      quantity,
+      foil,
+    }: {
+      cardId: string;
+      cardName: string;
+      own: boolean;
+      quantity: number;
+      foil: boolean;
+    }) => writeCollectionOwnership(cardId, cardName, own, quantity, foil),
+    onSuccess: () => {
+      void invalidateInventoryQueries(qc, { deckId });
+    },
+  });
+
+  const addCard = useMutation({
+    mutationFn: async ({
+      cardId,
+      cardName,
       isSideboard,
+      foil,
     }: {
       cardId: string;
       cardName: string;
       isSideboard: boolean;
-    }) => addCardToDeck(deckId, cardId, isSideboard, cards, cardName),
+      foil?: boolean;
+    }) => {
+      await addCardToDeck(deckId, cardId, isSideboard, cards, cardName, foil);
+      if (addAsOwned) {
+        await addCollectionCopies(cardId, cardName, 1, foil ?? deckIsFoil);
+      }
+    },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['deckCards', deckId] });
+      void invalidateInventoryQueries(qc, { deckId });
       setSearchResults([]);
       setSearch('');
     },
@@ -193,7 +373,9 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format }) 
     if (search.trim() === '') return;
     setSearching(true);
     try {
-      const results = await findCardsByName(search.trim());
+      const q = search.trim();
+      const qLower = q.toLowerCase();
+      const results = await findCardsByName(q);
       const mapped = results.map(r => ({
         id: r.id,
         title: r.attributes.title,
@@ -204,9 +386,43 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format }) 
         priceEur: r.attributes.field_price_eur,
         cmc: r.attributes.field_cmc ?? 0,
         typeLine: r.attributes.field_type_line ?? '',
+        fullArt: Boolean(r.attributes.field_full_art),
+        borderColor: r.attributes.field_border_color ?? '',
       }));
-      // Priced printings first so $0 promos/MTGO don't win by accident.
+      const seen = new Set(mapped.map(r => r.id));
+      for (const cc of collectionCards) {
+        if (collectionOwnedQty(cc) < 1) {
+          continue;
+        }
+        const title = (cc.attributes.field_card_title ?? '').toLowerCase();
+        if (title !== qLower && !title.includes(qLower)) {
+          continue;
+        }
+        const id = collectionPrintingId(cc);
+        if (id == null || seen.has(id)) {
+          continue;
+        }
+        seen.add(id);
+        mapped.push({
+          id,
+          title: cc.attributes.field_card_title ?? q,
+          setCode: cc.attributes.field_set_code ?? '',
+          setName: cc.attributes.field_set_name ?? '',
+          collectorNumber: cc.attributes.field_collector_number ?? '',
+          priceUsd: cc.attributes.field_price_usd ?? null,
+          priceEur: cc.attributes.field_price_eur ?? null,
+          cmc: cc.attributes.field_cmc ?? 0,
+          typeLine: cc.attributes.field_type_line ?? '',
+          fullArt: Boolean(cc.attributes.field_full_art),
+          borderColor: cc.attributes.field_border_color ?? '',
+        });
+      }
       mapped.sort((a, b) => {
+        const oa = ownedByCardId.get(a.id) ?? 0;
+        const ob = ownedByCardId.get(b.id) ?? 0;
+        if ((oa > 0) !== (ob > 0)) {
+          return oa > 0 ? -1 : 1;
+        }
         const pa = Math.max(
           Number.parseFloat(a.priceUsd ?? '') || 0,
           Number.parseFloat(a.priceEur ?? '') || 0,
@@ -218,10 +434,28 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format }) 
         return pb - pa;
       });
       setSearchResults(mapped);
+      setPrintingFilter(EMPTY_PRINTING_FILTER);
     } finally {
       setSearching(false);
     }
   }
+
+  const filteredSearchResults = useMemo(
+    () =>
+      searchResults.filter(r =>
+        matchesPrintingFilter(
+          {
+            field_set_code: r.setCode,
+            field_set_name: r.setName,
+            field_collector_number: r.collectorNumber,
+            field_full_art: r.fullArt,
+            field_border_color: r.borderColor,
+          },
+          printingFilter,
+        ),
+      ),
+    [searchResults, printingFilter],
+  );
 
   const main = mainDeck(cards);
   const sb = sideboard(cards);
@@ -266,8 +500,19 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format }) 
     const setCode = (dc.card.field_set_code ?? '').toUpperCase();
     const setName = dc.card.field_set_name ?? '';
     const setTitle = [setCode, setName].filter(Boolean).join(' — ');
+    const ownedQty = ownedByCardId.get(dc.card.id) ?? 0;
+    const notOwned = ownedQty < 1;
+    const selected = selectedSlotId === dc.id;
     return (
-      <tr key={dc.card.id + String(dc.isSideboard)}>
+      <tr
+        key={dc.id}
+        onClick={() => setSelectedSlotId(dc.id)}
+        style={{
+          background: selected ? 'var(--bg-2)' : undefined,
+          outline: selected ? '1px solid var(--accent)' : undefined,
+          cursor: 'pointer',
+        }}
+      >
         <td style={{ padding: '0.25rem 0.5rem' }}>
           <Link
             href={cardPrintingsPath(dc.card.title, {
@@ -275,7 +520,9 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format }) 
               deckId,
               slotId: dc.id,
               from: deckSlug,
+              foil: dc.isFoil,
             })}
+            onClick={e => e.stopPropagation()}
             style={{
               color: mvLegal ? 'inherit' : 'var(--neg)',
               textDecoration: 'none',
@@ -306,8 +553,34 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format }) 
           <span style={{ marginLeft: 8, display: 'inline-flex', verticalAlign: 'middle' }}>
             <ManaCost cost={dc.card.field_mana_cost} size={14} />
           </span>
+          <FoilToggle
+            isFoil={dc.isFoil}
+            disabled={setFoil.isPending}
+            onToggle={() => setFoil.mutate({ slotId: dc.id, foil: !dc.isFoil })}
+          />
+          {notOwned ? (
+            <span
+              style={{
+                marginLeft: 8,
+                fontSize: 11,
+                opacity: 0.65,
+              }}
+            >
+              not owned
+            </span>
+          ) : (
+            <span
+              style={{
+                marginLeft: 8,
+                fontSize: 11,
+                opacity: 0.65,
+              }}
+            >
+              owned {ownedQty}
+            </span>
+          )}
         </td>
-        <td style={{ padding: '0.25rem 0.5rem', textAlign: 'center' }}>
+        <td style={{ padding: '0.25rem 0.5rem', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
           <button
             type="button"
             onClick={() => updateQty.mutate({ slotId: dc.id, qty: dc.quantity - 1 })}
@@ -327,12 +600,17 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format }) 
             +
           </button>
         </td>
-        <td style={{ padding: '0.25rem 0.5rem', textAlign: 'center' }}>
+        <td style={{ padding: '0.25rem 0.5rem', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
           <button
             type="button"
             onClick={() => {
               void remove.mutateAsync({ slotId: dc.id }).then(() =>
-                addCard.mutate({ cardId: dc.card.id, cardName: dc.card.title, isSideboard: !dc.isSideboard }),
+                addCard.mutate({
+                  cardId: dc.card.id,
+                  cardName: dc.card.title,
+                  isSideboard: !dc.isSideboard,
+                  foil: dc.isFoil,
+                }),
               );
             }}
             style={{ fontSize: '0.75rem' }}
@@ -341,7 +619,7 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format }) 
             {dc.isSideboard ? 'To main' : 'To SB'}
           </button>
         </td>
-        <td style={{ padding: '0.25rem 0.5rem', textAlign: 'center' }}>
+        <td style={{ padding: '0.25rem 0.5rem', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
           <button
             type="button"
             onClick={() => remove.mutate({ slotId: dc.id })}
@@ -355,7 +633,8 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format }) 
   }
 
   return (
-    <div>
+    <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
       {/* Card count banner — soft guidance only; oversized lists are allowed. */}
       <p style={{ fontWeight: 'bold', margin: '0 0 0.75rem' }}>
         <span style={{ color: mainOk ? 'var(--pos)' : 'var(--ink)' }}>
@@ -407,6 +686,25 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format }) 
       </div>
 
       {searchResults.length > 0 && (
+        <>
+          <PrintingFilter value={printingFilter} onChange={setPrintingFilter} />
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              margin: '0 0 0.5rem',
+              fontSize: 13,
+              cursor: 'pointer',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={addAsOwned}
+              onChange={e => setAddAsOwned(e.target.checked)}
+            />
+            I own this (add to collection)
+          </label>
         <ul
           style={{
             listStyle: 'none',
@@ -418,7 +716,7 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format }) 
             overflowY: 'auto',
           }}
         >
-          {searchResults.map(r => {
+          {filteredSearchResults.map(r => {
             const setLabel = [
               r.setCode ? r.setCode.toUpperCase() : null,
               r.setName || null,
@@ -431,10 +729,15 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format }) 
               r.priceEur ? `€${Number.parseFloat(r.priceEur).toFixed(2)}` : null,
             ].filter(Boolean);
             const mvLegal = isLegalManaValue(r.typeLine, r.cmc, format);
+            const inMain = cards.some(s => s.card.id === r.id && !s.isSideboard);
+            const inSb = cards.some(s => s.card.id === r.id && s.isSideboard);
+            const ownedQty = ownedByCardId.get(r.id) ?? 0;
             const meta = [
               setLabel || null,
               `CMC ${r.cmc}`,
               priceBits.join(' / ') || 'no price',
+              ownedQty > 0 ? `owned ${ownedQty}` : null,
+              inMain || inSb ? 'in deck' : null,
             ]
               .filter(Boolean)
               .join(' · ');
@@ -465,7 +768,7 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format }) 
                   title={illegalTitle}
                   onClick={() => addCard.mutate({ cardId: r.id, cardName: r.title, isSideboard: false })}
                 >
-                  + Main
+                  {inMain ? '+1 copy' : '+ Main'}
                 </button>
                 <button
                   type="button"
@@ -473,11 +776,16 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format }) 
                   title={illegalTitle}
                   onClick={() => addCard.mutate({ cardId: r.id, cardName: r.title, isSideboard: true })}
                 >
-                  + SB
+                  {inSb ? '+1 copy' : '+ SB'}
                 </button>
               </li>
             );
           })}
+          {filteredSearchResults.length === 0 && (
+            <li style={{ padding: '0.4rem 0.75rem', fontSize: 13, opacity: 0.8 }}>
+              No printings match this filter.
+            </li>
+          )}
           <li style={{ padding: '0.25rem 0.75rem' }}>
             <button
               type="button"
@@ -488,6 +796,7 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format }) 
             </button>
           </li>
         </ul>
+        </>
       )}
 
       {/* Main deck — grouped by type */}
@@ -560,6 +869,89 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format }) 
           <p style={{ color: 'var(--ink)' }}>Sideboard is empty.</p>
         )}
       </section>
+      </div>
+      <aside
+        style={{
+          width: 280,
+          flexShrink: 0,
+          position: 'sticky',
+          top: 16,
+          alignSelf: 'flex-start',
+        }}
+      >
+        {selectedSlot == null ? (
+          <p style={{ margin: 0, opacity: 0.7, fontSize: 13 }}>Select a card</p>
+        ) : (
+          <div>
+            <img
+              src={cardImageSrc(selectedSlot.card)}
+              alt={selectedSlot.card.title}
+              style={{ width: '100%', borderRadius: 8, display: 'block' }}
+            />
+            <p style={{ margin: '0.65rem 0 0.25rem', fontWeight: 700 }}>
+              {selectedSlot.card.title}
+            </p>
+            <p style={{ margin: '0 0 0.35rem', fontSize: 13, opacity: 0.9 }}>
+              {(selectedSlot.card.field_set_name || selectedSlot.card.field_set_code || 'Unknown set')}
+              {(selectedSlot.card.field_set_code ?? '') !== ''
+                ? ` (${selectedSlot.card.field_set_code.toUpperCase()}`
+                : ''}
+              {selectedSlot.card.field_collector_number
+                ? ` #${selectedSlot.card.field_collector_number}`
+                : ''}
+              {(selectedSlot.card.field_set_code ?? '') !== '' ? ')' : ''}
+            </p>
+            <p style={{ margin: '0 0 0.5rem', fontSize: 13 }}>
+              {formatPrice(priceFor(selectedSlot.card, currency, false), currency)}
+              {priceFor(selectedSlot.card, currency, true) != null && (
+                <>
+                  {' · foil '}
+                  {formatPrice(priceFor(selectedSlot.card, currency, true), currency)}
+                </>
+              )}
+            </p>
+            <div style={{ margin: '0 0 0.35rem 0' }}>
+              <FoilToggle
+                flush
+                isFoil={selectedSlot.isFoil}
+                disabled={setFoil.isPending}
+                onToggle={() =>
+                  setFoil.mutate({
+                    slotId: selectedSlot.id,
+                    foil: !selectedSlot.isFoil,
+                  })
+                }
+              />
+            </div>
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                margin: '0.35rem 0 0',
+                fontSize: 13,
+                cursor: 'pointer',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={(ownedByCardId.get(selectedSlot.card.id) ?? 0) > 0}
+                disabled={setOwned.isPending}
+                onChange={e =>
+                  setOwned.mutate({
+                    cardId: selectedSlot.card.id,
+                    cardName: selectedSlot.card.title,
+                    own: e.target.checked,
+                    quantity: selectedSlot.quantity,
+                    foil: selectedSlot.isFoil,
+                  })
+                }
+              />
+              I own this
+            </label>
+          </div>
+        )}
+      </aside>
     </div>
   );
 };
@@ -2126,7 +2518,7 @@ const DeckPage: React.FC = () => {
   });
 
   return (
-    <main style={{ padding: '1.5rem', maxWidth: 900, color: 'var(--ink)' }}>
+    <main style={{ padding: '1.5rem', maxWidth: 1200, color: 'var(--ink)' }}>
       <p style={{ margin: '0 0 1rem' }}>
         <Link href="/decks" style={{ color: 'var(--accent)' }}>
           Back to decks
@@ -2197,6 +2589,7 @@ const DeckPage: React.FC = () => {
           deckSlug={slug}
           cards={deckCards}
           format={deck.attributes.field_format}
+          deckIsFoil={Boolean(deck.attributes.field_is_foil)}
         />
       ) : tab === 'analysis' ? (
         <DeckAnalysis cards={deckCards} format={deck.attributes.field_format} deckTitle={deck.attributes.title} />
