@@ -23,6 +23,33 @@ _COMBO_ARCHETYPE_KEYWORDS = (
     "storm", "belcher", "ad nauseam", "amulet", "living end", "grinding",
 )
 
+# Forge's -c flag is a wall clock on the WHOLE match, not on one decision: when
+# it expires Forge prints "Stopping slow match as draw" and ends the game as a
+# draw (SimulateMatch.simulateSingleMatch). Its 120s default assumes Forge's
+# built-in AI, which decides in microseconds. An LLM pilot takes seconds per
+# decision, so a piloted match needs a clock derived from the pilot budget —
+# otherwise the first pilot call alone exhausts it and every game draws on
+# turn 0.
+#
+# The clock is a hang detector, not a schedule: a game that plays out faster
+# still finishes early, so it is sized generously.
+
+# Pilot decisions a full game is expected to need (~25 turns × 2 players ×
+# ~3 decisions each).
+_PILOT_DECISIONS_PER_GAME = 150
+
+# Share of its timeout ceiling a steady-state pilot call actually uses. Only the
+# first call, which pays the model load, approaches FORGE_PILOT_TIMEOUT.
+_PILOT_AVG_LATENCY_RATIO = 0.05
+
+# Match clock for Forge's built-in AI, which needs no LLM round trips. Also the
+# floor for a piloted match.
+_BUILTIN_AI_CLOCK_SECONDS = 120
+
+# Slack added to the Forge subprocess timeout for JVM start-up and card-DB load,
+# so the subprocess is never killed before its own match clock can fire.
+_FORGE_STARTUP_SECONDS = 120
+
 
 @dataclass(frozen=True)
 class ForgePilotConfig:
@@ -108,6 +135,47 @@ def deck_ai_hints(
     return format_ai_hints(pilot_prompt, pilot_mode)
 
 
+@dataclass(frozen=True)
+class ForgeRunBudget:
+    """Nested time budgets for one Forge batch, in seconds."""
+
+    clock: int
+    subprocess_timeout: int
+
+
+def forge_sim_clock(pilot_cfg: ForgePilotConfig) -> int:
+    """Seconds Forge may spend on one match before calling it a draw (-c).
+
+    Covers every pilot decision in the game, not just one, so it is derived
+    from the per-call pilot budget rather than fixed.
+    """
+    if not pilot_cfg.pilot_active():
+        return _BUILTIN_AI_CLOCK_SECONDS
+    # One full-ceiling call to absorb the cold model load, then a steady-state
+    # budget for the remaining decisions of the game.
+    cold_start = pilot_cfg.pilot_timeout
+    steady = (
+        pilot_cfg.pilot_timeout
+        * _PILOT_AVG_LATENCY_RATIO
+        * _PILOT_DECISIONS_PER_GAME
+    )
+    return max(_BUILTIN_AI_CLOCK_SECONDS, int(cold_start + steady))
+
+
+def forge_run_budget(n_games: int, pilot_cfg: ForgePilotConfig) -> ForgeRunBudget:
+    """Build the match clock and the subprocess timeout that must contain it.
+
+    The subprocess timeout exceeds every match's own clock so Forge stops slow
+    games itself and still prints its results, instead of being killed with
+    nothing parseable on stdout.
+    """
+    clock = forge_sim_clock(pilot_cfg)
+    return ForgeRunBudget(
+        clock=clock,
+        subprocess_timeout=n_games * clock + _FORGE_STARTUP_SECONDS,
+    )
+
+
 def build_forge_cmd(
     p_name: str,
     o_name: str,
@@ -115,19 +183,16 @@ def build_forge_cmd(
     pilot_cfg: ForgePilotConfig,
 ) -> list[str]:
     """Assemble the java -jar forge sim command line."""
-    cmd = [
+    return [
         require_env("FORGE_JAVA"), f"-Xmx{FORGE_MAX_HEAP}", "-jar", FORGE_JAR,
         "sim",
         "-d", f"{p_name}.dck", f"{o_name}.dck",
         "-n", str(n_games),
-        "-c", "60",
-    ]
-    if pilot_cfg.pilot_active():
-        cmd.extend([
-            "-pilot-url", pilot_cfg.pilot_url,
-            "-pilot-timeout", str(pilot_cfg.pilot_timeout),
-        ])
-    return cmd
+        "-c", str(forge_sim_clock(pilot_cfg)),
+    ] + ([
+        "-pilot-url", pilot_cfg.pilot_url,
+        "-pilot-timeout", str(pilot_cfg.pilot_timeout),
+    ] if pilot_cfg.pilot_active() else [])
 
 
 def _forge_work_dir() -> str:
@@ -149,19 +214,25 @@ def _forge_work_dir() -> str:
     return str(jar.parent)
 
 
-def invoke_forge(cmd: list[str], n_games: int) -> str:
+def invoke_forge(cmd: list[str], n_games: int, timeout: int) -> str:
     """Run Forge subprocess; return stdout or empty string on failure."""
     try:
         proc = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
-            timeout=n_games * 90,
+            timeout=timeout,
             check=False,
             cwd=_forge_work_dir(),
         )
     except subprocess.TimeoutExpired:
-        logger.error("Forge simulation timed out after %d games", n_games)
+        logger.error(
+            "Forge subprocess killed after %ds without finishing %d games. "
+            "Its own match clock should have stopped slow games first — check "
+            "FORGE_PILOT_TIMEOUT and whether the sidecar is responding.",
+            timeout,
+            n_games,
+        )
         return ""
     except FileNotFoundError:
         logger.error("Java not found. Set FORGE_JAVA to the java binary path.")

@@ -11,6 +11,11 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import Optional
 
+# Winner index for a game Forge ended without a result — a genuine draw, or a
+# match its sim clock stopped ("Stopping slow match as draw"). Scoring code must
+# exclude these games rather than attribute the game to either side.
+UNDECIDED_WINNER = -1
+
 
 # ---------------------------------------------------------------------------
 # Public turn / game log types
@@ -169,8 +174,13 @@ class GameLog:
 
     @property
     def winner(self) -> int:
-        """Index of the winning player (0 or 1)."""
+        """Index of the winning player (0 or 1), or UNDECIDED_WINNER."""
         return self.outcome.winner
+
+    @property
+    def decided(self) -> bool:
+        """True when Forge reported an actual winner for this game."""
+        return self.outcome.winner != UNDECIDED_WINNER
 
     @property
     def final_turn(self) -> int:
@@ -231,8 +241,13 @@ class SimResult:
 
     @property
     def winner(self) -> int:
-        """Index of the winning player (0 or 1)."""
+        """Index of the winning player (0 or 1), or UNDECIDED_WINNER."""
         return self.outcome.winner
+
+    @property
+    def decided(self) -> bool:
+        """True when Forge reported an actual winner for this game."""
+        return self.outcome.winner != UNDECIDED_WINNER
 
     @property
     def timed_out(self) -> bool:

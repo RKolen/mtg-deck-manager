@@ -1,4 +1,4 @@
-"""Chunk long simulation runs into smaller Forge/Python batches."""
+"""Chunk long simulation runs into smaller Forge batches."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 def sim_batch_size() -> int:
-    """Games per Forge/Python subprocess (env SIM_BATCH_SIZE)."""
+    """Games per Forge subprocess (env SIM_BATCH_SIZE)."""
     size = require_env_int("SIM_BATCH_SIZE")
     return max(1, min(size, 50))
 
@@ -35,9 +35,11 @@ def reindex_sim_result(result: SimResult, game_index: int) -> SimResult:
     return result
 
 
-def _batch_win_summary(results: list[SimResult]) -> tuple[int, int]:
-    wins = sum(1 for r in results if r.winner == 0)
-    return wins, len(results) - wins
+def _batch_win_summary(results: list[SimResult]) -> tuple[int, int, int]:
+    """Return (wins, losses, undecided) — draws are never scored as either."""
+    decided = [r for r in results if r.decided]
+    wins = sum(1 for r in decided if r.winner == 0)
+    return wins, len(decided) - wins, len(results) - len(decided)
 
 
 def log_batch_progress(
@@ -47,17 +49,28 @@ def log_batch_progress(
     results: list[SimResult],
 ) -> None:
     """Log running win-rate after each batch completes."""
-    wins, losses = _batch_win_summary(results)
-    rate = (100.0 * wins / len(results)) if results else 0.0
+    wins, losses, undecided = _batch_win_summary(results)
+    decided = wins + losses
+    rate = (100.0 * wins / decided) if decided else 0.0
     logger.info(
-        "Sim batch done: %s — %d/%d games (%.1f%% win rate, %dW-%dL so far)",
+        "Sim batch done: %s — %d/%d games (%.1f%% win rate over %d decided, "
+        "%dW-%dL, %d drawn/unfinished)",
         label,
         completed,
         total,
         rate,
+        decided,
         wins,
         losses,
+        undecided,
     )
+    if undecided and undecided == len(results):
+        logger.warning(
+            "%s: every game so far ended undecided — no win rate can be "
+            "computed. Forge is stopping matches on its clock, so check the "
+            "sidecar and FORGE_PILOT_TIMEOUT.",
+            label,
+        )
 
 
 def run_chunked_simulation(

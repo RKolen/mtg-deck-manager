@@ -13,7 +13,7 @@ fi
 
 cd "${ROOT}"
 "${VENV}/bin/pip" install -q -r "${SIM}/requirements-dev.txt"
-echo "==> pyright (strict, engine only)"
+echo "==> pyright (strict)"
 "${VENV}/bin/pyright" "${SIM}"
 echo "==> pylint (sim + sidecar + classifier)"
 "${VENV}/bin/pylint" --rcfile=../.pylintrc sim/ sidecar/ classifier/classifier.py classifier/main.py

@@ -91,7 +91,6 @@ Frontend: http://localhost:8001
 | `NEXT_PUBLIC_DRUPAL_URL` | `https://mtg-deck-manager.ddev.site` | Drupal base URL |
 | `NEXT_PUBLIC_DRUPAL_USER` | `admin` | GraphQL basic-auth username |
 | `NEXT_PUBLIC_DRUPAL_PASS` | `admin` | GraphQL basic-auth password |
-| `NEXT_PUBLIC_SIM_URL` | `http://localhost:8002` | Python sim service (port matches root `SIM_PORT`) |
 
 ---
 

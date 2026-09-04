@@ -280,6 +280,12 @@ def _ollama_num_ctx() -> int | None:
     return int(raw)
 
 
+# Seconds to wait for one Ollama /api/generate response. This is the innermost
+# timeout in the sim's ladder — every caller waiting on a sidecar round trip has
+# to allow more than this, or it abandons work Ollama is still doing.
+OLLAMA_REQUEST_TIMEOUT = 120
+
+
 def _ollama_post(payload: dict[str, Any]) -> OllamaGenerateResult:
     """POST to Ollama /api/generate and parse thinking vs response fields."""
     num_ctx = _ollama_num_ctx()
@@ -288,7 +294,7 @@ def _ollama_post(payload: dict[str, Any]) -> OllamaGenerateResult:
     resp = requests.post(
         f"{OLLAMA_URL.rstrip('/')}/api/generate",
         json=payload,
-        timeout=120,
+        timeout=OLLAMA_REQUEST_TIMEOUT,
     )
     resp.raise_for_status()
     data = resp.json()

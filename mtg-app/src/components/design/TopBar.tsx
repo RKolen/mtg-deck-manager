@@ -9,7 +9,6 @@ export type NavId =
   | 'decks'
   | 'builder'
   | 'collection'
-  | 'play'
   | 'sim'
   | 'import'
   | 'meta';
@@ -19,7 +18,6 @@ const TABS: Array<{ id: NavId; label: string; href: string; hotkey: string }> = 
   { id: 'decks', label: 'DECKS', href: '/decks', hotkey: 'D' },
   { id: 'builder', label: 'BUILDER', href: '/decks', hotkey: 'B' },
   { id: 'collection', label: 'COLLECTION', href: '/collection', hotkey: 'C' },
-  { id: 'play', label: 'PLAYTEST', href: '/play', hotkey: 'P' },
   { id: 'import', label: 'IMPORT', href: '/import', hotkey: 'I' },
   { id: 'meta', label: 'META', href: '/meta-decks', hotkey: 'M' },
 ];
@@ -29,7 +27,6 @@ function routeToNav(pathname: string): NavId {
   if (pathname.startsWith('/decks/') && pathname !== '/decks') return 'builder';
   if (pathname.startsWith('/decks')) return 'decks';
   if (pathname.startsWith('/collection')) return 'collection';
-  if (pathname.startsWith('/play')) return 'play';
   if (pathname.startsWith('/import')) return 'import';
   if (pathname.startsWith('/meta')) return 'meta';
   return 'home';

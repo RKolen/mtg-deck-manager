@@ -23,13 +23,12 @@ Optional AI environment variables:
   SIDECAR_URL    - Host-side AI sidecar (preferred; keeps inference out of DDEV)
   OLLAMA_URL     - Direct Ollama URL (fallback when SIDECAR_URL is unset)
   OLLAMA_MODEL   - Chat model for pilot decisions and key moments
-  LLM_SCRIPT_GENERATION - Set to 1 to LLM-generate card scripts during deck sync
   CAVEMAN_PILOT  - Pilot prompt compression: rules (default), llm, or off
   CAVEMAN_PILOT_MIN_CHARS - Skip compression below this length (default 120)
   SIM_BATCH_SIZE - Games per Forge subprocess chunk (default 5)
 
-When FORGE_JAR is not set the service runs in mock mode using the built-in
-Python engine (faster, less accurate). Set FORGE_JAR to enable real simulation.
+FORGE_JAR must point at an existing Forge desktop JAR. The service does not
+fall back to a heuristic engine when the JAR is missing or a run fails.
 """
 
 from __future__ import annotations
@@ -46,20 +45,13 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from caveman_compress import CompressedPrompt, compress_pilot_prompt
 from deck_registry import (
     fetch_deck_notes,
     fetch_deck_title,
     fetch_meta_deck,
     fetch_player_deck,
 )
-from engine.cards.deck_script_store import (
-    DeckMatchupScripts,
-    prepare_game_card_scripts_with_coverage,
-)
-from engine.game import InteractiveGame, _GameConfig, create_game, get_game, remove_game
-from engine.game.action_dispatch import dispatch_game_action
-from engine_sim import _BatchConfig, run_simulation as run_python_simulation
-from caveman_compress import CompressedPrompt, compress_pilot_prompt
 from forge_adapter import ForgeAdapter, ForgeSimOptions, forge_jar_available
 from forge_pilot import resolve_forge_pilot_config
 from game_log_emitter import emit_game_logs
@@ -77,6 +69,7 @@ app = FastAPI(
     version="1.0.0",
 )
 
+
 def _cors_origins() -> list[str]:
     """Return comma-separated CORS_ORIGINS from the environment."""
     raw = os.environ.get("CORS_ORIGINS", "").strip()
@@ -90,7 +83,7 @@ def _cors_origins() -> list[str]:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins(),
-    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
 )
 
@@ -106,13 +99,15 @@ class SimulateRequest(BaseModel):
     opponentArchetype: str = Field(..., description="Archetype name matching a meta_deck title")
     format: str = Field("Modern", description="MTG format")
     games: int = Field(50, ge=1, le=200, description="Number of games to simulate (max 200)")
-    useLlm: bool = Field(False, description="Use Ollama for MCTS board evaluation (slower)")
+    useLlm: bool = Field(
+        False,
+        description="Generate LLM key-moment summaries from finished Forge games",
+    )
     engine: str = Field(
         "auto",
         description=(
-            "Simulation engine: 'auto' (Forge when FORGE_JAR is set, else python), "
-            "'forge' (Forge JAR — full rules, mulligans, turn logs), or "
-            "'python' (LLM pilot prompts — experimental, fewer rules)"
+            "Simulation engine: 'auto' and 'forge' both run the local Forge JAR. "
+            "The Python interactive engine is no longer available."
         ),
     )
     pilotSide: str = Field(
@@ -137,13 +132,11 @@ def root() -> dict:
 
 @app.get("/health")
 def health() -> dict:
-    """Return service health and mock-mode status."""
-    adapter: ForgeAdapter | None = _state["adapter"]
-    mock_mode = adapter.is_mock if adapter is not None else not forge_jar_available()
+    """Return service health and whether the local Forge JAR is configured."""
+    configured = forge_jar_available()
     return {
-        "status": "ok",
-        "mock_mode": mock_mode,
-        "forge_configured": not mock_mode,
+        "status": "ok" if configured else "degraded",
+        "forge_configured": configured,
     }
 
 
@@ -197,9 +190,28 @@ async def _load_sim_matchup(deck_id: int, archetype: str, fmt: str) -> _SimMatch
     )
 
 
+def _require_forge_engine(requested: str) -> None:
+    """Reject unsupported engines and a missing local Forge JAR."""
+    if requested not in ("auto", "forge"):
+        raise HTTPException(
+            status_code=400,
+            detail="engine must be 'auto' or 'forge'. The Python engine is discontinued.",
+        )
+    if not forge_jar_available():
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "FORGE_JAR is not set or the file is missing. "
+                "Point FORGE_JAR at the Forge desktop JAR and restart the sim service."
+            ),
+        )
+
+
 @app.post("/simulate")
 async def simulate(req: SimulateRequest) -> dict:
-    """Run a simulation and return aggregate win-rate statistics."""
+    """Run a Forge simulation and return aggregate win-rate statistics."""
+    _require_forge_engine(req.engine)
+
     if _state["adapter"] is None:
         _state["adapter"] = ForgeAdapter()
 
@@ -219,10 +231,7 @@ async def simulate(req: SimulateRequest) -> dict:
     llm_ready = llm_is_configured()
     engine = resolve_sim_engine(
         EngineRequest(
-            requested=req.engine,
-            forge_ready=forge_jar_available(),
             llm_ready=llm_ready,
-            use_llm=req.useLlm,
             opponent_archetype=req.opponentArchetype,
             opp_drupal_prompt=matchup.opp_pilot_raw,
             player_prompt=matchup.player_pilot.text,
@@ -230,7 +239,6 @@ async def simulate(req: SimulateRequest) -> dict:
     )
     pilot_info = build_pilot_info(
         PilotInfoRequest(
-            engine=engine,
             opponent_archetype=req.opponentArchetype,
             opp_drupal_prompt=matchup.opp_pilot_raw,
             player=matchup.player_pilot,
@@ -247,75 +255,30 @@ async def simulate(req: SimulateRequest) -> dict:
         pilot_info.get("message"),
     )
 
-    script_coverage: dict[str, object] | None = None
-    if engine == "forge":
-        forge_pilot = resolve_forge_pilot_config(
-            matchup.player_pilot.text,
-            matchup.opponent_pilot.text,
-            req.opponentArchetype,
-        )
-        results = await asyncio.to_thread(
-            adapter.run_simulation,
-            matchup.player_deck,
-            matchup.opponent_deck,
-            req.games,
-            options=ForgeSimOptions(
-                deck_names=(matchup.deck_title, req.opponentArchetype),
-                pilot=forge_pilot,
-            ),
-        )
-    else:
-        script_result = await asyncio.to_thread(
-            prepare_game_card_scripts_with_coverage,
-            DeckMatchupScripts(
-                player_deck_nid=req.playerDeckId,
-                player_cards=matchup.player_deck,
-                player_title=matchup.deck_title,
-                meta_format=req.format,
-                meta_archetype=req.opponentArchetype,
-                opponent_cards=matchup.opponent_deck,
-            ),
-        )
-        script_coverage = script_result.coverage_payload
-        results = await asyncio.to_thread(
-            run_python_simulation,
-            matchup.player_deck,
-            matchup.opponent_deck,
-            req.games,
-            _BatchConfig(
-                names=(matchup.deck_title, req.opponentArchetype),
-                opponent_pilot_prompt=matchup.opponent_pilot.text,
-                player_pilot_prompt=matchup.player_pilot.text,
-                card_scripts=script_result.scripts,
-            ),
-        )
+    forge_pilot = resolve_forge_pilot_config(
+        matchup.player_pilot.text,
+        matchup.opponent_pilot.text,
+        req.opponentArchetype,
+    )
+    results = await asyncio.to_thread(
+        adapter.run_simulation,
+        matchup.player_deck,
+        matchup.opponent_deck,
+        req.games,
+        options=ForgeSimOptions(
+            deck_names=(matchup.deck_title, req.opponentArchetype),
+            pilot=forge_pilot,
+        ),
+    )
 
     if not results:
         raise HTTPException(
-            status_code=500,
-            detail="Simulation returned no results. Check sim service logs.",
-        )
-
-    # Report the engine that actually produced results, not the requested one:
-    # Forge can fail and fall back to the mock, which ignores the pilot prompts.
-    engine_used = adapter.last_engine if engine == "forge" else engine
-    fell_back_to_mock = engine == "forge" and engine_used == "mock"
-    if fell_back_to_mock:
-        logger.warning(
-            "engineUsed=mock: Forge failed and the built-in mock engine ran "
-            "instead. LLM pilot prompts were NOT applied — check the Forge error above."
-        )
-        pilot_info = {
-            **pilot_info,
-            "engineUsed": "mock",
-            "opponentPilotActive": False,
-            "playerPilotActive": False,
-            "message": (
-                "Mock engine (Forge unavailable) — heuristic AI only; the LLM "
-                "pilot prompts were NOT used. See sim logs for the Forge error."
+            status_code=503,
+            detail=(
+                "Forge returned no results. Check that Java can run FORGE_JAR "
+                "and see the sim service logs."
             ),
-            "fellBackToMock": True,
-        }
+        )
 
     emit_game_logs(results, matchup.deck_title, req.opponentArchetype)
 
@@ -329,234 +292,14 @@ async def simulate(req: SimulateRequest) -> dict:
             generate_moments=req.useLlm,
         ),
     )
-    stats["engineUsed"] = engine_used
+    stats["engineUsed"] = "forge"
     stats["engineRequested"] = engine
-    stats["fellBackToMock"] = fell_back_to_mock
     stats["pilotInfo"] = pilot_info
-    if engine_used == "python":
-        stats["scriptCoverage"] = script_coverage
     return stats
-
-
-# ---------------------------------------------------------------------------
-# Interactive game routes
-# ---------------------------------------------------------------------------
-
-class StartGameRequest(BaseModel):
-    """Request body for POST /game/start."""
-
-    playerDeckId: int
-    opponentArchetype: str
-    format: str = "Modern"
-    onThePlay: bool = True
-
-
-class GameActionRequest(BaseModel):
-    """Request body for POST /game/action.
-
-    Valid actions: keep, mulligan, draw, play_land, cast, pass_priority, go_to_attack,
-    toggle_attacker, confirm_attack, skip_attack, end_turn,
-    assign_blocker, unassign_blocker, confirm_blocks.
-    """
-
-    gameId: str
-    action: str
-    handIdx: int | None = None
-    kickerTimes: int = 0
-    entwined: bool = False
-    overloaded: bool = False
-    bestowTargetUid: str | None = None
-    castForMiracle: bool = False
-    replicateTimes: int = 0
-    squadTimes: int = 0
-    paidBuyback: bool = False
-    paidCasualty: bool = False
-    paidConspire: bool = False
-    paidBargain: bool = False
-    paidDemonstrate: bool = False
-    paidGift: bool = False
-    paidFuse: bool = False
-    paidAwaken: bool = False
-    paidImpending: bool = False
-    paidForMirrodin: bool = False
-    awakenLandHandIdx: int | None = None
-    escalateExtraTargets: int = 0
-    bargainSacrificeIds: list[str] = []
-    castForCleave: bool = False
-    assistMana: int = 0
-    craftArtifactIds: list[str] = []
-    castForEmerge: bool = False
-    castForOffering: bool = False
-    castForEvoke: bool = False
-    emergeSacrificeIds: list[str] = []
-    offeringSacrificeIds: list[str] = []
-    forMirrodinSacrificeIds: list[str] = []
-    casualtySacrificeIds: list[str] = []
-    castForMutate: bool = False
-    mutateTargetUid: str | None = None
-    spreeModeIndices: list[int] = []
-    tieredModeIndex: int | None = None
-    modalModeIndex: int | None = None
-    sneakLandHandIndices: list[int] = []
-    castForFreerunning: bool = False
-    castForSpectacle: bool = False
-    castForSurge: bool = False
-    castForPrototype: bool = False
-    paidSplice: bool = False
-    paidCompleated: bool = False
-    spliceHandIdx: int | None = None
-    specializeHandIdx: int | None = None
-    webSlingCreatureUid: str | None = None
-    auraSwapHandIdx: int | None = None
-    castForWarp: bool = False
-    castForWebSlinging: bool = False
-    castForConverted: bool = False
-    firstAgendaName: str = ""
-    secondAgendaName: str = ""
-    castForSpecialize: bool = False
-    castForMorph: bool = False
-    castForDisguise: bool = False
-    castForDash: bool = False
-    castForBlitz: bool = False
-    harmonizeCreatureIds: list[str] = []
-    convokeCreatureIds: list[str] = []
-    delveGraveyardIndices: list[int] = []
-    improviseArtifactIds: list[str] = []
-    escapeExileIndices: list[int] = []
-    discardHandIdx: int | None = None
-    targetUid: str | None = None
-    targetPlayer: int | None = None
-    permanentUid: str | None = None
-    blockerUid: str | None = None
-    attackerUid: str | None = None
-    libraryIdx: int | None = None
-    payShocklandLife: bool = False
-
-
-@app.post("/game/start")
-async def game_start(req: StartGameRequest) -> dict:
-    """Create a new interactive game session and return the initial state."""
-    try:
-        player_deck = await asyncio.to_thread(fetch_player_deck, req.playerDeckId)
-    except Exception as exc:
-        raise HTTPException(502, f"Could not fetch player deck: {exc}") from exc
-    if not player_deck:
-        raise HTTPException(404, f"Deck {req.playerDeckId} has no cards.")
-
-    player_pilot_raw = await asyncio.to_thread(fetch_deck_notes, req.playerDeckId)
-    player_pilot = compress_pilot_prompt(player_pilot_raw)
-
-    try:
-        opponent_deck, opp_pilot_raw = await asyncio.to_thread(
-            fetch_meta_deck, req.opponentArchetype, req.format
-        )
-    except Exception as exc:
-        raise HTTPException(502, f"Could not fetch meta deck: {exc}") from exc
-    if not opponent_deck:
-        raise HTTPException(404, f"No meta_deck for '{req.opponentArchetype}' in {req.format}.")
-
-    opponent_pilot = compress_pilot_prompt(
-        get_pilot_prompt(req.opponentArchetype, opp_pilot_raw),
-    )
-
-    deck_title = await asyncio.to_thread(fetch_deck_title, req.playerDeckId)
-    script_result = await asyncio.to_thread(
-        prepare_game_card_scripts_with_coverage,
-        DeckMatchupScripts(
-            player_deck_nid=req.playerDeckId,
-            player_cards=player_deck,
-            player_title=deck_title,
-            meta_format=req.format,
-            meta_archetype=req.opponentArchetype,
-            opponent_cards=opponent_deck,
-        ),
-    )
-
-    game = create_game(
-        player_deck, opponent_deck,
-        _GameConfig(
-            player_name="You",
-            opponent_name=req.opponentArchetype,
-            on_the_play=req.onThePlay,
-            pilot_prompt=opponent_pilot.text,
-            player_pilot_prompt=player_pilot.text,
-            pilot_prompt_resolved=True,
-        ),
-        card_scripts=script_result.scripts,
-    )
-    client = game.to_client()
-    client["scriptCoverage"] = script_result.coverage_payload
-    return client
-
-
-def _dispatch_blocker_action(game: InteractiveGame, req: GameActionRequest) -> dict | None:
-    """Dispatch declare-blockers phase actions; return None if action not recognised."""
-    if req.action == "assign_blocker":
-        assert req.blockerUid is not None and req.attackerUid is not None
-        return game.action_assign_blocker(req.blockerUid, req.attackerUid)
-    if req.action == "unassign_blocker":
-        assert req.blockerUid is not None
-        return game.action_unassign_blocker(req.blockerUid)
-    if req.action == "confirm_blocks":
-        return game.action_confirm_blocks()
-    return None
-
-
-async def _dispatch_action(game: InteractiveGame, req: GameActionRequest) -> dict:
-    """Dispatch a single game action and return the updated state dict."""
-    if req.action == "end_turn":
-        return await asyncio.to_thread(game.action_end_turn)
-    result = dispatch_game_action(game, req)
-    if result is not None:
-        return result
-    blocker_result = _dispatch_blocker_action(game, req)
-    if blocker_result is not None:
-        return blocker_result
-    raise HTTPException(400, f"Unknown action '{req.action}'")
-
-
-@app.post("/game/action")
-async def game_action(req: GameActionRequest) -> dict:
-    """Submit a player action and return the updated game state."""
-    game = get_game(req.gameId)
-    if game is None:
-        raise HTTPException(404, f"Game {req.gameId} not found.")
-    try:
-        return await _dispatch_action(game, req)
-    except AssertionError as exc:
-        raise HTTPException(
-            400, f"Invalid action '{req.action}' in phase '{game.phase}'"
-        ) from exc
-
-
-@app.get("/game/state/{game_id}")
-async def game_state(game_id: str) -> dict:
-    """Return the current state of an active game session."""
-    game = get_game(game_id)
-    if game is None:
-        raise HTTPException(404, f"Game {game_id} not found.")
-    return game.to_client()
-
-
-@app.get("/game/log/{game_id}")
-async def game_log(game_id: str) -> dict:
-    """Return the full turn-by-turn log for a game session."""
-    game = get_game(game_id)
-    if game is None:
-        raise HTTPException(404, f"Game {game_id} not found.")
-    return {"gameId": game_id, "log": game.full_log()}
-
-
-@app.delete("/game/{game_id}")
-async def game_delete(game_id: str) -> dict:
-    """Remove a game session and free its memory."""
-    remove_game(game_id)
-    return {"deleted": game_id}
 
 
 if __name__ == "__main__":
     from env_loader import load_project_env
-
     from env_loader import require_env, require_env_int
 
     load_project_env()

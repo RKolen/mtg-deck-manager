@@ -16,7 +16,7 @@ use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;
 
 /**
- * Proxies simulation requests to the Python mtg-sim service.
+ * Proxies simulation requests to the host mtg-sim Forge service.
  *
  * POST /api/simulate.
  *
@@ -25,9 +25,9 @@ use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;
  *   opponentArchetype (string) - Archetype name matching a meta_deck title
  *   format          (string)  - MTG format, e.g. "Modern"
  *   games           (int)     - Number of games, 1–200 (default 50)
- *   useLlm          (bool)    - Use Ollama for MCTS board evaluation (slower)
+ *   useLlm          (bool)    - Generate LLM key-moment summaries
  *
- * Response: the full simulation statistics JSON from the Python service,
+ * Response: the full simulation statistics JSON from the sim service,
  * also persisted as a simulation_result node for historical comparison.
  *
  * Requires MTG_SIM_SERVICE_URL in DDEV web_environment (config.local.yaml).

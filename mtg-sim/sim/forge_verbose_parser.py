@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import random
 import re
 from typing import Optional
 
@@ -20,6 +19,7 @@ from _sim_types import (
     TurnBoard,
     TurnDamage,
     TurnEvent,
+    UNDECIDED_WINNER,
     _GameState,
     _TurnAccum,
 )
@@ -161,7 +161,10 @@ class _ForgeVerboseParser:
         """Finalise a game and append a SimResult."""
         on_play = game_num % 2 == 1
         if winner_raw is None:
-            winner = random.randint(0, 1)
+            # Forge ended the game without a winner — a draw, or the sim clock
+            # stopping a slow match. Guessing a side here would fabricate a
+            # result, so mark the game undecided and let scoring exclude it.
+            winner = UNDECIDED_WINNER
             if not self._st.win_cond:
                 self._st.win_cond = "draw"
         else:

@@ -130,7 +130,6 @@ const IndexPage: React.FC = () => {
               ['/collection', 'Collection'],
               ['/import', 'Import XLSX'],
               ['/meta-decks', 'Meta decks'],
-              ['/play', 'Playtest'],
             ].map(([href, label]) => (
               <Link
                 key={href}

@@ -17,12 +17,13 @@ import json
 import logging
 import re
 from collections import Counter, defaultdict
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from llm_client import generate_text, is_configured
 
 if TYPE_CHECKING:
-    from forge_adapter import GameLog, SimResult, TurnEvent
+    from _sim_types import GameLog, SimResult, TurnEvent
 
 
 class MatchupConfig:
@@ -62,11 +63,19 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def _half_stats(results: list["SimResult"]) -> dict:
-    total = len(results)
+    """Win rate over decided games only; undecided ones are reported apart."""
+    decided = [r for r in results if r.decided]
+    total = len(decided)
+    undecided = len(results) - total
     if total == 0:
-        return {"wins": 0, "games": 0, "winRate": 0.0}
-    wins = sum(1 for r in results if r.winner == 0)
-    return {"wins": wins, "games": total, "winRate": round(wins / total, 4)}
+        return {"wins": 0, "games": 0, "winRate": 0.0, "undecided": undecided}
+    wins = sum(1 for r in decided if r.winner == 0)
+    return {
+        "wins": wins,
+        "games": total,
+        "winRate": round(wins / total, 4),
+        "undecided": undecided,
+    }
 
 
 def _top_killers(losses: list["SimResult"], total_losses: int) -> list[dict]:
@@ -164,6 +173,7 @@ def _serialise_log(log) -> dict:
         "opponentMulligan": log.opponent_mulligan,
         "playerOpeningHand": log.player_opening_hand,
         "winner": log.winner,
+        "decided": log.decided,
         "finalTurn": log.final_turn,
         "playerFinalLife": log.player_final_life,
         "opponentFinalLife": log.opponent_final_life,
@@ -196,10 +206,17 @@ def _build_prompt(stats: dict) -> str:
         f"{k['card']} ({k['appearances']} games)" for k in stats["topKillers"]
     )
     mull = stats.get("avgMulliganCount", 0)
+    scored = stats.get("decidedGames", stats["games"])
+    undecided = stats.get("undecidedGames", 0)
+    unfinished = (
+        f" {undecided} further game(s) ended undecided and are excluded.\n"
+        if undecided else "\n"
+    )
     return (
         f"Magic: The Gathering simulation: {stats['playerDeck']} vs "
         f"{stats['opponentArchetype']} in {stats['format']}.\n"
-        f"Results: {stats['wins']}/{stats['games']} wins ({stats['winRate'] * 100:.0f}%).\n"
+        f"Results: {stats['wins']}/{scored} wins "
+        f"({stats['winRate'] * 100:.0f}%).{unfinished}"
         f"On the play: {stats['onThePlay']['winRate'] * 100:.0f}%, "
         f"on the draw: {stats['onTheDraw']['winRate'] * 100:.0f}%.\n"
         f"Average win turn: {stats['avgTurnWin']}, loss turn: {stats['avgTurnLoss']}.\n"
@@ -323,8 +340,9 @@ def _empty_stats(cfg: MatchupConfig) -> dict:
         "opponentArchetype": cfg.opponent_archetype,
         "format": cfg.fmt,
         "games": 0, "wins": 0, "losses": 0, "winRate": 0.0,
-        "onThePlay": {"wins": 0, "games": 0, "winRate": 0.0},
-        "onTheDraw": {"wins": 0, "games": 0, "winRate": 0.0},
+        "decidedGames": 0, "undecidedGames": 0,
+        "onThePlay": {"wins": 0, "games": 0, "winRate": 0.0, "undecided": 0},
+        "onTheDraw": {"wins": 0, "games": 0, "winRate": 0.0, "undecided": 0},
         "avgTurnWin": None, "avgTurnLoss": None,
         "topKillers": [], "keyMoments": [],
         "gameLogs": [], "lifeProgression": [],
@@ -359,6 +377,47 @@ def _turn_stats(results: list["SimResult"]) -> tuple[float | None, float | None]
 # Main entry point
 # ---------------------------------------------------------------------------
 
+@dataclass(frozen=True)
+class _WinLossRecord:
+    """Win/loss tally over decided games, plus the undecided ones set aside."""
+
+    decided: list["SimResult"]
+    wins: int
+
+    @property
+    def scored(self) -> int:
+        """Number of games that produced an actual winner."""
+        return len(self.decided)
+
+    @property
+    def losses(self) -> int:
+        """Decided games the player lost."""
+        return self.scored - self.wins
+
+    @property
+    def losing_games(self) -> list["SimResult"]:
+        """Decided games the opponent won."""
+        return [r for r in self.decided if r.winner == 1]
+
+    @property
+    def win_rate(self) -> float:
+        """Win rate over decided games; 0.0 when nothing was decided."""
+        return round(self.wins / self.scored, 4) if self.scored else 0.0
+
+
+def _win_loss_record(results: list["SimResult"]) -> _WinLossRecord:
+    """Tally wins over decided games only.
+
+    A game Forge ended without a winner proves nothing about the matchup, so it
+    stays out of the win rate and is surfaced as its own count instead.
+    """
+    decided = [r for r in results if r.decided]
+    return _WinLossRecord(
+        decided=decided,
+        wins=sum(1 for r in decided if r.winner == 0),
+    )
+
+
 def compute_statistics(results: list["SimResult"], cfg: MatchupConfig) -> dict:
     """
     Compute a full simulation result dict from individual game outcomes.
@@ -367,11 +426,9 @@ def compute_statistics(results: list["SimResult"], cfg: MatchupConfig) -> dict:
     if total == 0:
         return _empty_stats(cfg)
 
-    wins = sum(1 for r in results if r.winner == 0)
-    losses = total - wins
+    record = _win_loss_record(results)
     on_play = [r for i, r in enumerate(results) if i % 2 == 0]
     on_draw = [r for i, r in enumerate(results) if i % 2 == 1]
-    losing_games = [r for r in results if r.winner == 1]
     mull_stats, player_mulls = _mulligan_stats(results, total)
     avg_turn_win, avg_turn_loss = _turn_stats(results)
     win_conditions: Counter[str] = Counter(
@@ -382,13 +439,15 @@ def compute_statistics(results: list["SimResult"], cfg: MatchupConfig) -> dict:
         "playerDeck": cfg.player_deck_name,
         "opponentArchetype": cfg.opponent_archetype,
         "format": cfg.fmt,
-        "games": total, "wins": wins, "losses": losses,
-        "winRate": round(wins / total, 4),
+        "games": total, "wins": record.wins, "losses": record.losses,
+        "decidedGames": record.scored,
+        "undecidedGames": total - record.scored,
+        "winRate": record.win_rate,
         "onThePlay": _half_stats(on_play),
         "onTheDraw": _half_stats(on_draw),
         "avgTurnWin": avg_turn_win,
         "avgTurnLoss": avg_turn_loss,
-        "topKillers": _top_killers(losing_games, losses),
+        "topKillers": _top_killers(record.losing_games, record.losses),
         "mulliganStats": mull_stats,
         "avgMulliganCount": round(sum(player_mulls) / total, 2),
         "manaEfficiency": _mana_efficiency(results),

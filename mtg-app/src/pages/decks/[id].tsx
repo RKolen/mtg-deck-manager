@@ -1255,19 +1255,10 @@ const DeckSimulate: React.FC<DeckSimulateProps> = ({ deckNid, format, deckTitle 
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', color: 'var(--ink)' }}>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
         <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--ink)' }}>
-          Simulate {deckTitle} against a meta archetype, or play an interactive game.
-          Requires <code>mtg-sim/sim/main.py</code> (see <code>SIM_PORT</code> in repo <code>.env</code>).
+          Simulate {deckTitle} against a meta archetype via the local Forge JAR.
+          Requires <code>mtg-sim/sim/main.py</code> and <code>FORGE_JAR</code>
+          (see <code>SIM_PORT</code> in repo <code>.env</code>).
         </p>
-        {selectedArchetype && (
-          <a
-            href={`/play?deckId=${deckNid}&vs=${encodeURIComponent(selectedArchetype)}&format=${encodeURIComponent(format)}&play=1`}
-            target="_blank"
-            rel="noreferrer"
-            style={{ display: 'inline-block', padding: '0.4rem 1rem', background: '#1a3a1a', color: '#2ecc71', border: '1px solid #2ecc71', borderRadius: 4, fontWeight: 600, fontSize: '0.88rem', textDecoration: 'none' }}
-          >
-            Play vs {selectedArchetype}
-          </a>
-        )}
       </div>
 
       {/* Controls */}

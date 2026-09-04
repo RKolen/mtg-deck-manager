@@ -48,7 +48,6 @@ export function AppShell({
       if (key === 'h') router.push('/');
       else if (key === 'd') router.push('/decks');
       else if (key === 'c') router.push('/collection');
-      else if (key === 'p') router.push('/play');
       else if (key === 'i') router.push('/import');
       else if (key === 'm') router.push('/meta-decks');
     }

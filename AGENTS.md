@@ -267,13 +267,13 @@ ddev drush cr    # rebuild Drupal cache
 
 Forge LLM pilot work (rules + decision hooks) lives in the sibling clone
 `../forge` on branch `mtg/llm-pilot`. See [docs/forge-llm-pilots.md](docs/forge-llm-pilots.md) (git-ignored).
-| **`mtg-app/.env.local`** | Next.js-only (`NEXT_PUBLIC_*`). `NEXT_PUBLIC_SIM_URL` / `NEXT_PUBLIC_CLASSIFIER_URL` ports must match root `SIM_PORT` / `CLASSIFIER_PORT`. |
+| **`mtg-app/.env.local`** | Next.js-only (`NEXT_PUBLIC_*`). `NEXT_PUBLIC_CLASSIFIER_URL` port must match root `CLASSIFIER_PORT`. |
 | **`drupal/.ddev/config.yaml`** | Committed DDEV config with **empty** `web_environment` placeholders only. |
 | **`drupal/.ddev/config.local.yaml`** | Local DDEV overrides (gitignored). Set `MTG_SIM_SERVICE_URL`, `MTG_AI_SIDECAR_URL`, `OLLAMA_CHAT_MODEL` from root `.env`. |
 | **Ollama provider host/port** | Not in config sync. Set `MTG_AI_SIDECAR_URL` in DDEV `web_environment`; `settings.mtg.php` applies it at runtime (`config_export_blacklist` prevents re-export). |
 
 Template: copy `/.env.example` to `/.env`. If a port is already in use locally,
-pick a free one and keep `NEXT_PUBLIC_SIM_URL`, `MTG_SIM_SERVICE_URL`, `SIM_PORT`,
+pick a free one and keep `MTG_SIM_SERVICE_URL`, `SIM_PORT`,
 `NEXT_PUBLIC_CLASSIFIER_URL`, and `CLASSIFIER_PORT` aligned. Set `DRUPAL_CORS_ORIGINS`
 in root `.env` and DDEV `web_environment` (no hardcoded localhost origins in PHP).
 
@@ -288,7 +288,7 @@ DDEV containers. Start everything with `./start.sh` from the repo root.
 |---------|------|---------|
 | Ollama | host `OLLAMA_PORT` | LLM inference (qwen3:4b for pilots, nomic for embeddings) |
 | AI sidecar | `mtg-sim/sidecar/` | FastAPI boundary: `/pilot-pick`, `/generate` — proxies to host Ollama |
-| Sim API | `mtg-sim/sim/` | Forge/Python simulations; uses `SIDECAR_URL` for opponent/player pilots |
+| Sim API | `mtg-sim/sim/` | Forge gauntlet (`POST /simulate`); uses `SIDECAR_URL` for opponent/player pilots |
 
 Simulation pilots:
 - **Player deck** — `field_notes` on the deck node (same role as your heroic pilot prompt).

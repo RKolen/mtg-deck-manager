@@ -12,6 +12,7 @@ import os
 
 import requests
 from ollama_http import (
+    OLLAMA_REQUEST_TIMEOUT,
     build_pilot_pick_prompt,
     generate_text as ollama_generate_text,
     is_configured as ollama_configured,
@@ -22,6 +23,11 @@ from ollama_http import (
 logger = logging.getLogger(__name__)
 
 SIDECAR_URL: str = os.environ.get("SIDECAR_URL", "")
+
+# The sidecar spends up to OLLAMA_REQUEST_TIMEOUT on its own Ollama call, so
+# waiting any less means giving up on a request that is still being served. The
+# margin covers HTTP and JSON overhead on top of inference.
+SIDECAR_TIMEOUT: int = OLLAMA_REQUEST_TIMEOUT + 30
 
 
 def is_configured() -> bool:
@@ -80,7 +86,7 @@ def _sidecar_pick(
                 "state": state,
                 "system_prompt": system_prompt,
             },
-            timeout=30,
+            timeout=SIDECAR_TIMEOUT,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -97,7 +103,7 @@ def _sidecar_generate(prompt: str, temperature: float, max_tokens: int) -> str:
         resp = requests.post(
             f"{SIDECAR_URL.rstrip('/')}/generate",
             json={"prompt": prompt, "temperature": temperature, "max_tokens": max_tokens},
-            timeout=60,
+            timeout=SIDECAR_TIMEOUT,
         )
         resp.raise_for_status()
         return str(resp.json().get("text", "")).strip()

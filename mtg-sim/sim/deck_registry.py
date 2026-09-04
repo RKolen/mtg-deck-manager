@@ -1,8 +1,8 @@
 """
-Fetches deck lists from Drupal GraphQL for use in game simulations.
+Fetches deck lists from Drupal GraphQL for use in Forge simulations.
 
-Returns CardInfo objects with CMC, type, power and toughness so the mock
-engine can make realistic gameplay decisions based on the actual cards.
+Returns CardInfo objects with name, quantity, type, and oracle text so decks
+can be written as Forge .dck files.
 """
 
 from __future__ import annotations
@@ -10,19 +10,46 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from dataclasses import dataclass, field
 from functools import lru_cache
 from urllib.parse import urljoin
 
 import requests
 
-from engine.cards.land_mana import parse_produced_mana_from_oracle
-
 logger = logging.getLogger(__name__)
+
+_COLOR_ORDER = "WUBRG"
+_MANA_TOKEN_RE = re.compile(r"\{([WRUBGC])\}")
 
 DRUPAL_URL: str = os.environ.get("DRUPAL_URL", "")
 DRUPAL_USER: str = os.environ.get("DRUPAL_USER", "")
 DRUPAL_PASS: str = os.environ.get("DRUPAL_PASS", "")
+
+
+def parse_produced_mana_from_oracle(
+    oracle_text: str,
+    *,
+    type_line: str = "",
+) -> list[str]:
+    """Return mana colors a land produces, parsed from its oracle text."""
+    if "Land" not in type_line and "land" not in (oracle_text or "").lower()[:30]:
+        return []
+    text = oracle_text or ""
+    lowered = text.lower()
+    if "any color" in lowered or "any one color" in lowered:
+        return list(_COLOR_ORDER)
+
+    colors: set[str] = set()
+    for line in text.splitlines():
+        if "add" not in line.lower():
+            continue
+        for match in _MANA_TOKEN_RE.finditer(line):
+            color = match.group(1)
+            if color in _COLOR_ORDER:
+                colors.add(color)
+    return sorted(colors, key=_COLOR_ORDER.index)
+
 
 def _parse_list_field(value: object) -> list[str]:
     """Parse a JSON:API multi-value field into a list of strings."""
@@ -47,7 +74,7 @@ class ManaProfile:
 
 @dataclass
 class CardInfo:
-    """Enriched card data used by the simulation engine.
+    """Enriched card data used when building Forge deck files.
 
     Power and toughness are stored as a combined 'pt' string (e.g. '2/2')
     matching the canonical MTG notation, keeping attribute count within bounds.

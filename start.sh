@@ -54,17 +54,6 @@ frontend_env_port() {
 
 FRONTEND_ENV="$(frontend_env_file || true)"
 if [[ -n "$FRONTEND_ENV" ]]; then
-  FRONTEND_SIM_PORT="$(frontend_env_port "$FRONTEND_ENV" 'NEXT_PUBLIC_SIM_URL')"
-  if [[ -z "$FRONTEND_SIM_PORT" ]]; then
-    FRONTEND_SIM_PORT="$(frontend_env_port "$FRONTEND_ENV" 'GATSBY_SIM_URL')"
-    if [[ -n "$FRONTEND_SIM_PORT" ]]; then
-      echo "WARNING: $FRONTEND_ENV still uses GATSBY_SIM_URL — rename to NEXT_PUBLIC_SIM_URL."
-    fi
-  fi
-  if [[ -n "$FRONTEND_SIM_PORT" && "$FRONTEND_SIM_PORT" != "$SIM_PORT" ]]; then
-    echo "WARNING: frontend sim URL port ($FRONTEND_SIM_PORT) does not match SIM_PORT ($SIM_PORT)."
-    echo "         Update $FRONTEND_ENV to use port $SIM_PORT."
-  fi
   FRONTEND_CLASSIFIER_PORT="$(frontend_env_port "$FRONTEND_ENV" 'NEXT_PUBLIC_CLASSIFIER_URL')"
   if [[ -z "$FRONTEND_CLASSIFIER_PORT" ]]; then
     FRONTEND_CLASSIFIER_PORT="$(frontend_env_port "$FRONTEND_ENV" 'GATSBY_CLASSIFIER_URL')"
@@ -88,7 +77,6 @@ export_frontend_env() {
   export NEXT_PUBLIC_DRUPAL_URL="${NEXT_PUBLIC_DRUPAL_URL:-${GATSBY_DRUPAL_URL:-}}"
   export NEXT_PUBLIC_DRUPAL_USER="${NEXT_PUBLIC_DRUPAL_USER:-${GATSBY_DRUPAL_USER:-}}"
   export NEXT_PUBLIC_DRUPAL_PASS="${NEXT_PUBLIC_DRUPAL_PASS:-${GATSBY_DRUPAL_PASS:-}}"
-  export NEXT_PUBLIC_SIM_URL="${NEXT_PUBLIC_SIM_URL:-${GATSBY_SIM_URL:-}}"
   export NEXT_PUBLIC_CLASSIFIER_URL="${NEXT_PUBLIC_CLASSIFIER_URL:-${GATSBY_CLASSIFIER_URL:-}}"
   if [[ -z "${NEXT_PUBLIC_CLASSIFIER_URL:-}" && -n "${CLASSIFIER_HOST:-}" && -n "${CLASSIFIER_PORT:-}" ]]; then
     export NEXT_PUBLIC_CLASSIFIER_URL="http://${CLASSIFIER_HOST}:${CLASSIFIER_PORT}"
