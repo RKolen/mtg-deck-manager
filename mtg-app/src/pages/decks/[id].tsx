@@ -156,6 +156,45 @@ interface EditorProps {
   deckIsFoil: boolean;
 }
 
+type OwnedCounts = { owned: number; foil: number };
+
+function ownedForFinish(counts: OwnedCounts | undefined, foil: boolean): number {
+  if (counts == null) {
+    return 0;
+  }
+  return foil ? counts.foil : counts.owned;
+}
+
+function ownedTotal(counts: OwnedCounts | undefined): number {
+  if (counts == null) {
+    return 0;
+  }
+  return counts.owned + counts.foil;
+}
+
+function applyOwnership(
+  currentOwned: number,
+  currentFoil: number,
+  own: boolean,
+  quantity: number,
+  foil: boolean,
+): OwnedCounts {
+  let nextOwned = currentOwned;
+  let nextFoil = currentFoil;
+  if (own) {
+    if (foil) {
+      nextFoil = Math.max(nextFoil, quantity);
+    } else {
+      nextOwned = Math.max(nextOwned, quantity);
+    }
+  } else if (foil) {
+    nextFoil = 0;
+  } else {
+    nextOwned = 0;
+  }
+  return { owned: nextOwned, foil: nextFoil };
+}
+
 function FoilToggle({
   isFoil,
   disabled,
@@ -229,13 +268,16 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format, de
   });
 
   const ownedByCardId = useMemo(() => {
-    const map = new Map<string, number>();
+    const map = new Map<string, OwnedCounts>();
     for (const cc of collectionCards) {
       const cardId = collectionPrintingId(cc);
       if (cardId == null) {
         continue;
       }
-      map.set(cardId, collectionOwnedQty(cc));
+      map.set(cardId, {
+        owned: cc.attributes.field_quantity_owned ?? 0,
+        foil: cc.attributes.field_quantity_foil ?? 0,
+      });
     }
     return map;
   }, [collectionCards]);
@@ -254,19 +296,15 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format, de
     foil: boolean,
   ): Promise<void> {
     const existing = collectionEntry(cardId);
-    let nextOwned = existing?.attributes.field_quantity_owned ?? 0;
-    let nextFoil = existing?.attributes.field_quantity_foil ?? 0;
-    if (own) {
-      if (foil) {
-        nextFoil = Math.max(nextFoil, quantity);
-      } else {
-        nextOwned = Math.max(nextOwned, quantity);
-      }
-    } else if (foil) {
-      nextFoil = 0;
-    } else {
-      nextOwned = 0;
-    }
+    const next = applyOwnership(
+      existing?.attributes.field_quantity_owned ?? 0,
+      existing?.attributes.field_quantity_foil ?? 0,
+      own,
+      quantity,
+      foil,
+    );
+    const nextOwned = next.owned;
+    const nextFoil = next.foil;
     await upsertCollectionCard(
       cardId,
       cardName,
@@ -418,8 +456,8 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format, de
         });
       }
       mapped.sort((a, b) => {
-        const oa = ownedByCardId.get(a.id) ?? 0;
-        const ob = ownedByCardId.get(b.id) ?? 0;
+        const oa = ownedTotal(ownedByCardId.get(a.id));
+        const ob = ownedTotal(ownedByCardId.get(b.id));
         if ((oa > 0) !== (ob > 0)) {
           return oa > 0 ? -1 : 1;
         }
@@ -500,7 +538,7 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format, de
     const setCode = (dc.card.field_set_code ?? '').toUpperCase();
     const setName = dc.card.field_set_name ?? '';
     const setTitle = [setCode, setName].filter(Boolean).join(' — ');
-    const ownedQty = ownedByCardId.get(dc.card.id) ?? 0;
+    const ownedQty = ownedForFinish(ownedByCardId.get(dc.card.id), dc.isFoil);
     const notOwned = ownedQty < 1;
     const selected = selectedSlotId === dc.id;
     return (
@@ -731,7 +769,7 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format, de
             const mvLegal = isLegalManaValue(r.typeLine, r.cmc, format);
             const inMain = cards.some(s => s.card.id === r.id && !s.isSideboard);
             const inSb = cards.some(s => s.card.id === r.id && s.isSideboard);
-            const ownedQty = ownedByCardId.get(r.id) ?? 0;
+            const ownedQty = ownedTotal(ownedByCardId.get(r.id));
             const meta = [
               setLabel || null,
               `CMC ${r.cmc}`,
@@ -935,7 +973,7 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format, de
             >
               <input
                 type="checkbox"
-                checked={(ownedByCardId.get(selectedSlot.card.id) ?? 0) > 0}
+                checked={ownedForFinish(ownedByCardId.get(selectedSlot.card.id), selectedSlot.isFoil) > 0}
                 disabled={setOwned.isPending}
                 onChange={e =>
                   setOwned.mutate({
@@ -947,7 +985,7 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format, de
                   })
                 }
               />
-              I own this
+              I own this{selectedSlot.isFoil ? ' (foil)' : ''}
             </label>
           </div>
         )}

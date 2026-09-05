@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\mtg_scryfall_sync;
 
 use Drupal\Component\Datetime\TimeInterface;
+use Drupal\Core\Database\Connection;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\State\StateInterface;
@@ -112,6 +113,7 @@ class ScryfallImporter {
     private readonly TimeInterface $time,
     private readonly ClientInterface $httpClient,
     private readonly SetTaxonomy $setTaxonomy,
+    private readonly Connection $database,
   ) {}
 
   /**
@@ -635,6 +637,154 @@ class ScryfallImporter {
     ]);
 
     return $updated;
+  }
+
+  /**
+   * Backfills full-art and border-color fields from the local bulk file.
+   *
+   * These fields were added after the first import, so existing cards have
+   * empty values and the frontend Full art filter matches nothing.
+   *
+   * @return array{updated: int, skipped: int}
+   *   updated: cards written; skipped: bulk rows with no matching node.
+   *
+   * @throws \RuntimeException
+   *   When the bulk data file is missing or cannot be read.
+   */
+  public function backfillArtFields(): array {
+    if (!$this->dataFileExists()) {
+      throw new \RuntimeException('Scryfall data file not found. Run downloadBulkData() first.');
+    }
+
+    $nodes = [];
+    $result = $this->database->query(
+      'SELECT n.nid, n.vid, n.langcode, s.field_scryfall_id_value
+       FROM {node_field_data} n
+       INNER JOIN {node__field_scryfall_id} s
+         ON s.entity_id = n.nid AND s.deleted = 0
+       WHERE n.type = :type AND n.default_langcode = 1',
+      [':type' => 'mtg_card'],
+    );
+    foreach ($result as $row) {
+      $nodes[(string) $row->field_scryfall_id_value] = [
+        'entity_id' => (int) $row->nid,
+        'revision_id' => (int) $row->vid,
+        'langcode' => (string) $row->langcode,
+      ];
+    }
+
+    $full_art_rows = [];
+    $border_rows = [];
+    $updated = 0;
+    $skipped = 0;
+
+    foreach ($this->iterateBulkCards() as $card) {
+      $scryfall_id = $card['id'] ?? NULL;
+      if (!is_string($scryfall_id) || !isset($nodes[$scryfall_id])) {
+        $skipped++;
+        continue;
+      }
+      $node = $nodes[$scryfall_id];
+      $base = [
+        'bundle' => 'mtg_card',
+        'deleted' => 0,
+        'entity_id' => $node['entity_id'],
+        'revision_id' => $node['revision_id'],
+        'langcode' => $node['langcode'],
+        'delta' => 0,
+      ];
+      $full_art_rows[] = $base + [
+        'field_full_art_value' => !empty($card['full_art']) ? 1 : 0,
+      ];
+      $border = $card['border_color'] ?? '';
+      $border_rows[] = $base + [
+        'field_border_color_value' => is_string($border) ? substr($border, 0, 16) : '',
+      ];
+      $updated++;
+    }
+
+    $this->replaceFieldRows('node__field_full_art', 'field_full_art_value', $full_art_rows);
+    $this->replaceFieldRows('node_revision__field_full_art', 'field_full_art_value', $full_art_rows);
+    $this->replaceFieldRows('node__field_border_color', 'field_border_color_value', $border_rows);
+    $this->replaceFieldRows('node_revision__field_border_color', 'field_border_color_value', $border_rows);
+
+    $this->loggerFactory->get('mtg_scryfall_sync')->info(
+      'Art field backfill: @updated cards written, @skipped bulk rows unmatched.',
+      ['@updated' => $updated, '@skipped' => $skipped],
+    );
+
+    return ['updated' => $updated, 'skipped' => $skipped];
+  }
+
+  /**
+   * Yields decoded card objects from the local Scryfall bulk file.
+   *
+   * @return \Generator<int, array<string, mixed>>
+   *   One Scryfall card object per iteration.
+   *
+   * @throws \RuntimeException
+   *   When the bulk data file cannot be opened.
+   */
+  private function iterateBulkCards(): \Generator {
+    $fh = fopen(self::DATA_FILE, 'rb');
+    if ($fh === FALSE) {
+      throw new \RuntimeException('Failed to open data file: ' . self::DATA_FILE);
+    }
+    try {
+      while (!feof($fh)) {
+        $raw = fgets($fh);
+        if ($raw === FALSE) {
+          break;
+        }
+        $line = ltrim($raw);
+        if (!str_starts_with($line, '{')) {
+          continue;
+        }
+        $card = json_decode(rtrim($line, " \t\n\r\0\x0B,"), TRUE);
+        if (is_array($card)) {
+          yield $card;
+        }
+      }
+    }
+    finally {
+      fclose($fh);
+    }
+  }
+
+  /**
+   * Replaces every row in a field table with the given values.
+   *
+   * @param string $table
+   *   Field data or revision table name.
+   * @param string $value_column
+   *   Value column for this field.
+   * @param list<array<string, int|string>> $rows
+   *   Rows to insert after the table is emptied.
+   */
+  private function replaceFieldRows(string $table, string $value_column, array $rows): void {
+    if (!$this->database->schema()->tableExists($table)) {
+      return;
+    }
+    $this->database->truncate($table)->execute();
+    if ($rows === []) {
+      return;
+    }
+    $columns = [
+      'bundle',
+      'deleted',
+      'entity_id',
+      'revision_id',
+      'langcode',
+      'delta',
+      $value_column,
+    ];
+    foreach (array_chunk($rows, 200) as $chunk) {
+      $insert = $this->database->insert($table)->fields($columns);
+      foreach ($chunk as $row) {
+        $insert->values($row);
+      }
+      $insert->execute();
+    }
   }
 
   /**

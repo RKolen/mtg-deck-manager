@@ -402,6 +402,18 @@ export async function fetchDecks(): Promise<JsonApiResource<DeckAttributes>[]> {
   return data.nodeDecks.nodes.map(toDeckResourceFromCompose);
 }
 
+export async function fetchFormats(): Promise<{ name: string; slug: string }[]> {
+  const query = gql`
+    query GetFormats {
+      formats { name slug }
+    }
+  `;
+  const data = await getGraphQLClient().request<{
+    formats: { name: string; slug: string }[];
+  }>(query);
+  return [...data.formats].sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export async function fetchDeckBySlug(
   slug: string,
 ): Promise<JsonApiResource<DeckAttributes> | null> {

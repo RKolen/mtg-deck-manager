@@ -166,7 +166,7 @@ export function TopBar({
             padding: '2px 6px',
             borderRadius: 3,
             fontSize: 10,
-            color: 'var(--ink)',
+            color: '#000',
           }}
         >
           {dark ? 'DARK' : 'LIGHT'}

@@ -138,3 +138,25 @@ function mtg_graphql_update_9003(): string {
   }
   return 'Re-backfilled foil on ' . $slots . ' slots (' . $foil_slots . ' foil).';
 }
+
+/**
+ * Adds the Other term to the mtg_format vocabulary.
+ */
+function mtg_graphql_update_9004(): string {
+  $storage = \Drupal::entityTypeManager()->getStorage('taxonomy_term');
+  $existing = $storage->loadByProperties([
+    'vid' => 'mtg_format',
+    'name' => 'Other',
+  ]);
+  if ($existing !== []) {
+    return 'Other format term already exists.';
+  }
+
+  $term = $storage->create([
+    'vid' => 'mtg_format',
+    'name' => 'Other',
+    'field_goldfish_slug' => 'other',
+  ]);
+  $term->save();
+  return 'Created Other format term.';
+}

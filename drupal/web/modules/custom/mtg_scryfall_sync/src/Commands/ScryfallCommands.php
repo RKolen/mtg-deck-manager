@@ -240,4 +240,36 @@ class ScryfallCommands extends DrushCommands {
     }
   }
 
+  /**
+   * Backfills full-art and border-color fields from the local bulk file.
+   *
+   * Needed once after those fields were added; the Full art printing filter
+   * stays empty until cards have these values.
+   *
+   * @command mtg:backfill-art
+   * @aliases mtg-art
+   * @usage ddev drush mtg:backfill-art
+   */
+  public function backfillArt(): void {
+    if (!$this->importer->dataFileExists()) {
+      $this->logger()->error('No data file found. Run mtg:scryfall-download first.');
+      return;
+    }
+
+    $this->output()->writeln('Backfilling full-art and border-color from the local Scryfall file...');
+    try {
+      $result = $this->importer->backfillArtFields();
+    }
+    catch (\RuntimeException $e) {
+      $this->logger()->error('Backfill failed: @msg', ['@msg' => $e->getMessage()]);
+      return;
+    }
+
+    $this->output()->writeln(sprintf(
+      'Art backfill complete: %d cards written, %d bulk rows unmatched.',
+      $result['updated'],
+      $result['skipped'],
+    ));
+  }
+
 }

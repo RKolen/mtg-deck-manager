@@ -1,4 +1,4 @@
-uuid: 2c005944-3600-43eb-b691-bebe3242fadd
+uuid: e23a1cca-ab42-4ffd-ba10-4eefa55f31f7
 langcode: en
 status: true
 dependencies:
@@ -12,7 +12,7 @@ bundle: mtg_set
 label: 'Set code'
 description: 'Scryfall set abbreviation (e.g. mh2).'
 required: true
-translatable: false
+translatable: true
 default_value: {  }
 default_value_callback: ''
 settings: {  }

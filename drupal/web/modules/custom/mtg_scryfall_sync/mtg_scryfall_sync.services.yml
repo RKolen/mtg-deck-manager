@@ -13,3 +13,4 @@ services:
       - '@datetime.time'
       - '@http_client'
       - '@mtg_scryfall_sync.set_taxonomy'
+      - '@database'

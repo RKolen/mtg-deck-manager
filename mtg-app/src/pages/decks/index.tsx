@@ -8,6 +8,7 @@ import { useRouter } from 'next/router';
 import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   fetchDecks,
+  fetchFormats,
   createDeck,
   deleteDeck,
   fetchDeckCardsWithCards,
@@ -24,26 +25,6 @@ import {
   totalDeckPrice,
 } from '../../utils/prices';
 import { isMainDeckSizeOk } from '../../utils/deckAnalysis';
-
-const FORMATS = [
-  'Standard',
-  'Modern',
-  'Legacy',
-  'Vintage',
-  'Pioneer',
-  'Pauper',
-  'EDH',
-  'Commander',
-  'Tiny Leaders',
-  'TLR',
-  'Other',
-];
-
-function notePreview(notes: string | null): string {
-  if (!notes) return '';
-  const first = notes.split(/[.\n]/)[0]?.trim() ?? '';
-  return first.slice(0, 72);
-}
 
 function formatChanged(ts: number | null | undefined): string {
   if (ts == null) return '--';
@@ -80,6 +61,11 @@ const DecksPage: React.FC = () => {
     queryFn: fetchDecks,
   });
 
+  const { data: formats = [] } = useQuery({
+    queryKey: ['formats'],
+    queryFn: fetchFormats,
+  });
+
   const cardQueries = useQueries({
     queries: decks.map(deck => ({
       queryKey: ['deckCards', deck.id],
@@ -102,7 +88,7 @@ const DecksPage: React.FC = () => {
   const [filter, setFilter] = useState('');
   const [creating, setCreating] = useState(false);
   const [title, setTitle] = useState('');
-  const [format, setFormat] = useState(FORMATS[0] ?? 'Standard');
+  const [format, setFormat] = useState('Standard');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [hover, setHover] = useState<{
     name: string;
@@ -124,6 +110,13 @@ const DecksPage: React.FC = () => {
   useEffect(() => {
     if (sel >= filtered.length) setSel(Math.max(0, filtered.length - 1));
   }, [filtered.length, sel]);
+
+  useEffect(() => {
+    if (formats.length === 0) return;
+    if (!formats.some(f => f.name === format)) {
+      setFormat(formats[0]?.name ?? 'Standard');
+    }
+  }, [formats, format]);
 
   const selected = filtered[sel] ?? null;
   const selectedCards = selected ? cardsByDeckId.get(selected.id) ?? [] : [];
@@ -239,7 +232,7 @@ const DecksPage: React.FC = () => {
               padding: '3px 8px',
               borderRadius: 2,
               fontSize: 10,
-              color: 'var(--ink)',
+              color: '#000',
             }}
             title="Toggle reference currency"
           >
@@ -332,9 +325,6 @@ const DecksPage: React.FC = () => {
                       <div style={{ fontWeight: 600, color: 'var(--ink)' }}>
                         {d.attributes.title}
                       </div>
-                      <div style={{ color: 'var(--ink)', fontSize: 10 }}>
-                        {notePreview(d.attributes.field_notes)}
-                      </div>
                     </td>
                     <td className="dim">{d.attributes.field_format}</td>
                     <td>
@@ -372,7 +362,7 @@ const DecksPage: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => setDeleteConfirm(null)}
-                            style={{ color: 'var(--ink)', fontSize: 10 }}
+                            style={{ color: '#000', fontSize: 10 }}
                           >
                             NO
                           </button>
@@ -381,7 +371,7 @@ const DecksPage: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => setDeleteConfirm(d.id)}
-                          style={{ color: 'var(--ink)', fontSize: 10 }}
+                          style={{ color: '#000', fontSize: 10 }}
                           aria-label={`Delete ${d.attributes.title}`}
                         >
                           DEL
@@ -472,13 +462,20 @@ const DecksPage: React.FC = () => {
                     color: 'var(--ink)',
                   }}
                 >
-                  {FORMATS.map(f => (
-                    <option key={f} value={f}>
-                      {f}
+                  {formats.map(f => (
+                    <option key={f.name} value={f.name}>
+                      {f.name}
                     </option>
                   ))}
                 </select>
               </label>
+              {createMutation.isError && (
+                <div className="mono" style={{ color: 'var(--neg)', fontSize: 11 }}>
+                  {createMutation.error instanceof Error
+                    ? createMutation.error.message
+                    : 'Could not create deck.'}
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 8 }}>
                 <button
                   type="submit"
@@ -500,7 +497,7 @@ const DecksPage: React.FC = () => {
                     setCreating(false);
                     setTitle('');
                   }}
-                  style={{ color: 'var(--ink)', fontSize: 10 }}
+                  style={{ color: '#000', fontSize: 10 }}
                 >
                   CANCEL
                 </button>
@@ -566,21 +563,6 @@ function DeckPreview({
           {deck.attributes.field_format}
         </span>
       </div>
-      {deck.attributes.field_notes && (
-        <div
-          style={{
-            fontFamily: 'var(--mono)',
-            fontSize: 11,
-            color: 'var(--ink)',
-            marginBottom: 12,
-            lineHeight: 1.6,
-            maxHeight: 72,
-            overflow: 'hidden',
-          }}
-        >
-          {notePreview(deck.attributes.field_notes)}
-        </div>
-      )}
       <div className="mono uc dim" style={{ fontSize: 9, marginBottom: 4 }}>
         KEY CARDS
       </div>

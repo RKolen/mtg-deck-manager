@@ -14,6 +14,8 @@ use Drupal\graphql\GraphQL\ResolverRegistryInterface;
 use GraphQL\Type\Definition\ResolveInfo;
 use Drupal\mtg_graphql\Service\DeckCardMutator;
 use Drupal\node\NodeInterface;
+use Drupal\taxonomy\TermInterface;
+use GraphQL\Error\UserError;
 
 /**
  * Registers MTG custom GraphQL field resolvers.
@@ -247,13 +249,10 @@ final class MtgGraphqlResolverRegistration {
     $registry->addFieldResolver('Mutation', 'createDeck',
       $builder->callback(function ($value, array $args): NodeInterface {
         $storage = \Drupal::entityTypeManager()->getStorage('node');
-        $formatTerm = \Drupal::entityTypeManager()
-          ->getStorage('taxonomy_term')
-          ->loadByProperties(['vid' => 'mtg_format', 'name' => $args['format']]);
         $node = $storage->create([
           'type'              => 'deck',
           'title'             => $args['title'],
-          'field_format_term' => ['target_id' => (int) reset($formatTerm)->id()],
+          'field_format_term' => ['target_id' => self::formatTermId($args['format'])],
           'field_notes'       => $args['notes'] ?? NULL,
           'status'            => 1,
         ]);
@@ -272,10 +271,7 @@ final class MtgGraphqlResolverRegistration {
           $node->setTitle($args['title']);
         }
         if (isset($args['format'])) {
-          $formatTerm = \Drupal::entityTypeManager()
-            ->getStorage('taxonomy_term')
-            ->loadByProperties(['vid' => 'mtg_format', 'name' => $args['format']]);
-          $node->set('field_format_term', ['target_id' => (int) reset($formatTerm)->id()]);
+          $node->set('field_format_term', ['target_id' => self::formatTermId($args['format'])]);
         }
         if (array_key_exists('notes', $args)) {
           $node->set('field_notes', $args['notes']);
@@ -953,6 +949,34 @@ final class MtgGraphqlResolverRegistration {
     $registry->addFieldResolver('ScrapeMetaDecksResult', 'skipped',
       $builder->callback(fn(array $r) => $r['skipped'])
     );
+  }
+
+  /**
+   * Returns the mtg_format term ID for a deck format name.
+   *
+   * Accepts common aliases (EDH, TLR). Throws a GraphQL user error when
+   * the format is not in the taxonomy.
+   *
+   * @throws \GraphQL\Error\UserError
+   *   When no matching format term exists.
+   */
+  private static function formatTermId(string $formatName): int {
+    $aliases = [
+      'EDH' => 'Commander',
+      'TLR' => 'Tiny Leaders',
+    ];
+    $name = $aliases[$formatName] ?? $formatName;
+    $terms = \Drupal::entityTypeManager()
+      ->getStorage('taxonomy_term')
+      ->loadByProperties(['vid' => 'mtg_format', 'name' => $name]);
+    $term = reset($terms);
+    if (!$term instanceof TermInterface) {
+      throw new UserError(sprintf(
+        'Unknown format "%s". Add it to the mtg_format taxonomy or choose an existing format.',
+        $formatName,
+      ));
+    }
+    return (int) $term->id();
   }
 
   /**

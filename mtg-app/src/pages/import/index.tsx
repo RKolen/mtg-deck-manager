@@ -6,12 +6,14 @@
  * cards for manual resolution, then creates the deck and slots via GraphQL.
  */
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { useQuery } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import {
   findCardsByName,
+  fetchFormats,
   createDeck,
   importCardToDeck,
 } from '../../services/drupalApi';
@@ -186,26 +188,24 @@ const ImportPage: React.FC = () => {
   const router = useRouter();
   const [step, setStep] = useState<Step>('upload');
   const [deckTitle, setDeckTitle] = useState('Imported Deck');
-  const [deckFormat, setDeckFormat] = useState('Other');
+  const [deckFormat, setDeckFormat] = useState('Standard');
   const [rows, setRows] = useState<MatchedRow[]>([]);
   const [progress, setProgress] = useState('');
   const [createdDeckId, setCreatedDeckId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const FORMATS = [
-    'Standard',
-    'Modern',
-    'Legacy',
-    'Vintage',
-    'Pioneer',
-    'Pauper',
-    'EDH',
-    'Commander',
-    'Tiny Leaders',
-    'TLR',
-    'Other',
-  ];
+  const { data: formats = [] } = useQuery({
+    queryKey: ['formats'],
+    queryFn: fetchFormats,
+  });
+
+  useEffect(() => {
+    if (formats.length === 0) return;
+    if (!formats.some(f => f.name === deckFormat)) {
+      setDeckFormat(formats[0]?.name ?? 'Standard');
+    }
+  }, [formats, deckFormat]);
 
   // ----- Step 1: File parsing + name matching -----
 
@@ -458,9 +458,9 @@ const ImportPage: React.FC = () => {
                 onChange={e => setDeckFormat(e.target.value)}
                 style={{ display: 'block', marginTop: 4 }}
               >
-                {FORMATS.map(f => (
-                  <option key={f} value={f}>
-                    {f}
+                {formats.map(f => (
+                  <option key={f.name} value={f.name}>
+                    {f.name}
                   </option>
                 ))}
               </select>

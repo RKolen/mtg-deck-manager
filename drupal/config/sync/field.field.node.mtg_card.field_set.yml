@@ -1,4 +1,4 @@
-uuid: e592a1bc-e724-4ca3-bfbb-13a1317e16b2
+uuid: 5e5970b3-9106-4f82-a015-77938b2b7b64
 langcode: en
 status: true
 dependencies:
@@ -13,7 +13,7 @@ bundle: mtg_card
 label: Set
 description: 'Print set (taxonomy). Prefer this over typing set codes.'
 required: false
-translatable: false
+translatable: true
 default_value: {  }
 default_value_callback: ''
 settings:
