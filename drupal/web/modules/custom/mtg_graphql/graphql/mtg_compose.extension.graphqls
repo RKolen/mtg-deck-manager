@@ -51,10 +51,15 @@ extend type Query {
   cardSets(q: String, limit: Int): [CardSet!]!
 }
 
-extend type Mutation {
-  createDeck(title: String!, format: String!, notes: String): Deck!
+extend type NodeDeck {
+  commander: MtgCard
+  commanderIsFoil: Boolean!
+}
 
-  updateDeck(id: ID!, title: String, format: String, notes: String): Deck!
+extend type Mutation {
+  createDeck(title: String!, format: String!, notes: String, commanderId: ID): Deck!
+
+  updateDeck(id: ID!, title: String, format: String, notes: String, commanderId: ID, commanderFoil: Boolean): Deck!
 
   deleteDeck(id: ID!): Boolean!
 

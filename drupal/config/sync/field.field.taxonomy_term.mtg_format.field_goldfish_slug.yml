@@ -11,7 +11,7 @@ entity_type: taxonomy_term
 bundle: mtg_format
 label: 'MTGGoldfish Slug'
 description: ''
-required: true
+required: false
 translatable: true
 default_value: {  }
 default_value_callback: ''

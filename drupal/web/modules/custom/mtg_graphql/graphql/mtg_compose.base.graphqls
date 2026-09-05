@@ -51,6 +51,8 @@ type Deck {
   title: String!
   format: String!
   notes: String
+  commander: MtgCard
+  commanderIsFoil: Boolean!
 }
 
 type DeckCard {

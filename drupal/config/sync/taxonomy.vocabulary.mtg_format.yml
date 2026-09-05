@@ -4,6 +4,6 @@ status: true
 dependencies: {  }
 name: 'MTG Format'
 vid: mtg_format
-description: 'Canonical MTG competitive formats used by the meta-deck scraper, and deck/card legalities.'
+description: 'MTG constructed and community formats used by decks, legalities, and the meta-deck scraper.'
 weight: 0
 new_revision: false

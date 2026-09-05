@@ -5,8 +5,10 @@
  * Install/update hooks for mtg_graphql.
  */
 
+use Drupal\Core\Entity\Entity\EntityFormDisplay;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
+use Drupal\mtg_graphql\MtgFormatCatalog;
 use Drupal\mtg_graphql\Service\DeckCardMutator;
 use Drupal\node\NodeInterface;
 use Drupal\paragraphs\ParagraphInterface;
@@ -159,4 +161,152 @@ function mtg_graphql_update_9004(): string {
   ]);
   $term->save();
   return 'Created Other format term.';
+}
+
+/**
+ * Adds remaining constructed and community MTG formats.
+ */
+function mtg_graphql_update_9005(): string {
+  $slug_field = FieldConfig::loadByName(
+    'taxonomy_term',
+    'mtg_format',
+    'field_goldfish_slug',
+  );
+  if ($slug_field instanceof FieldConfig && $slug_field->isRequired()) {
+    $slug_field->setRequired(FALSE);
+    $slug_field->save();
+  }
+
+  $result = MtgFormatCatalog::ensureTerms();
+  $parts = [];
+  if ($result['created'] !== []) {
+    $parts[] = 'Created ' . implode(', ', $result['created']);
+  }
+  if ($result['updated'] !== []) {
+    $parts[] = 'Updated slugs for ' . implode(', ', $result['updated']);
+  }
+  if ($parts === []) {
+    return 'All MTG format terms already present.';
+  }
+  return implode('. ', $parts) . '.';
+}
+
+/**
+ * Adds field_commander on deck nodes.
+ */
+function mtg_graphql_update_9006(): string {
+  $storage_name = 'field_commander';
+  if (!FieldStorageConfig::loadByName('node', $storage_name)) {
+    FieldStorageConfig::create([
+      'field_name' => $storage_name,
+      'entity_type' => 'node',
+      'type' => 'entity_reference',
+      'cardinality' => 1,
+      'settings' => [
+        'target_type' => 'node',
+      ],
+    ])->save();
+  }
+
+  if (!FieldConfig::loadByName('node', 'deck', $storage_name)) {
+    FieldConfig::create([
+      'field_name' => $storage_name,
+      'entity_type' => 'node',
+      'bundle' => 'deck',
+      'label' => 'Commander',
+      'description' => 'Designated commander for Commander, Tiny Leaders, and similar formats.',
+      'required' => FALSE,
+      'settings' => [
+        'handler' => 'mtg_card:node',
+        'handler_settings' => [
+          'target_bundles' => [
+            'mtg_card' => 'mtg_card',
+          ],
+          'auto_create' => FALSE,
+        ],
+      ],
+    ])->save();
+  }
+
+  $display = \Drupal::entityTypeManager()
+    ->getStorage('entity_form_display')
+    ->load('node.deck.default');
+  if ($display instanceof EntityFormDisplay) {
+    $display->setComponent($storage_name, [
+      'type' => 'entity_reference_autocomplete',
+      'weight' => 4,
+      'region' => 'content',
+      'settings' => [
+        'match_operator' => 'CONTAINS',
+        'match_limit' => 10,
+        'size' => 60,
+        'placeholder' => '',
+      ],
+    ]);
+    $group = $display->getThirdPartySetting('field_group', 'group_deck_details');
+    if (is_array($group) && isset($group['children']) && is_array($group['children'])) {
+      if (!in_array($storage_name, $group['children'], TRUE)) {
+        $group['children'][] = $storage_name;
+        $display->setThirdPartySetting('field_group', 'group_deck_details', $group);
+      }
+    }
+    $display->save();
+  }
+
+  return 'Created field_commander on deck.';
+}
+
+/**
+ * Adds field_commander_foil on deck nodes.
+ */
+function mtg_graphql_update_9007(): string {
+  $storage_name = 'field_commander_foil';
+  if (!FieldStorageConfig::loadByName('node', $storage_name)) {
+    FieldStorageConfig::create([
+      'field_name' => $storage_name,
+      'entity_type' => 'node',
+      'type' => 'boolean',
+      'cardinality' => 1,
+    ])->save();
+  }
+
+  if (!FieldConfig::loadByName('node', 'deck', $storage_name)) {
+    FieldConfig::create([
+      'field_name' => $storage_name,
+      'entity_type' => 'node',
+      'bundle' => 'deck',
+      'label' => 'Commander foil',
+      'description' => 'When enabled, the commander is a foil copy.',
+      'required' => FALSE,
+      'default_value' => [['value' => 0]],
+      'settings' => [
+        'on_label' => 'Foil',
+        'off_label' => 'Non-foil',
+      ],
+    ])->save();
+  }
+
+  $display = \Drupal::entityTypeManager()
+    ->getStorage('entity_form_display')
+    ->load('node.deck.default');
+  if ($display instanceof EntityFormDisplay) {
+    $display->setComponent($storage_name, [
+      'type' => 'boolean_checkbox',
+      'weight' => 5,
+      'region' => 'content',
+      'settings' => [
+        'display_label' => TRUE,
+      ],
+    ]);
+    $group = $display->getThirdPartySetting('field_group', 'group_deck_details');
+    if (is_array($group) && isset($group['children']) && is_array($group['children'])) {
+      if (!in_array($storage_name, $group['children'], TRUE)) {
+        $group['children'][] = $storage_name;
+        $display->setThirdPartySetting('field_group', 'group_deck_details', $group);
+      }
+    }
+    $display->save();
+  }
+
+  return 'Created field_commander_foil on deck.';
 }

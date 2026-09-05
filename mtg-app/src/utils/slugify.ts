@@ -16,6 +16,9 @@ export function slugify(title: string): string {
     .replace(/^-|-$/g, '');
 }
 
+/** Sentinel slot id for the deck-level commander printing. */
+export const COMMANDER_SLOT = 'commander';
+
 /** Builds /cards/:slug with optional printing / deck-slot context. */
 export function cardPrintingsPath(
   title: string,

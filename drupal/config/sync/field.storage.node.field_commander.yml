@@ -1,0 +1,19 @@
+uuid: 8f975188-6e2c-4c5a-8b03-b9469f3332f8
+langcode: en
+status: true
+dependencies:
+  module:
+    - node
+id: node.field_commander
+field_name: field_commander
+entity_type: node
+type: entity_reference
+settings:
+  target_type: node
+module: core
+locked: false
+cardinality: 1
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

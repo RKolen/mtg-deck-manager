@@ -24,7 +24,7 @@ import {
   priceSourceLabel,
   totalDeckPrice,
 } from '../../utils/prices';
-import { isMainDeckSizeOk } from '../../utils/deckAnalysis';
+import { isMainDeckSizeOk, nonRulebreakerMainCount } from '../../utils/deckAnalysis';
 
 function formatChanged(ts: number | null | undefined): string {
   if (ts == null) return '--';
@@ -33,9 +33,15 @@ function formatChanged(ts: number | null | undefined): string {
   return d.toISOString().slice(5, 10);
 }
 
-function deckColorIdentity(cards: DeckCardWithCard[]): string[] {
+function deckColorIdentity(
+  cards: DeckCardWithCard[],
+  commanderColors: string[] = [],
+): string[] {
   const order = ['W', 'U', 'B', 'R', 'G'];
   const set = new Set<string>();
+  for (const c of commanderColors) {
+    if (order.includes(c)) set.add(c);
+  }
   for (const slot of cards) {
     if (slot.isSideboard) continue;
     for (const c of slot.card.field_color_identity ?? []) {
@@ -299,12 +305,20 @@ const DecksPage: React.FC = () => {
               {filtered.map((d, i) => {
                 const cards = cardsByDeckId.get(d.id);
                 const md = cards ? mainDeckCount(cards) : null;
-                const colors = cards ? deckColorIdentity(cards) : [];
+                const colors = cards
+                  ? deckColorIdentity(
+                      cards,
+                      d.attributes.field_commander?.field_color_identity ?? [],
+                    )
+                  : [];
                 const value = cards
                   ? totalDeckPrice(cards, currency, false)
                   : null;
                 const legal =
-                  md != null && isMainDeckSizeOk(d.attributes.field_format, md);
+                  md != null &&
+                  isMainDeckSizeOk(d.attributes.field_format, md, {
+                    nonRulebreakerCount: nonRulebreakerMainCount(cards ?? []),
+                  });
                 return (
                   <tr
                     key={d.id}
@@ -547,7 +561,10 @@ function DeckPreview({
 }) {
   const md = cards.filter(c => !c.isSideboard);
   const top = [...md].sort((a, b) => b.quantity - a.quantity).slice(0, 6);
-  const colors = deckColorIdentity(cards);
+  const colors = deckColorIdentity(
+    cards,
+    deck.attributes.field_commander?.field_color_identity ?? [],
+  );
 
   return (
     <div style={{ padding: 12, borderBottom: '1px solid var(--line)' }}>

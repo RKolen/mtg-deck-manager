@@ -56,9 +56,34 @@ const FORMATS = [
   'modern',
   'legacy',
   'vintage',
-  'commander',
   'pauper',
+  'commander',
+  'historic',
+  'explorer',
+  'timeless',
+  'alchemy',
+  'brawl',
+  'standardbrawl',
+  'paupercommander',
+  'oathbreaker',
+  'predh',
+  'premodern',
+  'oldschool',
+  'penny',
+  'duel',
+  'gladiator',
 ];
+
+function legalFormatLabel(key: string): string {
+  const labels: Record<string, string> = {
+    '': 'Any format',
+    standardbrawl: 'Standard Brawl',
+    paupercommander: 'Pauper Commander',
+    oldschool: 'Old School',
+    predh: 'Predh',
+  };
+  return labels[key] ?? key.charAt(0).toUpperCase() + key.slice(1);
+}
 
 const TYPES = [
   'All',
@@ -258,7 +283,7 @@ const CardFilter: React.FC<CardFilterProps> = ({ filter, onChange }) => {
         >
           {FORMATS.map(f => (
             <option key={f} value={f}>
-              {f === '' ? 'Any format' : f.charAt(0).toUpperCase() + f.slice(1)}
+              {legalFormatLabel(f)}
             </option>
           ))}
         </select>

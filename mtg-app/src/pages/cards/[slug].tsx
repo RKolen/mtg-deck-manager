@@ -14,6 +14,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   fetchCardBySlug,
   findCardsByName,
+  replaceCommanderPrinting,
   replaceDeckCardPrinting,
 } from '../../services/drupalApi';
 import { invalidateInventoryQueries } from '../../services/queryCache';
@@ -22,7 +23,7 @@ import PrintingSwapDialog, {
   type PrintingSwapTarget,
 } from '../../components/PrintingSwapDialog';
 import { getOracleText } from '../../utils/deckAnalysis';
-import { cardPrintingsPath } from '../../utils/slugify';
+import { COMMANDER_SLOT, cardPrintingsPath } from '../../utils/slugify';
 import { useTheme } from '../../context/ThemeContext';
 import PrintingFilter, {
   EMPTY_PRINTING_FILTER,
@@ -42,6 +43,7 @@ const CardPage: React.FC = () => {
   const slotId = typeof router.query.slot === 'string' ? router.query.slot : '';
   const fromSlug = typeof router.query.from === 'string' ? router.query.from : '';
   const deckIsFoil = router.query.foil === '1' || router.query.foil === 'true';
+  const isCommanderSlot = slotId === COMMANDER_SLOT;
   const fromDeck = deckId !== '' && slotId !== '';
 
   const [pending, setPending] = useState<PrintingSwapTarget | null>(null);
@@ -103,9 +105,21 @@ const CardPage: React.FC = () => {
       nextId: string;
       mode: CollectionSwapMode;
       foil: boolean;
-    }) => replaceDeckCardPrinting(deckId, slotId, nextId, mode, foil),
+    }) =>
+      isCommanderSlot
+        ? replaceCommanderPrinting(
+            deckId,
+            nextId,
+            pending?.attributes.title ?? title,
+            mode,
+            foil,
+            currentPrinting?.id,
+            currentPrinting?.attributes.title,
+          )
+        : replaceDeckCardPrinting(deckId, slotId, nextId, mode, foil),
     onSuccess: async (_data, vars) => {
       await invalidateInventoryQueries(qc, { deckId });
+      await qc.invalidateQueries({ queryKey: ['deck'] });
       setPending(null);
       setSwapError(null);
       const nextTitle = pending?.attributes.title ?? title;

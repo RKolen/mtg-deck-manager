@@ -93,10 +93,40 @@ export function normalizeFormat(format: string | null | undefined): string {
   return (format ?? '').trim().toLowerCase().replace(/[:\-]+/g, ' ').replace(/\s+/g, ' ');
 }
 
+const HUNDRED_CARD_SINGLETON = new Set([
+  'edh',
+  'commander',
+  'predh',
+  'pauper commander',
+  'historic brawl',
+  'gladiator',
+  'canadian highlander',
+  'canlander',
+  'duel commander',
+  'duel',
+  'brawl',
+]);
+
+const SIXTY_CARD_SINGLETON = new Set(['standard brawl', 'oathbreaker']);
+
 /** True for Commander / EDH format labels (100-card singleton). */
 export function isCommanderFormat(format: string | null | undefined): boolean {
   const normalized = normalizeFormat(format);
   return normalized === 'edh' || normalized === 'commander';
+}
+
+/** True for 100-card singleton formats (Commander family, Brawl, Gladiator). */
+export function isHundredCardSingleton(
+  format: string | null | undefined,
+): boolean {
+  return HUNDRED_CARD_SINGLETON.has(normalizeFormat(format));
+}
+
+/** True for 60-card singleton formats (Standard Brawl, Oathbreaker). */
+export function isSixtyCardSingleton(
+  format: string | null | undefined,
+): boolean {
+  return SIXTY_CARD_SINGLETON.has(normalizeFormat(format));
 }
 
 /**
@@ -105,20 +135,79 @@ export function isCommanderFormat(format: string | null | undefined): boolean {
 export function isTinyLeadersFormat(format: string | null | undefined): boolean {
   const normalized = normalizeFormat(format);
   return (
-    normalized === 'tiny leaders'
+    normalized === 'tiny leader'
+    || normalized === 'tiny leaders'
     || normalized === 'tinyleaders'
     || normalized === 'tlr'
     || normalized === 'tiny leaders reborn'
   );
 }
 
-/** True for singleton commander-style formats (EDH / Commander / Tiny Leaders / TLR). */
+/** True for singleton commander-style formats. */
 export function isSingletonFormat(format: string | null | undefined): boolean {
-  return isCommanderFormat(format) || isTinyLeadersFormat(format);
+  return (
+    isHundredCardSingleton(format)
+    || isTinyLeadersFormat(format)
+    || isSixtyCardSingleton(format)
+  );
+}
+
+const USES_COMMANDER_CARD = new Set([
+  'edh',
+  'commander',
+  'tiny leader',
+  'tiny leaders',
+  'tinyleaders',
+  'tlr',
+  'tiny leaders reborn',
+  'duel commander',
+  'pauper commander',
+  'predh',
+  'brawl',
+  'standard brawl',
+  'historic brawl',
+  'oathbreaker',
+]);
+
+/** True when the format has a designated commander (or oathbreaker) card. */
+export function usesCommanderCard(format: string | null | undefined): boolean {
+  return USES_COMMANDER_CARD.has(normalizeFormat(format));
 }
 
 /** Tiny Leaders / TLR mana-value cap (Rule of 3). */
 export const TINY_LEADERS_MAX_MANA_VALUE = 3;
+
+/**
+ * Whether a printing is a legal commander for the format.
+ * Legendary creature or planeswalker, plus cards that "can be your commander".
+ * Tiny Leaders also requires mana value 3 or less. Oathbreaker requires a
+ * planeswalker.
+ */
+export function isLegalCommanderCard(
+  typeLine: string,
+  cmc: number | null | undefined,
+  oracleText: string | null | undefined,
+  format: string | null | undefined,
+): boolean {
+  const type = typeLine.toLowerCase();
+  const oracle = (oracleText ?? '').toLowerCase();
+  const canBe = /can be your commander/.test(oracle);
+  const legendary = /\blegendary\b/.test(type);
+  const creature = /\bcreature\b/.test(type);
+  const planeswalker = /\bplaneswalker\b/.test(type);
+
+  if (normalizeFormat(format) === 'oathbreaker') {
+    return planeswalker;
+  }
+  const ok = (legendary && (creature || planeswalker)) || canBe;
+  if (!ok) {
+    return false;
+  }
+  if (isTinyLeadersFormat(format)) {
+    return (cmc ?? 0) <= TINY_LEADERS_MAX_MANA_VALUE;
+  }
+  return true;
+}
 
 /**
  * Format mana-value cap for nonland cards, or null when unrestricted.
@@ -150,8 +239,13 @@ export function isLegalManaValue(
 }
 
 export interface DeckListAllowance {
-  /** Soft minimum / target main-deck size shown in the UI. */
+  /** Required main-deck size (or constructed minimum). Commander is separate. */
   mainTarget: number;
+  /**
+   * When true, mainTarget is a hard maximum. Only cards whose oracle text
+   * contains "rulebreaker" may push the list over that number.
+   */
+  mainHardMax: boolean;
   /**
    * Soft sideboard guidance size, or null when the format has no official
    * sideboard (Commander). Oversized boards are allowed either way.
@@ -162,30 +256,88 @@ export interface DeckListAllowance {
 }
 
 /**
- * Format-aware decklist size guidance (soft UI targets, not hard blocks).
- * Constructed: min 60, no maximum. Commander: 100. Tiny Leaders / TLR: 50
- * with a soft 10-card sideboard and MV ≤ 3 for nonlands.
+ * Format-aware decklist size rules.
+ * Constructed: min 60, no maximum. Commander family: exactly 99 + commander.
+ * Tiny Leaders / TLR: exactly 49 + commander, soft 10-card sideboard, MV ≤ 3
+ * for nonlands. Standard Brawl and Oathbreaker: exactly 59 + commander.
  */
 export function deckListAllowance(format: string | null | undefined): DeckListAllowance {
-  if (isCommanderFormat(format)) {
-    return { mainTarget: 100, sideboardSoftMax: null, maxManaValue: null };
+  if (isHundredCardSingleton(format)) {
+    return {
+      mainTarget: usesCommanderCard(format) ? 99 : 100,
+      mainHardMax: true,
+      sideboardSoftMax: null,
+      maxManaValue: null,
+    };
   }
   if (isTinyLeadersFormat(format)) {
     return {
-      mainTarget: 50,
+      mainTarget: 49,
+      mainHardMax: true,
       sideboardSoftMax: 10,
       maxManaValue: TINY_LEADERS_MAX_MANA_VALUE,
     };
   }
-  return { mainTarget: 60, sideboardSoftMax: 15, maxManaValue: null };
+  if (isSixtyCardSingleton(format)) {
+    return {
+      mainTarget: usesCommanderCard(format) ? 59 : 60,
+      mainHardMax: true,
+      sideboardSoftMax: null,
+      maxManaValue: null,
+    };
+  }
+  return {
+    mainTarget: 60,
+    mainHardMax: false,
+    sideboardSoftMax: 15,
+    maxManaValue: null,
+  };
 }
 
-/** True when main-deck count meets the soft size target for the format. */
+/** True when oracle text lets a card exceed a hard deck-size cap. */
+export function hasRulebreaker(oracleText: string | null | undefined): boolean {
+  return /rulebreaker/i.test(oracleText ?? '');
+}
+
+/** Main-deck copies that do not have Rulebreaker in their oracle text. */
+export function nonRulebreakerMainCount(cards: DeckCardWithCard[]): number {
+  return cards
+    .filter(c => !c.isSideboard && !hasRulebreaker(getOracleText(c.card)))
+    .reduce((sum, c) => sum + c.quantity, 0);
+}
+
+/**
+ * True when a card may be added to the main deck without breaking size.
+ * Constructed has no maximum. Hard-cap formats block non-Rulebreaker cards
+ * once non-Rulebreaker main copies already meet the target.
+ */
+export function canAddToMain(
+  format: string | null | undefined,
+  nonRulebreakerMain: number,
+  oracleText: string | null | undefined,
+): boolean {
+  const allowance = deckListAllowance(format);
+  if (!allowance.mainHardMax) {
+    return true;
+  }
+  if (hasRulebreaker(oracleText)) {
+    return true;
+  }
+  return nonRulebreakerMain < allowance.mainTarget;
+}
+
+/** True when main-deck count is legal for the format. */
 export function isMainDeckSizeOk(
   format: string | null | undefined,
   mainCount: number,
+  options?: { nonRulebreakerCount?: number },
 ): boolean {
-  return mainCount >= deckListAllowance(format).mainTarget;
+  const allowance = deckListAllowance(format);
+  if (allowance.mainHardMax) {
+    const nonRb = options?.nonRulebreakerCount ?? mainCount;
+    return mainCount >= allowance.mainTarget && nonRb <= allowance.mainTarget;
+  }
+  return mainCount >= allowance.mainTarget;
 }
 
 /**

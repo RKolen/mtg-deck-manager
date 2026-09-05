@@ -3,6 +3,8 @@ langcode: en
 status: true
 dependencies:
   config:
+    - field.field.node.deck.field_commander
+    - field.field.node.deck.field_commander_foil
     - field.field.node.deck.field_deck_cards
     - field.field.node.deck.field_format
     - field.field.node.deck.field_format_term
@@ -33,6 +35,8 @@ third_party_settings:
         - title
         - field_format
         - field_deck_cards
+        - field_commander
+        - field_commander_foil
       label: Details
       region: content
       parent_name: group_deck_tabs
@@ -68,6 +72,23 @@ content:
     weight: 10
     region: content
     settings: {  }
+    third_party_settings: {  }
+  field_commander:
+    type: entity_reference_autocomplete
+    weight: 4
+    region: content
+    settings:
+      match_operator: CONTAINS
+      match_limit: 10
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_commander_foil:
+    type: boolean_checkbox
+    weight: 5
+    region: content
+    settings:
+      display_label: true
     third_party_settings: {  }
   field_deck_cards:
     type: paragraphs

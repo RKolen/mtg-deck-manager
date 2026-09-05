@@ -1,0 +1,23 @@
+uuid: 371c5513-8d0c-4e68-a7e5-15df1c92ffff
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_commander_foil
+    - node.type.deck
+id: node.deck.field_commander_foil
+field_name: field_commander_foil
+entity_type: node
+bundle: deck
+label: 'Commander foil'
+description: 'When enabled, the commander is a foil copy.'
+required: false
+translatable: true
+default_value:
+  -
+    value: 0
+default_value_callback: ''
+settings:
+  on_label: Foil
+  off_label: Non-foil
+field_type: boolean

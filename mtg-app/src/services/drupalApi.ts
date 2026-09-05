@@ -3,6 +3,7 @@ import type {
   CollectionCardAttributes,
   DeckAttributes,
   DeckCardWithCard,
+  DeckCommander,
   JsonApiCollectionResponse,
   JsonApiResource,
   JsonApiSingleResponse,
@@ -57,6 +58,8 @@ interface GqlComposeDeck {
   isFoil?: boolean | null;
   notes?: GqlText | null;
   changed?: { timestamp: number } | null;
+  commander?: GqlMtgCard | null;
+  commanderIsFoil?: boolean | null;
 }
 
 /** Custom MTG schema Deck (mutations). */
@@ -66,6 +69,8 @@ interface GqlDeck {
   title: string;
   format: string;
   notes: string | null;
+  commander?: GqlMtgCard | null;
+  commanderIsFoil?: boolean | null;
 }
 
 interface GqlComposeCollectionCard {
@@ -157,6 +162,29 @@ function composePlainText(text: GqlText | null | undefined): string | null {
   return text.value ?? text.processed ?? null;
 }
 
+function toDeckCommander(c: GqlMtgCard | null | undefined): DeckCommander | null {
+  if (c == null) {
+    return null;
+  }
+  return {
+    id: c.id,
+    title: c.title,
+    field_type_line: c.typeLine ?? '',
+    field_mana_cost: c.manaCost ?? '',
+    field_cmc: c.cmc ?? 0,
+    field_color_identity: c.colorIdentity ?? [],
+    field_oracle_text: c.oracleText ?? '',
+    field_image_uri: c.imageUri ?? '',
+    field_set_code: c.setCode ?? '',
+    field_set_name: c.setName ?? '',
+    field_collector_number: c.collectorNumber ?? '',
+    field_price_usd: c.priceUsd ?? null,
+    field_price_eur: c.priceEur ?? null,
+    field_price_usd_foil: c.priceUsdFoil ?? null,
+    field_price_eur_foil: c.priceEurFoil ?? null,
+  };
+}
+
 function toDeckResourceFromCompose(d: GqlComposeDeck): JsonApiResource<DeckAttributes> {
   return {
     id: d.uuid,
@@ -168,6 +196,8 @@ function toDeckResourceFromCompose(d: GqlComposeDeck): JsonApiResource<DeckAttri
       field_is_foil: Boolean(d.isFoil),
       drupal_internal__nid: parseInt(d.id, 10),
       changed: d.changed?.timestamp ?? null,
+      field_commander: toDeckCommander(d.commander),
+      field_commander_foil: Boolean(d.commanderIsFoil),
     },
   };
 }
@@ -181,6 +211,8 @@ function toDeckResource(d: GqlDeck): JsonApiResource<DeckAttributes> {
       field_format: d.format,
       field_notes: d.notes ?? null,
       drupal_internal__nid: d.nid,
+      field_commander: toDeckCommander(d.commander),
+      field_commander_foil: Boolean(d.commanderIsFoil),
     },
   };
 }
@@ -293,15 +325,21 @@ const CARD_DETAIL_FIELDS = gql`
 `;
 
 const COMPOSE_DECK_FIELDS = gql`
+  ${CARD_FIELDS}
   fragment ComposeDeckFields on NodeDeck {
     id uuid title format isFoil notes { value processed }
     changed { timestamp }
+    commander { ...CardFields }
+    commanderIsFoil
   }
 `;
 
 const MTG_DECK_FIELDS = gql`
+  ${CARD_FIELDS}
   fragment DeckFields on Deck {
     id nid title format notes
+    commander { ...CardFields }
+    commanderIsFoil
   }
 `;
 
@@ -437,38 +475,72 @@ export async function fetchDeck(
 }
 
 export async function createDeck(
-  attributes: Pick<DeckAttributes, 'title' | 'field_format' | 'field_notes'>,
+  attributes: Pick<DeckAttributes, 'title' | 'field_format' | 'field_notes'> & {
+    commanderId?: string | null;
+  },
 ): Promise<JsonApiResource<DeckAttributes>> {
   const mutation = gql`
     ${MTG_DECK_FIELDS}
-    mutation CreateDeck($title: String!, $format: String!, $notes: String) {
-      createDeck(title: $title, format: $format, notes: $notes) { ...DeckFields }
+    mutation CreateDeck($title: String!, $format: String!, $notes: String, $commanderId: ID) {
+      createDeck(title: $title, format: $format, notes: $notes, commanderId: $commanderId) { ...DeckFields }
     }
   `;
   const data = await getGraphQLClient().request<{ createDeck: GqlDeck }>(mutation, {
     title: attributes.title,
     format: attributes.field_format,
     notes: attributes.field_notes ?? null,
+    commanderId: attributes.commanderId ?? null,
   });
   return toDeckResource(data.createDeck);
 }
 
 export async function updateDeck(
   id: string,
-  attributes: Partial<DeckAttributes>,
+  attributes: Partial<DeckAttributes> & {
+    commanderId?: string | null;
+    commanderFoil?: boolean;
+  },
 ): Promise<JsonApiResource<DeckAttributes>> {
   const mutation = gql`
     ${MTG_DECK_FIELDS}
-    mutation UpdateDeck($id: ID!, $title: String, $format: String, $notes: String) {
-      updateDeck(id: $id, title: $title, format: $format, notes: $notes) { ...DeckFields }
+    mutation UpdateDeck(
+      $id: ID!
+      $title: String
+      $format: String
+      $notes: String
+      $commanderId: ID
+      $commanderFoil: Boolean
+    ) {
+      updateDeck(
+        id: $id
+        title: $title
+        format: $format
+        notes: $notes
+        commanderId: $commanderId
+        commanderFoil: $commanderFoil
+      ) { ...DeckFields }
     }
   `;
-  const data = await getGraphQLClient().request<{ updateDeck: GqlDeck }>(mutation, {
+  const variables: {
+    id: string;
+    title: string | null;
+    format: string | null;
+    notes: string | null;
+    commanderId?: string;
+    commanderFoil?: boolean;
+  } = {
     id,
     title: attributes.title ?? null,
     format: attributes.field_format ?? null,
     notes: attributes.field_notes ?? null,
-  });
+  };
+  if ('commanderId' in attributes) {
+    variables.commanderId = attributes.commanderId ?? '';
+  }
+  if ('commanderFoil' in attributes) {
+    variables.commanderFoil = Boolean(attributes.commanderFoil);
+  }
+  const data = await getGraphQLClient().request<{ updateDeck: GqlDeck }>(mutation, variables);
   return toDeckResource(data.updateDeck);
 }
 
@@ -676,6 +748,61 @@ export async function setDeckCardFoil(
     }
   `;
   await getGraphQLClient().request(mutation, { deckId, slotId, foil });
+}
+
+export async function replaceCommanderPrinting(
+  deckId: string,
+  nextCardId: string,
+  nextCardName: string,
+  collectionMode: 'none' | 'replace' | 'add',
+  foil: boolean,
+  previousCardId?: string,
+  previousCardName?: string,
+): Promise<void> {
+  await updateDeck(deckId, { commanderId: nextCardId, commanderFoil: foil });
+  if (collectionMode === 'none') {
+    return;
+  }
+
+  const nextRow = await fetchCollectionCardByCardId(nextCardId);
+  let nextOwned = nextRow?.attributes.field_quantity_owned ?? 0;
+  let nextFoil = nextRow?.attributes.field_quantity_foil ?? 0;
+  if (foil) {
+    nextFoil += 1;
+  } else {
+    nextOwned += 1;
+  }
+  await upsertCollectionCard(
+    nextCardId,
+    nextCardName,
+    nextOwned,
+    nextFoil,
+    nextRow?.id,
+  );
+
+  if (
+    collectionMode === 'replace'
+    && previousCardId != null
+    && previousCardId !== nextCardId
+  ) {
+    const prevRow = await fetchCollectionCardByCardId(previousCardId);
+    if (prevRow != null) {
+      let prevOwned = prevRow.attributes.field_quantity_owned ?? 0;
+      let prevFoilQty = prevRow.attributes.field_quantity_foil ?? 0;
+      if (foil) {
+        prevFoilQty = Math.max(0, prevFoilQty - 1);
+      } else {
+        prevOwned = Math.max(0, prevOwned - 1);
+      }
+      await upsertCollectionCard(
+        previousCardId,
+        previousCardName ?? nextCardName,
+        prevOwned,
+        prevFoilQty,
+        prevRow.id,
+      );
+    }
+  }
 }
 
 export async function replaceDeckCardPrinting(

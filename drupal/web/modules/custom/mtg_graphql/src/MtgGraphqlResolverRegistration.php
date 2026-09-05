@@ -269,13 +269,18 @@ final class MtgGraphqlResolverRegistration {
     $registry->addFieldResolver('Mutation', 'createDeck',
       $builder->callback(function ($value, array $args): NodeInterface {
         $storage = \Drupal::entityTypeManager()->getStorage('node');
+        $formatName = (string) $args['format'];
         $node = $storage->create([
           'type'              => 'deck',
           'title'             => $args['title'],
-          'field_format_term' => ['target_id' => self::formatTermId($args['format'])],
+          'field_format'      => $formatName,
+          'field_format_term' => ['target_id' => self::formatTermId($formatName)],
           'field_notes'       => $args['notes'] ?? NULL,
           'status'            => 1,
         ]);
+        if (isset($args['commanderId'])) {
+          self::setCommander($node, (string) $args['commanderId']);
+        }
         $node->save();
         return $node;
       })
@@ -291,10 +296,21 @@ final class MtgGraphqlResolverRegistration {
           $node->setTitle($args['title']);
         }
         if (isset($args['format'])) {
-          $node->set('field_format_term', ['target_id' => self::formatTermId($args['format'])]);
+          $formatName = (string) $args['format'];
+          $node->set('field_format', $formatName);
+          $node->set('field_format_term', ['target_id' => self::formatTermId($formatName)]);
+          if (!MtgFormatCatalog::usesCommanderCard($formatName)) {
+            self::setCommander($node, '');
+          }
         }
         if (array_key_exists('notes', $args)) {
           $node->set('field_notes', $args['notes']);
+        }
+        if (isset($args['commanderId'])) {
+          self::setCommander($node, (string) $args['commanderId']);
+        }
+        if (isset($args['commanderFoil']) && $node->hasField('field_commander_foil')) {
+          $node->set('field_commander_foil', (bool) $args['commanderFoil']);
         }
         $node->save();
         return $node;
@@ -522,11 +538,25 @@ final class MtgGraphqlResolverRegistration {
     $registry->addFieldResolver('Deck', 'id', $builder->callback(fn($n) => $n->uuid()));
     $registry->addFieldResolver('Deck', 'nid', $builder->callback(fn($n) => (int) $n->id()));
     $registry->addFieldResolver('Deck', 'title', $builder->callback(fn($n) => $n->getTitle()));
-    $registry->addFieldResolver('Deck', 'format', $builder->callback(function ($n): string {
-      $ref = $n->get('field_format_term')->first();
-      return $ref && $ref->entity ? $ref->entity->getName() : '';
-    }));
+    $registry->addFieldResolver('Deck', 'format',
+      $builder->callback(fn($n) => self::deckFormatName($n))
+    );
+    $registry->addFieldResolver('NodeDeck', 'format',
+      $builder->callback(fn($n) => self::deckFormatName($n))
+    );
     $registry->addFieldResolver('Deck', 'notes', $builder->callback(fn($n) => $n->get('field_notes')->value));
+    $registry->addFieldResolver('Deck', 'commander',
+      $builder->callback(fn($n) => self::commanderCard($n))
+    );
+    $registry->addFieldResolver('NodeDeck', 'commander',
+      $builder->callback(fn($n) => self::commanderCard($n))
+    );
+    $registry->addFieldResolver('Deck', 'commanderIsFoil',
+      $builder->callback(fn($n) => self::commanderIsFoil($n))
+    );
+    $registry->addFieldResolver('NodeDeck', 'commanderIsFoil',
+      $builder->callback(fn($n) => self::commanderIsFoil($n))
+    );
   }
 
   /**
@@ -969,6 +999,80 @@ final class MtgGraphqlResolverRegistration {
     $registry->addFieldResolver('ScrapeMetaDecksResult', 'skipped',
       $builder->callback(fn(array $r) => $r['skipped'])
     );
+  }
+
+  /**
+   * Format display name from the taxonomy term, with the string field fallback.
+   */
+  private static function deckFormatName(mixed $node): string {
+    if (!$node instanceof NodeInterface) {
+      return '';
+    }
+    if ($node->hasField('field_format_term') && !$node->get('field_format_term')->isEmpty()) {
+      $item = $node->get('field_format_term')->first();
+      if ($item instanceof EntityReferenceItem && $item->entity !== NULL) {
+        return (string) $item->entity->label();
+      }
+    }
+    if ($node->hasField('field_format') && !$node->get('field_format')->isEmpty()) {
+      return (string) $node->get('field_format')->value;
+    }
+    return '';
+  }
+
+  /**
+   * Sets or clears the deck commander from a card UUID.
+   *
+   * @throws \GraphQL\Error\UserError
+   *   When the UUID does not match an mtg_card node.
+   */
+  private static function setCommander(NodeInterface $node, string $commanderId): void {
+    if (!$node->hasField('field_commander')) {
+      return;
+    }
+    if ($commanderId === '') {
+      $node->set('field_commander', []);
+      if ($node->hasField('field_commander_foil')) {
+        $node->set('field_commander_foil', FALSE);
+      }
+      return;
+    }
+    $cards = \Drupal::entityTypeManager()
+      ->getStorage('node')
+      ->loadByProperties(['uuid' => $commanderId, 'type' => 'mtg_card']);
+    $card = reset($cards);
+    if (!$card instanceof NodeInterface) {
+      throw new UserError('Commander card not found.');
+    }
+    $node->set('field_commander', ['target_id' => (int) $card->id()]);
+  }
+
+  /**
+   * Referenced commander card, or NULL when unset.
+   */
+  private static function commanderCard(mixed $node): ?NodeInterface {
+    if (!$node instanceof NodeInterface || !$node->hasField('field_commander')) {
+      return NULL;
+    }
+    if ($node->get('field_commander')->isEmpty()) {
+      return NULL;
+    }
+    $item = $node->get('field_commander')->first();
+    if (!$item instanceof EntityReferenceItem) {
+      return NULL;
+    }
+    $entity = $item->entity;
+    return $entity instanceof NodeInterface ? $entity : NULL;
+  }
+
+  /**
+   * Whether the deck commander is foil.
+   */
+  private static function commanderIsFoil(mixed $node): bool {
+    if (!$node instanceof NodeInterface || !$node->hasField('field_commander_foil')) {
+      return FALSE;
+    }
+    return (bool) $node->get('field_commander_foil')->value;
   }
 
   /**

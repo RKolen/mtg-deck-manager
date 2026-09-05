@@ -68,6 +68,24 @@ export interface MtgCardAttributes {
   field_border_color?: string;
 }
 
+export interface DeckCommander {
+  id: string;
+  title: string;
+  field_type_line: string;
+  field_mana_cost: string;
+  field_cmc: number;
+  field_color_identity: string[];
+  field_oracle_text: string;
+  field_image_uri: string;
+  field_set_code: string;
+  field_set_name: string;
+  field_collector_number: string;
+  field_price_usd: string | null;
+  field_price_eur: string | null;
+  field_price_usd_foil: string | null;
+  field_price_eur_foil: string | null;
+}
+
 export interface DeckAttributes {
   title: string;
   field_format: string;
@@ -77,6 +95,8 @@ export interface DeckAttributes {
   field_is_foil?: boolean;
   /** Unix timestamp from Drupal `changed`, when available. */
   changed?: number | null;
+  field_commander?: DeckCommander | null;
+  field_commander_foil?: boolean;
 }
 
 // Deck cards are stored as paragraph--deck_card entities embedded in

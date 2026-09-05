@@ -1,0 +1,25 @@
+uuid: b32c0d75-2bd9-4abb-ab8d-d9246053655c
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_commander
+    - node.type.deck
+    - node.type.mtg_card
+id: node.deck.field_commander
+field_name: field_commander
+entity_type: node
+bundle: deck
+label: Commander
+description: 'Designated commander for Commander, Tiny Leaders, and similar formats.'
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings:
+  handler: 'mtg_card:node'
+  handler_settings:
+    target_bundles:
+      mtg_card: mtg_card
+    auto_create: false
+field_type: entity_reference

@@ -27,6 +27,7 @@ import {
 
 import {
   fetchDeckBySlug,
+  fetchFormats,
   fetchDeckCardsWithCards,
   fetchCollectionCards,
   collectionPrintingId,
@@ -39,6 +40,7 @@ import {
   removeCardFromDeck,
   updateDeck,
 } from '../../services/drupalApi';
+import CommanderPicker from '../../components/CommanderPicker';
 import { invalidateInventoryQueries } from '../../services/queryCache';
 import { ManaCost } from '../../components/design/Mana';
 import PrintingFilter, {
@@ -72,8 +74,8 @@ import {
   type MatchupAdvice,
   type ArchetypeProbability,
 } from '../../services/metaApi';
-import type { CollectionCard, DeckCardWithCard } from '../../types/drupal';
-import { cardPrintingsPath } from '../../utils/slugify';
+import type { CollectionCard, DeckCardWithCard, DeckCommander } from '../../types/drupal';
+import { COMMANDER_SLOT, cardPrintingsPath } from '../../utils/slugify';
 import {
   ALL_COLORS,
   COLOR_LABEL,
@@ -93,7 +95,12 @@ import {
   deckListAllowance,
   isMainDeckSizeOk,
   isLegalManaValue,
+  usesCommanderCard,
+  isTinyLeadersFormat,
   isLand,
+  getOracleText,
+  canAddToMain,
+  nonRulebreakerMainCount,
   type MtgColor,
   classifyType,
 } from '../../utils/deckAnalysis';
@@ -154,6 +161,8 @@ interface EditorProps {
   cards: DeckCardWithCard[];
   format: string;
   deckIsFoil: boolean;
+  commander?: DeckCommander | null;
+  commanderFoil?: boolean;
 }
 
 type OwnedCounts = { owned: number; foil: number };
@@ -248,7 +257,15 @@ function FoilToggle({
   );
 }
 
-const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format, deckIsFoil }) => {
+const DeckEditor: React.FC<EditorProps> = ({
+  deckId,
+  deckSlug,
+  cards,
+  format,
+  deckIsFoil,
+  commander,
+  commanderFoil = false,
+}) => {
   const { currency } = useTheme();
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<
@@ -262,6 +279,7 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format, de
       priceEur: string | null;
       cmc: number;
       typeLine: string;
+      oracleText: string;
       fullArt: boolean;
       borderColor: string;
     }[]
@@ -375,6 +393,13 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format, de
     },
   });
 
+  const setCommanderFoil = useMutation({
+    mutationFn: (foil: boolean) => updateDeck(deckId, { commanderFoil: foil }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['deck'] });
+    },
+  });
+
   const setOwned = useMutation({
     mutationFn: ({
       cardId,
@@ -435,6 +460,7 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format, de
         priceEur: r.attributes.field_price_eur,
         cmc: r.attributes.field_cmc ?? 0,
         typeLine: r.attributes.field_type_line ?? '',
+        oracleText: getOracleText(r.attributes),
         fullArt: Boolean(r.attributes.field_full_art),
         borderColor: r.attributes.field_border_color ?? '',
       }));
@@ -462,6 +488,7 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format, de
           priceEur: cc.attributes.field_price_eur ?? null,
           cmc: cc.attributes.field_cmc ?? 0,
           typeLine: cc.attributes.field_type_line ?? '',
+          oracleText: '',
           fullArt: Boolean(cc.attributes.field_full_art),
           borderColor: cc.attributes.field_border_color ?? '',
         });
@@ -519,7 +546,13 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format, de
   const mainCount = totalCount(main);
   const sbCount = totalCount(sb);
   const allowance = deckListAllowance(format);
-  const mainOk = isMainDeckSizeOk(format, mainCount);
+  const showCommander = usesCommanderCard(format);
+  const commanderLabel = isTinyLeadersFormat(format) ? 'Tiny Leader' : 'Commander';
+  const nonRbMain = nonRulebreakerMainCount(cards);
+  const mainOk = isMainDeckSizeOk(format, mainCount, {
+    nonRulebreakerCount: nonRbMain,
+  });
+  const mainOver = allowance.mainHardMax && nonRbMain > allowance.mainTarget;
   const sbSoftMax = allowance.sideboardSoftMax;
   const sbOverSoft = sbSoftMax != null && sbCount > sbSoftMax;
   const maxMv = allowance.maxManaValue;
@@ -539,16 +572,17 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format, de
   }
 
   function renderRow(dc: DeckCardWithCard): React.ReactNode {
-    const oracleText =
-      typeof dc.card.field_oracle_text === 'string'
-        ? dc.card.field_oracle_text
-        : (dc.card.field_oracle_text as { value?: string } | null)?.value ?? '';
+    const oracleText = getOracleText(dc.card);
     const maxCopies = maxCopiesAllowed(
       dc.card.field_type_line ?? '',
       oracleText,
       format,
     );
     const atMax = dc.quantity >= maxCopies;
+    const sizeBlocked =
+      !dc.isSideboard && !canAddToMain(format, nonRbMain, oracleText);
+    const moveBlocked =
+      dc.isSideboard && !canAddToMain(format, nonRbMain, oracleText);
     const mvLegal = isLegalManaValue(
       dc.card.field_type_line ?? '',
       dc.card.field_cmc,
@@ -650,8 +684,14 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format, de
           <button
             type="button"
             onClick={() => updateQty.mutate({ slotId: dc.id, qty: dc.quantity + 1 })}
-            disabled={atMax}
-            title={atMax ? `Max ${maxCopies === Infinity ? 'unlimited' : maxCopies} copies` : undefined}
+            disabled={atMax || sizeBlocked}
+            title={
+              sizeBlocked
+                ? `Main deck is limited to ${allowance.mainTarget} cards`
+                : atMax
+                  ? `Max ${maxCopies === Infinity ? 'unlimited' : maxCopies} copies`
+                  : undefined
+            }
             style={{ width: 24 }}
           >
             +
@@ -670,8 +710,15 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format, de
                 }),
               );
             }}
+            disabled={moveBlocked}
             style={{ fontSize: '0.75rem' }}
-            title={dc.isSideboard ? 'Move to main' : 'Move to sideboard'}
+            title={
+              moveBlocked
+                ? `Main deck is limited to ${allowance.mainTarget} cards`
+                : dc.isSideboard
+                  ? 'Move to main'
+                  : 'Move to sideboard'
+            }
           >
             {dc.isSideboard ? 'To main' : 'To SB'}
           </button>
@@ -692,10 +739,19 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format, de
   return (
     <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
       <div style={{ flex: 1, minWidth: 0 }}>
-      {/* Card count banner — soft guidance only; oversized lists are allowed. */}
+      {/* Card count banner. Hard-cap formats omit +; constructed stays 60+. */}
       <p style={{ fontWeight: 'bold', margin: '0 0 0.75rem' }}>
-        <span style={{ color: mainOk ? 'var(--pos)' : 'var(--ink)' }}>
-          Main: {mainCount} / {allowance.mainTarget}+
+        <span
+          style={{
+            color: mainOver
+              ? 'var(--neg)'
+              : mainOk
+                ? 'var(--pos)'
+                : 'var(--ink)',
+          }}
+        >
+          Main: {mainCount} / {allowance.mainTarget}
+          {allowance.mainHardMax ? '' : '+'}
         </span>
         {'  |  '}
         <span
@@ -711,6 +767,16 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format, de
             ? `Sideboard: ${sbCount}`
             : `Sideboard: ${sbCount} / ${sbSoftMax}`}
         </span>
+        {showCommander && (
+          <>
+            {'  |  '}
+            <span
+              style={{ color: commander != null ? 'var(--pos)' : 'var(--ink)' }}
+            >
+              {commanderLabel}: {commander != null ? commander.title : 'none'}
+            </span>
+          </>
+        )}
         {maxMv != null && (
           <>
             {'  |  '}
@@ -798,10 +864,13 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format, de
             ]
               .filter(Boolean)
               .join(' · ');
+            const canMain = canAddToMain(format, nonRbMain, r.oracleText);
             const illegalTitle =
               maxMv != null && !mvLegal
                 ? `Mana value ${r.cmc} exceeds format max ${maxMv}`
-                : undefined;
+                : !canMain
+                  ? `Main deck is limited to ${allowance.mainTarget} cards`
+                  : undefined;
             return (
               <li
                 key={r.id}
@@ -821,7 +890,7 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format, de
                 </span>
                 <button
                   type="button"
-                  disabled={!mvLegal}
+                  disabled={!mvLegal || !canMain}
                   title={illegalTitle}
                   onClick={() => addCard.mutate({ cardId: r.id, cardName: r.title, isSideboard: false })}
                 >
@@ -854,6 +923,84 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format, de
           </li>
         </ul>
         </>
+      )}
+
+      {showCommander && (
+        <section style={{ marginBottom: '1.25rem' }}>
+          <h3
+            style={{
+              margin: '0 0 0.4rem',
+              borderBottom: '2px solid var(--line)',
+              paddingBottom: '0.25rem',
+              color: 'var(--ink)',
+            }}
+          >
+            {commanderLabel}
+            <span style={{ marginLeft: 8, color: 'var(--ink)', fontWeight: 'normal', fontSize: '0.9rem' }}>
+              ({commander != null ? 1 : 0})
+            </span>
+          </h3>
+          {commander != null && (
+            <table style={{ width: '100%', borderCollapse: 'collapse', color: 'var(--ink)', marginBottom: 8 }}>
+              <tbody>
+                <tr
+                  onClick={() => setSelectedSlotId(COMMANDER_SLOT)}
+                  style={{
+                    background: selectedSlotId === COMMANDER_SLOT ? 'var(--bg-2)' : undefined,
+                    outline: selectedSlotId === COMMANDER_SLOT ? '1px solid var(--accent)' : undefined,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <td style={{ padding: '0.25rem 0.5rem' }}>
+                    <Link
+                      href={cardPrintingsPath(commander.title, {
+                        printing: commander.id,
+                        deckId,
+                        slotId: COMMANDER_SLOT,
+                        from: deckSlug,
+                        foil: commanderFoil,
+                      })}
+                      onClick={e => e.stopPropagation()}
+                      style={{ color: 'inherit', textDecoration: 'none', fontWeight: 'bold' }}
+                    >
+                      {commander.title}
+                    </Link>
+                    {commander.field_set_code !== '' && (
+                      <span
+                        style={{
+                          marginLeft: 8,
+                          fontSize: '0.75rem',
+                          opacity: 0.85,
+                          fontFamily: 'var(--mono)',
+                        }}
+                      >
+                        [{commander.field_set_code.toUpperCase()}]
+                      </span>
+                    )}
+                    <span style={{ marginLeft: 8, display: 'inline-flex', verticalAlign: 'middle' }}>
+                      <ManaCost cost={commander.field_mana_cost} size={14} />
+                    </span>
+                    <FoilToggle
+                      isFoil={commanderFoil}
+                      disabled={setCommanderFoil.isPending}
+                      onToggle={() => setCommanderFoil.mutate(!commanderFoil)}
+                    />
+                    <span style={{ marginLeft: 8, fontSize: 11, opacity: 0.65 }}>
+                      {ownedForFinish(ownedByCardId.get(commander.id), commanderFoil) < 1
+                        ? 'not owned'
+                        : `owned ${ownedForFinish(ownedByCardId.get(commander.id), commanderFoil)}`}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          )}
+          <CommanderPicker
+            deckId={deckId}
+            format={format}
+            commander={commander}
+          />
+        </section>
       )}
 
       {/* Main deck — grouped by type */}
@@ -936,17 +1083,160 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format, de
           alignSelf: 'flex-start',
         }}
       >
-        {selectedSlot == null ? (
+        {showCommander && (
+          <div style={{ marginBottom: selectedSlot != null ? 16 : 0 }}>
+            <div className="mono uc dim" style={{ fontSize: 9, letterSpacing: '0.08em', marginBottom: 8 }}>
+              {commanderLabel}
+            </div>
+            {commander == null ? (
+              <p style={{ margin: 0, opacity: 0.7, fontSize: 13 }}>
+                No {commanderLabel.toLowerCase()} set.
+              </p>
+            ) : (
+              <div>
+                <Link
+                  href={cardPrintingsPath(commander.title, {
+                    printing: commander.id,
+                    deckId,
+                    slotId: COMMANDER_SLOT,
+                    from: deckSlug,
+                    foil: commanderFoil,
+                  })}
+                >
+                  <img
+                    src={cardImageSrc({ field_image_uri: commander.field_image_uri })}
+                    alt={commander.title}
+                    style={{ width: '100%', borderRadius: 8, display: 'block' }}
+                  />
+                </Link>
+                <p style={{ margin: '0.65rem 0 0.25rem', fontWeight: 700 }}>
+                  <Link
+                    href={cardPrintingsPath(commander.title, {
+                      printing: commander.id,
+                      deckId,
+                      slotId: COMMANDER_SLOT,
+                      from: deckSlug,
+                      foil: commanderFoil,
+                    })}
+                    style={{ color: 'inherit', textDecoration: 'none' }}
+                  >
+                    {commander.title}
+                  </Link>
+                </p>
+                <p style={{ margin: '0 0 0.35rem', fontSize: 13, opacity: 0.9 }}>
+                  {(commander.field_set_name || commander.field_set_code || 'Unknown set')}
+                  {commander.field_set_code !== ''
+                    ? ` (${commander.field_set_code.toUpperCase()}`
+                    : ''}
+                  {commander.field_collector_number
+                    ? ` #${commander.field_collector_number}`
+                    : ''}
+                  {commander.field_set_code !== '' ? ')' : ''}
+                </p>
+                <p style={{ margin: '0 0 0.5rem', fontSize: 13 }}>
+                  {formatPrice(priceFor(commander, currency, false), currency)}
+                  {priceFor(commander, currency, true) != null && (
+                    <>
+                      {' · foil '}
+                      {formatPrice(priceFor(commander, currency, true), currency)}
+                    </>
+                  )}
+                </p>
+                <div style={{ margin: '0 0 0.35rem 0' }}>
+                  <FoilToggle
+                    flush
+                    isFoil={commanderFoil}
+                    disabled={setCommanderFoil.isPending}
+                    onToggle={() => setCommanderFoil.mutate(!commanderFoil)}
+                  />
+                </div>
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    margin: '0.35rem 0 0',
+                    fontSize: 13,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={ownedForFinish(ownedByCardId.get(commander.id), commanderFoil) > 0}
+                    disabled={setOwned.isPending}
+                    onChange={e =>
+                      setOwned.mutate({
+                        cardId: commander.id,
+                        cardName: commander.title,
+                        own: e.target.checked,
+                        quantity: 1,
+                        foil: commanderFoil,
+                      })
+                    }
+                  />
+                  I own this{commanderFoil ? ' (foil)' : ''}
+                </label>
+                <p style={{ margin: '0.5rem 0 0', fontSize: 12 }}>
+                  <Link
+                    href={cardPrintingsPath(commander.title, {
+                      printing: commander.id,
+                      deckId,
+                      slotId: COMMANDER_SLOT,
+                      from: deckSlug,
+                      foil: commanderFoil,
+                    })}
+                    style={{ color: 'var(--accent)' }}
+                  >
+                    Change printing
+                  </Link>
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+        {selectedSlot == null && !showCommander ? (
           <p style={{ margin: 0, opacity: 0.7, fontSize: 13 }}>Select a card</p>
-        ) : (
-          <div>
-            <img
-              src={cardImageSrc(selectedSlot.card)}
-              alt={selectedSlot.card.title}
-              style={{ width: '100%', borderRadius: 8, display: 'block' }}
-            />
+        ) : selectedSlot != null ? (
+          <div
+            style={
+              showCommander
+                ? { borderTop: '1px solid var(--line)', paddingTop: 12 }
+                : undefined
+            }
+          >
+            {showCommander && (
+              <div className="mono uc dim" style={{ fontSize: 9, letterSpacing: '0.08em', marginBottom: 8 }}>
+                Selected
+              </div>
+            )}
+            <Link
+              href={cardPrintingsPath(selectedSlot.card.title, {
+                printing: selectedSlot.card.id,
+                deckId,
+                slotId: selectedSlot.id,
+                from: deckSlug,
+                foil: selectedSlot.isFoil,
+              })}
+            >
+              <img
+                src={cardImageSrc(selectedSlot.card)}
+                alt={selectedSlot.card.title}
+                style={{ width: '100%', borderRadius: 8, display: 'block' }}
+              />
+            </Link>
             <p style={{ margin: '0.65rem 0 0.25rem', fontWeight: 700 }}>
-              {selectedSlot.card.title}
+              <Link
+                href={cardPrintingsPath(selectedSlot.card.title, {
+                  printing: selectedSlot.card.id,
+                  deckId,
+                  slotId: selectedSlot.id,
+                  from: deckSlug,
+                  foil: selectedSlot.isFoil,
+                })}
+                style={{ color: 'inherit', textDecoration: 'none' }}
+              >
+                {selectedSlot.card.title}
+              </Link>
             </p>
             <p style={{ margin: '0 0 0.35rem', fontSize: 13, opacity: 0.9 }}>
               {(selectedSlot.card.field_set_name || selectedSlot.card.field_set_code || 'Unknown set')}
@@ -1006,8 +1296,22 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format, de
               />
               I own this{selectedSlot.isFoil ? ' (foil)' : ''}
             </label>
+            <p style={{ margin: '0.5rem 0 0', fontSize: 12 }}>
+              <Link
+                href={cardPrintingsPath(selectedSlot.card.title, {
+                  printing: selectedSlot.card.id,
+                  deckId,
+                  slotId: selectedSlot.id,
+                  from: deckSlug,
+                  foil: selectedSlot.isFoil,
+                })}
+                style={{ color: 'var(--accent)' }}
+              >
+                Change printing
+              </Link>
+            </p>
           </div>
-        )}
+        ) : null}
       </aside>
     </div>
   );
@@ -2444,25 +2748,15 @@ interface DeckHeaderProps {
   format: string;
 }
 
-const FORMATS = [
-  'Standard',
-  'Modern',
-  'Legacy',
-  'Vintage',
-  'Pioneer',
-  'Pauper',
-  'EDH',
-  'Commander',
-  'Tiny Leaders',
-  'TLR',
-  'Other',
-];
-
 const DeckHeader: React.FC<DeckHeaderProps> = ({ deckId, title, format }) => {
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState(title);
   const [draftFormat, setDraftFormat] = useState(format);
+  const { data: formats = [] } = useQuery({
+    queryKey: ['formats'],
+    queryFn: fetchFormats,
+  });
 
   const save = useMutation({
     mutationFn: () =>
@@ -2471,7 +2765,7 @@ const DeckHeader: React.FC<DeckHeaderProps> = ({ deckId, title, format }) => {
         field_format: draftFormat,
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['deck', deckId] });
+      qc.invalidateQueries({ queryKey: ['deck'] });
       setEditing(false);
     },
   });
@@ -2490,9 +2784,9 @@ const DeckHeader: React.FC<DeckHeaderProps> = ({ deckId, title, format }) => {
           value={draftFormat}
           onChange={e => setDraftFormat(e.target.value)}
         >
-          {FORMATS.map(f => (
-            <option key={f} value={f}>
-              {f}
+          {formats.map(f => (
+            <option key={f.name} value={f.name}>
+              {f.name}
             </option>
           ))}
         </select>
@@ -2647,6 +2941,8 @@ const DeckPage: React.FC = () => {
           cards={deckCards}
           format={deck.attributes.field_format}
           deckIsFoil={Boolean(deck.attributes.field_is_foil)}
+          commander={deck.attributes.field_commander}
+          commanderFoil={Boolean(deck.attributes.field_commander_foil)}
         />
       ) : tab === 'analysis' ? (
         <DeckAnalysis cards={deckCards} format={deck.attributes.field_format} deckTitle={deck.attributes.title} />

@@ -115,11 +115,13 @@ const MetaDecksPage: React.FC = () => {
     queryFn: fetchFormats,
   });
 
+  const scrapeableFormats = formats.filter(f => f.slug !== '');
+
   useEffect(() => {
-    if (selectedFormat === null && formats.length > 0 && formats[0] != null) {
-      setSelectedFormat(formats[0].name);
+    if (selectedFormat === null && scrapeableFormats[0] != null) {
+      setSelectedFormat(scrapeableFormats[0].name);
     }
-  }, [formats, selectedFormat]);
+  }, [scrapeableFormats, selectedFormat]);
 
   const { data: decks = [], isLoading: decksLoading } = useQuery<MetaDeck[]>({
     queryKey: ['metaDecks', selectedFormat],
@@ -153,7 +155,7 @@ const MetaDecksPage: React.FC = () => {
       {formatsLoading && <p>Loading formats...</p>}
 
       {/* Format selector + scrape controls */}
-      {formats.length > 0 && (
+      {scrapeableFormats.length > 0 && (
         <div
           style={{
             display: 'flex',
@@ -175,7 +177,7 @@ const MetaDecksPage: React.FC = () => {
               setScrapeError(null);
             }}
           >
-            {formats.map((f) => (
+            {scrapeableFormats.map((f) => (
               <option key={f.slug} value={f.name}>
                 {f.name}
               </option>
