@@ -11,7 +11,7 @@ extend type Query {
 
   card(slug: String!): MtgCard
 
-  cardsByName(name: String!): [MtgCard!]!
+  cardsByName(name: String!, contains: Boolean): [MtgCard!]!
 
   deckCards(deckId: ID!): [DeckCard!]!
 

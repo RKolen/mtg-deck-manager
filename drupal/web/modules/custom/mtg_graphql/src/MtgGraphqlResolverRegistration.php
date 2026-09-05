@@ -129,18 +129,38 @@ final class MtgGraphqlResolverRegistration {
 
     $registry->addFieldResolver('Query', 'cardsByName',
       $builder->callback(function ($value, array $args): array {
-        $storage = \Drupal::entityTypeManager()->getStorage('node');
-        $ids = \Drupal::entityQuery('node')
+        $contains = !empty($args['contains']);
+        $name = (string) $args['name'];
+        $query = \Drupal::entityQuery('node')
           ->condition('type', 'mtg_card')
           ->condition('status', 1)
-          ->condition('title', $args['name'])
           ->accessCheck(FALSE)
           ->sort('field_set_name', 'ASC')
-          ->sort('field_collector_number', 'ASC')
-          ->execute();
-        $nodes = array_values($storage->loadMultiple($ids));
+          ->sort('field_collector_number', 'ASC');
+        if ($contains) {
+          $query->condition('title', $name, 'CONTAINS');
+          $query->range(0, 80);
+        }
+        else {
+          $query->condition('title', $name);
+        }
+        $storage = \Drupal::entityTypeManager()->getStorage('node');
+        $nodes = array_values($storage->loadMultiple($query->execute()));
+        $needle = mb_strtolower($name);
         // Prefer printings with a market price when sorting within a set.
-        usort($nodes, static function ($a, $b): int {
+        usort($nodes, static function ($a, $b) use ($contains, $needle): int {
+          if ($contains) {
+            $ta = mb_strtolower((string) $a->getTitle());
+            $tb = mb_strtolower((string) $b->getTitle());
+            $ra = self::titleMatchRank($ta, $needle);
+            $rb = self::titleMatchRank($tb, $needle);
+            if ($ra !== $rb) {
+              return $ra <=> $rb;
+            }
+            if ($ta !== $tb) {
+              return $ta <=> $tb;
+            }
+          }
           $sa = (string) ($a->get('field_set_name')->value ?? '');
           $sb = (string) ($b->get('field_set_name')->value ?? '');
           if ($sa !== $sb) {
@@ -949,6 +969,21 @@ final class MtgGraphqlResolverRegistration {
     $registry->addFieldResolver('ScrapeMetaDecksResult', 'skipped',
       $builder->callback(fn(array $r) => $r['skipped'])
     );
+  }
+
+  /**
+   * Ranks a card title against a search needle (lower is better).
+   *
+   * Exact match, then prefix, then contains.
+   */
+  private static function titleMatchRank(string $title, string $needle): int {
+    if ($title === $needle) {
+      return 0;
+    }
+    if ($needle !== '' && str_starts_with($title, $needle)) {
+      return 1;
+    }
+    return 2;
   }
 
   /**

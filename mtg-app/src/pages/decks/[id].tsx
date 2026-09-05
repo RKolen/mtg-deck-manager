@@ -172,6 +172,17 @@ function ownedTotal(counts: OwnedCounts | undefined): number {
   return counts.owned + counts.foil;
 }
 
+function titleMatchRank(title: string, needle: string): number {
+  const t = title.toLowerCase();
+  if (t === needle) {
+    return 0;
+  }
+  if (needle !== '' && t.startsWith(needle)) {
+    return 1;
+  }
+  return 2;
+}
+
 function applyOwnership(
   currentOwned: number,
   currentFoil: number,
@@ -413,7 +424,7 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format, de
     try {
       const q = search.trim();
       const qLower = q.toLowerCase();
-      const results = await findCardsByName(q);
+      const results = await findCardsByName(q, { contains: true });
       const mapped = results.map(r => ({
         id: r.id,
         title: r.attributes.title,
@@ -460,6 +471,14 @@ const DeckEditor: React.FC<EditorProps> = ({ deckId, deckSlug, cards, format, de
         const ob = ownedTotal(ownedByCardId.get(b.id));
         if ((oa > 0) !== (ob > 0)) {
           return oa > 0 ? -1 : 1;
+        }
+        const ra = titleMatchRank(a.title, qLower);
+        const rb = titleMatchRank(b.title, qLower);
+        if (ra !== rb) {
+          return ra - rb;
+        }
+        if (a.title !== b.title) {
+          return a.title.localeCompare(b.title);
         }
         const pa = Math.max(
           Number.parseFloat(a.priceUsd ?? '') || 0,
