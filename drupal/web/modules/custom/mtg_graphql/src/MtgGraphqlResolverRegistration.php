@@ -128,24 +128,35 @@ final class MtgGraphqlResolverRegistration {
     );
 
     $registry->addFieldResolver('Query', 'cardsByName',
-      $builder->callback(function ($value, array $args): array {
+      $builder->callback(function ($value, array $args, ResolveContext $context, ResolveInfo $info, FieldContext $fieldContext): array {
+        $fieldContext->addCacheTags(['node_list:mtg_card']);
         $contains = !empty($args['contains']);
         $name = (string) $args['name'];
-        $query = \Drupal::entityQuery('node')
+        $set = trim((string) ($args['set'] ?? ''));
+        $storage = \Drupal::entityTypeManager()->getStorage('node');
+
+        $exact = \Drupal::entityQuery('node')
           ->condition('type', 'mtg_card')
           ->condition('status', 1)
+          ->condition('title', $name)
           ->accessCheck(FALSE)
           ->sort('field_set_name', 'ASC')
           ->sort('field_collector_number', 'ASC');
+        self::applySetQuery($exact, $set);
+        $ids = $exact->execute();
+
         if ($contains) {
-          $query->condition('title', $name, 'CONTAINS');
-          $query->range(0, 80);
+          $fuzzy = \Drupal::entityQuery('node')
+            ->condition('type', 'mtg_card')
+            ->condition('status', 1)
+            ->condition('title', $name, 'CONTAINS')
+            ->accessCheck(FALSE)
+            ->sort('field_set_name', 'ASC');
+          self::applySetQuery($fuzzy, $set);
+          $ids += $fuzzy->execute();
         }
-        else {
-          $query->condition('title', $name);
-        }
-        $storage = \Drupal::entityTypeManager()->getStorage('node');
-        $nodes = array_values($storage->loadMultiple($query->execute()));
+
+        $nodes = array_values($storage->loadMultiple($ids));
         $needle = mb_strtolower($name);
         // Prefer printings with a market price when sorting within a set.
         usort($nodes, static function ($a, $b) use ($contains, $needle): int {
@@ -1073,6 +1084,32 @@ final class MtgGraphqlResolverRegistration {
       return FALSE;
     }
     return (bool) $node->get('field_commander_foil')->value;
+  }
+
+  /**
+   * Restricts a card query to set code, set name, or collector number.
+   */
+  private static function applySetQuery(QueryInterface $query, string $set): void {
+    $set = trim($set);
+    if ($set === '') {
+      return;
+    }
+    if (str_starts_with($set, '#') || preg_match('/^\d+$/', $set)) {
+      $bare = ltrim($set, '#');
+      if ($bare !== '') {
+        $query->condition('field_collector_number', $bare, 'STARTS_WITH');
+      }
+      return;
+    }
+    if (preg_match('/^(?=[a-z0-9]{2,5}$)(?=.*[a-z])[a-z0-9]+$/i', $set)) {
+      $query->condition('field_set_code', $set, 'STARTS_WITH');
+      return;
+    }
+    $group = $query->orConditionGroup()
+      ->condition('field_set_code', $set, 'CONTAINS')
+      ->condition('field_set_name', $set, 'CONTAINS')
+      ->condition('field_collector_number', $set, 'CONTAINS');
+    $query->condition($group);
   }
 
   /**

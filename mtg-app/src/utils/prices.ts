@@ -53,6 +53,31 @@ export function formatPriceInt(value: number | null | undefined, currency: Curre
   return `${symbol}${Math.round(value)}`;
 }
 
+/**
+ * Unit price for a deck slot. Foil uses foil listings first and only then
+ * regular; regular never falls back to foil (serialized foil can dwarf it).
+ */
+export function slotUnitPrice(
+  card: Pick<
+    MtgCardAttributes,
+    'field_price_usd' | 'field_price_usd_foil' | 'field_price_eur' | 'field_price_eur_foil'
+  >,
+  currency: Currency,
+  foil = false,
+): number {
+  const other: Currency = currency === 'EUR' ? 'USD' : 'EUR';
+  if (foil) {
+    return (
+      priceFor(card, currency, true) ??
+      priceFor(card, other, true) ??
+      priceFor(card, currency, false) ??
+      priceFor(card, other, false) ??
+      0
+    );
+  }
+  return priceFor(card, currency, false) ?? priceFor(card, other, false) ?? 0;
+}
+
 export function totalDeckPrice(
   cards: Array<{
     quantity: number;
@@ -63,23 +88,10 @@ export function totalDeckPrice(
   currency: Currency,
   includeSideboard = false,
 ): number {
-  const other: Currency = currency === 'EUR' ? 'USD' : 'EUR';
   return cards.reduce((sum, slot) => {
     if (!includeSideboard && slot.isSideboard) {
       return sum;
     }
-    const foil = Boolean(slot.isFoil);
-    // Never fall back from regular to foil: serialized/SLD foil listings can
-    // be thousands while the non-foil printing has no Cardmarket price.
-    const unit = foil
-      ? priceFor(slot.card, currency, true) ??
-        priceFor(slot.card, other, true) ??
-        priceFor(slot.card, currency, false) ??
-        priceFor(slot.card, other, false) ??
-        0
-      : priceFor(slot.card, currency, false) ??
-        priceFor(slot.card, other, false) ??
-        0;
-    return sum + unit * slot.quantity;
+    return sum + slotUnitPrice(slot.card, currency, Boolean(slot.isFoil)) * slot.quantity;
   }, 0);
 }

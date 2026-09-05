@@ -605,6 +605,30 @@ export function classifyType(typeLine: string): string {
   return 'Other';
 }
 
+/** Decklist section order: one heading per card type. */
+export const DECK_LIST_TYPE_GROUPS: { label: string; types: string[] }[] = [
+  { label: 'Creatures', types: ['Creature'] },
+  { label: 'Planeswalkers', types: ['Planeswalker'] },
+  { label: 'Instants', types: ['Instant'] },
+  { label: 'Sorceries', types: ['Sorcery'] },
+  { label: 'Enchantments', types: ['Enchantment'] },
+  { label: 'Artifacts', types: ['Artifact'] },
+  { label: 'Other', types: ['Other'] },
+  { label: 'Lands', types: ['Land'] },
+];
+
+/** Groups cards into non-empty type sections for a decklist. */
+export function groupDeckCardsByType<T extends { card: { field_type_line?: string | null } }>(
+  cards: T[],
+): { label: string; cards: T[] }[] {
+  return DECK_LIST_TYPE_GROUPS.map(group => ({
+    label: group.label,
+    cards: cards.filter(dc =>
+      group.types.includes(classifyType(dc.card.field_type_line ?? '')),
+    ),
+  })).filter(group => group.cards.length > 0);
+}
+
 /** Card type distribution for the main deck (quantity-weighted). */
 export function cardTypeDistribution(
   cards: DeckCardWithCard[],

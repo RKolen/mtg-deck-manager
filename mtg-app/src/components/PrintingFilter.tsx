@@ -46,12 +46,15 @@ export function matchesPrintingFilter(
   const collector = (card.field_collector_number ?? '').toLowerCase();
   const hashed = collector === '' ? '' : `#${collector}`;
   const bare = raw.replace(/^#/, '');
-  return (
-    code.includes(raw) ||
-    name.includes(raw) ||
-    collector.includes(bare) ||
-    hashed.includes(raw)
-  );
+  if (raw.startsWith('#') || /^\d+$/.test(raw)) {
+    return collector === bare || collector.startsWith(bare) || hashed.includes(raw);
+  }
+  // Short tokens with a letter are set codes, so "ons" matches Onslaught
+  // and not names that only contain those letters.
+  if (/^(?=[a-z0-9]{2,5}$)(?=.*[a-z])[a-z0-9]+$/.test(raw)) {
+    return code === raw || code.startsWith(raw);
+  }
+  return name.includes(raw) || code.includes(raw) || collector.includes(bare);
 }
 
 interface PrintingFilterProps {
@@ -81,7 +84,7 @@ const PrintingFilter: React.FC<PrintingFilterProps> = ({ value, onChange, extra 
         type="search"
         value={value.query}
         onChange={e => onChange({ ...value, query: e.target.value })}
-        placeholder="Set code, name, or #273"
+        placeholder="Set code, name, or 237"
         aria-label="Filter printings by set"
         style={{ flex: '1 1 180px', minWidth: 140 }}
       />

@@ -2,12 +2,16 @@
  * Commander / Tiny Leaders commander card picker.
  */
 
-import React, { useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { findCardsByName, updateDeck } from '../services/drupalApi';
 import type { DeckCommander } from '../types/drupal';
 import { cardImageSrc } from '../utils/cardImage';
 import { isLegalCommanderCard, isTinyLeadersFormat } from '../utils/deckAnalysis';
+import PrintingFilter, {
+  EMPTY_PRINTING_FILTER,
+  matchesPrintingFilter,
+} from './PrintingFilter';
 
 interface CommanderPickerProps {
   deckId: string;
@@ -35,8 +39,12 @@ const CommanderPicker: React.FC<CommanderPickerProps> = ({
       setName: string;
       collectorNumber: string;
       imageUri: string;
+      fullArt: boolean;
+      borderColor: string;
     }[]
   >([]);
+  const [printingFilter, setPrintingFilter] = useState(EMPTY_PRINTING_FILTER);
+  const lastSearchName = useRef('');
 
   const save = useMutation({
     mutationFn: (commanderId: string) => updateDeck(deckId, { commanderId }),
@@ -52,9 +60,15 @@ const CommanderPicker: React.FC<CommanderPickerProps> = ({
     if (search.trim() === '') {
       return;
     }
+    const q = search.trim();
+    const qLower = q.toLowerCase();
+    if (qLower !== lastSearchName.current) {
+      lastSearchName.current = qLower;
+      setPrintingFilter(EMPTY_PRINTING_FILTER);
+    }
     setSearching(true);
     try {
-      const cards = await findCardsByName(search.trim(), { contains: true });
+      const cards = await findCardsByName(q, { contains: true });
       setResults(
         cards.map(c => ({
           id: c.id,
@@ -69,12 +83,31 @@ const CommanderPicker: React.FC<CommanderPickerProps> = ({
           setName: c.attributes.field_set_name ?? '',
           collectorNumber: c.attributes.field_collector_number ?? '',
           imageUri: c.attributes.field_image_uri ?? '',
+          fullArt: Boolean(c.attributes.field_full_art),
+          borderColor: c.attributes.field_border_color ?? '',
         })),
       );
     } finally {
       setSearching(false);
     }
   }
+
+  const filteredResults = useMemo(
+    () =>
+      results.filter(r =>
+        matchesPrintingFilter(
+          {
+            field_set_code: r.setCode,
+            field_set_name: r.setName,
+            field_collector_number: r.collectorNumber,
+            field_full_art: r.fullArt,
+            field_border_color: r.borderColor,
+          },
+          printingFilter,
+        ),
+      ),
+    [results, printingFilter],
+  );
 
   const label = isTinyLeadersFormat(format) ? 'Tiny Leader' : 'Commander';
 
@@ -137,8 +170,11 @@ const CommanderPicker: React.FC<CommanderPickerProps> = ({
             )}
           </div>
           {results.length > 0 && (
+            <PrintingFilter value={printingFilter} onChange={setPrintingFilter} />
+          )}
+          {filteredResults.length > 0 && (
             <ul style={{ listStyle: 'none', margin: '8px 0 0', padding: 0 }}>
-              {results.map(r => {
+              {filteredResults.map(r => {
                 const legal = isLegalCommanderCard(
                   r.typeLine,
                   r.cmc,
@@ -189,6 +225,11 @@ const CommanderPicker: React.FC<CommanderPickerProps> = ({
                 );
               })}
             </ul>
+          )}
+          {results.length > 0 && filteredResults.length === 0 && (
+            <p style={{ margin: '8px 0 0', fontSize: 13, opacity: 0.8 }}>
+              No printings match this filter.
+            </p>
           )}
         </div>
       )}

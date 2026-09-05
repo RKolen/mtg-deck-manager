@@ -41,6 +41,7 @@ import {
   updateDeck,
 } from '../../services/drupalApi';
 import CommanderPicker from '../../components/CommanderPicker';
+import DeckValueList from '../../components/DeckValueList';
 import { invalidateInventoryQueries } from '../../services/queryCache';
 import { ManaCost } from '../../components/design/Mana';
 import PrintingFilter, {
@@ -102,7 +103,7 @@ import {
   canAddToMain,
   nonRulebreakerMainCount,
   type MtgColor,
-  classifyType,
+  groupDeckCardsByType,
 } from '../../utils/deckAnalysis';
 
 // ---------------------------------------------------------------------------
@@ -286,6 +287,7 @@ const DeckEditor: React.FC<EditorProps> = ({
   >([]);
   const [searching, setSearching] = useState(false);
   const [printingFilter, setPrintingFilter] = useState(EMPTY_PRINTING_FILTER);
+  const lastSearchName = useRef('');
   const [addAsOwned, setAddAsOwned] = useState(false);
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const qc = useQueryClient();
@@ -449,6 +451,10 @@ const DeckEditor: React.FC<EditorProps> = ({
     try {
       const q = search.trim();
       const qLower = q.toLowerCase();
+      if (qLower !== lastSearchName.current) {
+        lastSearchName.current = qLower;
+        setPrintingFilter(EMPTY_PRINTING_FILTER);
+      }
       const results = await findCardsByName(q, { contains: true });
       const mapped = results.map(r => ({
         id: r.id,
@@ -518,7 +524,6 @@ const DeckEditor: React.FC<EditorProps> = ({
         return pb - pa;
       });
       setSearchResults(mapped);
-      setPrintingFilter(EMPTY_PRINTING_FILTER);
     } finally {
       setSearching(false);
     }
@@ -560,15 +565,44 @@ const DeckEditor: React.FC<EditorProps> = ({
     dc => !isLegalManaValue(dc.card.field_type_line ?? '', dc.card.field_cmc, format),
   ).length;
 
-  // Group main deck cards into sections.
-  const GROUPS: { label: string; types: string[] }[] = [
-    { label: 'Creatures',  types: ['Creature'] },
-    { label: 'Spells',     types: ['Instant', 'Sorcery', 'Enchantment', 'Planeswalker', 'Artifact', 'Other'] },
-    { label: 'Lands',      types: ['Land'] },
-  ];
-
-  function groupCards(cards: DeckCardWithCard[], types: string[]): DeckCardWithCard[] {
-    return cards.filter(dc => types.includes(classifyType(dc.card.field_type_line ?? '')));
+  function renderTypeGroups(
+    list: DeckCardWithCard[],
+    keyPrefix: string,
+    heading: 'h3' | 'h4' = 'h3',
+  ): React.ReactNode {
+    const Heading = heading;
+    return groupDeckCardsByType(list).map(group => {
+      const groupCount = totalCount(group.cards);
+      return (
+        <section key={`${keyPrefix}-${group.label}`} style={{ marginBottom: '1.25rem' }}>
+          <Heading
+            style={{
+              margin: '0 0 0.4rem',
+              borderBottom: heading === 'h3' ? '2px solid var(--line)' : '1px solid var(--line)',
+              paddingBottom: '0.25rem',
+              color: 'var(--ink)',
+              fontSize: heading === 'h4' ? '1rem' : undefined,
+            }}
+          >
+            {group.label}
+            <span style={{ marginLeft: 8, color: 'var(--ink)', fontWeight: 'normal', fontSize: '0.9rem' }}>
+              ({groupCount})
+            </span>
+          </Heading>
+          <table style={{ width: '100%', borderCollapse: 'collapse', color: 'var(--ink)' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--line)' }}>
+                <th style={{ textAlign: 'left', padding: '0.2rem 0.5rem', color: 'var(--ink)' }}>Card</th>
+                <th style={{ padding: '0.2rem 0.5rem', color: 'var(--ink)' }}>Qty</th>
+                <th style={{ padding: '0.2rem 0.5rem', color: 'var(--ink)' }}>Move</th>
+                <th style={{ padding: '0.2rem 0.5rem', color: 'var(--ink)' }}>Del</th>
+              </tr>
+            </thead>
+            <tbody>{group.cards.map(dc => renderRow(dc))}</tbody>
+          </table>
+        </section>
+      );
+    });
   }
 
   function renderRow(dc: DeckCardWithCard): React.ReactNode {
@@ -1007,39 +1041,7 @@ const DeckEditor: React.FC<EditorProps> = ({
       {main.length === 0 ? (
         <p style={{ color: 'var(--ink)' }}>No cards in main deck yet.</p>
       ) : (
-        GROUPS.map(group => {
-          const grouped = groupCards(main, group.types);
-          if (grouped.length === 0) return null;
-          const groupCount = totalCount(grouped);
-          return (
-            <section key={group.label} style={{ marginBottom: '1.25rem' }}>
-              <h3
-                style={{
-                  margin: '0 0 0.4rem',
-                  borderBottom: '2px solid var(--line)',
-                  paddingBottom: '0.25rem',
-                  color: 'var(--ink)',
-                }}
-              >
-                {group.label}
-                <span style={{ marginLeft: 8, color: 'var(--ink)', fontWeight: 'normal', fontSize: '0.9rem' }}>
-                  ({groupCount})
-                </span>
-              </h3>
-              <table style={{ width: '100%', borderCollapse: 'collapse', color: 'var(--ink)' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--line)' }}>
-                    <th style={{ textAlign: 'left', padding: '0.2rem 0.5rem', color: 'var(--ink)' }}>Card</th>
-                    <th style={{ padding: '0.2rem 0.5rem', color: 'var(--ink)' }}>Qty</th>
-                    <th style={{ padding: '0.2rem 0.5rem', color: 'var(--ink)' }}>Move</th>
-                    <th style={{ padding: '0.2rem 0.5rem', color: 'var(--ink)' }}>Del</th>
-                  </tr>
-                </thead>
-                <tbody>{grouped.map(dc => renderRow(dc))}</tbody>
-              </table>
-            </section>
-          );
-        })
+        renderTypeGroups(main, 'main')
       )}
 
       {/* Sideboard */}
@@ -1058,17 +1060,7 @@ const DeckEditor: React.FC<EditorProps> = ({
           </span>
         </h3>
         {sb.length > 0 ? (
-          <table style={{ width: '100%', borderCollapse: 'collapse', color: 'var(--ink)' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--line)' }}>
-                <th style={{ textAlign: 'left', padding: '0.2rem 0.5rem', color: 'var(--ink)' }}>Card</th>
-                <th style={{ padding: '0.2rem 0.5rem', color: 'var(--ink)' }}>Qty</th>
-                <th style={{ padding: '0.2rem 0.5rem', color: 'var(--ink)' }}>Move</th>
-                <th style={{ padding: '0.2rem 0.5rem', color: 'var(--ink)' }}>Del</th>
-              </tr>
-            </thead>
-            <tbody>{sb.map(dc => renderRow(dc))}</tbody>
-          </table>
+          renderTypeGroups(sb, 'sb', 'h4')
         ) : (
           <p style={{ color: 'var(--ink)' }}>Sideboard is empty.</p>
         )}
@@ -1313,6 +1305,15 @@ const DeckEditor: React.FC<EditorProps> = ({
           </div>
         ) : null}
       </aside>
+      <DeckValueList
+        cards={cards}
+        currency={currency}
+        commander={commander}
+        commanderFoil={commanderFoil}
+        commanderLabel={commanderLabel}
+        selectedSlotId={selectedSlotId}
+        onSelect={setSelectedSlotId}
+      />
     </div>
   );
 };
@@ -2869,7 +2870,7 @@ const DeckPage: React.FC = () => {
   });
 
   return (
-    <main style={{ padding: '1.5rem', maxWidth: 1200, color: 'var(--ink)' }}>
+    <main style={{ padding: '1.5rem', maxWidth: 1520, color: 'var(--ink)' }}>
       <p style={{ margin: '0 0 1rem' }}>
         <Link href="/decks" style={{ color: 'var(--accent)' }}>
           Back to decks

@@ -409,18 +409,19 @@ export async function fetchCardBySlug(
 
 export async function findCardsByName(
   name: string,
-  options: { contains?: boolean } = {},
+  options: { contains?: boolean; set?: string } = {},
 ): Promise<JsonApiResource<MtgCardAttributes>[]> {
   const query = gql`
     ${CARD_FIELDS}
-    query FindCards($name: String!, $contains: Boolean) {
-      cardsByName(name: $name, contains: $contains) { ...CardFields }
+    query FindCards($name: String!, $contains: Boolean, $set: String) {
+      cardsByName(name: $name, contains: $contains, set: $set) { ...CardFields }
     }
   `;
 
   const data = await getGraphQLClient().request<{ cardsByName: GqlMtgCard[] }>(query, {
     name,
     contains: options.contains ?? false,
+    set: options.set != null && options.set.trim() !== '' ? options.set.trim() : null,
   });
   return data.cardsByName.map(toCardResource);
 }

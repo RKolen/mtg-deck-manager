@@ -63,7 +63,7 @@ const CardPage: React.FC = () => {
     queryKey: ['printings', title],
     queryFn: () => findCardsByName(title),
     enabled: title !== '',
-    staleTime: 5 * 60_000,
+    staleTime: 60_000,
   });
 
   const sortedPrintings = useMemo(() => {
