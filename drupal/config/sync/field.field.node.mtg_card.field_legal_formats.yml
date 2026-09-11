@@ -10,7 +10,7 @@ field_name: field_legal_formats
 entity_type: node
 bundle: mtg_card
 label: 'Legal Formats'
-description: 'Formats in which this card is legal (e.g. modern, legacy, pauper).'
+description: 'Formats in which this card is playable (Scryfall legal or restricted).'
 required: false
 translatable: true
 default_value: {  }

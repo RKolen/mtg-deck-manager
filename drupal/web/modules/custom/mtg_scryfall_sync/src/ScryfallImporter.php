@@ -422,14 +422,7 @@ class ScryfallImporter {
     $node->set('field_toughness', $card['toughness'] ?? $face['toughness'] ?? NULL);
     $node->set('field_loyalty', $card['loyalty'] ?? NULL);
 
-    // Legalities: store only the format keys where the card is "legal".
-    $legal_formats = [];
-    foreach ($card['legalities'] ?? [] as $format => $status) {
-      if ($status === 'legal') {
-        $legal_formats[] = $format;
-      }
-    }
-    $node->set('field_legal_formats', $legal_formats);
+    $this->applyLegalities($node, $card);
 
     // Phase 9 fields — pricing and set metadata.
     // Scryfall default_cards includes a prices object with usd / usd_foil /
@@ -563,7 +556,7 @@ class ScryfallImporter {
   }
 
   /**
-   * Refreshes field_legal_formats on all printings of the given card names.
+   * Refreshes legality fields on all printings of the given card names.
    *
    * Called after importSet() to propagate legality changes caused by reprints
    * (e.g. a card reprinted into Modern gets all its printings updated).
@@ -600,13 +593,6 @@ class ScryfallImporter {
           continue;
         }
 
-        $legal_formats = [];
-        foreach ($card['legalities'] ?? [] as $format => $status) {
-          if ($status === 'legal') {
-            $legal_formats[] = $format;
-          }
-        }
-
         // Update all printings of this card by title.
         $nids = $storage->getQuery()
           ->accessCheck(FALSE)
@@ -615,7 +601,10 @@ class ScryfallImporter {
           ->execute();
 
         foreach ($storage->loadMultiple(array_values($nids)) as $node) {
-          $node->set('field_legal_formats', $legal_formats);
+          if (!$node instanceof NodeInterface) {
+            continue;
+          }
+          $this->applyLegalities($node, $card);
           $node->save();
           $updated++;
         }
@@ -717,6 +706,96 @@ class ScryfallImporter {
   }
 
   /**
+   * Backfills legal and restricted format lists from the local bulk file.
+   *
+   * Restricted cards are stored as playable in field_legal_formats and also
+   * listed in field_restricted_formats (one-copy formats such as Vintage).
+   *
+   * @return array{updated: int, skipped: int}
+   *   updated: cards written; skipped: bulk rows with no matching node.
+   *
+   * @throws \RuntimeException
+   *   When the bulk data file is missing or cannot be read.
+   */
+  public function backfillLegalities(): array {
+    if (!$this->dataFileExists()) {
+      throw new \RuntimeException('Scryfall data file not found. Run downloadBulkData() first.');
+    }
+
+    $nodes = [];
+    $result = $this->database->query(
+      'SELECT n.nid, n.vid, n.langcode, s.field_scryfall_id_value
+       FROM {node_field_data} n
+       INNER JOIN {node__field_scryfall_id} s
+         ON s.entity_id = n.nid AND s.deleted = 0
+       WHERE n.type = :type AND n.default_langcode = 1',
+      [':type' => 'mtg_card'],
+    );
+    foreach ($result as $row) {
+      $nodes[(string) $row->field_scryfall_id_value] = [
+        'entity_id' => (int) $row->nid,
+        'revision_id' => (int) $row->vid,
+        'langcode' => (string) $row->langcode,
+      ];
+    }
+
+    $legal_rows = [];
+    $restricted_rows = [];
+    $updated = 0;
+    $skipped = 0;
+
+    foreach ($this->iterateBulkCards() as $card) {
+      $scryfall_id = $card['id'] ?? NULL;
+      if (!is_string($scryfall_id) || !isset($nodes[$scryfall_id])) {
+        $skipped++;
+        continue;
+      }
+      $node = $nodes[$scryfall_id];
+      $parsed = $this->parseLegalities($card);
+      $base = [
+        'bundle' => 'mtg_card',
+        'deleted' => 0,
+        'entity_id' => $node['entity_id'],
+        'revision_id' => $node['revision_id'],
+        'langcode' => $node['langcode'],
+      ];
+      foreach ($parsed['legal'] as $delta => $format) {
+        $legal_rows[] = $base + [
+          'delta' => $delta,
+          'field_legal_formats_value' => $format,
+        ];
+      }
+      foreach ($parsed['restricted'] as $delta => $format) {
+        $restricted_rows[] = $base + [
+          'delta' => $delta,
+          'field_restricted_formats_value' => $format,
+        ];
+      }
+      $updated++;
+    }
+
+    $this->replaceFieldRows('node__field_legal_formats', 'field_legal_formats_value', $legal_rows);
+    $this->replaceFieldRows('node_revision__field_legal_formats', 'field_legal_formats_value', $legal_rows);
+    $this->replaceFieldRows(
+      'node__field_restricted_formats',
+      'field_restricted_formats_value',
+      $restricted_rows,
+    );
+    $this->replaceFieldRows(
+      'node_revision__field_restricted_formats',
+      'field_restricted_formats_value',
+      $restricted_rows,
+    );
+
+    $this->loggerFactory->get('mtg_scryfall_sync')->info(
+      'Legality backfill: @updated cards written, @skipped bulk rows unmatched.',
+      ['@updated' => $updated, '@skipped' => $skipped],
+    );
+
+    return ['updated' => $updated, 'skipped' => $skipped];
+  }
+
+  /**
    * Yields decoded card objects from the local Scryfall bulk file.
    *
    * @return \Generator<int, array<string, mixed>>
@@ -810,6 +889,60 @@ class ScryfallImporter {
       return NULL;
     }
     return number_format((float) $value, 2, '.', '');
+  }
+
+  /**
+   * Writes playable and restricted format lists from a Scryfall card object.
+   *
+   * Restricted cards remain playable (one copy), so they are stored in both
+   * field_legal_formats and field_restricted_formats.
+   *
+   * @param \Drupal\node\NodeInterface $node
+   *   The mtg_card node to update.
+   * @param array<string, mixed> $card
+   *   A Scryfall card payload.
+   */
+  private function applyLegalities(NodeInterface $node, array $card): void {
+    $parsed = $this->parseLegalities($card);
+    $node->set('field_legal_formats', $parsed['legal']);
+    if ($node->hasField('field_restricted_formats')) {
+      $node->set('field_restricted_formats', $parsed['restricted']);
+    }
+  }
+
+  /**
+   * Splits Scryfall legalities into playable and restricted format keys.
+   *
+   * @param array<string, mixed> $card
+   *   A Scryfall card payload.
+   *
+   * @return array{legal: list<string>, restricted: list<string>}
+   *   Playable formats (legal or restricted) and restricted-only formats.
+   */
+  private function parseLegalities(array $card): array {
+    $legal_formats = [];
+    $restricted_formats = [];
+    $legalities = $card['legalities'] ?? [];
+    if (!is_array($legalities)) {
+      $legalities = [];
+    }
+
+    foreach ($legalities as $format => $status) {
+      if (!is_string($format) || !is_string($status)) {
+        continue;
+      }
+      if ($status === 'legal' || $status === 'restricted') {
+        $legal_formats[] = $format;
+      }
+      if ($status === 'restricted') {
+        $restricted_formats[] = $format;
+      }
+    }
+
+    return [
+      'legal' => $legal_formats,
+      'restricted' => $restricted_formats,
+    ];
   }
 
 }

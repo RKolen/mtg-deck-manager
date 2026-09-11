@@ -14,6 +14,7 @@ dependencies:
     - field.field.node.mtg_card.field_image_uri
     - field.field.node.mtg_card.field_is_mana_producer
     - field.field.node.mtg_card.field_legal_formats
+    - field.field.node.mtg_card.field_restricted_formats
     - field.field.node.mtg_card.field_loyalty
     - field.field.node.mtg_card.field_mana_cost
     - field.field.node.mtg_card.field_oracle_text
@@ -79,6 +80,7 @@ third_party_settings:
         - field_toughness
         - field_loyalty
         - field_legal_formats
+        - field_restricted_formats
       label: Gameplay
       region: content
       parent_name: group_mtg_card_tabs
@@ -287,6 +289,14 @@ content:
   field_rarity:
     type: string_textfield
     weight: 13
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_restricted_formats:
+    type: string_textfield
+    weight: 15
     region: content
     settings:
       size: 60

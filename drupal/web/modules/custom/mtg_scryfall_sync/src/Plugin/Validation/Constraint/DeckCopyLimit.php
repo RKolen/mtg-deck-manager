@@ -20,7 +20,9 @@ use Symfony\Component\Validator\Constraint;
  * - Commander / Tiny Leaders / Brawl main-deck size is a hard maximum
  *   (99 / 49 / 59 plus commander). Cards with "rulebreaker" in oracle
  *   may exceed that maximum.
- * - All other constructed decks default to 4 copies (main + sideboard).
+ * - All other constructed decks default to 4 copies (main + sideboard),
+ *   counted by oracle name across printings.
+ * - Restricted cards (Scryfall) are limited to 1 copy.
  * - Constructed main-deck and sideboard totals stay soft (60+ / 15).
  *
  * @Constraint(

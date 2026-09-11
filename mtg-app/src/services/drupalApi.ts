@@ -29,6 +29,7 @@ interface GqlMtgCard {
   isManaProducer: boolean;
   producedMana: string[];
   legalFormats: string[];
+  restrictedFormats: string[];
   priceUsd: string | null;
   priceUsdFoil: string | null;
   priceEur: string | null;
@@ -137,6 +138,7 @@ function toCardResource(c: GqlMtgCard): JsonApiResource<MtgCardAttributes> {
       field_is_mana_producer: c.isManaProducer,
       field_produced_mana: c.producedMana,
       field_legal_formats: c.legalFormats,
+      field_restricted_formats: c.restrictedFormats ?? [],
       field_price_usd: c.priceUsd ?? null,
       field_price_usd_foil: c.priceUsdFoil ?? null,
       field_price_eur: c.priceEur ?? null,
@@ -175,6 +177,8 @@ function toDeckCommander(c: GqlMtgCard | null | undefined): DeckCommander | null
     field_color_identity: c.colorIdentity ?? [],
     field_oracle_text: c.oracleText ?? '',
     field_image_uri: c.imageUri ?? '',
+    field_legal_formats: c.legalFormats ?? [],
+    field_restricted_formats: c.restrictedFormats ?? [],
     field_set_code: c.setCode ?? '',
     field_set_name: c.setName ?? '',
     field_collector_number: c.collectorNumber ?? '',
@@ -267,6 +271,7 @@ function toDeckCardWithCard(d: GqlDeckCard): DeckCardWithCard {
       field_is_mana_producer: c.isManaProducer,
       field_produced_mana: c.producedMana,
       field_legal_formats: c.legalFormats,
+      field_restricted_formats: c.restrictedFormats ?? [],
       field_price_usd: c.priceUsd ?? null,
       field_price_usd_foil: c.priceUsdFoil ?? null,
       field_price_eur: c.priceEur ?? null,
@@ -308,7 +313,7 @@ function toCollectionCardResource(cc: GqlCollectionCard): JsonApiResource<Collec
 const CARD_FIELDS = gql`
   fragment CardFields on MtgCard {
     id title manaCost cmc typeLine colors colorIdentity
-    oracleText imageUri isManaProducer producedMana legalFormats
+    oracleText imageUri isManaProducer producedMana legalFormats restrictedFormats
     priceUsd priceUsdFoil priceEur priceEurFoil setCode setName rarity collectorNumber
     fullArt borderColor
   }
@@ -317,7 +322,7 @@ const CARD_FIELDS = gql`
 const CARD_DETAIL_FIELDS = gql`
   fragment CardDetailFields on MtgCard {
     id title manaCost cmc typeLine colors colorIdentity
-    oracleText imageUri isManaProducer producedMana legalFormats
+    oracleText imageUri isManaProducer producedMana legalFormats restrictedFormats
     priceUsd priceUsdFoil priceEur priceEurFoil setCode setName rarity collectorNumber
     power toughness loyalty
     fullArt borderColor
@@ -570,6 +575,7 @@ interface GqlComposeMtgCard {
   isManaProducer: boolean;
   producedMana: string[];
   legalFormats: string[];
+  restrictedFormats?: string[] | null;
   priceUsd?: string | null;
   priceUsdFoil?: string | null;
   priceEur?: string | null;
@@ -613,6 +619,7 @@ const COMPOSE_DECK_CARD_FIELDS = gql`
         isManaProducer
         producedMana
         legalFormats
+        restrictedFormats
         priceUsd
         priceUsdFoil
         priceEur
@@ -645,6 +652,7 @@ function composeMtgCardToGql(card: GqlComposeMtgCard): GqlMtgCard {
     isManaProducer: card.isManaProducer,
     producedMana: card.producedMana,
     legalFormats: card.legalFormats,
+    restrictedFormats: card.restrictedFormats ?? [],
     priceUsd: card.priceUsd ?? null,
     priceUsdFoil: card.priceUsdFoil ?? null,
     priceEur: card.priceEur ?? null,
@@ -932,14 +940,18 @@ export async function fetchCollectionCards(): Promise<
   `;
   const out: JsonApiResource<CollectionCardAttributes>[] = [];
   let after: string | null = null;
+  type CollectionPage = {
+    nodeCollectionCards: {
+      nodes: GqlComposeCollectionCard[];
+      pageInfo: { hasNextPage: boolean; endCursor?: string | null };
+    };
+  };
   for (let page = 0; page < 50; page += 1) {
-    const data = await getGraphQLClient().request<{
-      nodeCollectionCards: {
-        nodes: GqlComposeCollectionCard[];
-        pageInfo: { hasNextPage: boolean; endCursor?: string | null };
-      };
-    }>(query, { after });
-    const conn = data.nodeCollectionCards;
+    const data: CollectionPage = await getGraphQLClient().request(
+      query,
+      { after },
+    );
+    const conn: CollectionPage['nodeCollectionCards'] = data.nodeCollectionCards;
     out.push(...conn.nodes.map(toCollectionCardFromCompose));
     if (!conn.pageInfo.hasNextPage || conn.pageInfo.endCursor == null) {
       break;

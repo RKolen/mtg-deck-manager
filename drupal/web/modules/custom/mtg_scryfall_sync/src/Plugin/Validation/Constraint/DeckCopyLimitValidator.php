@@ -22,7 +22,9 @@ use Symfony\Component\Validator\ConstraintValidator;
  *   6. Tiny Leaders / TLR nonlands              -> mana value <= 3
  *   7. Commander / Tiny Leaders / Brawl         -> hard main-deck size
  *      (Rulebreaker cards may exceed the cap)
- *   8. Default constructed                      -> 4 copies (main + sideboard)
+ *   8. Restricted in the deck format (Scryfall) -> 1 copy
+ *   9. Default constructed -> 4 copies (main + sideboard)
+ *  10. Copy limits are summed by oracle name across printings.
  */
 class DeckCopyLimitValidator extends ConstraintValidator {
 
@@ -51,8 +53,9 @@ class DeckCopyLimitValidator extends ConstraintValidator {
 
     /** @var \Drupal\mtg_scryfall_sync\Plugin\Validation\Constraint\DeckCopyLimit $constraint */
 
-    // Aggregate quantity per card (main+sideboard combined for copy limits).
-    $cardQuantities = [];
+    // Aggregate quantity per oracle name (main+sideboard+commander).
+    $slot_card_ids = [];
+    $slot_rows = [];
     $mainQuantities = [];
 
     foreach ($entity->get('field_deck_cards')->referencedEntities() as $para) {
@@ -65,31 +68,75 @@ class DeckCopyLimitValidator extends ConstraintValidator {
       if ($cardId < 1) {
         continue;
       }
-      $cardQuantities[$cardId] = ($cardQuantities[$cardId] ?? 0) + $qty;
       $is_sideboard = $para->hasField('field_is_sideboard')
         && (bool) $para->get('field_is_sideboard')->value;
+      $slot_card_ids[$cardId] = $cardId;
+      $slot_rows[] = [
+        'id' => $cardId,
+        'qty' => $qty,
+        'sideboard' => $is_sideboard,
+      ];
       if (!$is_sideboard) {
         $mainQuantities[$cardId] = ($mainQuantities[$cardId] ?? 0) + $qty;
       }
     }
 
-    if ($cardQuantities === []) {
+    $commander = $this->commanderCard($entity);
+    if ($commander instanceof ContentEntityInterface) {
+      $commander_id = (int) $commander->id();
+      if ($commander_id > 0) {
+        $slot_card_ids[$commander_id] = $commander_id;
+      }
+    }
+
+    if ($slot_rows === [] && !$commander instanceof ContentEntityInterface) {
       return;
     }
 
     $formatLabel = $this->formatLabel($entity);
     $normalizedFormat = $this->normalizeFormat($formatLabel);
+    $scryfallKey = $this->scryfallFormatKey($normalizedFormat);
     $defaultMax = $this->isSingletonFormat($normalizedFormat) ? 1 : 4;
     $enforceMaxMv = $this->isTinyLeadersFormat($normalizedFormat);
-    $cards = \Drupal::entityTypeManager()->getStorage('node')->loadMultiple(array_keys($cardQuantities));
+    $cards = \Drupal::entityTypeManager()->getStorage('node')->loadMultiple($slot_card_ids);
 
-    foreach ($cardQuantities as $cardId => $totalQty) {
-      $card = $cards[$cardId] ?? NULL;
+    /** @var array<string, array{qty: int, card: \Drupal\Core\Entity\ContentEntityInterface}> $copiesByName */
+    $copiesByName = [];
+    foreach ($slot_rows as $row) {
+      $card = $cards[$row['id']] ?? NULL;
       if (!$card instanceof ContentEntityInterface) {
         continue;
       }
+      $name = (string) $card->label();
+      if ($name === '') {
+        continue;
+      }
+      if (!isset($copiesByName[$name])) {
+        $copiesByName[$name] = [
+          'qty' => 0,
+          'card' => $card,
+        ];
+      }
+      $copiesByName[$name]['qty'] += $row['qty'];
+    }
 
-      $max = $this->maxAllowed($card, $defaultMax);
+    if ($commander instanceof ContentEntityInterface) {
+      $name = (string) $commander->label();
+      if ($name !== '') {
+        if (!isset($copiesByName[$name])) {
+          $copiesByName[$name] = [
+            'qty' => 0,
+            'card' => $commander,
+          ];
+        }
+        $copiesByName[$name]['qty'] += 1;
+      }
+    }
+
+    foreach ($copiesByName as $entry) {
+      $card = $entry['card'];
+      $totalQty = $entry['qty'];
+      $max = $this->maxAllowed($card, $defaultMax, $scryfallKey);
       if ($totalQty > $max) {
         $this->context->addViolation($constraint->tooManyCopies, [
           '%count' => $totalQty,
@@ -196,7 +243,11 @@ class DeckCopyLimitValidator extends ConstraintValidator {
   /**
    * Maximum copies allowed for a card in the current format.
    */
-  private function maxAllowed(ContentEntityInterface $card, int $defaultMax): int {
+  private function maxAllowed(
+    ContentEntityInterface $card,
+    int $defaultMax,
+    string $scryfallKey,
+  ): int {
     $type_line = (string) $card->get('field_type_line')->value;
     $oracle = (string) $card->get('field_oracle_text')->value;
 
@@ -212,7 +263,72 @@ class DeckCopyLimitValidator extends ConstraintValidator {
     if (preg_match(self::ONLY_ONE_PATTERN, $oracle)) {
       return 1;
     }
+    if ($scryfallKey !== '' && $this->isRestricted($card, $scryfallKey)) {
+      return 1;
+    }
     return $defaultMax;
+  }
+
+  /**
+   * Whether Scryfall lists the card as restricted in this format.
+   */
+  private function isRestricted(ContentEntityInterface $card, string $scryfallKey): bool {
+    if (!$card->hasField('field_restricted_formats')) {
+      return FALSE;
+    }
+    foreach ($card->get('field_restricted_formats')->getValue() as $item) {
+      if ((string) ($item['value'] ?? '') === $scryfallKey) {
+        return TRUE;
+      }
+    }
+    return FALSE;
+  }
+
+  /**
+   * Designated commander card, if the deck has one.
+   */
+  private function commanderCard(ContentEntityInterface $deck): ?ContentEntityInterface {
+    if (!$deck->hasField('field_commander') || $deck->get('field_commander')->isEmpty()) {
+      return NULL;
+    }
+    $item = $deck->get('field_commander')->first();
+    if (!$item instanceof EntityReferenceItem || $item->entity === NULL) {
+      return NULL;
+    }
+    $commander = $item->entity;
+    return $commander instanceof ContentEntityInterface ? $commander : NULL;
+  }
+
+  /**
+   * Scryfall legalities key for a normalized format label, or empty.
+   */
+  private function scryfallFormatKey(string $normalized): string {
+    return match ($normalized) {
+      'standard' => 'standard',
+      'pioneer' => 'pioneer',
+      'modern' => 'modern',
+      'legacy' => 'legacy',
+      'vintage' => 'vintage',
+      'pauper' => 'pauper',
+      'historic' => 'historic',
+      'explorer' => 'explorer',
+      'timeless' => 'timeless',
+      'alchemy' => 'alchemy',
+      'premodern' => 'premodern',
+      'penny dreadful', 'penny' => 'penny',
+      'edh', 'commander' => 'commander',
+      'duel commander', 'duel' => 'duel',
+      'brawl', 'historic brawl' => 'brawl',
+      'standard brawl' => 'standardbrawl',
+      'pauper commander' => 'paupercommander',
+      'oathbreaker' => 'oathbreaker',
+      'predh' => 'predh',
+      'gladiator' => 'gladiator',
+      'old school', 'oldschool' => 'oldschool',
+      'tiny leader', 'tiny leaders', 'tinyleaders', 'tlr',
+      'tiny leaders reborn' => 'tlr',
+      default => '',
+    };
   }
 
   /**

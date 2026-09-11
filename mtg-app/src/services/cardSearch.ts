@@ -54,6 +54,7 @@ interface GqlSearchCard {
   isManaProducer: boolean;
   producedMana: string[];
   legalFormats: string[];
+  restrictedFormats: string[];
   priceUsd: string | null;
   priceUsdFoil: string | null;
   priceEur: string | null;
@@ -70,7 +71,7 @@ interface GqlSearchCard {
 const SEARCH_CARD_FIELDS = gql`
   fragment SearchCardFields on MtgCard {
     id title manaCost cmc typeLine colors colorIdentity
-    oracleText imageUri isManaProducer producedMana legalFormats
+    oracleText imageUri isManaProducer producedMana legalFormats restrictedFormats
     priceUsd priceUsdFoil priceEur priceEurFoil setCode setName rarity collectorNumber
     power toughness loyalty
   }

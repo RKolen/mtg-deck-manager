@@ -375,6 +375,224 @@ export function maxCopiesAllowed(
   return isSingletonFormat(format) ? 1 : 4;
 }
 
+/**
+ * Scryfall `legalities` key for a deck format label, or null when the
+ * format is community-only (Tiny Leaders, Canadian Highlander, etc.).
+ */
+export function scryfallFormatKey(
+  format: string | null | undefined,
+): string | null {
+  const normalized = normalizeFormat(format);
+  const mapped: Record<string, string> = {
+    standard: 'standard',
+    pioneer: 'pioneer',
+    modern: 'modern',
+    legacy: 'legacy',
+    vintage: 'vintage',
+    pauper: 'pauper',
+    historic: 'historic',
+    explorer: 'explorer',
+    timeless: 'timeless',
+    alchemy: 'alchemy',
+    premodern: 'premodern',
+    'penny dreadful': 'penny',
+    penny: 'penny',
+    edh: 'commander',
+    commander: 'commander',
+    'duel commander': 'duel',
+    duel: 'duel',
+    brawl: 'brawl',
+    'historic brawl': 'brawl',
+    'standard brawl': 'standardbrawl',
+    'pauper commander': 'paupercommander',
+    oathbreaker: 'oathbreaker',
+    predh: 'predh',
+    gladiator: 'gladiator',
+    'old school': 'oldschool',
+    oldschool: 'oldschool',
+    'tiny leader': 'tlr',
+    'tiny leaders': 'tlr',
+    tinyleaders: 'tlr',
+    tlr: 'tlr',
+    'tiny leaders reborn': 'tlr',
+  };
+  return mapped[normalized] ?? null;
+}
+
+export interface DeckLegalityCard {
+  title: string;
+  field_type_line?: string | null;
+  field_cmc?: number | null;
+  field_oracle_text?: unknown;
+  field_legal_formats?: string[] | null;
+  field_restricted_formats?: string[] | null;
+}
+
+export type DeckLegalityCode =
+  | 'size'
+  | 'copies'
+  | 'restricted'
+  | 'illegal'
+  | 'mana_value'
+  | 'commander';
+
+export interface DeckLegalityIssue {
+  code: DeckLegalityCode;
+  message: string;
+}
+
+export interface DeckLegality {
+  ok: boolean;
+  issues: DeckLegalityIssue[];
+}
+
+/**
+ * Copy limit including the restricted list (1) when Scryfall marks the
+ * card restricted in this format.
+ */
+export function maxCopiesForCard(
+  typeLine: string,
+  oracleText: string,
+  format: string | null | undefined,
+  restrictedFormats: string[] | null | undefined = null,
+): number {
+  const base = maxCopiesAllowed(typeLine, oracleText, format);
+  const key = scryfallFormatKey(format);
+  if (key != null && (restrictedFormats ?? []).includes(key)) {
+    return Math.min(base, 1);
+  }
+  return base;
+}
+
+function isPlayableInFormat(
+  card: DeckLegalityCard,
+  scryfallKey: string,
+): boolean {
+  const legal = card.field_legal_formats ?? [];
+  const restricted = card.field_restricted_formats ?? [];
+  return legal.includes(scryfallKey) || restricted.includes(scryfallKey);
+}
+
+/**
+ * Full constructed-legality check for the decks list badge and editor.
+ *
+ * Enforces: main-deck size, 4-of (or singleton) by oracle name across
+ * printings and main+sideboard, Vintage-style restricted list, Scryfall
+ * format legality (banned / not legal), Tiny Leaders mana-value, and a
+ * designated commander when the format requires one.
+ */
+export function evaluateDeckLegality(
+  format: string | null | undefined,
+  cards: DeckCardWithCard[],
+  commander: DeckLegalityCard | null | undefined = null,
+): DeckLegality {
+  const issues: DeckLegalityIssue[] = [];
+  const allowance = deckListAllowance(format);
+  const mainCount = totalCount(mainDeck(cards));
+  const nonRb = nonRulebreakerMainCount(cards);
+  const formatLabel = (format ?? '').trim() || 'this format';
+  const scryfallKey = scryfallFormatKey(format);
+
+  if (!isMainDeckSizeOk(format, mainCount, { nonRulebreakerCount: nonRb })) {
+    if (allowance.mainHardMax && nonRb > allowance.mainTarget) {
+      issues.push({
+        code: 'size',
+        message: `Main deck has ${mainCount} cards; ${formatLabel} allows at most ${allowance.mainTarget}.`,
+      });
+    }
+    else {
+      issues.push({
+        code: 'size',
+        message: `Main deck has ${mainCount} cards; ${formatLabel} needs ${allowance.mainTarget}.`,
+      });
+    }
+  }
+
+  if (usesCommanderCard(format) && commander == null) {
+    issues.push({
+      code: 'commander',
+      message: `Missing commander for ${formatLabel}.`,
+    });
+  }
+
+  const byName = new Map<string, { qty: number; card: DeckLegalityCard }>();
+  const addNamed = (card: DeckLegalityCard, qty: number) => {
+    const name = card.title.trim();
+    if (name === '') {
+      return;
+    }
+    const existing = byName.get(name);
+    if (existing) {
+      existing.qty += qty;
+      return;
+    }
+    byName.set(name, { qty, card });
+  };
+
+  for (const slot of cards) {
+    addNamed(slot.card, slot.quantity);
+  }
+  if (commander != null) {
+    addNamed(commander, 1);
+  }
+
+  for (const { qty, card } of byName.values()) {
+    const oracle = getOracleText(card);
+    const typeLine = card.field_type_line ?? '';
+    const max = maxCopiesForCard(
+      typeLine,
+      oracle,
+      format,
+      card.field_restricted_formats,
+    );
+    if (qty > max) {
+      const key = scryfallFormatKey(format);
+      const restricted =
+        key != null && (card.field_restricted_formats ?? []).includes(key);
+      issues.push({
+        code: restricted ? 'restricted' : 'copies',
+        message: restricted
+          ? `${qty} copies of ${card.title} (restricted to 1 in ${formatLabel}).`
+          : `${qty} copies of ${card.title} (max ${max}, main and sideboard combined).`,
+      });
+    }
+
+    if (
+      scryfallKey != null &&
+      !isPlayableInFormat(card, scryfallKey)
+    ) {
+      issues.push({
+        code: 'illegal',
+        message: `${card.title} is not legal in ${formatLabel}.`,
+      });
+    }
+  }
+
+  const mvSeen = new Set<string>();
+  const checkManaValue = (card: DeckLegalityCard) => {
+    if (isLegalManaValue(card.field_type_line ?? '', card.field_cmc, format)) {
+      return;
+    }
+    if (mvSeen.has(card.title)) {
+      return;
+    }
+    mvSeen.add(card.title);
+    issues.push({
+      code: 'mana_value',
+      message: `${card.title} has mana value ${card.field_cmc ?? 0}; ${formatLabel} allows at most ${allowance.maxManaValue}.`,
+    });
+  };
+
+  for (const slot of cards) {
+    checkManaValue(slot.card);
+  }
+  if (commander != null) {
+    checkManaValue(commander);
+  }
+
+  return { ok: issues.length === 0, issues };
+}
+
 // ---------------------------------------------------------------------------
 // Deck partitions
 // ---------------------------------------------------------------------------

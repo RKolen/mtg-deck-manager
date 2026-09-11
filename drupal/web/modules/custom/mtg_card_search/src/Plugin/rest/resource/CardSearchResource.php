@@ -375,6 +375,9 @@ final class CardSearchResource extends ResourceBase {
         'field_is_mana_producer' => (bool) ($node->get('field_is_mana_producer')->value ?? FALSE),
         'field_produced_mana' => array_column($node->get('field_produced_mana')->getValue(), 'value'),
         'field_legal_formats' => array_column($node->get('field_legal_formats')->getValue(), 'value'),
+        'field_restricted_formats' => $node->hasField('field_restricted_formats')
+          ? array_column($node->get('field_restricted_formats')->getValue(), 'value')
+          : [],
         'field_power' => $node->get('field_power')->value,
         'field_toughness' => $node->get('field_toughness')->value,
         'field_loyalty' => $node->get('field_loyalty')->value,

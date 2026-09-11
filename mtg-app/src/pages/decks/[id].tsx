@@ -92,7 +92,7 @@ import {
   totalManaSources,
   manaHandProbability,
   manaColoredCardRatio,
-  maxCopiesAllowed,
+  maxCopiesForCard,
   deckListAllowance,
   isMainDeckSizeOk,
   isLegalManaValue,
@@ -102,9 +102,11 @@ import {
   getOracleText,
   canAddToMain,
   nonRulebreakerMainCount,
+  evaluateDeckLegality,
   type MtgColor,
   groupDeckCardsByType,
 } from '../../utils/deckAnalysis';
+import { LegalityBadge } from '../../components/design/LegalityBadge';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -564,6 +566,20 @@ const DeckEditor: React.FC<EditorProps> = ({
   const illegalMvCount = cards.filter(
     dc => !isLegalManaValue(dc.card.field_type_line ?? '', dc.card.field_cmc, format),
   ).length;
+  const legality = evaluateDeckLegality(format, cards, commander ?? null);
+  const copiesByName = new Map<string, number>();
+  for (const slot of cards) {
+    copiesByName.set(
+      slot.card.title,
+      (copiesByName.get(slot.card.title) ?? 0) + slot.quantity,
+    );
+  }
+  if (commander != null) {
+    copiesByName.set(
+      commander.title,
+      (copiesByName.get(commander.title) ?? 0) + 1,
+    );
+  }
 
   function renderTypeGroups(
     list: DeckCardWithCard[],
@@ -607,12 +623,14 @@ const DeckEditor: React.FC<EditorProps> = ({
 
   function renderRow(dc: DeckCardWithCard): React.ReactNode {
     const oracleText = getOracleText(dc.card);
-    const maxCopies = maxCopiesAllowed(
+    const maxCopies = maxCopiesForCard(
       dc.card.field_type_line ?? '',
       oracleText,
       format,
+      dc.card.field_restricted_formats,
     );
-    const atMax = dc.quantity >= maxCopies;
+    const namedQty = copiesByName.get(dc.card.title) ?? dc.quantity;
+    const atMax = namedQty >= maxCopies;
     const sizeBlocked =
       !dc.isSideboard && !canAddToMain(format, nonRbMain, oracleText);
     const moveBlocked =
@@ -823,7 +841,23 @@ const DeckEditor: React.FC<EditorProps> = ({
             </span>
           </>
         )}
+        <LegalityBadge legality={legality} />
       </p>
+      {legality.issues.length > 0 && (
+        <ul
+          style={{
+            margin: '0 0 0.75rem',
+            paddingLeft: 18,
+            color: 'var(--neg)',
+            fontSize: '0.85rem',
+            lineHeight: 1.45,
+          }}
+        >
+          {legality.issues.map(issue => (
+            <li key={`${issue.code}-${issue.message}`}>{issue.message}</li>
+          ))}
+        </ul>
+      )}
 
       {/* Search */}
       <div style={{ display: 'flex', gap: 8, marginBottom: '1rem' }}>

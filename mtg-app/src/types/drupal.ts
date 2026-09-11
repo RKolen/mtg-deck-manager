@@ -51,6 +51,7 @@ export interface MtgCardAttributes {
   field_is_mana_producer: boolean;
   field_produced_mana: string[];
   field_legal_formats: string[];
+  field_restricted_formats: string[];
   field_power: string | null;
   field_toughness: string | null;
   field_loyalty: string | null;
@@ -77,6 +78,8 @@ export interface DeckCommander {
   field_color_identity: string[];
   field_oracle_text: string;
   field_image_uri: string;
+  field_legal_formats?: string[];
+  field_restricted_formats?: string[];
   field_set_code: string;
   field_set_name: string;
   field_collector_number: string;

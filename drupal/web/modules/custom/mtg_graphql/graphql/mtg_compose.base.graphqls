@@ -30,6 +30,7 @@ type MtgCard {
   isManaProducer: Boolean!
   producedMana: [String!]!
   legalFormats: [String!]!
+  restrictedFormats: [String!]!
   priceUsd: String
   priceUsdFoil: String
   priceEur: String

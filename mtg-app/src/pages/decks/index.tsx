@@ -19,12 +19,18 @@ import { useTheme } from '../../context/ThemeContext';
 import { ColorIdStrip, ManaCost } from '../../components/design/Mana';
 import { Panel, Stat } from '../../components/design/Panel';
 import { HoverPreview } from '../../components/design/HoverPreview';
+import { LegalityBadge } from '../../components/design/LegalityBadge';
 import {
   formatPriceInt,
   priceSourceLabel,
   totalDeckPrice,
 } from '../../utils/prices';
-import { isMainDeckSizeOk, nonRulebreakerMainCount } from '../../utils/deckAnalysis';
+import {
+  isMainDeckSizeOk,
+  nonRulebreakerMainCount,
+  evaluateDeckLegality,
+  type DeckLegality,
+} from '../../utils/deckAnalysis';
 
 function formatChanged(ts: number | null | undefined): string {
   if (ts == null) return '--';
@@ -319,6 +325,13 @@ const DecksPage: React.FC = () => {
                   isMainDeckSizeOk(d.attributes.field_format, md, {
                     nonRulebreakerCount: nonRulebreakerMainCount(cards ?? []),
                   });
+                const legality = cards
+                  ? evaluateDeckLegality(
+                      d.attributes.field_format,
+                      cards,
+                      d.attributes.field_commander ?? null,
+                    )
+                  : null;
                 return (
                   <tr
                     key={d.id}
@@ -338,6 +351,7 @@ const DecksPage: React.FC = () => {
                     <td>
                       <div style={{ fontWeight: 600, color: 'var(--ink)' }}>
                         {d.attributes.title}
+                        <LegalityBadge legality={legality} />
                       </div>
                     </td>
                     <td className="dim">{d.attributes.field_format}</td>
@@ -426,6 +440,15 @@ const DecksPage: React.FC = () => {
             cards={selectedCards}
             manaSymbolStyle={manaSymbolStyle}
             currency={currency}
+            legality={
+              cardsByDeckId.has(selected.id)
+                ? evaluateDeckLegality(
+                    selected.attributes.field_format,
+                    selectedCards,
+                    selected.attributes.field_commander ?? null,
+                  )
+                : null
+            }
             onHover={(name, imageUri, e) =>
               setHover({ name, imageUri, x: e.clientX, y: e.clientY })
             }
@@ -549,6 +572,7 @@ function DeckPreview({
   cards,
   manaSymbolStyle,
   currency,
+  legality,
   onHover,
   onClearHover,
 }: {
@@ -556,6 +580,7 @@ function DeckPreview({
   cards: DeckCardWithCard[];
   manaSymbolStyle: 'letter' | 'dot' | 'wedge' | 'sq';
   currency: 'USD' | 'EUR';
+  legality: DeckLegality | null;
   onHover: (name: string, imageUri: string | null, e: React.MouseEvent) => void;
   onClearHover: () => void;
 }) {
@@ -573,6 +598,7 @@ function DeckPreview({
       </div>
       <div className="sans" style={{ fontSize: 18, fontWeight: 700, marginBottom: 2 }}>
         {deck.attributes.title}
+        <LegalityBadge legality={legality} />
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
         <ColorIdStrip colors={colors} manaSymbolStyle={manaSymbolStyle} />
@@ -580,6 +606,22 @@ function DeckPreview({
           {deck.attributes.field_format}
         </span>
       </div>
+      {legality != null && !legality.ok && (
+        <ul
+          className="mono"
+          style={{
+            margin: '0 0 12px',
+            paddingLeft: 16,
+            fontSize: 11,
+            color: 'var(--neg)',
+            lineHeight: 1.5,
+          }}
+        >
+          {legality.issues.map(issue => (
+            <li key={`${issue.code}-${issue.message}`}>{issue.message}</li>
+          ))}
+        </ul>
+      )}
       <div className="mono uc dim" style={{ fontSize: 9, marginBottom: 4 }}>
         KEY CARDS
       </div>

@@ -50,6 +50,8 @@ field_config:
         enabled: true
       field_legal_formats:
         enabled: true
+      field_restricted_formats:
+        enabled: true
       field_price_usd:
         enabled: true
       field_price_usd_foil:

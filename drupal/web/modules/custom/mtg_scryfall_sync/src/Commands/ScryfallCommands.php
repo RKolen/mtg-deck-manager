@@ -272,4 +272,36 @@ class ScryfallCommands extends DrushCommands {
     ));
   }
 
+  /**
+   * Backfills legal and restricted formats from the local bulk file.
+   *
+   * Restricted cards become playable in field_legal_formats and listed in
+   * field_restricted_formats so Vintage-style one-copy rules can be enforced.
+   *
+   * @command mtg:backfill-legalities
+   * @aliases mtg-legal
+   * @usage ddev drush mtg:backfill-legalities
+   */
+  public function backfillLegalities(): void {
+    if (!$this->importer->dataFileExists()) {
+      $this->logger()->error('No data file found. Run mtg:scryfall-download first.');
+      return;
+    }
+
+    $this->output()->writeln('Backfilling legal and restricted formats from the local Scryfall file...');
+    try {
+      $result = $this->importer->backfillLegalities();
+    }
+    catch (\RuntimeException $e) {
+      $this->logger()->error('Backfill failed: @msg', ['@msg' => $e->getMessage()]);
+      return;
+    }
+
+    $this->output()->writeln(sprintf(
+      'Legality backfill complete: %d cards written, %d bulk rows unmatched.',
+      $result['updated'],
+      $result['skipped'],
+    ));
+  }
+
 }

@@ -93,20 +93,11 @@ final class MtgGraphqlResolverRegistration {
           return NULL;
         }
 
-        // Build a tight LIKE from every slug segment so common prefixes
-        // like "The%" (1400+ cards) do not truncate the candidate set
-        // before a match. Possessive first segments ("jaces") drop the
-        // trailing s to match "Jace's".
-        $likeParts = [];
-        foreach ($parts as $i => $part) {
-          if ($i === 0 && str_ends_with($part, 's') && strlen($part) > 2) {
-            $likeParts[] = ucfirst(substr($part, 0, -1));
-          }
-          else {
-            $likeParts[] = ucfirst($part);
-          }
-        }
-        $search = implode('%', $likeParts);
+        // Tight LIKE from every segment so prefixes like "The%" (1400+
+        // cards) do not fill the candidate window before a match.
+        // Trailing "s" is dropped on every part so possessives resolve:
+        // "jaces" -> "Jace's", "suns" -> "Sun's" in White Sun's Zenith.
+        $search = self::slugLikePattern($parts);
 
         $storage = \Drupal::entityTypeManager()->getStorage('node');
         $ids = \Drupal::entityQuery('node')
@@ -528,10 +519,14 @@ final class MtgGraphqlResolverRegistration {
       'colorIdentity' => 'field_color_identity',
       'producedMana'  => 'field_produced_mana',
       'legalFormats'  => 'field_legal_formats',
+      'restrictedFormats' => 'field_restricted_formats',
     ];
     foreach ($multiValueFields as $gql => $drupal) {
       $registry->addFieldResolver('MtgCard', $gql,
         $builder->callback(function ($node) use ($drupal): array {
+          if (!$node->hasField($drupal)) {
+            return [];
+          }
           $out = [];
           foreach ($node->get($drupal) as $item) {
             $out[] = $item->value;
@@ -1153,6 +1148,32 @@ final class MtgGraphqlResolverRegistration {
       ));
     }
     return (int) $term->id();
+  }
+
+  /**
+   * Builds a LIKE prefix from URL slug segments.
+   *
+   * A trailing "s" is dropped on every segment so possessives in any
+   * word still match the stored title ("white-suns-zenith" ->
+   * "White%Sun%Zenith", matching "White Sun's Zenith").
+   *
+   * @param list<string> $parts
+   *   Non-empty slug segments.
+   *
+   * @return string
+   *   LIKE prefix without the trailing wildcard.
+   */
+  public static function slugLikePattern(array $parts): string {
+    $like_parts = [];
+    foreach ($parts as $part) {
+      if (str_ends_with($part, 's') && strlen($part) > 2) {
+        $like_parts[] = ucfirst(substr($part, 0, -1));
+      }
+      else {
+        $like_parts[] = ucfirst($part);
+      }
+    }
+    return implode('%', $like_parts);
   }
 
   /**
