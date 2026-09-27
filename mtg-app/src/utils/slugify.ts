@@ -2,6 +2,7 @@
  * Converts a card or deck title into a URL-safe slug.
  *
  * Rules:
+ *  - Strip diacritics (NFD) so "Lim-Dûl's" -> "lim-duls", not "lim-d-ls".
  *  - Lowercase everything.
  *  - Strip apostrophes and curly-quote variants so possessives collapse
  *    cleanly (e.g. "Jace's" -> "jaces").
@@ -10,8 +11,10 @@
  */
 export function slugify(title: string): string {
   return title
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
-    .replace(/[''`]/g, '')
+    .replace(/[''`\u2019\u2018]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
 }

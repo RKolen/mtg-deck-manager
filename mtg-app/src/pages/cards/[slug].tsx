@@ -51,8 +51,18 @@ const CardPage: React.FC = () => {
   const [printingFilter, setPrintingFilter] = useState(EMPTY_PRINTING_FILTER);
 
   const { data: card, isLoading, isError } = useQuery({
-    queryKey: ['card', slug],
-    queryFn: () => fetchCardBySlug(slug),
+    queryKey: ['card', slug, highlightId],
+    queryFn: async () => {
+      const bySlug = await fetchCardBySlug(slug);
+      if (bySlug != null) {
+        return bySlug;
+      }
+      // Accented names used to slug as lim-d-ls-vault; printing UUID still works.
+      if (highlightId !== '') {
+        return fetchCardBySlug(highlightId);
+      }
+      return null;
+    },
     enabled: router.isReady && slug !== '',
     staleTime: 5 * 60_000,
   });

@@ -87,31 +87,51 @@ final class MtgGraphqlResolverRegistration {
 
     $registry->addFieldResolver('Query', 'card',
       $builder->callback(function ($value, array $args): ?NodeInterface {
-        $slug = $args['slug'];
+        $slug = (string) $args['slug'];
+        $storage = \Drupal::entityTypeManager()->getStorage('node');
+
+        // Allow lookup by printing UUID (used when slug resolution fails).
+        if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $slug) === 1) {
+          $nodes = $storage->loadByProperties([
+            'type' => 'mtg_card',
+            'uuid' => $slug,
+            'status' => 1,
+          ]);
+          $node = reset($nodes);
+          return $node instanceof NodeInterface ? $node : NULL;
+        }
+
         $parts = array_values(array_filter(explode('-', $slug), static fn(string $p): bool => $p !== ''));
         if ($parts === []) {
           return NULL;
         }
 
-        // Tight LIKE from every segment so prefixes like "The%" (1400+
-        // cards) do not fill the candidate window before a match.
-        // Trailing "s" is dropped on every part so possessives resolve:
-        // "jaces" -> "Jace's", "suns" -> "Sun's" in White Sun's Zenith.
-        $search = self::slugLikePattern($parts);
+        // Try tight LIKE first, then first+last (diacritics / split segments),
+        // then first-segment only with a wider window.
+        $patterns = [self::slugLikePattern($parts)];
+        if (count($parts) >= 3) {
+          $patterns[] = self::slugLikePattern([
+            $parts[0],
+            $parts[count($parts) - 1],
+          ]);
+        }
+        $patterns[] = ucfirst($parts[0]);
 
-        $storage = \Drupal::entityTypeManager()->getStorage('node');
-        $ids = \Drupal::entityQuery('node')
-          ->condition('type', 'mtg_card')
-          ->condition('status', 1)
-          ->condition('title', $search . '%', 'LIKE')
-          ->accessCheck(FALSE)
-          ->sort('nid', 'DESC')
-          ->range(0, 50)
-          ->execute();
+        foreach ($patterns as $index => $search) {
+          $limit = $index === array_key_last($patterns) ? 200 : 50;
+          $ids = \Drupal::entityQuery('node')
+            ->condition('type', 'mtg_card')
+            ->condition('status', 1)
+            ->condition('title', $search . '%', 'LIKE')
+            ->accessCheck(FALSE)
+            ->sort('nid', 'DESC')
+            ->range(0, $limit)
+            ->execute();
 
-        foreach ($storage->loadMultiple($ids) as $node) {
-          if (self::slugify($node->getTitle()) === $slug) {
-            return $node;
+          foreach ($storage->loadMultiple($ids) as $node) {
+            if (self::slugify($node->getTitle()) === $slug) {
+              return $node;
+            }
           }
         }
         return NULL;
@@ -1180,9 +1200,18 @@ final class MtgGraphqlResolverRegistration {
    * Mirrors the JS slugify() in mtg-app/src/utils/slugify.ts.
    */
   public static function slugify(string $title): string {
-    $lower    = mb_strtolower($title, 'UTF-8');
+    $lower = mb_strtolower($title, 'UTF-8');
+    if (class_exists(\Normalizer::class)) {
+      $normalized = \Normalizer::normalize($lower, \Normalizer::FORM_D);
+      if (is_string($normalized)) {
+        $folded = preg_replace('/\p{Mn}/u', '', $normalized);
+        if (is_string($folded)) {
+          $lower = $folded;
+        }
+      }
+    }
     $stripped = preg_replace("/['\x{2019}\x{2018}`]/u", '', $lower);
-    $dashed   = preg_replace('/[^a-z0-9]+/', '-', $stripped ?? '');
+    $dashed = preg_replace('/[^a-z0-9]+/', '-', $stripped ?? '');
     return trim($dashed ?? '', '-');
   }
 
