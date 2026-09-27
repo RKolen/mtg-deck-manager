@@ -7,7 +7,7 @@
  * Route: /decks/:id  (Next.js dynamic route via [id].tsx)
  */
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -195,27 +195,110 @@ function titleMatchRank(title: string, needle: string): number {
   return 2;
 }
 
-function applyOwnership(
-  currentOwned: number,
-  currentFoil: number,
-  own: boolean,
-  quantity: number,
-  foil: boolean,
-): OwnedCounts {
-  let nextOwned = currentOwned;
-  let nextFoil = currentFoil;
-  if (own) {
-    if (foil) {
-      nextFoil = Math.max(nextFoil, quantity);
-    } else {
-      nextOwned = Math.max(nextOwned, quantity);
+const ownedQtyInputStyle: React.CSSProperties = {
+  width: 48,
+  textAlign: 'center',
+  padding: '2px 4px',
+  color: 'var(--ink)',
+  background: 'var(--bg)',
+  border: '1px solid var(--line)',
+};
+
+function OwnedAmountControl({
+  cardId,
+  cardName,
+  ownedQty,
+  foil,
+  onCommit,
+}: {
+  cardId: string;
+  cardName: string;
+  ownedQty: number;
+  foil: boolean;
+  onCommit: (
+    cardId: string,
+    cardName: string,
+    quantity: number,
+    foil: boolean,
+  ) => void;
+}): React.ReactElement {
+  const [text, setText] = useState(String(ownedQty));
+  const focused = useRef(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const metaRef = useRef({ cardId, cardName, ownedQty, foil });
+  metaRef.current = { cardId, cardName, ownedQty, foil };
+
+  useEffect(() => {
+    if (debounceRef.current != null) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
     }
-  } else if (foil) {
-    nextFoil = 0;
-  } else {
-    nextOwned = 0;
+    setText(String(ownedQty));
+    focused.current = false;
+  }, [cardId, foil]);
+
+  useEffect(() => {
+    if (!focused.current) {
+      setText(String(ownedQty));
+    }
+  }, [ownedQty]);
+
+  function commit(raw: string): void {
+    const next = Math.max(0, Number.parseInt(raw, 10) || 0);
+    setText(String(next));
+    const meta = metaRef.current;
+    if (next !== meta.ownedQty) {
+      onCommit(meta.cardId, meta.cardName, next, meta.foil);
+    }
   }
-  return { owned: nextOwned, foil: nextFoil };
+
+  return (
+    <label
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        margin: '0.35rem 0 0',
+        fontSize: 13,
+      }}
+    >
+      <span>In collection{foil ? ' (foil)' : ''}</span>
+      <input
+        type="number"
+        min={0}
+        value={text}
+        onFocus={() => {
+          focused.current = true;
+        }}
+        onBlur={() => {
+          focused.current = false;
+          if (debounceRef.current != null) {
+            clearTimeout(debounceRef.current);
+            debounceRef.current = null;
+          }
+          commit(text);
+        }}
+        onChange={e => {
+          const value = e.target.value;
+          setText(value);
+          if (debounceRef.current != null) {
+            clearTimeout(debounceRef.current);
+          }
+          debounceRef.current = setTimeout(() => {
+            debounceRef.current = null;
+            commit(value);
+          }, 400);
+        }}
+        onKeyDown={e => {
+          if (e.key === 'Enter') {
+            (e.target as HTMLInputElement).blur();
+          }
+        }}
+        style={ownedQtyInputStyle}
+        aria-label="Collection owned amount"
+      />
+    </label>
+  );
 }
 
 function FoilToggle({
@@ -290,7 +373,7 @@ const DeckEditor: React.FC<EditorProps> = ({
   const [searching, setSearching] = useState(false);
   const [printingFilter, setPrintingFilter] = useState(EMPTY_PRINTING_FILTER);
   const lastSearchName = useRef('');
-  const [addAsOwned, setAddAsOwned] = useState(false);
+  const [addOwnedAmount, setAddOwnedAmount] = useState('');
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const qc = useQueryClient();
 
@@ -321,53 +404,46 @@ const DeckEditor: React.FC<EditorProps> = ({
     return collectionCards.find(cc => collectionPrintingId(cc) === cardId);
   }
 
-  async function writeCollectionOwnership(
+  function patchCollectionOwned(
+    list: CollectionCard[],
     cardId: string,
     cardName: string,
-    own: boolean,
-    quantity: number,
-    foil: boolean,
-  ): Promise<void> {
-    const existing = collectionEntry(cardId);
-    const next = applyOwnership(
-      existing?.attributes.field_quantity_owned ?? 0,
-      existing?.attributes.field_quantity_foil ?? 0,
-      own,
-      quantity,
-      foil,
-    );
-    const nextOwned = next.owned;
-    const nextFoil = next.foil;
-    await upsertCollectionCard(
-      cardId,
-      cardName,
-      nextOwned,
-      nextFoil,
-      existing?.id,
-    );
-  }
-
-  async function addCollectionCopies(
-    cardId: string,
-    cardName: string,
-    quantity: number,
-    foil: boolean,
-  ): Promise<void> {
-    const existing = collectionEntry(cardId);
-    let nextOwned = existing?.attributes.field_quantity_owned ?? 0;
-    let nextFoil = existing?.attributes.field_quantity_foil ?? 0;
-    if (foil) {
-      nextFoil += quantity;
-    } else {
-      nextOwned += quantity;
+    quantityOwned: number,
+    quantityFoil: number,
+    existingId?: string,
+  ): CollectionCard[] {
+    const idx = list.findIndex(cc => collectionPrintingId(cc) === cardId);
+    if (idx < 0) {
+      return [
+        ...list,
+        {
+          id: existingId ?? `optimistic-${cardId}`,
+          type: 'node--collection_card',
+          attributes: {
+            field_quantity_owned: quantityOwned,
+            field_quantity_foil: quantityFoil,
+            field_card_title: cardName,
+          },
+          relationships: {
+            field_card: {
+              data: { id: cardId, type: 'node--mtg_card' },
+            },
+          },
+        },
+      ];
     }
-    await upsertCollectionCard(
-      cardId,
-      cardName,
-      nextOwned,
-      nextFoil,
-      existing?.id,
-    );
+    const prev = list[idx]!;
+    const next = [...list];
+    next[idx] = {
+      ...prev,
+      id: existingId ?? prev.id,
+      attributes: {
+        ...prev.attributes,
+        field_quantity_owned: quantityOwned,
+        field_quantity_foil: quantityFoil,
+      },
+    };
+    return next;
   }
 
   const updateQty = useMutation({
@@ -408,20 +484,92 @@ const DeckEditor: React.FC<EditorProps> = ({
     mutationFn: ({
       cardId,
       cardName,
-      own,
-      quantity,
-      foil,
+      quantityOwned,
+      quantityFoil,
+      existingId,
     }: {
       cardId: string;
       cardName: string;
-      own: boolean;
-      quantity: number;
-      foil: boolean;
-    }) => writeCollectionOwnership(cardId, cardName, own, quantity, foil),
-    onSuccess: () => {
-      void invalidateInventoryQueries(qc, { deckId });
+      quantityOwned: number;
+      quantityFoil: number;
+      existingId?: string;
+    }) =>
+      upsertCollectionCard(
+        cardId,
+        cardName,
+        quantityOwned,
+        quantityFoil,
+        existingId,
+      ),
+    onMutate: async ({
+      cardId,
+      cardName,
+      quantityOwned,
+      quantityFoil,
+      existingId,
+    }) => {
+      await qc.cancelQueries({ queryKey: ['collectionCards'] });
+      const prev = qc.getQueryData<CollectionCard[]>(['collectionCards']);
+      qc.setQueryData<CollectionCard[]>(['collectionCards'], old =>
+        patchCollectionOwned(
+          old ?? [],
+          cardId,
+          cardName,
+          quantityOwned,
+          quantityFoil,
+          existingId,
+        ),
+      );
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev != null) {
+        qc.setQueryData(['collectionCards'], ctx.prev);
+      }
+    },
+    onSuccess: (saved, { cardId, cardName, quantityOwned, quantityFoil }) => {
+      qc.setQueryData<CollectionCard[]>(['collectionCards'], old => {
+        const withoutTemp = (old ?? []).filter(
+          cc =>
+            !(
+              cc.id.startsWith('optimistic-')
+              && collectionPrintingId(cc) === cardId
+            ),
+        );
+        return patchCollectionOwned(
+          withoutTemp,
+          cardId,
+          cardName,
+          quantityOwned,
+          quantityFoil,
+          saved.id,
+        );
+      });
+      void qc.invalidateQueries({ queryKey: ['collectionValue'] });
     },
   });
+
+  function commitOwnedAmount(
+    cardId: string,
+    cardName: string,
+    quantity: number,
+    foil: boolean,
+  ): void {
+    const qty = Math.max(0, Number(quantity) || 0);
+    const counts = ownedByCardId.get(cardId);
+    const existing = collectionEntry(cardId);
+    const existingId =
+      existing?.id != null && !existing.id.startsWith('optimistic-')
+        ? existing.id
+        : undefined;
+    setOwned.mutate({
+      cardId,
+      cardName,
+      quantityOwned: foil ? (counts?.owned ?? 0) : qty,
+      quantityFoil: foil ? qty : (counts?.foil ?? 0),
+      existingId,
+    });
+  }
 
   const addCard = useMutation({
     mutationFn: async ({
@@ -436,8 +584,23 @@ const DeckEditor: React.FC<EditorProps> = ({
       foil?: boolean;
     }) => {
       await addCardToDeck(deckId, cardId, isSideboard, cards, cardName, foil);
-      if (addAsOwned) {
-        await addCollectionCopies(cardId, cardName, 1, foil ?? deckIsFoil);
+      const ownedRaw = addOwnedAmount.trim();
+      if (ownedRaw !== '') {
+        const ownedQty = Math.max(0, Number.parseInt(ownedRaw, 10) || 0);
+        const finishFoil = foil ?? deckIsFoil;
+        const counts = ownedByCardId.get(cardId);
+        const existing = collectionEntry(cardId);
+        const existingId =
+          existing?.id != null && !existing.id.startsWith('optimistic-')
+            ? existing.id
+            : undefined;
+        await upsertCollectionCard(
+          cardId,
+          cardName,
+          finishFoil ? (counts?.owned ?? 0) : ownedQty,
+          finishFoil ? ownedQty : (counts?.foil ?? 0),
+          existingId,
+        );
       }
     },
     onSuccess: () => {
@@ -886,15 +1049,22 @@ const DeckEditor: React.FC<EditorProps> = ({
               gap: 8,
               margin: '0 0 0.5rem',
               fontSize: 13,
-              cursor: 'pointer',
             }}
           >
+            <span>In collection</span>
             <input
-              type="checkbox"
-              checked={addAsOwned}
-              onChange={e => setAddAsOwned(e.target.checked)}
+              type="number"
+              min={0}
+              value={addOwnedAmount}
+              placeholder="amount"
+              onChange={e => setAddOwnedAmount(e.target.value)}
+              style={ownedQtyInputStyle}
+              aria-label="Collection owned amount"
+              title="Sets how many you own of this printing. Leave blank to leave collection unchanged. Independent of deck copies."
             />
-            I own this (add to collection)
+            <span style={{ opacity: 0.65, fontSize: 12 }}>
+              (blank = leave collection unchanged)
+            </span>
           </label>
         <ul
           style={{
@@ -1176,32 +1346,13 @@ const DeckEditor: React.FC<EditorProps> = ({
                     onToggle={() => setCommanderFoil.mutate(!commanderFoil)}
                   />
                 </div>
-                <label
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    margin: '0.35rem 0 0',
-                    fontSize: 13,
-                    cursor: 'pointer',
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={ownedForFinish(ownedByCardId.get(commander.id), commanderFoil) > 0}
-                    disabled={setOwned.isPending}
-                    onChange={e =>
-                      setOwned.mutate({
-                        cardId: commander.id,
-                        cardName: commander.title,
-                        own: e.target.checked,
-                        quantity: 1,
-                        foil: commanderFoil,
-                      })
-                    }
-                  />
-                  I own this{commanderFoil ? ' (foil)' : ''}
-                </label>
+                <OwnedAmountControl
+                  cardId={commander.id}
+                  cardName={commander.title}
+                  ownedQty={ownedForFinish(ownedByCardId.get(commander.id), commanderFoil)}
+                  foil={commanderFoil}
+                  onCommit={commitOwnedAmount}
+                />
                 <p style={{ margin: '0.5rem 0 0', fontSize: 12 }}>
                   <Link
                     href={cardPrintingsPath(commander.title, {
@@ -1296,32 +1447,16 @@ const DeckEditor: React.FC<EditorProps> = ({
                 }
               />
             </div>
-            <label
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                margin: '0.35rem 0 0',
-                fontSize: 13,
-                cursor: 'pointer',
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={ownedForFinish(ownedByCardId.get(selectedSlot.card.id), selectedSlot.isFoil) > 0}
-                disabled={setOwned.isPending}
-                onChange={e =>
-                  setOwned.mutate({
-                    cardId: selectedSlot.card.id,
-                    cardName: selectedSlot.card.title,
-                    own: e.target.checked,
-                    quantity: selectedSlot.quantity,
-                    foil: selectedSlot.isFoil,
-                  })
-                }
-              />
-              I own this{selectedSlot.isFoil ? ' (foil)' : ''}
-            </label>
+            <OwnedAmountControl
+              cardId={selectedSlot.card.id}
+              cardName={selectedSlot.card.title}
+              ownedQty={ownedForFinish(
+                ownedByCardId.get(selectedSlot.card.id),
+                selectedSlot.isFoil,
+              )}
+              foil={selectedSlot.isFoil}
+              onCommit={commitOwnedAmount}
+            />
             <p style={{ margin: '0.5rem 0 0', fontSize: 12 }}>
               <Link
                 href={cardPrintingsPath(selectedSlot.card.title, {
