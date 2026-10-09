@@ -16,3 +16,11 @@ services:
       - '@database'
       - '@cache.entity'
       - '@cache_tags.invalidator'
+
+  mtg_scryfall_sync.exchange_rate:
+    class: Drupal\mtg_scryfall_sync\Service\ExchangeRate
+    arguments:
+      - '@http_client'
+      - '@state'
+      - '@datetime.time'
+      - '@logger.factory'

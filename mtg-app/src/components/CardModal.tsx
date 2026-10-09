@@ -2,6 +2,8 @@ import React, { useEffect } from 'react';
 import Link from 'next/link';
 import { getOracleText } from '../utils/deckAnalysis';
 import { slugify } from '../utils/slugify';
+import { formatPrice, priceFor } from '../utils/prices';
+import { useTheme } from '../context/ThemeContext';
 
 export interface CardData {
   id: string;
@@ -21,6 +23,8 @@ export interface CardData {
   // Phase 9
   field_price_usd?: string | null;
   field_price_usd_foil?: string | null;
+  field_price_eur?: string | null;
+  field_price_eur_foil?: string | null;
   field_set_name?: string | null;
   field_rarity?: string | null;
 }
@@ -61,6 +65,15 @@ const CardModal: React.FC<CardModalProps> = ({
 
   const oracleText = getOracleText(card);
   const total = quantityOwned + quantityFoil;
+  const { currency } = useTheme();
+  const priced = {
+    field_price_usd: card.field_price_usd ?? null,
+    field_price_usd_foil: card.field_price_usd_foil ?? null,
+    field_price_eur: card.field_price_eur ?? null,
+    field_price_eur_foil: card.field_price_eur_foil ?? null,
+  };
+  const regularPrice = priceFor(priced, currency);
+  const foilPrice = priceFor(priced, currency, true);
 
   return (
     <div
@@ -182,11 +195,11 @@ const CardModal: React.FC<CardModalProps> = ({
             </p>
           )}
 
-          {(card.field_price_usd || card.field_price_usd_foil) && (
+          {(regularPrice != null || foilPrice != null) && (
             <p style={{ margin: '0.25rem 0', fontSize: '0.85rem', color: 'var(--ink)' }}>
-              {card.field_price_usd && <><strong>USD:</strong> ${card.field_price_usd}</>}
-              {card.field_price_usd && card.field_price_usd_foil && ' · '}
-              {card.field_price_usd_foil && <><strong>Foil:</strong> ${card.field_price_usd_foil}</>}
+              {regularPrice != null && <><strong>{currency}:</strong> {formatPrice(regularPrice, currency)}</>}
+              {regularPrice != null && foilPrice != null && ' · '}
+              {foilPrice != null && <><strong>Foil:</strong> {formatPrice(foilPrice, currency)}</>}
             </p>
           )}
 

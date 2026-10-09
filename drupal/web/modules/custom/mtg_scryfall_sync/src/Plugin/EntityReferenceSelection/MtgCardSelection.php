@@ -74,11 +74,6 @@ final class MtgCardSelection extends NodeSelection {
     $cn = $card->hasField('field_collector_number')
       ? trim((string) ($card->get('field_collector_number')->value ?? ''))
       : '';
-    $usd = $card->hasField('field_price_usd') ? $card->get('field_price_usd')->value : NULL;
-    $eur = $card->hasField('field_price_eur') ? $card->get('field_price_eur')->value : NULL;
-    $usdFoil = $card->hasField('field_price_usd_foil') ? $card->get('field_price_usd_foil')->value : NULL;
-    $eurFoil = $card->hasField('field_price_eur_foil') ? $card->get('field_price_eur_foil')->value : NULL;
-
     $parts = [$name];
     $meta = [];
     if ($set !== '') {
@@ -94,21 +89,16 @@ final class MtgCardSelection extends NodeSelection {
     elseif ($setName !== '') {
       $meta[] = $setName . ($cn !== '' ? ' #' . $cn : '');
     }
-    if ($usd !== NULL && $usd !== '') {
-      $meta[] = '$' . number_format((float) $usd, 2);
+    // "~" marks a price converted from USD because there is no EUR one.
+    [$eur, $eurEstimated] = self::eurPrice($card, FALSE);
+    [$eurFoil, $foilEstimated] = self::eurPrice($card, TRUE);
+    if ($eur !== NULL) {
+      $meta[] = ($eurEstimated ? '~' : '') . '€' . number_format($eur, 2);
     }
-    if ($eur !== NULL && $eur !== '') {
-      $meta[] = '€' . number_format((float) $eur, 2);
+    if ($eurFoil !== NULL) {
+      $meta[] = 'foil ' . ($foilEstimated ? '~' : '') . '€' . number_format($eurFoil, 2);
     }
-    if ($usdFoil !== NULL && $usdFoil !== '') {
-      $meta[] = 'foil $' . number_format((float) $usdFoil, 2);
-    }
-    if ($eurFoil !== NULL && $eurFoil !== '') {
-      $meta[] = 'foil €' . number_format((float) $eurFoil, 2);
-    }
-    $hasNonFoil = ($usd !== NULL && $usd !== '') || ($eur !== NULL && $eur !== '');
-    $hasFoil = ($usdFoil !== NULL && $usdFoil !== '') || ($eurFoil !== NULL && $eurFoil !== '');
-    if (!$hasNonFoil && !$hasFoil) {
+    if ($eur === NULL && $eurFoil === NULL) {
       $meta[] = 'no price';
     }
 
@@ -120,18 +110,37 @@ final class MtgCardSelection extends NodeSelection {
   }
 
   /**
-   * Highest available non-foil price for sorting.
+   * Non-foil EUR price for sorting, 0 when there is none.
    */
   private static function bestPrice(mixed $node): float {
     if (!$node instanceof NodeInterface || $node->bundle() !== 'mtg_card') {
       return 0.0;
     }
-    if (!$node->hasField('field_price_usd') || !$node->hasField('field_price_eur')) {
-      return 0.0;
+    return self::eurPrice($node, FALSE)[0] ?? 0.0;
+  }
+
+  /**
+   * EUR price of one finish, converted from USD when no EUR price exists.
+   *
+   * @param \Drupal\node\NodeInterface $card
+   *   The mtg_card printing.
+   * @param bool $foil
+   *   TRUE for the foil finish.
+   *
+   * @return array{0: float|null, 1: bool}
+   *   The price (NULL when unpriced) and whether it was converted from USD.
+   */
+  private static function eurPrice(NodeInterface $card, bool $foil): array {
+    $suffix = $foil ? '_foil' : '';
+    $eur = $card->hasField("field_price_eur$suffix") ? (float) ($card->get("field_price_eur$suffix")->value ?? 0) : 0.0;
+    if ($eur > 0) {
+      return [$eur, FALSE];
     }
-    $usd = (float) ($node->get('field_price_usd')->value ?? 0);
-    $eur = (float) ($node->get('field_price_eur')->value ?? 0);
-    return max($usd, $eur);
+    $usd = $card->hasField("field_price_usd$suffix") ? (float) ($card->get("field_price_usd$suffix")->value ?? 0) : 0.0;
+    if ($usd > 0) {
+      return [\Drupal::service('mtg_scryfall_sync.exchange_rate')->convert($usd, TRUE), TRUE];
+    }
+    return [NULL, FALSE];
   }
 
 }

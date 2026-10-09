@@ -3,6 +3,7 @@
  */
 
 import React, { useMemo } from 'react';
+import { useTheme } from '../context/ThemeContext';
 import type { DeckCardWithCard, DeckCommander } from '../types/drupal';
 import { COMMANDER_SLOT } from '../utils/slugify';
 import {
@@ -49,10 +50,11 @@ const DeckValueList: React.FC<DeckValueListProps> = ({
   selectedSlotId,
   onSelect,
 }) => {
+  const { usdToEur } = useTheme();
   const rows = useMemo(() => {
     const items: ValueRow[] = [];
     if (commander != null) {
-      const unit = slotUnitPrice(commander, currency, commanderFoil);
+      const unit = slotUnitPrice(commander, currency, commanderFoil, usdToEur);
       items.push({
         slotId: COMMANDER_SLOT,
         title: commander.title,
@@ -63,7 +65,7 @@ const DeckValueList: React.FC<DeckValueListProps> = ({
       });
     }
     for (const slot of cards) {
-      const unit = slotUnitPrice(slot.card, currency, slot.isFoil);
+      const unit = slotUnitPrice(slot.card, currency, slot.isFoil, usdToEur);
       items.push({
         slotId: slot.id,
         title: slot.card.title,
@@ -80,7 +82,7 @@ const DeckValueList: React.FC<DeckValueListProps> = ({
       return a.title.localeCompare(b.title);
     });
     return items;
-  }, [cards, commander, commanderFoil, currency]);
+  }, [cards, commander, commanderFoil, currency, usdToEur]);
 
   const total = rows.reduce((sum, row) => sum + row.line, 0);
   const priced = rows.filter(row => row.line > 0).length;

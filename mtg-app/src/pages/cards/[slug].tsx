@@ -36,7 +36,7 @@ import type { MtgCard } from '../../types/drupal';
 const CardPage: React.FC = () => {
   const router = useRouter();
   const qc = useQueryClient();
-  const { currency } = useTheme();
+  const { currency, usdToEur } = useTheme();
   const slug = typeof router.query.slug === 'string' ? router.query.slug : '';
   const highlightId =
     typeof router.query.printing === 'string' ? router.query.printing : '';
@@ -82,11 +82,11 @@ const CardPage: React.FC = () => {
       const sa = a.attributes.field_set_name ?? a.attributes.field_set_code ?? '';
       const sb = b.attributes.field_set_name ?? b.attributes.field_set_code ?? '';
       if (sa !== sb) return sa.localeCompare(sb);
-      const pa = bestPrice(a.attributes, currency) ?? 0;
-      const pb = bestPrice(b.attributes, currency) ?? 0;
+      const pa = bestPrice(a.attributes, currency, false, usdToEur) ?? 0;
+      const pb = bestPrice(b.attributes, currency, false, usdToEur) ?? 0;
       return pb - pa;
     });
-  }, [printings, currency]);
+  }, [printings, currency, usdToEur]);
 
   const filteredPrintings = useMemo(
     () => sortedPrintings.filter(p => matchesPrintingFilter(p.attributes, printingFilter)),

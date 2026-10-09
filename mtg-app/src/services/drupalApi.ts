@@ -1033,7 +1033,7 @@ export function collectionOwnedQty(
   return (cc.attributes.field_quantity_owned ?? 0) + (cc.attributes.field_quantity_foil ?? 0);
 }
 
-export async function fetchCollectionValue(currency: 'USD' | 'EUR' = 'USD'): Promise<number> {
+export async function fetchCollectionValue(currency: 'USD' | 'EUR' = 'EUR'): Promise<number> {
   const query = gql`
     query GetCollectionValue($currency: String) {
       collectionValue(currency: $currency)
@@ -1043,6 +1043,17 @@ export async function fetchCollectionValue(currency: 'USD' | 'EUR' = 'USD'): Pro
     currency,
   });
   return data.collectionValue;
+}
+
+/** Euros per US dollar, for valuing cards that only have a USD price. */
+export async function fetchUsdToEurRate(): Promise<number> {
+  const query = gql`
+    query GetUsdToEurRate {
+      usdToEurRate
+    }
+  `;
+  const data = await getGraphQLClient().request<{ usdToEurRate: number }>(query);
+  return data.usdToEurRate;
 }
 
 export async function upsertCollectionCard(

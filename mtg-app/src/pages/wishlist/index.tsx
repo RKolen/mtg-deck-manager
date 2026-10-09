@@ -32,16 +32,12 @@ const fieldStyle: React.CSSProperties = {
 
 /**
  * Price of one wanted copy: the cheapest priced printing for any-printing
- * wishes (from the server), falling back to the other currency.
+ * wishes (from the server), else the wished printing's price.
  */
-function unitPrice(item: WishlistItem, currency: Currency): number | null {
-  const [main, other] = currency === 'EUR' ? [item.priceEur, item.priceUsd] : [item.priceUsd, item.priceEur];
+function unitPrice(item: WishlistItem, currency: Currency, usdToEur: number | null): number | null {
+  const main = currency === 'EUR' ? item.priceEur : item.priceUsd;
   if (main != null) return main;
-  if (item.card != null) {
-    const shown = bestPrice(item.card, currency, item.foil);
-    if (shown != null) return shown;
-  }
-  return other;
+  return item.card != null ? bestPrice(item.card, currency, item.foil, usdToEur) : null;
 }
 
 /** Copies still to get. */
@@ -50,7 +46,7 @@ function stillNeeded(item: WishlistItem): number {
 }
 
 /** Plain-text list grouped by intent, for mailing or printing. */
-function exportText(items: WishlistItem[], currency: Currency): string {
+function exportText(items: WishlistItem[], currency: Currency, usdToEur: number | null): string {
   const groups = new Map<string, WishlistItem[]>();
   for (const item of items) {
     const key = item.intent?.name ?? 'No intent';
@@ -67,7 +63,7 @@ function exportText(items: WishlistItem[], currency: Currency): string {
     for (const item of group) {
       const need = stillNeeded(item);
       if (need === 0) continue;
-      const price = unitPrice(item, currency);
+      const price = unitPrice(item, currency, usdToEur);
       total += (price ?? 0) * need;
       const details = [
         item.anyPrinting ? null : `${item.card?.field_set_name ?? ''} #${item.card?.field_collector_number ?? ''}`,
@@ -101,6 +97,7 @@ const WishCardPreview: React.FC<{ item: WishlistItem; currency: Currency; onClos
   currency,
   onClose,
 }) => {
+  const { usdToEur } = useTheme();
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') onClose();
@@ -155,7 +152,7 @@ const WishCardPreview: React.FC<{ item: WishlistItem; currency: Currency; onClos
           {item.anyPrinting ? `Any printing (shown: ${printing})` : printing}
           {item.foil ? ' · foil' : ''}
           {' · '}
-          {formatPrice(unitPrice(item, currency), currency)}
+          {formatPrice(unitPrice(item, currency, usdToEur), currency)}
         </p>
         <p style={{ margin: '2px 0 0', opacity: 0.8 }}>
           Have {item.owned} of {item.quantity}
@@ -176,7 +173,7 @@ const WishCardPreview: React.FC<{ item: WishlistItem; currency: Currency; onClos
 
 const WishlistPage: React.FC = () => {
   const qc = useQueryClient();
-  const { currency } = useTheme();
+  const { currency, usdToEur } = useTheme();
   const [deckId, setDeckId] = useState('');
   const [intentId, setIntentId] = useState('');
   const [showDone, setShowDone] = useState(false);
@@ -253,7 +250,7 @@ const WishlistPage: React.FC = () => {
     for (const item of items) {
       const need = stillNeeded(item);
       if (need > 0) {
-        const price = unitPrice(item, currency);
+        const price = unitPrice(item, currency, usdToEur);
         count += 1;
         copyCount += need;
         sum += (price ?? 0) * need;
@@ -261,7 +258,7 @@ const WishlistPage: React.FC = () => {
       }
     }
     return { openCount: count, copies: copyCount, cost: sum, unpriced: missing };
-  }, [items, currency]);
+  }, [items, currency, usdToEur]);
 
   return (
     <main style={{ padding: '1rem 1.5rem', color: 'var(--ink)' }}>
@@ -320,7 +317,7 @@ const WishlistPage: React.FC = () => {
         <label>
           <input type="checkbox" checked={showDone} onChange={e => setShowDone(e.target.checked)} /> Show done
         </label>
-        <button type="button" onClick={() => download('want-list.txt', exportText(items, currency))} disabled={items.length === 0}>
+        <button type="button" onClick={() => download('want-list.txt', exportText(items, currency, usdToEur))} disabled={items.length === 0}>
           Export .txt
         </button>
       </div>
@@ -414,7 +411,7 @@ const WishlistPage: React.FC = () => {
           </thead>
           <tbody>
             {items.map(item => {
-              const price = unitPrice(item, currency);
+              const price = unitPrice(item, currency, usdToEur);
               const need = stillNeeded(item);
               const card = item.card;
               return (

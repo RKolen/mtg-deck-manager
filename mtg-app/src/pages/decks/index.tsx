@@ -66,7 +66,7 @@ function mainDeckCount(cards: DeckCardWithCard[]): number {
 const DecksPage: React.FC = () => {
   const router = useRouter();
   const qc = useQueryClient();
-  const { currency, manaSymbolStyle, setCurrency } = useTheme();
+  const { currency, manaSymbolStyle, usdToEur } = useTheme();
 
   const { data: decks = [], isLoading } = useQuery<Deck[]>({
     queryKey: ['decks'],
@@ -159,7 +159,7 @@ const DecksPage: React.FC = () => {
   const totalExpValue = decks.reduce((sum, d) => {
     const cards = cardsByDeckId.get(d.id);
     if (!cards) return sum;
-    return sum + totalDeckPrice(cards, currency, false);
+    return sum + totalDeckPrice(cards, currency, false, usdToEur);
   }, 0);
 
   const uniqueAcrossDecks = useMemo(() => {
@@ -237,21 +237,6 @@ const DecksPage: React.FC = () => {
           <div className="vr" style={{ height: 14 }} />
           <button
             type="button"
-            onClick={() => setCurrency(currency === 'EUR' ? 'USD' : 'EUR')}
-            className="mono"
-            style={{
-              border: '1px solid var(--line-2)',
-              padding: '3px 8px',
-              borderRadius: 2,
-              fontSize: 10,
-              color: '#000',
-            }}
-            title="Toggle reference currency"
-          >
-            {currency}
-          </button>
-          <button
-            type="button"
             onClick={() => setCreating(true)}
             style={{
               background: 'var(--accent)',
@@ -318,7 +303,7 @@ const DecksPage: React.FC = () => {
                     )
                   : [];
                 const value = cards
-                  ? totalDeckPrice(cards, currency, false)
+                  ? totalDeckPrice(cards, currency, false, usdToEur)
                   : null;
                 const legal =
                   md != null &&
@@ -584,6 +569,7 @@ function DeckPreview({
   onHover: (name: string, imageUri: string | null, e: React.MouseEvent) => void;
   onClearHover: () => void;
 }) {
+  const { usdToEur } = useTheme();
   const md = cards.filter(c => !c.isSideboard);
   const top = [...md].sort((a, b) => b.quantity - a.quantity).slice(0, 6);
   const colors = deckColorIdentity(
@@ -679,7 +665,7 @@ function DeckPreview({
       <div className="mono tnum dim" style={{ fontSize: 10, marginTop: 10 }}>
         MAIN {mainDeckCount(cards)} · VALUE{' '}
         {formatPriceInt(
-          totalDeckPrice(cards, currency, false),
+          totalDeckPrice(cards, currency, false, usdToEur),
           currency,
         )}
         {deck.attributes.field_is_foil ? ' FOIL' : ''}

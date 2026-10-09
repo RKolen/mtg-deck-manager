@@ -314,8 +314,8 @@ final class MtgGraphqlResolverRegistration {
           if ($sa !== $sb) {
             return $sa <=> $sb;
           }
-          $pa = (float) ($a->get('field_price_usd')->value ?? 0);
-          $pb = (float) ($b->get('field_price_usd')->value ?? 0);
+          $pa = (float) ($a->get('field_price_eur')->value ?? 0);
+          $pb = (float) ($b->get('field_price_eur')->value ?? 0);
           return $pb <=> $pa;
         });
         return $nodes;
@@ -367,7 +367,10 @@ final class MtgGraphqlResolverRegistration {
           'node_list:collection_card',
           'node_list:mtg_card',
         ]);
-        $currency = strtoupper((string) ($args['currency'] ?? 'USD'));
+        // Cards priced only in the other currency follow the exchange rate.
+        $fieldContext->mergeCacheMaxAge(3600);
+        $usdToEur = \Drupal::service('mtg_scryfall_sync.exchange_rate')->usdToEur();
+        $currency = strtoupper((string) ($args['currency'] ?? 'EUR'));
         $useEur = $currency === 'EUR';
         $storage = \Drupal::entityTypeManager()->getStorage('node');
         $ids = \Drupal::entityQuery('node')
@@ -391,10 +394,17 @@ final class MtgGraphqlResolverRegistration {
           if (!$card instanceof FieldableEntityInterface) {
             continue;
           }
-          $total += self::bestPrice($card, $useEur, FALSE) * $owned
-            + self::bestPrice($card, $useEur, TRUE) * $foil;
+          $total += self::bestPrice($card, $useEur, FALSE, $usdToEur) * $owned
+            + self::bestPrice($card, $useEur, TRUE, $usdToEur) * $foil;
         }
         return round($total, 2);
+      })
+    );
+
+    $registry->addFieldResolver('Query', 'usdToEurRate',
+      $builder->callback(function ($value, array $args, ResolveContext $context, ResolveInfo $info, FieldContext $fieldContext): float {
+        $fieldContext->mergeCacheMaxAge(3600);
+        return \Drupal::service('mtg_scryfall_sync.exchange_rate')->usdToEur();
       })
     );
   }
@@ -403,23 +413,31 @@ final class MtgGraphqlResolverRegistration {
    * Price of one copy with fallbacks, 0 when the card has no price at all.
    *
    * Order: the asked finish in the asked currency, the other finish in that
-   * currency, then the same two in the other currency. Foil-only and
-   * regular-only printings are valued instead of counting as 0.
+   * currency, then the same two in the other currency converted at the
+   * USD to EUR rate. Foil-only and regular-only printings are valued instead
+   * of counting as 0.
+   *
+   * @param \Drupal\Core\Entity\FieldableEntityInterface $card
+   *   The mtg_card printing.
+   * @param bool $eur
+   *   TRUE for a EUR price, FALSE for USD.
+   * @param bool $foil
+   *   TRUE for the foil finish.
+   * @param float $usdToEur
+   *   Euros per US dollar.
    */
-  public static function bestPrice(FieldableEntityInterface $card, bool $eur, bool $foil): float {
-    $fields = [];
-    foreach ($eur ? ['eur', 'usd'] : ['usd', 'eur'] as $currency) {
-      $regular = "field_price_$currency";
-      $fields[] = $foil ? "{$regular}_foil" : $regular;
-      $fields[] = $foil ? $regular : "{$regular}_foil";
-    }
-    foreach ($fields as $field) {
-      if (!$card->hasField($field)) {
-        continue;
-      }
-      $value = (float) ($card->get($field)->value ?? 0);
-      if ($value > 0) {
-        return $value;
+  public static function bestPrice(FieldableEntityInterface $card, bool $eur, bool $foil, float $usdToEur): float {
+    $other = $eur ? $usdToEur : 1 / $usdToEur;
+    foreach ([[$eur, 1.0], [!$eur, $other]] as [$inEur, $factor]) {
+      $regular = $inEur ? 'field_price_eur' : 'field_price_usd';
+      foreach ($foil ? ["{$regular}_foil", $regular] : [$regular, "{$regular}_foil"] as $field) {
+        if (!$card->hasField($field)) {
+          continue;
+        }
+        $value = (float) ($card->get($field)->value ?? 0);
+        if ($value > 0) {
+          return $value * $factor;
+        }
       }
     }
     return 0.0;

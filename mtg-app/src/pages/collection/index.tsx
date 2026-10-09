@@ -42,7 +42,7 @@ const VIEWS: Array<{ id: CollectionView; label: string }> = [
 // ---------------------------------------------------------------------------
 
 const CollectionPage: React.FC = () => {
-  const { currency } = useTheme();
+  const { currency, usdToEur } = useTheme();
 
   const [filter, setFilter] = useState<FilterState>({
     ...EMPTY_FILTER,
@@ -259,11 +259,11 @@ const CollectionPage: React.FC = () => {
       const trade = cc.attributes.field_quantity_trade ?? 0;
       if (trade > 0) {
         copies += trade;
-        value += tradeValue(cc.attributes, currency);
+        value += tradeValue(cc.attributes, currency, usdToEur);
       }
     }
     return { tradeCopies: copies, tradeTotal: value };
-  }, [collectionCards, currency]);
+  }, [collectionCards, currency, usdToEur]);
 
   const filteredCopies = useMemo(
     () =>
@@ -588,6 +588,8 @@ const CollectionPage: React.FC = () => {
             field_legal_formats: modalCard.attributes.field_legal_formats ?? null,
             field_price_usd: modalCard.attributes.field_price_usd ?? null,
             field_price_usd_foil: modalCard.attributes.field_price_usd_foil ?? null,
+            field_price_eur: modalCard.attributes.field_price_eur ?? null,
+            field_price_eur_foil: modalCard.attributes.field_price_eur_foil ?? null,
             field_set_name: modalCard.attributes.field_set_name ?? null,
             field_rarity: modalCard.attributes.field_rarity ?? null,
           } as CardData}

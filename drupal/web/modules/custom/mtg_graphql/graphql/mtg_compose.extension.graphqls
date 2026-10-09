@@ -23,6 +23,9 @@ extend type Query {
 
   collectionValue(currency: String): Float!
 
+  "Euros per US dollar (ECB reference rate), for converting USD-only prices."
+  usdToEurRate: Float!
+
   pages: [Page!]!
 
   metaDecks(format: String!): [MetaDeck!]!

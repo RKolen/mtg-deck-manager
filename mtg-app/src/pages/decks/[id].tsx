@@ -357,7 +357,7 @@ const DeckEditor: React.FC<EditorProps> = ({
   commander,
   commanderFoil = false,
 }) => {
-  const { currency } = useTheme();
+  const { currency, usdToEur } = useTheme();
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<
     {
@@ -704,14 +704,8 @@ const DeckEditor: React.FC<EditorProps> = ({
         if (a.title !== b.title) {
           return a.title.localeCompare(b.title);
         }
-        const pa = Math.max(
-          Number.parseFloat(a.priceUsd ?? '') || 0,
-          Number.parseFloat(a.priceEur ?? '') || 0,
-        );
-        const pb = Math.max(
-          Number.parseFloat(b.priceUsd ?? '') || 0,
-          Number.parseFloat(b.priceEur ?? '') || 0,
-        );
+        const pa = Number.parseFloat((currency === 'EUR' ? a.priceEur : a.priceUsd) ?? '') || 0;
+        const pb = Number.parseFloat((currency === 'EUR' ? b.priceEur : b.priceUsd) ?? '') || 0;
         return pb - pa;
       });
       setSearchResults(mapped);
@@ -745,7 +739,7 @@ const DeckEditor: React.FC<EditorProps> = ({
   const maybeMissingCost = maybeCards.reduce((sum, dc) => {
     const owned = ownedForFinish(ownedByCardId.get(dc.card.id), dc.isFoil);
     const missing = Math.max(0, dc.quantity - owned);
-    return sum + missing * slotUnitPrice(dc.card, currency, dc.isFoil);
+    return sum + missing * slotUnitPrice(dc.card, currency, dc.isFoil, usdToEur);
   }, 0);
   const allowance = deckListAllowance(format);
   const showCommander = usesCommanderCard(format);
@@ -1132,10 +1126,8 @@ const DeckEditor: React.FC<EditorProps> = ({
             ]
               .filter(Boolean)
               .join(' ');
-            const priceBits = [
-              r.priceUsd ? `$${Number.parseFloat(r.priceUsd).toFixed(2)}` : null,
-              r.priceEur ? `€${Number.parseFloat(r.priceEur).toFixed(2)}` : null,
-            ].filter(Boolean);
+            const shownPrice = currency === 'EUR' ? r.priceEur : r.priceUsd;
+            const priceBits = shownPrice ? [formatPrice(Number.parseFloat(shownPrice), currency)] : [];
             const mvLegal = isLegalManaValue(r.typeLine, r.cmc, format);
             const inMain = cards.some(s => s.card.id === r.id && !s.isSideboard);
             const inSb = cards.some(s => s.card.id === r.id && s.isSideboard);

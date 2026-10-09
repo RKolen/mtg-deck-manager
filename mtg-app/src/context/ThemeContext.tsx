@@ -6,6 +6,8 @@ import React, {
   useMemo,
   useState,
 } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { fetchUsdToEurRate } from '../services/drupalApi';
 import type { Currency } from '../utils/prices';
 import type { ManaSymbolStyle } from '../components/design/Mana';
 
@@ -17,6 +19,8 @@ export type ThemePrefs = {
 };
 
 type ThemeContextValue = ThemePrefs & {
+  /** Euros per US dollar, or null until loaded (no conversion then). */
+  usdToEur: number | null;
   setDark: (dark: boolean) => void;
   toggleDark: () => void;
   setAccentColor: (color: string) => void;
@@ -43,7 +47,8 @@ function loadPrefs(): ThemePrefs {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULTS;
     const parsed = JSON.parse(raw) as Partial<ThemePrefs>;
-    return { ...DEFAULTS, ...parsed };
+    // Prices are always shown in EUR; ignore a stored USD preference.
+    return { ...DEFAULTS, ...parsed, currency: 'EUR' };
   } catch {
     return DEFAULTS;
   }
@@ -81,16 +86,23 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setPrefs(p => ({ ...p, manaSymbolStyle }));
   }, []);
 
+  const { data: usdToEur = null } = useQuery({
+    queryKey: ['usdToEurRate'],
+    queryFn: fetchUsdToEurRate,
+    staleTime: 60 * 60 * 1000,
+  });
+
   const value = useMemo(
     () => ({
       ...prefs,
+      usdToEur,
       setDark,
       toggleDark,
       setAccentColor,
       setCurrency,
       setManaSymbolStyle,
     }),
-    [prefs, setDark, toggleDark, setAccentColor, setCurrency, setManaSymbolStyle],
+    [prefs, usdToEur, setDark, toggleDark, setAccentColor, setCurrency, setManaSymbolStyle],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

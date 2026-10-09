@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import Link from 'next/link';
 import { slugify } from '../utils/slugify';
 import { formatPrice, tradeValue, type Currency } from '../utils/prices';
+import { useTheme } from '../context/ThemeContext';
 import type { CollectionCard } from '../types/drupal';
 
 interface TradeListProps {
@@ -24,6 +25,7 @@ const inputStyle: React.CSSProperties = {
  * location so the list follows the binder.
  */
 const TradeList: React.FC<TradeListProps> = ({ rows, currency, onChange }) => {
+  const { usdToEur } = useTheme();
   const sorted = useMemo(
     () =>
       rows
@@ -42,7 +44,7 @@ const TradeList: React.FC<TradeListProps> = ({ rows, currency, onChange }) => {
     [rows],
   );
 
-  const total = sorted.reduce((sum, r) => sum + tradeValue(r.attributes, currency), 0);
+  const total = sorted.reduce((sum, r) => sum + tradeValue(r.attributes, currency, usdToEur), 0);
   const copies = sorted.reduce((sum, r) => sum + (r.attributes.field_quantity_trade ?? 0), 0);
 
   if (sorted.length === 0) {
@@ -116,7 +118,7 @@ const TradeList: React.FC<TradeListProps> = ({ rows, currency, onChange }) => {
                   />
                 </td>
                 <td style={{ padding: 4, textAlign: 'right' }}>
-                  {formatPrice(tradeValue(a, currency), currency)}
+                  {formatPrice(tradeValue(a, currency, usdToEur), currency)}
                 </td>
               </tr>
             );

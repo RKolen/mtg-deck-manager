@@ -10,3 +10,4 @@ dependencies:
   - drupal:paragraphs
   - mtg_card_search:mtg_card_search
   - mtg_card_images:mtg_card_images
+  - mtg_scryfall_sync:mtg_scryfall_sync

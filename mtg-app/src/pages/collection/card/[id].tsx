@@ -16,9 +16,12 @@ import { invalidateInventoryQueries } from '../../../services/queryCache';
 import WishlistPanel from '../../../components/WishlistPanel';
 import { getOracleText } from '../../../utils/deckAnalysis';
 import { slugify } from '../../../utils/slugify';
+import { formatPrice, priceFor } from '../../../utils/prices';
+import { useTheme } from '../../../context/ThemeContext';
 
 const CollectionCardPage: React.FC = () => {
   const router = useRouter();
+  const { currency } = useTheme();
   const slug = typeof router.query.id === 'string' ? router.query.id : '';
   const qc = useQueryClient();
 
@@ -140,10 +143,10 @@ const CollectionCardPage: React.FC = () => {
               {a.field_set_name} · {a.field_rarity} · #{a.field_collector_number}
             </p>
           )}
-          {(a.field_price_usd != null || a.field_price_usd_foil != null) && (
+          {(priceFor(a, currency) != null || priceFor(a, currency, true) != null) && (
             <p style={{ margin: '0.25rem 0', fontSize: '0.8rem', color: 'var(--ink)' }}>
-              {a.field_price_usd != null && `$${a.field_price_usd}`}
-              {a.field_price_usd_foil != null && ` · foil $${a.field_price_usd_foil}`}
+              {priceFor(a, currency) != null && formatPrice(priceFor(a, currency), currency)}
+              {priceFor(a, currency, true) != null && ` · foil ${formatPrice(priceFor(a, currency, true), currency)}`}
             </p>
           )}
 
