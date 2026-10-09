@@ -245,8 +245,48 @@ final class CollectionEnsurer {
 
     $node->set('field_quantity_owned', $owned);
     $node->set('field_quantity_foil', $foil);
+    self::clampTrade($node);
     $node->save();
     return $removed;
+  }
+
+  /**
+   * Sets how many copies of a printing are for trade, and where they are.
+   *
+   * The trade count is capped at the copies owned (regular plus foil). A
+   * NULL location leaves the stored location unchanged.
+   *
+   * @param \Drupal\node\NodeInterface $row
+   *   The collection_card node.
+   * @param int $quantity
+   *   Copies for trade.
+   * @param string|null $location
+   *   Binder location, empty to clear, NULL to keep.
+   */
+  public function setTrade(NodeInterface $row, int $quantity, ?string $location = NULL): void {
+    if ($row->hasField('field_quantity_trade')) {
+      $row->set('field_quantity_trade', max(0, $quantity));
+      self::clampTrade($row);
+    }
+    if ($location !== NULL && $row->hasField('field_binder_location')) {
+      $row->set('field_binder_location', trim($location) === '' ? NULL : trim($location));
+    }
+    $row->save();
+  }
+
+  /**
+   * Caps the trade count of a collection row at the copies it holds.
+   */
+  public static function clampTrade(NodeInterface $row): void {
+    if (!$row->hasField('field_quantity_trade')) {
+      return;
+    }
+    $owned = (int) ($row->get('field_quantity_owned')->value ?? 0)
+      + (int) ($row->get('field_quantity_foil')->value ?? 0);
+    $trade = (int) ($row->get('field_quantity_trade')->value ?? 0);
+    if ($trade > $owned) {
+      $row->set('field_quantity_trade', $owned);
+    }
   }
 
   /**

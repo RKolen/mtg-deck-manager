@@ -1,0 +1,30 @@
+uuid: ff635447-1540-4058-817e-f7a7b0e75931
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_maybe_cards
+    - node.type.deck
+    - paragraphs.paragraphs_type.deck_card
+  module:
+    - entity_reference_revisions
+id: node.deck.field_maybe_cards
+field_name: field_maybe_cards
+entity_type: node
+bundle: deck
+label: 'Maybe Cards'
+description: ''
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings:
+  handler: 'default:paragraph'
+  handler_settings:
+    target_bundles:
+      deck_card: deck_card
+    target_bundles_drag_drop:
+      deck_card:
+        weight: 0
+        enabled: true
+field_type: entity_reference_revisions

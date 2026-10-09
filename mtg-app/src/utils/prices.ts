@@ -1,4 +1,4 @@
-import type { MtgCardAttributes } from '../types/drupal';
+import type { CollectionCardAttributes, MtgCardAttributes } from '../types/drupal';
 
 export type Currency = 'USD' | 'EUR';
 
@@ -53,29 +53,31 @@ export function formatPriceInt(value: number | null | undefined, currency: Curre
   return `${symbol}${Math.round(value)}`;
 }
 
+type PricedCard = Pick<
+  MtgCardAttributes,
+  'field_price_usd' | 'field_price_usd_foil' | 'field_price_eur' | 'field_price_eur_foil'
+>;
+
 /**
- * Unit price for a deck slot. Foil uses foil listings first and only then
- * regular; regular never falls back to foil (serialized foil can dwarf it).
+ * Price of one copy with fallbacks, for values, totals and sorting.
+ *
+ * Order: the asked finish in the asked currency, the other finish in that
+ * currency, then the same two in the other currency. A foil-only or
+ * regular-only printing gets a price instead of none.
  */
-export function slotUnitPrice(
-  card: Pick<
-    MtgCardAttributes,
-    'field_price_usd' | 'field_price_usd_foil' | 'field_price_eur' | 'field_price_eur_foil'
-  >,
-  currency: Currency,
-  foil = false,
-): number {
+export function bestPrice(card: PricedCard, currency: Currency, foil = false): number | null {
   const other: Currency = currency === 'EUR' ? 'USD' : 'EUR';
-  if (foil) {
-    return (
-      priceFor(card, currency, true) ??
-      priceFor(card, other, true) ??
-      priceFor(card, currency, false) ??
-      priceFor(card, other, false) ??
-      0
-    );
-  }
-  return priceFor(card, currency, false) ?? priceFor(card, other, false) ?? 0;
+  return (
+    priceFor(card, currency, foil) ??
+    priceFor(card, currency, !foil) ??
+    priceFor(card, other, foil) ??
+    priceFor(card, other, !foil)
+  );
+}
+
+/** Unit price for a deck slot; 0 when the card has no price at all. */
+export function slotUnitPrice(card: PricedCard, currency: Currency, foil = false): number {
+  return bestPrice(card, currency, foil) ?? 0;
 }
 
 export function totalDeckPrice(
@@ -94,4 +96,25 @@ export function totalDeckPrice(
     }
     return sum + slotUnitPrice(slot.card, currency, Boolean(slot.isFoil)) * slot.quantity;
   }, 0);
+}
+
+/**
+ * Value of a collection row's trade copies.
+ *
+ * Trade copies are counted as regular copies first; only copies beyond the
+ * regular ones are valued at the foil price. Both use bestPrice fallbacks.
+ */
+export function tradeValue(cc: CollectionCardAttributes, currency: Currency): number {
+  const owned = cc.field_quantity_owned ?? 0;
+  const foil = cc.field_quantity_foil ?? 0;
+  const trade = Math.min(cc.field_quantity_trade ?? 0, owned + foil);
+  const regularCopies = Math.min(trade, owned);
+  const foilCopies = trade - regularCopies;
+  const card: PricedCard = {
+    field_price_eur: cc.field_price_eur ?? null,
+    field_price_eur_foil: cc.field_price_eur_foil ?? null,
+    field_price_usd: cc.field_price_usd ?? null,
+    field_price_usd_foil: cc.field_price_usd_foil ?? null,
+  };
+  return regularCopies * (bestPrice(card, currency) ?? 0) + foilCopies * (bestPrice(card, currency, true) ?? 0);
 }

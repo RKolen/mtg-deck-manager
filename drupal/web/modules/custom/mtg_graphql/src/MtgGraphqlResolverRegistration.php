@@ -12,7 +12,9 @@ use Drupal\graphql\GraphQL\Execution\ResolveContext;
 use Drupal\graphql\GraphQL\ResolverBuilder;
 use Drupal\graphql\GraphQL\ResolverRegistryInterface;
 use GraphQL\Type\Definition\ResolveInfo;
+use Drupal\mtg_graphql\Service\CollectionEnsurer;
 use Drupal\mtg_graphql\Service\DeckCardMutator;
+use Drupal\mtg_graphql\Service\WishlistService;
 use Drupal\node\NodeInterface;
 use Drupal\taxonomy\TermInterface;
 use GraphQL\Error\UserError;
@@ -42,6 +44,130 @@ final class MtgGraphqlResolverRegistration {
     self::addDeckCardSlotResolvers($registry, $builder);
     self::addFormatResolvers($registry, $builder);
     self::addScrapeMetaDecksResolver($registry, $builder);
+    self::addWishlistResolvers($registry, $builder);
+    self::addCollectionImportResolvers($registry, $builder);
+  }
+
+  /**
+   * Registers wishlist queries, mutations and type resolvers.
+   */
+  public static function addWishlistResolvers(ResolverRegistryInterface $registry, ResolverBuilder $builder): void {
+    $wishlist = static fn(): WishlistService => \Drupal::service('mtg_graphql.wishlist');
+
+    $registry->addFieldResolver('Query', 'wishlist',
+      $builder->callback(function ($value, array $args, ResolveContext $context, ResolveInfo $info, FieldContext $fieldContext) use ($wishlist): array {
+        $fieldContext->addCacheTags(['node_list:wishlist_item', 'node_list:collection_card']);
+        return $wishlist()->items(
+          isset($args['deckId']) ? (string) $args['deckId'] : NULL,
+          isset($args['intentId']) ? (string) $args['intentId'] : NULL,
+          !empty($args['includeDone']),
+        );
+      })
+    );
+    $registry->addFieldResolver('Query', 'wishlistForCard',
+      $builder->callback(function ($value, array $args, ResolveContext $context, ResolveInfo $info, FieldContext $fieldContext) use ($wishlist): array {
+        $fieldContext->addCacheTags(['node_list:wishlist_item', 'node_list:collection_card']);
+        $card = \Drupal::service('entity.repository')->loadEntityByUuid('node', (string) $args['cardId']);
+        return $card instanceof NodeInterface ? $wishlist()->itemsForCard($card) : [];
+      })
+    );
+    $registry->addFieldResolver('Query', 'wishIntents',
+      $builder->callback(function ($value, array $args, ResolveContext $context, ResolveInfo $info, FieldContext $fieldContext) use ($wishlist): array {
+        $fieldContext->addCacheTags(['taxonomy_term_list:wish_intent']);
+        return $wishlist()->intents();
+      })
+    );
+    $registry->addFieldResolver('Mutation', 'saveWishlistItem',
+      $builder->callback(fn($value, array $args) => $wishlist()->save($args))
+    );
+    $registry->addFieldResolver('Mutation', 'deleteWishlistItem',
+      $builder->callback(fn($value, array $args) => $wishlist()->delete((string) $args['id']))
+    );
+
+    $registry->addFieldResolver('WishIntent', 'id', $builder->callback(fn($t) => (string) $t->id()));
+    $registry->addFieldResolver('WishIntent', 'name', $builder->callback(fn($t) => $t->getName()));
+
+    $registry->addFieldResolver('WishlistItem', 'id', $builder->callback(fn($n) => $n->uuid()));
+    $registry->addFieldResolver('WishlistItem', 'quantity',
+      $builder->callback(fn($n) => max(1, (int) ($n->get('field_wish_quantity')->value ?? 1)))
+    );
+    $registry->addFieldResolver('WishlistItem', 'anyPrinting',
+      $builder->callback(fn($n) => $wishlist()->anyPrinting($n))
+    );
+    $registry->addFieldResolver('WishlistItem', 'foil',
+      $builder->callback(fn($n) => DeckCardMutator::fieldIsOn($n, 'field_is_foil'))
+    );
+    $registry->addFieldResolver('WishlistItem', 'minCondition',
+      $builder->callback(fn($n) => $n->get('field_min_condition')->value)
+    );
+    $registry->addFieldResolver('WishlistItem', 'notes',
+      $builder->callback(fn($n) => $n->get('field_notes')->value)
+    );
+    $registry->addFieldResolver('WishlistItem', 'card',
+      $builder->callback(fn($n) => $n->get('field_card')->entity)
+    );
+    $registry->addFieldResolver('WishlistItem', 'deck',
+      $builder->callback(fn($n) => $n->get('field_wish_deck')->entity)
+    );
+    $registry->addFieldResolver('WishlistItem', 'intent',
+      $builder->callback(fn($n) => $n->get('field_wish_intent')->entity)
+    );
+    $registry->addFieldResolver('WishlistItem', 'owned',
+      $builder->callback(fn($n) => $wishlist()->owned($n))
+    );
+    $registry->addFieldResolver('WishlistItem', 'done',
+      $builder->callback(fn($n) => $wishlist()->isDone($n))
+    );
+    $registry->addFieldResolver('WishlistItem', 'priceEur',
+      $builder->callback(fn($n) => $wishlist()->price($n, 'eur'))
+    );
+    $registry->addFieldResolver('WishlistItem', 'priceUsd',
+      $builder->callback(fn($n) => $wishlist()->price($n, 'usd'))
+    );
+  }
+
+  /**
+   * Registers the collection import mutation and result type.
+   */
+  public static function addCollectionImportResolvers(ResolverRegistryInterface $registry, ResolverBuilder $builder): void {
+    $registry->addFieldResolver('Mutation', 'importCollection',
+      $builder->callback(function ($value, array $args): array {
+        /** @var \Drupal\mtg_graphql\Service\CollectionImporter $importer */
+        $importer = \Drupal::service('mtg_graphql.collection_importer');
+        return $importer->import($args['rows'] ?? [], (bool) $args['apply']);
+      })
+    );
+    $registry->addFieldResolver('CollectionImportResult', 'row',
+      $builder->callback(fn(array $r) => $r['row'])
+    );
+    $registry->addFieldResolver('CollectionImportResult', 'status',
+      $builder->callback(fn(array $r) => $r['status'])
+    );
+    $registry->addFieldResolver('CollectionImportResult', 'matchedBy',
+      $builder->callback(fn(array $r) => $r['matchedBy'])
+    );
+    $registry->addFieldResolver('CollectionImportResult', 'card',
+      $builder->callback(fn(array $r) => $r['card'])
+    );
+  }
+
+  /**
+   * Applies optional trade arguments to a collection row before saving.
+   *
+   * @param \Drupal\node\NodeInterface $node
+   *   The collection_card node.
+   * @param array<string, mixed> $args
+   *   Mutation arguments (quantityTrade, binderLocation).
+   */
+  private static function applyTradeArgs(NodeInterface $node, array $args): void {
+    if (array_key_exists('quantityTrade', $args) && $args['quantityTrade'] !== NULL && $node->hasField('field_quantity_trade')) {
+      $node->set('field_quantity_trade', max(0, (int) $args['quantityTrade']));
+    }
+    if (array_key_exists('binderLocation', $args) && $args['binderLocation'] !== NULL && $node->hasField('field_binder_location')) {
+      $location = trim((string) $args['binderLocation']);
+      $node->set('field_binder_location', $location === '' ? NULL : $location);
+    }
+    CollectionEnsurer::clampTrade($node);
   }
 
   /**
@@ -265,22 +391,38 @@ final class MtgGraphqlResolverRegistration {
           if (!$card instanceof FieldableEntityInterface) {
             continue;
           }
-          if ($useEur) {
-            $price = (float) ($card->get('field_price_eur')->value ?? 0);
-            $priceFoil = (float) ($card->get('field_price_eur_foil')->value ?? 0);
-          }
-          else {
-            $price = (float) ($card->get('field_price_usd')->value ?? 0);
-            $priceFoil = (float) ($card->get('field_price_usd_foil')->value ?? 0);
-          }
-          if ($priceFoil <= 0) {
-            $priceFoil = $price;
-          }
-          $total += ($price * $owned) + ($priceFoil * $foil);
+          $total += self::bestPrice($card, $useEur, FALSE) * $owned
+            + self::bestPrice($card, $useEur, TRUE) * $foil;
         }
         return round($total, 2);
       })
     );
+  }
+
+  /**
+   * Price of one copy with fallbacks, 0 when the card has no price at all.
+   *
+   * Order: the asked finish in the asked currency, the other finish in that
+   * currency, then the same two in the other currency. Foil-only and
+   * regular-only printings are valued instead of counting as 0.
+   */
+  public static function bestPrice(FieldableEntityInterface $card, bool $eur, bool $foil): float {
+    $fields = [];
+    foreach ($eur ? ['eur', 'usd'] : ['usd', 'eur'] as $currency) {
+      $regular = "field_price_$currency";
+      $fields[] = $foil ? "{$regular}_foil" : $regular;
+      $fields[] = $foil ? $regular : "{$regular}_foil";
+    }
+    foreach ($fields as $field) {
+      if (!$card->hasField($field)) {
+        continue;
+      }
+      $value = (float) ($card->get($field)->value ?? 0);
+      if ($value > 0) {
+        return $value;
+      }
+    }
+    return 0.0;
   }
 
   /**
@@ -362,6 +504,7 @@ final class MtgGraphqlResolverRegistration {
           if ($node instanceof NodeInterface) {
             $node->set('field_quantity_owned', $args['quantityOwned']);
             $node->set('field_quantity_foil', $args['quantityFoil'] ?? 0);
+            self::applyTradeArgs($node, $args);
             $node->save();
             return $node;
           }
@@ -386,6 +529,7 @@ final class MtgGraphqlResolverRegistration {
             $node->set('title', $args['cardName']);
             $node->set('field_quantity_owned', $args['quantityOwned']);
             $node->set('field_quantity_foil', $args['quantityFoil'] ?? 0);
+            self::applyTradeArgs($node, $args);
             $node->save();
             return $node;
           }
@@ -399,6 +543,7 @@ final class MtgGraphqlResolverRegistration {
           'field_card'           => ['target_id' => $cardNode->id()],
           'status'               => 1,
         ]);
+        self::applyTradeArgs($node, $args);
         $node->save();
         return $node;
       })
@@ -411,12 +556,24 @@ final class MtgGraphqlResolverRegistration {
         $foil = array_key_exists('foil', $args) && $args['foil'] !== NULL
           ? (bool) $args['foil']
           : NULL;
+        $board = isset($args['board']) && $args['board'] !== '' ? (string) $args['board'] : NULL;
         return $mutator->add(
           (string) $args['deckId'],
           (string) $args['cardId'],
           (int) $args['quantity'],
           (bool) $args['isSideboard'],
           $foil,
+          $board,
+        );
+      })
+    );
+
+    $registry->addFieldResolver('Mutation', 'deckCardMove',
+      $builder->callback(function ($value, array $args) use ($mutator): array {
+        return $mutator->move(
+          (string) $args['deckId'],
+          (string) $args['slotId'],
+          (string) $args['board'],
         );
       })
     );
@@ -601,6 +758,9 @@ final class MtgGraphqlResolverRegistration {
     $registry->addFieldResolver('DeckCard', 'isFoil',
       $builder->callback(fn($p) => DeckCardMutator::fieldIsOn($p, 'field_is_foil'))
     );
+    $registry->addFieldResolver('DeckCard', 'board',
+      $builder->callback(fn($p) => DeckCardMutator::boardOf($p))
+    );
     $registry->addFieldResolver('DeckCard', 'card',
       $builder->callback(function ($p): ?NodeInterface {
         $ref = $p->get('field_card')->first();
@@ -621,6 +781,16 @@ final class MtgGraphqlResolverRegistration {
     );
     $registry->addFieldResolver('CollectionCard', 'quantityFoil',
       $builder->callback(fn($n) => (int) ($n->get('field_quantity_foil')->value ?? 0))
+    );
+    $registry->addFieldResolver('CollectionCard', 'quantityTrade',
+      $builder->callback(fn($n) => $n->hasField('field_quantity_trade')
+        ? (int) ($n->get('field_quantity_trade')->value ?? 0)
+        : 0)
+    );
+    $registry->addFieldResolver('CollectionCard', 'binderLocation',
+      $builder->callback(fn($n) => $n->hasField('field_binder_location')
+        ? $n->get('field_binder_location')->value
+        : NULL)
     );
     $registry->addFieldResolver('CollectionCard', 'card',
       $builder->callback(function ($n): ?NodeInterface {
@@ -899,6 +1069,17 @@ final class MtgGraphqlResolverRegistration {
     if (!empty($args['titlePrefix'])) {
       $query->condition('title', $args['titlePrefix'] . '%', 'LIKE');
     }
+    // Tokens and emblems (type lines start with Token / Emblem) are hidden
+    // unless asked for; tokens: true lists only them.
+    if (($args['tokens'] ?? NULL) === TRUE) {
+      $query->condition($query->orConditionGroup()
+        ->condition('field_type_line', 'Token%', 'LIKE')
+        ->condition('field_type_line', 'Emblem%', 'LIKE'));
+    }
+    else {
+      $query->condition('field_type_line', 'Token%', 'NOT LIKE');
+      $query->condition('field_type_line', 'Emblem%', 'NOT LIKE');
+    }
   }
 
   /**
@@ -969,6 +1150,9 @@ final class MtgGraphqlResolverRegistration {
     );
     $registry->addFieldResolver('DeckCardSlot', 'isFoil',
       $builder->callback(fn(array $slot) => (bool) ($slot['isFoil'] ?? FALSE))
+    );
+    $registry->addFieldResolver('DeckCardSlot', 'board',
+      $builder->callback(fn(array $slot) => (string) ($slot['board'] ?? 'main'))
     );
   }
 

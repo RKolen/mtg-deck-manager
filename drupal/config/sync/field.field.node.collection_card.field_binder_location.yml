@@ -1,0 +1,19 @@
+uuid: fe80209e-ecd2-446c-94e7-2e49064a0ffc
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_binder_location
+    - node.type.collection_card
+id: node.collection_card.field_binder_location
+field_name: field_binder_location
+entity_type: node
+bundle: collection_card
+label: 'Binder location'
+description: 'Where the trade copies are kept, e.g. "Trade binder, page 3, pocket 7".'
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: string

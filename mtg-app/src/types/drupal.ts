@@ -108,6 +108,10 @@ export interface DeckAttributes {
 export interface CollectionCardAttributes {
   field_quantity_owned: number;
   field_quantity_foil: number;
+  /** Copies (regular and foil together) available for trade. */
+  field_quantity_trade?: number;
+  /** Where the trade copies are kept, e.g. "Trade binder, page 3, pocket 7". */
+  field_binder_location?: string | null;
   /** Printing title when the collection query includes card fields. */
   field_card_title?: string;
   field_set_code?: string;
@@ -117,6 +121,9 @@ export interface CollectionCardAttributes {
   field_cmc?: number;
   field_price_usd?: string | null;
   field_price_eur?: string | null;
+  field_price_eur_foil?: string | null;
+  field_price_usd_foil?: string | null;
+  field_image_uri?: string | null;
   field_full_art?: boolean;
   field_border_color?: string;
 }
@@ -130,10 +137,65 @@ export type CollectionCard = JsonApiResource<CollectionCardAttributes>;
  * A card slot in a deck, backed by a paragraph--deck_card entity.
  * id is the paragraph UUID, used by the /api/deck-cards mutations.
  */
+/** Where a deck slot lives: main deck, sideboard, or maybeboard. */
+export type DeckBoard = 'main' | 'side' | 'maybe';
+
 export interface DeckCardWithCard {
   id: string;
   quantity: number;
   isSideboard: boolean;
   isFoil: boolean;
+  /** Maybeboard slots never count toward deck size, legality or value. */
+  board: DeckBoard;
   card: MtgCardAttributes & { id: string };
+}
+
+export interface WishIntent {
+  id: string;
+  name: string;
+}
+
+/** Cardmarket conditions, best first. */
+export const WISH_CONDITIONS = ['M', 'NM', 'EX', 'GD', 'LP', 'PL', 'PO'] as const;
+export type WishCondition = (typeof WISH_CONDITIONS)[number];
+
+/** A wanted card. Done once the collection holds the wanted quantity. */
+export interface WishlistItem {
+  id: string;
+  quantity: number;
+  /** Any printing fills the wish; false means this exact printing. */
+  anyPrinting: boolean;
+  foil: boolean;
+  minCondition: WishCondition | null;
+  notes: string | null;
+  card: (MtgCardAttributes & { id: string }) | null;
+  deck: { id: string; title: string } | null;
+  intent: WishIntent | null;
+  /** Copies in the collection that count toward the wish. */
+  owned: number;
+  done: boolean;
+  /** One copy in EUR: cheapest priced printing for any-printing wishes. */
+  priceEur: number | null;
+  /** One copy in USD: cheapest priced printing for any-printing wishes. */
+  priceUsd: number | null;
+}
+
+/** One row for the collection import (matched by Scryfall ID first). */
+export interface CollectionImportRow {
+  name?: string | null;
+  quantity: number;
+  foil?: boolean;
+  scryfallId?: string | null;
+  setCode?: string | null;
+  collectorNumber?: string | null;
+  quantityTrade?: number | null;
+  binderLocation?: string | null;
+}
+
+export interface CollectionImportResult {
+  row: number;
+  /** matched (dry run), added, skipped or not_found. */
+  status: 'matched' | 'added' | 'skipped' | 'not_found';
+  matchedBy: string;
+  card: { id: string; title: string; setCode: string | null; setName: string | null; collectorNumber: string | null } | null;
 }

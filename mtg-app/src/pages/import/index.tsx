@@ -4,6 +4,8 @@
  * Parses a Magic Deck Spreadsheet v2 Excel file client-side using xlsx.js,
  * matches card names against the Drupal card library, presents unmatched
  * cards for manual resolution, then creates the deck and slots via GraphQL.
+ *
+ * The "Collection (CSV)" mode adds cards to the collection instead.
  */
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
@@ -18,6 +20,7 @@ import {
   importCardToDeck,
 } from '../../services/drupalApi';
 import { slugify } from '../../utils/slugify';
+import CollectionCsvImport from '../../components/CollectionCsvImport';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -186,6 +189,7 @@ type Step = 'upload' | 'matching' | 'confirm' | 'importing' | 'done';
 
 const ImportPage: React.FC = () => {
   const router = useRouter();
+  const [mode, setMode] = useState<'deck' | 'collection'>('deck');
   const [step, setStep] = useState<Step>('upload');
   const [deckTitle, setDeckTitle] = useState('Imported Deck');
   const [deckFormat, setDeckFormat] = useState('Standard');
@@ -366,7 +370,27 @@ const ImportPage: React.FC = () => {
       <p style={{ margin: '0 0 1rem' }}>
         <Link href="/">Home</Link>
       </p>
-      <h1 style={{ marginTop: 0 }}>Import XLSX deck</h1>
+      <h1 style={{ marginTop: 0 }}>{mode === 'deck' ? 'Import XLSX deck' : 'Import collection CSV'}</h1>
+
+      <div role="tablist" style={{ display: 'flex', gap: 8, marginBottom: '1rem' }}>
+        {(['deck', 'collection'] as const).map(m => (
+          <button
+            key={m}
+            type="button"
+            role="tab"
+            aria-selected={mode === m}
+            onClick={() => setMode(m)}
+            style={{ fontWeight: mode === m ? 'bold' : 'normal' }}
+          >
+            {m === 'deck' ? 'Deck (XLSX)' : 'Collection (CSV)'}
+          </button>
+        ))}
+      </div>
+
+      {mode === 'collection' ? (
+        <CollectionCsvImport />
+      ) : (
+      <>
 
       {error != null && (
         <p style={{ color: '#c00', background: '#fff0f0', padding: '0.75rem', borderRadius: 4 }}>
@@ -595,6 +619,8 @@ const ImportPage: React.FC = () => {
             Import another
           </button>
         </div>
+      )}
+      </>
       )}
     </main>
   );

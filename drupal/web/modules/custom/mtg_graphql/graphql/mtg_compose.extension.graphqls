@@ -7,6 +7,8 @@ extend type Query {
     type: String
     maxCmc: Float
     titlePrefix: String
+    "null hides tokens and emblems, true shows only them, false hides them."
+    tokens: Boolean
   ): CardPage!
 
   card(slug: String!): MtgCard
@@ -44,11 +46,23 @@ extend type Query {
     setExclude: Boolean
     deckIds: [ID!]
     deckExclude: Boolean
+    "Include tokens and emblems (excluded by default)."
+    includeTokens: Boolean
+    "Only tokens and emblems (for the token box)."
+    tokensOnly: Boolean
     page: Int
     limit: Int
   ): CardSearchResult!
 
   cardSets(q: String, limit: Int): [CardSet!]!
+
+  "Wishlist items, optionally for one deck or intent. Done wishes are hidden unless includeDone is true."
+  wishlist(deckId: ID, intentId: ID, includeDone: Boolean): [WishlistItem!]!
+
+  "Wishes this printing would fill (any-printing wishes for the same card, or this exact printing)."
+  wishlistForCard(cardId: ID!): [WishlistItem!]!
+
+  wishIntents: [WishIntent!]!
 }
 
 extend type NodeDeck {
@@ -69,6 +83,10 @@ extend type Mutation {
     quantityOwned: Int!
     quantityFoil: Int
     existingId: ID
+    "Copies for trade; capped at the copies owned. Omit to keep."
+    quantityTrade: Int
+    "Binder location; empty clears it. Omit to keep."
+    binderLocation: String
   ): CollectionCard!
 
   deckCardAdd(
@@ -77,6 +95,8 @@ extend type Mutation {
     quantity: Int!
     isSideboard: Boolean!
     foil: Boolean
+    "main, side or maybe; overrides isSideboard when set."
+    board: String
   ): DeckCardSlot!
 
   deckCardUpdate(deckId: ID!, slotId: ID!, quantity: Int!): DeckCardSlot!
@@ -93,5 +113,37 @@ extend type Mutation {
 
   deckCardRemove(deckId: ID!, slotId: ID!): Boolean!
 
+  "Moves a slot to main, side or maybe, merging with an existing slot of the same printing."
+  deckCardMove(deckId: ID!, slotId: ID!, board: String!): DeckCardSlot!
+
+  saveWishlistItem(
+    id: ID
+    cardId: ID!
+    quantity: Int!
+    anyPrinting: Boolean
+    foil: Boolean
+    deckId: ID
+    intentId: ID
+    minCondition: String
+    notes: String
+  ): WishlistItem!
+
+  deleteWishlistItem(id: ID!): Boolean!
+
+  "Matches rows to printings; with apply true the copies are added to the collection."
+  importCollection(rows: [CollectionImportRow!]!, apply: Boolean!): [CollectionImportResult!]!
+
   scrapeMetaDecks(format: String!, limit: Int): ScrapeMetaDecksResult!
+}
+
+input CollectionImportRow {
+  name: String
+  quantity: Int!
+  foil: Boolean
+  scryfallId: String
+  setCode: String
+  collectorNumber: String
+  "Copies of this row to mark for trade."
+  quantityTrade: Int
+  binderLocation: String
 }

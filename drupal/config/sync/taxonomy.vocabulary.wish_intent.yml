@@ -1,0 +1,9 @@
+uuid: 7d572ed9-ff56-4d6a-8293-50c068c68a56
+langcode: en
+status: true
+dependencies: {  }
+name: 'Wish intent'
+vid: wish_intent
+description: 'Why a card is on the wishlist.'
+weight: 0
+new_revision: false

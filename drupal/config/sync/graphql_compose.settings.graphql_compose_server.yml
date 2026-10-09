@@ -29,6 +29,8 @@ field_config:
         enabled: true
       field_is_foil:
         enabled: true
+      field_maybe_cards:
+        enabled: true
     mtg_card:
       field_mana_cost:
         enabled: true
@@ -84,6 +86,10 @@ field_config:
       field_quantity_owned:
         enabled: true
       field_quantity_foil:
+        enabled: true
+      field_quantity_trade:
+        enabled: true
+      field_binder_location:
         enabled: true
   paragraph:
     deck_card:

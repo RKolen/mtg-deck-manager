@@ -14,3 +14,5 @@ services:
       - '@http_client'
       - '@mtg_scryfall_sync.set_taxonomy'
       - '@database'
+      - '@cache.entity'
+      - '@cache_tags.invalidator'

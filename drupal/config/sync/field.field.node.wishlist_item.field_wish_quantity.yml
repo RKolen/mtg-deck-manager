@@ -1,0 +1,25 @@
+uuid: ebfadf02-44fa-4bcc-98da-19b55ba8e06f
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_wish_quantity
+    - node.type.wishlist_item
+id: node.wishlist_item.field_wish_quantity
+field_name: field_wish_quantity
+entity_type: node
+bundle: wishlist_item
+label: Quantity
+description: ''
+required: true
+translatable: true
+default_value:
+  -
+    value: 1
+default_value_callback: ''
+settings:
+  min: 1
+  max: null
+  prefix: ''
+  suffix: ''
+field_type: integer

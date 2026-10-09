@@ -1,0 +1,21 @@
+uuid: e359b50c-8af2-414a-af14-06bbc85443f4
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_min_condition
+    - node.type.wishlist_item
+  module:
+    - options
+id: node.wishlist_item.field_min_condition
+field_name: field_min_condition
+entity_type: node
+bundle: wishlist_item
+label: 'Minimum condition'
+description: ''
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: list_string

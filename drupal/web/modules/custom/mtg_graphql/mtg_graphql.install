@@ -310,3 +310,24 @@ function mtg_graphql_update_9007(): string {
 
   return 'Created field_commander_foil on deck.';
 }
+
+/**
+ * Creates the default wishlist intents.
+ *
+ * The wish_intent vocabulary and wishlist fields come from config. Terms are
+ * content, so they are created here when missing.
+ */
+function mtg_graphql_update_9008(): string {
+  $storage = \Drupal::entityTypeManager()->getStorage('taxonomy_term');
+  $created = [];
+  foreach (['Deck need', 'Brew', 'Upgrade', 'Price watch'] as $weight => $name) {
+    if ($storage->loadByProperties(['vid' => 'wish_intent', 'name' => $name]) !== []) {
+      continue;
+    }
+    $storage->create(['vid' => 'wish_intent', 'name' => $name, 'weight' => $weight])->save();
+    $created[] = $name;
+  }
+  return $created === []
+    ? 'Wishlist intents already present.'
+    : 'Created wishlist intents: ' . implode(', ', $created) . '.';
+}

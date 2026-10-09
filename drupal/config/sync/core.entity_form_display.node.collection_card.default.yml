@@ -3,9 +3,11 @@ langcode: en
 status: true
 dependencies:
   config:
+    - field.field.node.collection_card.field_binder_location
     - field.field.node.collection_card.field_card
     - field.field.node.collection_card.field_quantity_foil
     - field.field.node.collection_card.field_quantity_owned
+    - field.field.node.collection_card.field_quantity_trade
     - node.type.collection_card
 id: node.collection_card.default
 targetEntityType: node
@@ -17,6 +19,14 @@ content:
     weight: 10
     region: content
     settings: {  }
+    third_party_settings: {  }
+  field_binder_location:
+    type: string_textfield
+    weight: 5
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
     third_party_settings: {  }
   field_card:
     type: entity_reference_autocomplete
@@ -38,6 +48,13 @@ content:
   field_quantity_owned:
     type: number
     weight: 2
+    region: content
+    settings:
+      placeholder: ''
+    third_party_settings: {  }
+  field_quantity_trade:
+    type: number
+    weight: 4
     region: content
     settings:
       placeholder: ''

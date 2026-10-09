@@ -304,4 +304,72 @@ class ScryfallCommands extends DrushCommands {
     ));
   }
 
+  /**
+   * Imports tokens and emblems from the local bulk file.
+   *
+   * Earlier syncs skipped tokens. This imports only token layouts, so it runs
+   * in minutes; later full syncs keep them up to date.
+   *
+   * @command mtg:import-tokens
+   * @aliases mtg-tokens
+   * @usage ddev drush mtg:import-tokens
+   */
+  public function importTokens(): void {
+    if (!$this->importer->dataFileExists()) {
+      $this->logger()->error('No data file found. Run mtg:scryfall-download first.');
+      return;
+    }
+    $this->output()->writeln('Importing tokens and emblems from the local Scryfall file...');
+    try {
+      $result = $this->importer->importTokens();
+    }
+    catch (\RuntimeException $e) {
+      $this->logger()->error('Token import failed: @msg', ['@msg' => $e->getMessage()]);
+      return;
+    }
+    $this->output()->writeln(sprintf(
+      'Token import complete: %d added, %d updated.',
+      $result['added'],
+      $result['updated'],
+    ));
+  }
+
+  /**
+   * Refreshes card prices from the Scryfall bulk file.
+   *
+   * Writes prices directly instead of saving every card, so it takes minutes
+   * instead of the hours a full sync needs. New cards still need a full sync.
+   *
+   * @param array $options
+   *   Command options.
+   *
+   * @command mtg:refresh-prices
+   * @aliases mtg-prices
+   * @option download Download a fresh bulk file first.
+   * @usage ddev drush mtg:refresh-prices --download
+   */
+  public function refreshPrices(array $options = ['download' => FALSE]): void {
+    if ($options['download']) {
+      $this->output()->writeln('Downloading Scryfall bulk data...');
+      $this->importer->downloadBulkData();
+    }
+    if (!$this->importer->dataFileExists()) {
+      $this->logger()->error('No data file found. Run with --download or mtg:scryfall-download first.');
+      return;
+    }
+    $this->output()->writeln('Refreshing prices from the local Scryfall file...');
+    try {
+      $result = $this->importer->refreshPrices();
+    }
+    catch (\RuntimeException $e) {
+      $this->logger()->error('Price refresh failed: @msg', ['@msg' => $e->getMessage()]);
+      return;
+    }
+    $this->output()->writeln(sprintf(
+      'Price refresh complete: %d cards written, %d bulk rows unmatched.',
+      $result['updated'],
+      $result['skipped'],
+    ));
+  }
+
 }

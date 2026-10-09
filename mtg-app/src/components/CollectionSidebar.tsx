@@ -9,6 +9,10 @@ interface CollectionSidebarProps {
   filteredUnique: number;
   estValue: number | null;
   currency: Currency;
+  /** Copies marked for trade. */
+  tradeCopies?: number;
+  /** Value of the copies marked for trade. */
+  tradeValue?: number;
 }
 
 const CollectionSidebar: React.FC<CollectionSidebarProps> = ({
@@ -19,6 +23,8 @@ const CollectionSidebar: React.FC<CollectionSidebarProps> = ({
   filteredUnique,
   estValue,
   currency,
+  tradeCopies = 0,
+  tradeValue = 0,
 }) => (
   <aside
     className="summary-card"
@@ -40,6 +46,14 @@ const CollectionSidebar: React.FC<CollectionSidebarProps> = ({
           <dt style={{ color: 'var(--ink)' }}>Est. value ({currency})</dt>
           <dd style={{ marginLeft: 0, fontWeight: 'bold', color: 'var(--ink)' }}>
             {formatPrice(estValue, currency)}
+          </dd>
+        </>
+      )}
+      {tradeCopies > 0 && (
+        <>
+          <dt style={{ color: 'var(--ink)' }}>For trade</dt>
+          <dd style={{ marginLeft: 0, fontWeight: 'bold', color: 'var(--ink)' }}>
+            {tradeCopies} ({formatPrice(tradeValue, currency)})
           </dd>
         </>
       )}

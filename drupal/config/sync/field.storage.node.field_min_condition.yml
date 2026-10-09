@@ -1,0 +1,42 @@
+uuid: eca8cab7-2aef-4464-8fef-d5c6a8f336e5
+langcode: en
+status: true
+dependencies:
+  module:
+    - node
+    - options
+id: node.field_min_condition
+field_name: field_min_condition
+entity_type: node
+type: list_string
+settings:
+  allowed_values:
+    -
+      value: M
+      label: Mint
+    -
+      value: NM
+      label: 'Near Mint'
+    -
+      value: EX
+      label: Excellent
+    -
+      value: GD
+      label: Good
+    -
+      value: LP
+      label: 'Light Played'
+    -
+      value: PL
+      label: Played
+    -
+      value: PO
+      label: Poor
+  allowed_values_function: ''
+module: options
+locked: false
+cardinality: 1
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

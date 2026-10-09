@@ -1,13 +1,18 @@
 import { gql } from 'graphql-request';
 import type {
   CollectionCardAttributes,
+  CollectionImportResult,
+  CollectionImportRow,
   DeckAttributes,
+  DeckBoard,
   DeckCardWithCard,
   DeckCommander,
   JsonApiCollectionResponse,
   JsonApiResource,
   JsonApiSingleResponse,
   MtgCardAttributes,
+  WishIntent,
+  WishlistItem,
 } from '../types/drupal';
 import { getGraphQLClient } from './graphqlClient';
 import { slugify } from '../utils/slugify';
@@ -79,6 +84,8 @@ interface GqlComposeCollectionCard {
   uuid: string;
   quantityOwned: number;
   quantityFoil: number;
+  quantityTrade?: number | null;
+  binderLocation?: string | null;
   card?: {
     uuid: string;
     title?: string | null;
@@ -89,6 +96,9 @@ interface GqlComposeCollectionCard {
     cmc?: number | null;
     priceUsd?: string | null;
     priceEur?: string | null;
+    priceEurFoil?: string | null;
+    priceUsdFoil?: string | null;
+    imageUri?: string | null;
     fullArt?: boolean | null;
     borderColor?: string | null;
   } | null;
@@ -99,6 +109,7 @@ interface GqlDeckCard {
   quantity: number;
   isSideboard: boolean;
   isFoil?: boolean | null;
+  board?: DeckBoard | null;
   card: GqlMtgCard;
 }
 
@@ -106,6 +117,8 @@ interface GqlCollectionCard {
   id: string;
   quantityOwned: number;
   quantityFoil: number;
+  quantityTrade?: number | null;
+  binderLocation?: string | null;
   card: GqlMtgCard | null;
 }
 
@@ -230,6 +243,8 @@ function toCollectionCardFromCompose(
     attributes: {
       field_quantity_owned: cc.quantityOwned,
       field_quantity_foil: cc.quantityFoil,
+      field_quantity_trade: cc.quantityTrade ?? 0,
+      field_binder_location: cc.binderLocation ?? null,
       field_card_title: cc.card?.title ?? '',
       field_set_code: cc.card?.setCode ?? '',
       field_set_name: cc.card?.setName ?? '',
@@ -238,6 +253,9 @@ function toCollectionCardFromCompose(
       field_cmc: cc.card?.cmc ?? 0,
       field_price_usd: cc.card?.priceUsd ?? null,
       field_price_eur: cc.card?.priceEur ?? null,
+      field_price_eur_foil: cc.card?.priceEurFoil ?? null,
+      field_price_usd_foil: cc.card?.priceUsdFoil ?? null,
+      field_image_uri: cc.card?.imageUri ?? null,
       field_full_art: Boolean(cc.card?.fullArt),
       field_border_color: cc.card?.borderColor ?? '',
     },
@@ -256,6 +274,7 @@ function toDeckCardWithCard(d: GqlDeckCard): DeckCardWithCard {
     quantity: d.quantity,
     isSideboard: d.isSideboard,
     isFoil: Boolean(d.isFoil),
+    board: d.board ?? (d.isSideboard ? 'side' : 'main'),
     card: {
       id: c.id,
       title: c.title,
@@ -297,6 +316,8 @@ function toCollectionCardResource(cc: GqlCollectionCard): JsonApiResource<Collec
     attributes: {
       field_quantity_owned: cc.quantityOwned,
       field_quantity_foil: cc.quantityFoil,
+      field_quantity_trade: cc.quantityTrade ?? 0,
+      field_binder_location: cc.binderLocation ?? null,
     },
     relationships: {
       field_card: {
@@ -364,6 +385,8 @@ export async function fetchCardsPage(
     colors?: string[];
     type?: string;
     maxCmc?: number | null;
+    /** true lists only tokens and emblems; otherwise they are hidden. */
+    tokens?: boolean;
   } = {},
 ): Promise<CardPage> {
   // pageUrl encodes the page number as a plain integer string when set.
@@ -373,9 +396,12 @@ export async function fetchCardsPage(
     ${CARD_FIELDS}
     query GetCards(
       $page: Int, $name: String, $colors: [String!],
-      $type: String, $maxCmc: Float
+      $type: String, $maxCmc: Float, $tokens: Boolean
     ) {
-      cards(page: $page, limit: 50, name: $name, colors: $colors, type: $type, maxCmc: $maxCmc) {
+      cards(
+        page: $page, limit: 50, name: $name, colors: $colors, type: $type, maxCmc: $maxCmc,
+        tokens: $tokens
+      ) {
         cards { ...CardFields }
         nextCursor
       }
@@ -390,6 +416,7 @@ export async function fetchCardsPage(
     colors: filters.colors?.length ? filters.colors : null,
     type: filters.type !== 'All' ? (filters.type || null) : null,
     maxCmc: filters.maxCmc ?? null,
+    tokens: filters.tokens === true ? true : null,
   });
 
   return {
@@ -669,7 +696,7 @@ function composeMtgCardToGql(card: GqlComposeMtgCard): GqlMtgCard {
   };
 }
 
-function toDeckCardFromCompose(slot: GqlComposeDeckCard): DeckCardWithCard {
+function toDeckCardFromCompose(slot: GqlComposeDeckCard, maybe = false): DeckCardWithCard {
   if (slot.card == null) {
     throw new Error('Deck card paragraph is missing its card reference');
   }
@@ -678,19 +705,18 @@ function toDeckCardFromCompose(slot: GqlComposeDeckCard): DeckCardWithCard {
     quantity: slot.quantity,
     isSideboard: slot.isSideboard,
     isFoil: Boolean(slot.isFoil),
+    board: maybe ? 'maybe' : (slot.isSideboard ? 'side' : 'main'),
     card: composeMtgCardToGql(slot.card),
   });
   return mapped;
 }
 
-export async function fetchDeckCardsWithCards(
-  deckId: string,
-): Promise<DeckCardWithCard[]> {
+async function fetchDeckSlots(deckId: string, field: 'deckCards' | 'maybeCards'): Promise<DeckCardWithCard[]> {
   const query = gql`
     ${COMPOSE_DECK_CARD_FIELDS}
-    query GetDeckWithCards($id: ID!) {
+    query GetDeckSlots($id: ID!) {
       nodeDeck(id: $id) {
-        deckCards {
+        ${field} {
           ... on ParagraphDeckCard {
             ...ComposeDeckCardFields
           }
@@ -699,12 +725,26 @@ export async function fetchDeckCardsWithCards(
     }
   `;
   const data = await getGraphQLClient().request<{
-    nodeDeck: { deckCards: (GqlComposeDeckCard | null)[] } | null;
+    nodeDeck: Record<string, (GqlComposeDeckCard | null)[] | null> | null;
   }>(query, { id: deckId });
-  const slots = data.nodeDeck?.deckCards ?? [];
-  return slots
+  return (data.nodeDeck?.[field] ?? [])
     .filter((s): s is GqlComposeDeckCard => s != null && s.card != null)
-    .map(toDeckCardFromCompose);
+    .map(s => toDeckCardFromCompose(s, field === 'maybeCards'));
+}
+
+/** Main deck and sideboard slots. The maybeboard is loaded separately. */
+export async function fetchDeckCardsWithCards(
+  deckId: string,
+): Promise<DeckCardWithCard[]> {
+  return fetchDeckSlots(deckId, 'deckCards');
+}
+
+/**
+ * Maybeboard slots (board 'maybe'). They never count toward deck size,
+ * legality, value or simulation, so only the deck page loads them.
+ */
+export async function fetchDeckMaybeCards(deckId: string): Promise<DeckCardWithCard[]> {
+  return fetchDeckSlots(deckId, 'maybeCards');
 }
 
 async function deckCardAdd(
@@ -713,14 +753,16 @@ async function deckCardAdd(
   quantity: number,
   isSideboard: boolean,
   foil?: boolean,
+  board?: DeckBoard,
 ): Promise<void> {
   const mutation = gql`
     mutation DeckCardAdd(
-      $deckId: ID!, $cardId: ID!, $quantity: Int!, $isSideboard: Boolean!, $foil: Boolean
+      $deckId: ID!, $cardId: ID!, $quantity: Int!, $isSideboard: Boolean!, $foil: Boolean,
+      $board: String
     ) {
       deckCardAdd(
         deckId: $deckId, cardId: $cardId, quantity: $quantity,
-        isSideboard: $isSideboard, foil: $foil
+        isSideboard: $isSideboard, foil: $foil, board: $board
       ) { id }
     }
   `;
@@ -730,7 +772,18 @@ async function deckCardAdd(
     quantity,
     isSideboard,
     foil: foil ?? null,
+    board: board ?? null,
   });
+}
+
+/** Moves a slot to main, side or maybe; merges with the same printing there. */
+export async function moveDeckCard(deckId: string, slotId: string, board: DeckBoard): Promise<void> {
+  const mutation = gql`
+    mutation DeckCardMove($deckId: ID!, $slotId: ID!, $board: String!) {
+      deckCardMove(deckId: $deckId, slotId: $slotId, board: $board) { id }
+    }
+  `;
+  await getGraphQLClient().request(mutation, { deckId, slotId, board });
 }
 
 async function deckCardUpdate(
@@ -872,9 +925,11 @@ export async function addCardToDeck(
   existingSlots: DeckCardWithCard[] = [],
   _cardName = '',
   foil?: boolean,
+  board?: DeckBoard,
 ): Promise<void> {
+  const target: DeckBoard = board ?? (isSideboard ? 'side' : 'main');
   const existing = existingSlots.find(
-    s => s.card.id === cardId && s.isSideboard === isSideboard,
+    s => s.card.id === cardId && s.board === target,
   );
 
   if (existing != null) {
@@ -882,7 +937,7 @@ export async function addCardToDeck(
     return;
   }
 
-  await deckCardAdd(deckId, cardId, 1, isSideboard, foil);
+  await deckCardAdd(deckId, cardId, 1, target === 'side', foil, target);
 }
 
 export async function setCardQuantityInDeck(
@@ -917,7 +972,7 @@ export async function fetchCollectionCards(): Promise<
     query GetCollectionCards($after: Cursor) {
       nodeCollectionCards(first: 100, after: $after) {
         nodes {
-          id uuid quantityOwned quantityFoil
+          id uuid quantityOwned quantityFoil quantityTrade binderLocation
           card {
             ... on NodeMtgCard {
               uuid
@@ -929,6 +984,9 @@ export async function fetchCollectionCards(): Promise<
               cmc
               priceUsd
               priceEur
+              priceEurFoil
+              priceUsdFoil
+              imageUri
               fullArt
               borderColor
             }
@@ -993,25 +1051,36 @@ export async function upsertCollectionCard(
   quantityOwned: number,
   quantityFoil = 0,
   existingId?: string,
+  trade?: { quantityTrade?: number; binderLocation?: string },
 ): Promise<JsonApiResource<CollectionCardAttributes>> {
   const mutation = gql`
     mutation UpsertCollection(
       $cardId: ID!, $cardName: String!,
-      $quantityOwned: Int!, $quantityFoil: Int, $existingId: ID
+      $quantityOwned: Int!, $quantityFoil: Int, $existingId: ID,
+      $quantityTrade: Int, $binderLocation: String
     ) {
       upsertCollectionCard(
         cardId: $cardId, cardName: $cardName,
         quantityOwned: $quantityOwned, quantityFoil: $quantityFoil,
-        existingId: $existingId
+        existingId: $existingId,
+        quantityTrade: $quantityTrade, binderLocation: $binderLocation
       ) {
-        id quantityOwned quantityFoil
+        id quantityOwned quantityFoil quantityTrade binderLocation
         card { id }
       }
     }
   `;
   const data = await getGraphQLClient().request<{ upsertCollectionCard: GqlCollectionCard }>(
     mutation,
-    { cardId, cardName, quantityOwned, quantityFoil, existingId: existingId ?? null },
+    {
+      cardId,
+      cardName,
+      quantityOwned,
+      quantityFoil,
+      existingId: existingId ?? null,
+      quantityTrade: trade?.quantityTrade ?? null,
+      binderLocation: trade?.binderLocation ?? null,
+    },
   );
   return toCollectionCardResource(data.upsertCollectionCard);
 }
@@ -1022,7 +1091,7 @@ export async function fetchCollectionCardByCardId(
   const query = gql`
     query GetCollectionCardByCard($cardId: ID!) {
       collectionCardByCardId(cardId: $cardId) {
-        id quantityOwned quantityFoil
+        id quantityOwned quantityFoil quantityTrade binderLocation
         card { id }
       }
     }
@@ -1033,6 +1102,144 @@ export async function fetchCollectionCardByCardId(
   return data.collectionCardByCardId != null
     ? toCollectionCardResource(data.collectionCardByCardId)
     : null;
+}
+
+// ---------------------------------------------------------------------------
+// Wishlist
+// ---------------------------------------------------------------------------
+
+const WISHLIST_FIELDS = gql`
+  ${CARD_FIELDS}
+  fragment WishlistFields on WishlistItem {
+    id quantity anyPrinting foil minCondition notes owned done priceEur priceUsd
+    card { ...CardFields }
+    deck { id title }
+    intent { id name }
+  }
+`;
+
+interface GqlWishlistItem extends Omit<WishlistItem, 'card'> {
+  card: GqlMtgCard | null;
+}
+
+function toWishlistItem(w: GqlWishlistItem): WishlistItem {
+  return {
+    ...w,
+    card: w.card != null ? { id: w.card.id, ...toCardResource(w.card).attributes } : null,
+  };
+}
+
+/** Wishes, optionally for one deck or intent. Done wishes only when asked. */
+export async function fetchWishlist(
+  filters: { deckId?: string | null; intentId?: string | null; includeDone?: boolean } = {},
+): Promise<WishlistItem[]> {
+  const query = gql`
+    ${WISHLIST_FIELDS}
+    query GetWishlist($deckId: ID, $intentId: ID, $includeDone: Boolean) {
+      wishlist(deckId: $deckId, intentId: $intentId, includeDone: $includeDone) { ...WishlistFields }
+    }
+  `;
+  const data = await getGraphQLClient().request<{ wishlist: GqlWishlistItem[] }>(query, {
+    deckId: filters.deckId || null,
+    intentId: filters.intentId || null,
+    includeDone: filters.includeDone ?? false,
+  });
+  return data.wishlist.map(toWishlistItem);
+}
+
+/** Wishes a printing would fill (any-printing wishes for the card, or exact). */
+export async function fetchWishlistForCard(cardId: string): Promise<WishlistItem[]> {
+  const query = gql`
+    ${WISHLIST_FIELDS}
+    query GetWishlistForCard($cardId: ID!) {
+      wishlistForCard(cardId: $cardId) { ...WishlistFields }
+    }
+  `;
+  const data = await getGraphQLClient().request<{ wishlistForCard: GqlWishlistItem[] }>(query, { cardId });
+  return data.wishlistForCard.map(toWishlistItem);
+}
+
+export async function fetchWishIntents(): Promise<WishIntent[]> {
+  const query = gql`
+    query GetWishIntents { wishIntents { id name } }
+  `;
+  const data = await getGraphQLClient().request<{ wishIntents: WishIntent[] }>(query);
+  return data.wishIntents;
+}
+
+export interface WishlistItemInput {
+  id?: string | null;
+  cardId: string;
+  quantity: number;
+  anyPrinting?: boolean;
+  foil?: boolean;
+  /** Empty string clears the deck. */
+  deckId?: string | null;
+  /** Empty string clears the intent. */
+  intentId?: string | null;
+  minCondition?: string | null;
+  notes?: string | null;
+}
+
+export async function saveWishlistItem(input: WishlistItemInput): Promise<WishlistItem> {
+  const mutation = gql`
+    ${WISHLIST_FIELDS}
+    mutation SaveWishlistItem(
+      $id: ID, $cardId: ID!, $quantity: Int!, $anyPrinting: Boolean, $foil: Boolean,
+      $deckId: ID, $intentId: ID, $minCondition: String, $notes: String
+    ) {
+      saveWishlistItem(
+        id: $id, cardId: $cardId, quantity: $quantity, anyPrinting: $anyPrinting, foil: $foil,
+        deckId: $deckId, intentId: $intentId, minCondition: $minCondition, notes: $notes
+      ) { ...WishlistFields }
+    }
+  `;
+  const data = await getGraphQLClient().request<{ saveWishlistItem: GqlWishlistItem }>(mutation, {
+    id: input.id ?? null,
+    cardId: input.cardId,
+    quantity: input.quantity,
+    anyPrinting: input.anyPrinting ?? null,
+    foil: input.foil ?? null,
+    deckId: input.deckId ?? null,
+    intentId: input.intentId ?? null,
+    minCondition: input.minCondition ?? null,
+    notes: input.notes ?? null,
+  });
+  return toWishlistItem(data.saveWishlistItem);
+}
+
+export async function deleteWishlistItem(id: string): Promise<void> {
+  const mutation = gql`
+    mutation DeleteWishlistItem($id: ID!) { deleteWishlistItem(id: $id) }
+  `;
+  await getGraphQLClient().request(mutation, { id });
+}
+
+// ---------------------------------------------------------------------------
+// Collection import (exact printings by Scryfall ID)
+// ---------------------------------------------------------------------------
+
+/**
+ * Matches rows to printings. With apply false nothing is written, so the
+ * result can be shown for review first.
+ */
+export async function importCollection(
+  rows: CollectionImportRow[],
+  apply: boolean,
+): Promise<CollectionImportResult[]> {
+  const mutation = gql`
+    mutation ImportCollection($rows: [CollectionImportRow!]!, $apply: Boolean!) {
+      importCollection(rows: $rows, apply: $apply) {
+        row status matchedBy
+        card { id title setCode setName collectorNumber }
+      }
+    }
+  `;
+  const data = await getGraphQLClient().request<{ importCollection: CollectionImportResult[] }>(
+    mutation,
+    { rows, apply },
+  );
+  return data.importCollection;
 }
 
 // Re-export JSON:API types that are still used by other services / pages.

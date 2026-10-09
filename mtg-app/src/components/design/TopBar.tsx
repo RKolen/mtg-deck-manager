@@ -9,6 +9,7 @@ export type NavId =
   | 'decks'
   | 'builder'
   | 'collection'
+  | 'wishlist'
   | 'sim'
   | 'import'
   | 'meta';
@@ -16,17 +17,19 @@ export type NavId =
 const TABS: Array<{ id: NavId; label: string; href: string; hotkey: string }> = [
   { id: 'home', label: 'HOME', href: '/', hotkey: 'H' },
   { id: 'decks', label: 'DECKS', href: '/decks', hotkey: 'D' },
-  { id: 'builder', label: 'BUILDER', href: '/decks', hotkey: 'B' },
   { id: 'collection', label: 'COLLECTION', href: '/collection', hotkey: 'C' },
+  { id: 'wishlist', label: 'WISHLIST', href: '/wishlist', hotkey: 'W' },
   { id: 'import', label: 'IMPORT', href: '/import', hotkey: 'I' },
   { id: 'meta', label: 'META', href: '/meta-decks', hotkey: 'M' },
 ];
 
 function routeToNav(pathname: string): NavId {
   if (pathname === '/') return 'home';
-  if (pathname.startsWith('/decks/') && pathname !== '/decks') return 'builder';
+  // Deck pages (/decks/[id]) are where decks are built, so they keep the
+  // DECKS tab active.
   if (pathname.startsWith('/decks')) return 'decks';
   if (pathname.startsWith('/collection')) return 'collection';
+  if (pathname.startsWith('/wishlist')) return 'wishlist';
   if (pathname.startsWith('/import')) return 'import';
   if (pathname.startsWith('/meta')) return 'meta';
   return 'home';

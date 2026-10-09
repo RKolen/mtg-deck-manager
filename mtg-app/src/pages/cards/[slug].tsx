@@ -18,6 +18,7 @@ import {
   replaceDeckCardPrinting,
 } from '../../services/drupalApi';
 import { invalidateInventoryQueries } from '../../services/queryCache';
+import WishlistPanel from '../../components/WishlistPanel';
 import PrintingSwapDialog, {
   type CollectionSwapMode,
   type PrintingSwapTarget,
@@ -29,7 +30,7 @@ import PrintingFilter, {
   EMPTY_PRINTING_FILTER,
   matchesPrintingFilter,
 } from '../../components/PrintingFilter';
-import { formatPrice, priceFor } from '../../utils/prices';
+import { bestPrice, formatPrice, priceFor } from '../../utils/prices';
 import type { MtgCard } from '../../types/drupal';
 
 const CardPage: React.FC = () => {
@@ -81,8 +82,8 @@ const CardPage: React.FC = () => {
       const sa = a.attributes.field_set_name ?? a.attributes.field_set_code ?? '';
       const sb = b.attributes.field_set_name ?? b.attributes.field_set_code ?? '';
       if (sa !== sb) return sa.localeCompare(sb);
-      const pa = priceFor(a.attributes, currency) ?? 0;
-      const pb = priceFor(b.attributes, currency) ?? 0;
+      const pa = bestPrice(a.attributes, currency) ?? 0;
+      const pb = bestPrice(b.attributes, currency) ?? 0;
       return pb - pa;
     });
   }, [printings, currency]);
@@ -301,6 +302,8 @@ const CardPage: React.FC = () => {
               <strong>Legal in:</strong> {attrs.field_legal_formats.join(', ')}
             </p>
           )}
+
+          <WishlistPanel key={displayed.id} cardId={displayed.id} cardTitle={attrs.title} />
         </div>
       </div>
 

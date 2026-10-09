@@ -1,0 +1,25 @@
+uuid: 490c53b8-da56-4103-af22-5fe65f9dcf86
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_quantity_trade
+    - node.type.collection_card
+id: node.collection_card.field_quantity_trade
+field_name: field_quantity_trade
+entity_type: node
+bundle: collection_card
+label: 'Quantity for trade'
+description: 'Copies (regular and foil together) available for trade.'
+required: false
+translatable: true
+default_value:
+  -
+    value: 0
+default_value_callback: ''
+settings:
+  min: 0
+  max: null
+  prefix: ''
+  suffix: ''
+field_type: integer

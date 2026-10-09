@@ -5,7 +5,7 @@ import type { QueryClient } from '@tanstack/react-query';
  *
  * Printing swaps, deck edits, and collection upserts all change owned
  * copies and/or printings, so menu VAL, unique counts, and per-deck
- * prices must drop together.
+ * prices must drop together. Wishes count owned copies, so they refetch too.
  */
 export async function invalidateInventoryQueries(
   qc: QueryClient,
@@ -21,5 +21,6 @@ export async function invalidateInventoryQueries(
     qc.invalidateQueries({ queryKey: ['collectionByCard'] }),
     qc.invalidateQueries({ queryKey: ['collectionCard'] }),
     qc.invalidateQueries({ queryKey: deckKey }),
+    qc.invalidateQueries({ queryKey: ['wishlist'] }),
   ]);
 }

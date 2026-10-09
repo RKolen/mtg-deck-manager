@@ -1,0 +1,20 @@
+uuid: c4817a80-1f27-4d9e-8d83-8aee25ba87f8
+langcode: en
+status: true
+dependencies:
+  module:
+    - node
+    - taxonomy
+id: node.field_wish_intent
+field_name: field_wish_intent
+entity_type: node
+type: entity_reference
+settings:
+  target_type: taxonomy_term
+module: core
+locked: false
+cardinality: 1
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

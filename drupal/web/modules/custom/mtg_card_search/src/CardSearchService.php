@@ -32,7 +32,7 @@ final class CardSearchService {
    * @param array<string, mixed> $params
    *   Keys: q, type, oracleText, legalIn, cmcMin, cmcMax, colors,
    *   colorIdentity, manaProducer, rarity, setCodes, setExclude,
-   *   deckIds, deckExclude, page, limit.
+   *   deckIds, deckExclude, includeTokens, tokensOnly, page, limit.
    *
    * @return array{cards: \Drupal\node\NodeInterface[], count: int, pages: int}
    *   Matching cards plus result counts.
@@ -205,6 +205,24 @@ final class CardSearchService {
       }
       elseif ($cardNids !== []) {
         $conditions->addCondition('nid', $cardNids, 'NOT IN');
+      }
+      $hasCondition = TRUE;
+    }
+
+    // Tokens and emblems are collectable but never go in a deck. Their type
+    // lines start with "Token" or "Emblem", so match on those string ranges:
+    // only them for the token box, otherwise excluded unless asked for.
+    if (!empty($params['tokensOnly'])) {
+      $tokenGroup = $query->createConditionGroup('OR');
+      foreach (['Token', 'Emblem'] as $prefix) {
+        $tokenGroup->addCondition('field_type_line_string', [$prefix, $prefix . '~'], 'BETWEEN');
+      }
+      $conditions->addConditionGroup($tokenGroup);
+      $hasCondition = TRUE;
+    }
+    elseif (empty($params['includeTokens'])) {
+      foreach (['Token', 'Emblem'] as $prefix) {
+        $conditions->addCondition('field_type_line_string', [$prefix, $prefix . '~'], 'NOT BETWEEN');
       }
       $hasCondition = TRUE;
     }

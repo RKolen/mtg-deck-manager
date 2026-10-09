@@ -29,6 +29,8 @@ import {
   fetchDeckBySlug,
   fetchFormats,
   fetchDeckCardsWithCards,
+  fetchDeckMaybeCards,
+  moveDeckCard,
   fetchCollectionCards,
   collectionPrintingId,
   collectionOwnedQty,
@@ -50,7 +52,7 @@ import PrintingFilter, {
 } from '../../components/PrintingFilter';
 import { useTheme } from '../../context/ThemeContext';
 import { cardImageSrc } from '../../utils/cardImage';
-import { formatPrice, priceFor } from '../../utils/prices';
+import { formatPrice, priceFor, slotUnitPrice } from '../../utils/prices';
 import {
   chartAxisProps,
   chartTooltipProps,
@@ -75,7 +77,7 @@ import {
   type MatchupAdvice,
   type ArchetypeProbability,
 } from '../../services/metaApi';
-import type { CollectionCard, DeckCardWithCard, DeckCommander } from '../../types/drupal';
+import type { CollectionCard, DeckBoard, DeckCardWithCard, DeckCommander } from '../../types/drupal';
 import { COMMANDER_SLOT, cardPrintingsPath } from '../../utils/slugify';
 import {
   ALL_COLORS,
@@ -162,6 +164,8 @@ interface EditorProps {
   deckId: string;
   deckSlug: string;
   cards: DeckCardWithCard[];
+  /** Maybeboard slots. Never counted toward size, legality or value. */
+  maybeCards?: DeckCardWithCard[];
   format: string;
   deckIsFoil: boolean;
   commander?: DeckCommander | null;
@@ -347,6 +351,7 @@ const DeckEditor: React.FC<EditorProps> = ({
   deckId,
   deckSlug,
   cards,
+  maybeCards = [],
   format,
   deckIsFoil,
   commander,
@@ -398,7 +403,10 @@ const DeckEditor: React.FC<EditorProps> = ({
     return map;
   }, [collectionCards]);
 
-  const selectedSlot = cards.find(c => c.id === selectedSlotId) ?? null;
+  const selectedSlot =
+    cards.find(c => c.id === selectedSlotId)
+    ?? maybeCards.find(c => c.id === selectedSlotId)
+    ?? null;
 
   function collectionEntry(cardId: string): CollectionCard | undefined {
     return collectionCards.find(cc => collectionPrintingId(cc) === cardId);
@@ -468,6 +476,14 @@ const DeckEditor: React.FC<EditorProps> = ({
   const setFoil = useMutation({
     mutationFn: ({ slotId, foil }: { slotId: string; foil: boolean }) =>
       setDeckCardFoil(deckId, slotId, foil),
+    onSuccess: () => {
+      void invalidateInventoryQueries(qc, { deckId });
+    },
+  });
+
+  const moveSlot = useMutation({
+    mutationFn: ({ slotId, board }: { slotId: string; board: DeckBoard }) =>
+      moveDeckCard(deckId, slotId, board),
     onSuccess: () => {
       void invalidateInventoryQueries(qc, { deckId });
     },
@@ -577,13 +593,23 @@ const DeckEditor: React.FC<EditorProps> = ({
       cardName,
       isSideboard,
       foil,
+      board,
     }: {
       cardId: string;
       cardName: string;
       isSideboard: boolean;
       foil?: boolean;
+      board?: DeckBoard;
     }) => {
-      await addCardToDeck(deckId, cardId, isSideboard, cards, cardName, foil);
+      await addCardToDeck(
+        deckId,
+        cardId,
+        isSideboard,
+        board === 'maybe' ? maybeCards : cards,
+        cardName,
+        foil,
+        board,
+      );
       const ownedRaw = addOwnedAmount.trim();
       if (ownedRaw !== '') {
         const ownedQty = Math.max(0, Number.parseInt(ownedRaw, 10) || 0);
@@ -627,8 +653,8 @@ const DeckEditor: React.FC<EditorProps> = ({
         setCode: r.attributes.field_set_code ?? '',
         setName: r.attributes.field_set_name ?? '',
         collectorNumber: r.attributes.field_collector_number ?? '',
-        priceUsd: r.attributes.field_price_usd,
-        priceEur: r.attributes.field_price_eur,
+        priceUsd: r.attributes.field_price_usd ?? r.attributes.field_price_usd_foil ?? null,
+        priceEur: r.attributes.field_price_eur ?? r.attributes.field_price_eur_foil ?? null,
         cmc: r.attributes.field_cmc ?? 0,
         typeLine: r.attributes.field_type_line ?? '',
         oracleText: getOracleText(r.attributes),
@@ -655,8 +681,8 @@ const DeckEditor: React.FC<EditorProps> = ({
           setCode: cc.attributes.field_set_code ?? '',
           setName: cc.attributes.field_set_name ?? '',
           collectorNumber: cc.attributes.field_collector_number ?? '',
-          priceUsd: cc.attributes.field_price_usd ?? null,
-          priceEur: cc.attributes.field_price_eur ?? null,
+          priceUsd: cc.attributes.field_price_usd ?? cc.attributes.field_price_usd_foil ?? null,
+          priceEur: cc.attributes.field_price_eur ?? cc.attributes.field_price_eur_foil ?? null,
           cmc: cc.attributes.field_cmc ?? 0,
           typeLine: cc.attributes.field_type_line ?? '',
           oracleText: '',
@@ -715,6 +741,12 @@ const DeckEditor: React.FC<EditorProps> = ({
   const sb = sideboard(cards);
   const mainCount = totalCount(main);
   const sbCount = totalCount(sb);
+  const maybeCount = totalCount(maybeCards);
+  const maybeMissingCost = maybeCards.reduce((sum, dc) => {
+    const owned = ownedForFinish(ownedByCardId.get(dc.card.id), dc.isFoil);
+    const missing = Math.max(0, dc.quantity - owned);
+    return sum + missing * slotUnitPrice(dc.card, currency, dc.isFoil);
+  }, 0);
   const allowance = deckListAllowance(format);
   const showCommander = usesCommanderCard(format);
   const commanderLabel = isTinyLeadersFormat(format) ? 'Tiny Leader' : 'Commander';
@@ -792,12 +824,15 @@ const DeckEditor: React.FC<EditorProps> = ({
       format,
       dc.card.field_restricted_formats,
     );
+    const isMaybe = dc.board === 'maybe';
     const namedQty = copiesByName.get(dc.card.title) ?? dc.quantity;
-    const atMax = namedQty >= maxCopies;
-    const sizeBlocked =
-      !dc.isSideboard && !canAddToMain(format, nonRbMain, oracleText);
-    const moveBlocked =
-      dc.isSideboard && !canAddToMain(format, nonRbMain, oracleText);
+    const atMax = !isMaybe && namedQty >= maxCopies;
+    const mainFull = !canAddToMain(format, nonRbMain, oracleText);
+    const sizeBlocked = !isMaybe && !dc.isSideboard && mainFull;
+    const moveBlocked = (isMaybe || dc.isSideboard) && mainFull;
+    const moveTitle = moveBlocked
+      ? `Main deck is limited to ${allowance.mainTarget} cards`
+      : undefined;
     const mvLegal = isLegalManaValue(
       dc.card.field_type_line ?? '',
       dc.card.field_cmc,
@@ -912,31 +947,43 @@ const DeckEditor: React.FC<EditorProps> = ({
             +
           </button>
         </td>
-        <td style={{ padding: '0.25rem 0.5rem', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-          <button
-            type="button"
-            onClick={() => {
-              void remove.mutateAsync({ slotId: dc.id }).then(() =>
-                addCard.mutate({
-                  cardId: dc.card.id,
-                  cardName: dc.card.title,
-                  isSideboard: !dc.isSideboard,
-                  foil: dc.isFoil,
-                }),
-              );
-            }}
-            disabled={moveBlocked}
-            style={{ fontSize: '0.75rem' }}
-            title={
-              moveBlocked
-                ? `Main deck is limited to ${allowance.mainTarget} cards`
-                : dc.isSideboard
-                  ? 'Move to main'
-                  : 'Move to sideboard'
-            }
-          >
-            {dc.isSideboard ? 'To main' : 'To SB'}
-          </button>
+        <td
+          style={{ padding: '0.25rem 0.5rem', textAlign: 'center', whiteSpace: 'nowrap' }}
+          onClick={e => e.stopPropagation()}
+        >
+          {(isMaybe || dc.isSideboard) && (
+            <button
+              type="button"
+              onClick={() => moveSlot.mutate({ slotId: dc.id, board: 'main' })}
+              disabled={moveBlocked || moveSlot.isPending}
+              style={{ fontSize: '0.75rem' }}
+              title={moveTitle ?? 'Move to main'}
+            >
+              To main
+            </button>
+          )}
+          {(isMaybe || !dc.isSideboard) && (
+            <button
+              type="button"
+              onClick={() => moveSlot.mutate({ slotId: dc.id, board: 'side' })}
+              disabled={moveSlot.isPending}
+              style={{ fontSize: '0.75rem', marginLeft: isMaybe ? 4 : 0 }}
+              title="Move to sideboard"
+            >
+              To SB
+            </button>
+          )}
+          {!isMaybe && (
+            <button
+              type="button"
+              onClick={() => moveSlot.mutate({ slotId: dc.id, board: 'maybe' })}
+              disabled={moveSlot.isPending}
+              style={{ fontSize: '0.75rem', marginLeft: 4 }}
+              title="Move to the maybeboard (not counted in the deck)"
+            >
+              Maybe
+            </button>
+          )}
         </td>
         <td style={{ padding: '0.25rem 0.5rem', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
           <button
@@ -1092,6 +1139,7 @@ const DeckEditor: React.FC<EditorProps> = ({
             const mvLegal = isLegalManaValue(r.typeLine, r.cmc, format);
             const inMain = cards.some(s => s.card.id === r.id && !s.isSideboard);
             const inSb = cards.some(s => s.card.id === r.id && s.isSideboard);
+            const inMaybe = maybeCards.some(s => s.card.id === r.id);
             const ownedQty = ownedTotal(ownedByCardId.get(r.id));
             const meta = [
               setLabel || null,
@@ -1141,6 +1189,15 @@ const DeckEditor: React.FC<EditorProps> = ({
                   onClick={() => addCard.mutate({ cardId: r.id, cardName: r.title, isSideboard: true })}
                 >
                   {inSb ? '+1 copy' : '+ SB'}
+                </button>
+                <button
+                  type="button"
+                  title="Add to the maybeboard (not counted in the deck)"
+                  onClick={() =>
+                    addCard.mutate({ cardId: r.id, cardName: r.title, isSideboard: false, board: 'maybe' })
+                  }
+                >
+                  {inMaybe ? '+1 maybe' : '+ Maybe'}
                 </button>
               </li>
             );
@@ -1267,6 +1324,39 @@ const DeckEditor: React.FC<EditorProps> = ({
           renderTypeGroups(sb, 'sb', 'h4')
         ) : (
           <p style={{ color: 'var(--ink)' }}>Sideboard is empty.</p>
+        )}
+      </section>
+
+      {/* Maybeboard: candidates only, never part of the deck. */}
+      <section style={{ marginTop: '1.5rem' }}>
+        <h3
+          style={{
+            margin: '0 0 0.4rem',
+            borderBottom: '2px solid var(--line)',
+            paddingBottom: '0.25rem',
+            color: 'var(--ink)',
+          }}
+        >
+          Maybe
+          <span style={{ marginLeft: 8, color: 'var(--ink)', fontWeight: 'normal', fontSize: '0.9rem' }}>
+            ({maybeCount})
+          </span>
+          {maybeMissingCost > 0 && (
+            <span
+              style={{ marginLeft: 12, fontWeight: 'normal', fontSize: '0.8rem', opacity: 0.75 }}
+              title="Price of the maybe copies you do not own yet"
+            >
+              to buy: {formatPrice(maybeMissingCost, currency)}
+            </span>
+          )}
+        </h3>
+        {maybeCards.length > 0 ? (
+          renderTypeGroups(maybeCards, 'maybe', 'h4')
+        ) : (
+          <p style={{ color: 'var(--ink)', opacity: 0.75 }}>
+            No maybe cards. Use + Maybe in search results to note candidates without
+            counting them in the deck.
+          </p>
         )}
       </section>
       </div>
@@ -3020,6 +3110,12 @@ const DeckPage: React.FC = () => {
     enabled: deckId != null,
   });
 
+  const { data: maybeCards = [] } = useQuery<DeckCardWithCard[]>({
+    queryKey: ['deckCards', deckId, 'maybe'],
+    queryFn: () => fetchDeckMaybeCards(deckId!),
+    enabled: deckId != null && tab === 'editor',
+  });
+
   if (deckLoading) {
     return <main style={{ padding: '1.5rem', color: 'var(--ink)' }}>Loading deck...</main>;
   }
@@ -3109,6 +3205,7 @@ const DeckPage: React.FC = () => {
           deckId={deckId!}
           deckSlug={slug}
           cards={deckCards}
+          maybeCards={maybeCards}
           format={deck.attributes.field_format}
           deckIsFoil={Boolean(deck.attributes.field_is_foil)}
           commander={deck.attributes.field_commander}

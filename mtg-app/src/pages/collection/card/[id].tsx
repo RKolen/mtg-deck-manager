@@ -13,6 +13,7 @@ import {
   upsertCollectionCard,
 } from '../../../services/drupalApi';
 import { invalidateInventoryQueries } from '../../../services/queryCache';
+import WishlistPanel from '../../../components/WishlistPanel';
 import { getOracleText } from '../../../utils/deckAnalysis';
 import { slugify } from '../../../utils/slugify';
 
@@ -36,13 +37,22 @@ const CollectionCardPage: React.FC = () => {
   });
 
   const upsert = useMutation({
-    mutationFn: ({ owned, foil }: { owned: number; foil: number }) =>
+    mutationFn: ({
+      owned,
+      foil,
+      trade,
+    }: {
+      owned: number;
+      foil: number;
+      trade?: { quantityTrade?: number; binderLocation?: string };
+    }) =>
       upsertCollectionCard(
         cardId!,
         card!.attributes.title,
         owned,
         foil,
         cc?.id,
+        trade,
       ),
     onSuccess: () => {
       void invalidateInventoryQueries(qc);
@@ -51,6 +61,8 @@ const CollectionCardPage: React.FC = () => {
 
   const owned = cc?.attributes.field_quantity_owned ?? 0;
   const foil = cc?.attributes.field_quantity_foil ?? 0;
+  const trade = cc?.attributes.field_quantity_trade ?? 0;
+  const binderLocation = cc?.attributes.field_binder_location ?? '';
 
   if (cardLoading || ccLoading) {
     return <main style={{ padding: '1.5rem' }}>Loading...</main>;
@@ -231,6 +243,50 @@ const CollectionCardPage: React.FC = () => {
               Total: {owned + foil} ({owned} regular, {foil} foil)
             </p>
           )}
+
+          {(owned > 0 || foil > 0) && (
+            <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-end', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--ink)' }}>For trade</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <button
+                    type="button"
+                    style={{ width: 28 }}
+                    disabled={trade <= 0}
+                    onClick={() => upsert.mutate({ owned, foil, trade: { quantityTrade: trade - 1 } })}
+                  >
+                    -
+                  </button>
+                  <span style={{ width: 48, textAlign: 'center' }}>{trade}</span>
+                  <button
+                    type="button"
+                    style={{ width: 28 }}
+                    disabled={trade >= owned + foil}
+                    onClick={() => upsert.mutate({ owned, foil, trade: { quantityTrade: trade + 1 } })}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 180 }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--ink)' }}>Binder location</span>
+                <input
+                  key={binderLocation}
+                  type="text"
+                  defaultValue={binderLocation}
+                  placeholder="e.g. Trade binder, page 3, pocket 7"
+                  onBlur={e => {
+                    if (e.target.value !== binderLocation) {
+                      upsert.mutate({ owned, foil, trade: { binderLocation: e.target.value } });
+                    }
+                  }}
+                  style={{ color: '#000', background: '#fff', border: '1px solid #000', padding: '2px 4px' }}
+                />
+              </label>
+            </div>
+          )}
+
+          {cardId != null && <WishlistPanel key={cardId} cardId={cardId} cardTitle={a.title} />}
         </div>
       </div>
     </main>

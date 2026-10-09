@@ -1,0 +1,11 @@
+uuid: 574c4464-88ec-4e67-92c2-bf98adfd25b3
+langcode: en
+status: true
+dependencies: {  }
+name: 'Wishlist item'
+type: wishlist_item
+description: 'A card wanted for a deck, brew, upgrade or price watch.'
+help: null
+new_revision: false
+preview_mode: 1
+display_submitted: false

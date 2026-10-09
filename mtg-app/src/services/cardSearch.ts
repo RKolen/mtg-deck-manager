@@ -23,6 +23,10 @@ export interface CardSearchParams {
   /** Deck UUIDs or nids. */
   deckIds?: string[];
   deckExclude?: boolean;
+  /** Include tokens and emblems (excluded by default). */
+  includeTokens?: boolean;
+  /** Only tokens and emblems (the token box). */
+  tokensOnly?: boolean;
   page?: number;
   limit?: number;
 }
@@ -85,6 +89,7 @@ export async function searchCards(params: CardSearchParams): Promise<CardSearchR
       $cmcMin: Float, $cmcMax: Float, $colors: [String!], $colorIdentity: [String!],
       $manaProducer: Boolean, $rarity: String, $setCodes: [String!], $setExclude: Boolean,
       $deckIds: [ID!], $deckExclude: Boolean,
+      $includeTokens: Boolean, $tokensOnly: Boolean,
       $page: Int, $limit: Int
     ) {
       cardSearch(
@@ -92,6 +97,7 @@ export async function searchCards(params: CardSearchParams): Promise<CardSearchR
         cmcMin: $cmcMin, cmcMax: $cmcMax, colors: $colors, colorIdentity: $colorIdentity,
         manaProducer: $manaProducer, rarity: $rarity, setCodes: $setCodes, setExclude: $setExclude,
         deckIds: $deckIds, deckExclude: $deckExclude,
+        includeTokens: $includeTokens, tokensOnly: $tokensOnly,
         page: $page, limit: $limit
       ) {
         count
@@ -118,6 +124,8 @@ export async function searchCards(params: CardSearchParams): Promise<CardSearchR
     setExclude: params.setCodes?.length ? Boolean(params.setExclude) : null,
     deckIds: params.deckIds?.length ? params.deckIds : null,
     deckExclude: params.deckIds?.length ? Boolean(params.deckExclude) : null,
+    includeTokens: params.includeTokens ?? null,
+    tokensOnly: params.tokensOnly ?? null,
     page: params.page ?? 0,
     limit: params.limit ?? 20,
   });

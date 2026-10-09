@@ -14,6 +14,7 @@ import { slugify } from '../../utils/slugify';
 import CardFilter, { EMPTY_FILTER, type FilterState } from '../../components/CardFilter';
 import CardModal, { type CardData } from '../../components/CardModal';
 import CollectionSidebar from '../../components/CollectionSidebar';
+import TradeList from '../../components/TradeList';
 import { searchCards } from '../../services/cardSearch';
 import {
   fetchCollectionCards,
@@ -22,9 +23,19 @@ import {
 } from '../../services/drupalApi';
 import { invalidateInventoryQueries } from '../../services/queryCache';
 import { useTheme } from '../../context/ThemeContext';
+import { tradeValue } from '../../utils/prices';
 import type { CollectionCard, JsonApiResource, MtgCardAttributes } from '../../types/drupal';
 
 type CardResource = JsonApiResource<MtgCardAttributes>;
+
+/** all: every card; tokens: the token box; trade: the trade binder. */
+type CollectionView = 'all' | 'tokens' | 'trade';
+
+const VIEWS: Array<{ id: CollectionView; label: string }> = [
+  { id: 'all', label: 'All cards' },
+  { id: 'tokens', label: 'Tokens' },
+  { id: 'trade', label: 'For trade' },
+];
 
 // ---------------------------------------------------------------------------
 // Component
@@ -38,6 +49,7 @@ const CollectionPage: React.FC = () => {
     colors: new Set(),
   });
   const [modalCard, setModalCard] = useState<CardResource | null>(null);
+  const [view, setView] = useState<CollectionView>('all');
 
   // Debounced filter for API calls — avoids a request on every keystroke.
   const [debouncedFilter, setDebouncedFilter] = useState(filter);
@@ -67,6 +79,7 @@ const CollectionPage: React.FC = () => {
     setExclude: debouncedFilter.setExclude,
     deckIds: debouncedFilter.deckIds.slice().sort(),
     deckExclude: debouncedFilter.deckExclude,
+    tokens: view === 'tokens',
     page,
   });
   const {
@@ -87,9 +100,11 @@ const CollectionPage: React.FC = () => {
         setExclude: debouncedFilter.setExclude,
         deckIds: debouncedFilter.deckIds.length ? debouncedFilter.deckIds : undefined,
         deckExclude: debouncedFilter.deckExclude,
+        tokensOnly: view === 'tokens',
         page,
         limit: 50,
       }),
+    enabled: view !== 'trade',
   });
 
   const colorsKey = useMemo(
@@ -112,6 +127,7 @@ const CollectionPage: React.FC = () => {
     colorsKey,
     setsKey,
     decksKey,
+    view,
   ]);
 
   const { data: estValue = null } = useQuery<number>({
@@ -151,13 +167,15 @@ const CollectionPage: React.FC = () => {
       owned,
       foil,
       existingId,
+      trade,
     }: {
       cardId: string;
       cardName: string;
       owned: number;
       foil: number;
       existingId?: string;
-    }) => upsertCollectionCard(cardId, cardName, owned, foil, existingId),
+      trade?: { quantityTrade?: number; binderLocation?: string };
+    }) => upsertCollectionCard(cardId, cardName, owned, foil, existingId, trade),
     onSuccess: () => {
       void invalidateInventoryQueries(qc);
     },
@@ -173,6 +191,29 @@ const CollectionPage: React.FC = () => {
       owned: Math.max(0, owned),
       foil: Math.max(0, foil),
       existingId: existing?.id,
+    });
+  }
+
+  /** Sets the trade count (capped at copies owned) and binder location. */
+  function setTrade(
+    cardId: string,
+    cardName: string,
+    row: CollectionCard,
+    quantityTrade: number,
+    binderLocation?: string,
+  ): void {
+    const owned = row.attributes.field_quantity_owned ?? 0;
+    const foil = row.attributes.field_quantity_foil ?? 0;
+    upsert.mutate({
+      cardId,
+      cardName,
+      owned,
+      foil,
+      existingId: row.id,
+      trade: {
+        quantityTrade: Math.max(0, Math.min(quantityTrade, owned + foil)),
+        binderLocation,
+      },
     });
   }
 
@@ -211,6 +252,19 @@ const CollectionPage: React.FC = () => {
     return { totalCards: tc, totalUnique: tu, totalFoil: tf };
   }, [collectionCards]);
 
+  const { tradeCopies, tradeTotal } = useMemo(() => {
+    let copies = 0;
+    let value = 0;
+    for (const cc of collectionCards) {
+      const trade = cc.attributes.field_quantity_trade ?? 0;
+      if (trade > 0) {
+        copies += trade;
+        value += tradeValue(cc.attributes, currency);
+      }
+    }
+    return { tradeCopies: copies, tradeTotal: value };
+  }, [collectionCards, currency]);
+
   const filteredCopies = useMemo(
     () =>
       filteredCards.reduce((sum, card) => {
@@ -243,7 +297,39 @@ const CollectionPage: React.FC = () => {
           )}
         </h1>
 
-        {!cardsLoading && cards.length === 0 && (
+        <div role="tablist" aria-label="Collection view" style={{ display: 'flex', gap: 6, marginBottom: '0.75rem' }}>
+          {VIEWS.map(v => (
+            <button
+              key={v.id}
+              type="button"
+              role="tab"
+              aria-selected={view === v.id}
+              onClick={() => setView(v.id)}
+              style={{
+                padding: '0.25rem 0.75rem',
+                fontWeight: view === v.id ? 700 : 400,
+                borderBottom: view === v.id ? '2px solid var(--accent)' : '2px solid transparent',
+              }}
+            >
+              {v.label}
+              {v.id === 'trade' && tradeCopies > 0 ? ` (${tradeCopies})` : ''}
+            </button>
+          ))}
+        </div>
+
+        {view === 'trade' && (
+          <TradeList
+            rows={collectionCards}
+            currency={currency}
+            onChange={(row, quantityTrade, binderLocation) => {
+              const cardId = row.relationships?.field_card?.data;
+              if (cardId == null || Array.isArray(cardId)) return;
+              setTrade(cardId.id, row.attributes.field_card_title ?? '', row, quantityTrade, binderLocation);
+            }}
+          />
+        )}
+
+        {view !== 'trade' && !cardsLoading && cards.length === 0 && (
           <p>
             No cards found. Try adjusting your filters or run{' '}
             <code>ddev drush mtg-scryfall:sync</code> to import cards from
@@ -253,7 +339,7 @@ const CollectionPage: React.FC = () => {
 
         <div
           style={{
-            display: 'grid',
+            display: view === 'trade' ? 'none' : 'grid',
             gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
             gap: '0.75rem',
           }}
@@ -408,6 +494,33 @@ const CollectionPage: React.FC = () => {
                         +
                       </button>
                     </div>
+                    {cc != null && (owned > 0 || foil > 0) && (() => {
+                      const trade = cc.attributes.field_quantity_trade ?? 0;
+                      return (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ width: 36, fontSize: 10, opacity: 0.85 }}>Trade</span>
+                          <button
+                            type="button"
+                            onClick={() => setTrade(card.id, title, cc, trade - 1)}
+                            disabled={trade === 0}
+                            style={{ width: 24, padding: 0 }}
+                            title="Fewer copies for trade"
+                          >
+                            -
+                          </button>
+                          <span style={{ width: 40, textAlign: 'center' }}>{trade}</span>
+                          <button
+                            type="button"
+                            onClick={() => setTrade(card.id, title, cc, trade + 1)}
+                            disabled={trade >= owned + foil}
+                            style={{ width: 24, padding: 0 }}
+                            title="More copies for trade"
+                          >
+                            +
+                          </button>
+                        </div>
+                      );
+                    })()}
                     {(owned > 0 || foil > 0) && (
                       <div style={{ fontSize: 10, opacity: 0.85 }}>
                         Total {owned + foil}
@@ -420,7 +533,7 @@ const CollectionPage: React.FC = () => {
           })}
         </div>
 
-        {totalPages > 1 && (
+        {view !== 'trade' && totalPages > 1 && (
           <div style={{ textAlign: 'center', padding: '1rem', display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center' }}>
             <button
               type="button"
@@ -452,6 +565,8 @@ const CollectionPage: React.FC = () => {
           filteredUnique={filteredCards.length}
           estValue={estValue}
           currency={currency}
+          tradeCopies={tradeCopies}
+          tradeValue={tradeTotal}
         />
       </div>
 

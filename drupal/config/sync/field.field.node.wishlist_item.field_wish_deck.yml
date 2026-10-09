@@ -1,0 +1,24 @@
+uuid: 2587ee67-5050-4b2d-b700-a5c9854f5268
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_wish_deck
+    - node.type.deck
+    - node.type.wishlist_item
+id: node.wishlist_item.field_wish_deck
+field_name: field_wish_deck
+entity_type: node
+bundle: wishlist_item
+label: Deck
+description: 'Optional. Create an empty deck for a brew that has no list yet.'
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings:
+  handler: 'default:node'
+  handler_settings:
+    target_bundles:
+      deck: deck
+field_type: entity_reference

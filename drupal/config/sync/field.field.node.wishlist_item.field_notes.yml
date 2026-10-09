@@ -1,0 +1,22 @@
+uuid: 0f431234-ce24-4dc7-b8e9-459ab00115bb
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_notes
+    - node.type.wishlist_item
+  module:
+    - text
+id: node.wishlist_item.field_notes
+field_name: field_notes
+entity_type: node
+bundle: wishlist_item
+label: Notes
+description: ''
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings:
+  allowed_formats: {  }
+field_type: text_long

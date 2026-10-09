@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Drupal\mtg_scryfall_sync;
 
 use Drupal\Component\Datetime\TimeInterface;
+use Drupal\Core\Cache\CacheBackendInterface;
+use Drupal\Core\Cache\CacheTagsInvalidatorInterface;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
@@ -44,6 +46,9 @@ use GuzzleHttp\ClientInterface;
  *   {"id":"...","name":"..."}
  *   ]
  * Lines starting with "[" or "]" are skipped; every other line is a card.
+ * Scryfall now also serves the data as gzipped JSON Lines (one card object
+ * per line, no array brackets), which is decompressed on download and read
+ * by the same line reader.
  */
 class ScryfallImporter {
 
@@ -89,13 +94,35 @@ class ScryfallImporter {
   /**
    * Layouts that should be skipped during import.
    *
+   * Art Series cards are art prints, not game pieces.
+   *
    * @var string[]
    */
   private const SKIP_LAYOUTS = [
+    'art_series',
+  ];
+
+  /**
+   * Layouts imported as tokens and emblems (collectable, never deck cards).
+   *
+   * @var string[]
+   */
+  private const TOKEN_LAYOUTS = [
     'token',
     'emblem',
-    'art_series',
     'double_faced_token',
+  ];
+
+  /**
+   * Price fields refreshed from the bulk file, keyed by Scryfall price key.
+   *
+   * @var array<string, string>
+   */
+  private const PRICE_FIELDS = [
+    'usd' => 'field_price_usd',
+    'usd_foil' => 'field_price_usd_foil',
+    'eur' => 'field_price_eur',
+    'eur_foil' => 'field_price_eur_foil',
   ];
 
   /**
@@ -114,6 +141,8 @@ class ScryfallImporter {
     private readonly ClientInterface $httpClient,
     private readonly SetTaxonomy $setTaxonomy,
     private readonly Connection $database,
+    private readonly CacheBackendInterface $entityCache,
+    private readonly CacheTagsInvalidatorInterface $cacheTagsInvalidator,
   ) {}
 
   /**
@@ -140,7 +169,10 @@ class ScryfallImporter {
     $download_uri = NULL;
     foreach ($index['data'] as $item) {
       if ($item['type'] === self::BULK_TYPE) {
-        $download_uri = $item['download_uri'];
+        // Scryfall replaced download_uri (a JSON array) with
+        // jsonl_download_uri (gzipped JSON Lines). The line reader handles
+        // both formats, so prefer whichever one the index provides.
+        $download_uri = $item['download_uri'] ?? $item['jsonl_download_uri'] ?? NULL;
         break;
       }
     }
@@ -160,14 +192,53 @@ class ScryfallImporter {
         'User-Agent' => self::USER_AGENT,
         'Accept' => '*/*',
       ],
-      'sink' => self::DATA_FILE,
+      'sink' => self::DATA_FILE . '.download',
     ]);
+    $this->decompressDownload(self::DATA_FILE . '.download', self::DATA_FILE);
 
     $logger->info('Scryfall bulk data downloaded to @path.', ['@path' => self::DATA_FILE]);
 
     // Pre-count card lines and reset progress for a fresh import.
     $this->state->set(self::STATE_TOTAL, $this->countCardLines());
     $this->resetProgress();
+  }
+
+  /**
+   * Moves a downloaded bulk file into place, gunzipping it when compressed.
+   *
+   * @param string $source
+   *   Path of the downloaded file; removed afterwards.
+   * @param string $target
+   *   Path of the uncompressed data file to write.
+   *
+   * @throws \RuntimeException
+   *   When the file cannot be read or written.
+   */
+  private function decompressDownload(string $source, string $target): void {
+    $fh = fopen($source, 'rb');
+    $magic = $fh === FALSE ? '' : (string) fread($fh, 2);
+    if ($fh !== FALSE) {
+      fclose($fh);
+    }
+
+    if ($magic !== "\x1f\x8b") {
+      if (!rename($source, $target)) {
+        throw new \RuntimeException('Failed to move bulk data file to ' . $target);
+      }
+      return;
+    }
+
+    $in = gzopen($source, 'rb');
+    $out = fopen($target, 'wb');
+    if ($in === FALSE || $out === FALSE) {
+      throw new \RuntimeException('Failed to decompress bulk data file ' . $source);
+    }
+    while (!gzeof($in)) {
+      fwrite($out, (string) gzread($in, 1048576));
+    }
+    gzclose($in);
+    fclose($out);
+    unlink($source);
   }
 
   /**
@@ -355,6 +426,11 @@ class ScryfallImporter {
    */
   private function upsertCard(array $card, $storage): void {
     if (isset($card['layout']) && in_array($card['layout'], self::SKIP_LAYOUTS, TRUE)) {
+      return;
+    }
+    // Online-only printings (MTGO and Arena, e.g. Vintage Masters) cannot be
+    // owned on paper, so they are never imported.
+    if (!empty($card['digital'])) {
       return;
     }
 
@@ -793,6 +869,172 @@ class ScryfallImporter {
     );
 
     return ['updated' => $updated, 'skipped' => $skipped];
+  }
+
+  /**
+   * Imports tokens and emblems from the local bulk file.
+   *
+   * Tokens used to be skipped by the full sync. This pass imports only token
+   * layouts, so it takes minutes instead of a full re-sync.
+   *
+   * @return array{added: int, updated: int}
+   *   Token nodes created and updated.
+   *
+   * @throws \RuntimeException
+   *   When the bulk data file is missing or cannot be read.
+   */
+  public function importTokens(): array {
+    if (!$this->dataFileExists()) {
+      throw new \RuntimeException('Scryfall data file not found. Run downloadBulkData() first.');
+    }
+    $storage = $this->entityTypeManager->getStorage('node');
+    $known = $this->scryfallNodeMap();
+    $added = 0;
+    $updated = 0;
+    foreach ($this->iterateBulkCards() as $card) {
+      if (!in_array($card['layout'] ?? '', self::TOKEN_LAYOUTS, TRUE) || !empty($card['digital'])) {
+        continue;
+      }
+      $isNew = !isset($known[(string) ($card['id'] ?? '')]);
+      $this->upsertCard($card, $storage);
+      $isNew ? $added++ : $updated++;
+      // Keep memory flat over thousands of saves in one request.
+      $storage->resetCache();
+    }
+    $this->loggerFactory->get('mtg_scryfall_sync')->info(
+      'Token import: @added added, @updated updated.',
+      ['@added' => $added, '@updated' => $updated],
+    );
+    return ['added' => $added, 'updated' => $updated];
+  }
+
+  /**
+   * Refreshes card prices from the local bulk file without saving nodes.
+   *
+   * Writes the four price fields straight to their tables for every card in
+   * the file, which takes minutes instead of the hours a full sync needs.
+   * Cards missing from the file keep their current prices.
+   *
+   * @return array{updated: int, skipped: int}
+   *   updated: cards written; skipped: bulk rows with no matching node.
+   *
+   * @throws \RuntimeException
+   *   When the bulk data file is missing or cannot be read.
+   */
+  public function refreshPrices(): array {
+    if (!$this->dataFileExists()) {
+      throw new \RuntimeException('Scryfall data file not found. Run downloadBulkData() first.');
+    }
+    $nodes = $this->scryfallNodeMap();
+    $rows = array_fill_keys(array_values(self::PRICE_FIELDS), []);
+    $updated = 0;
+    $skipped = 0;
+
+    foreach ($this->iterateBulkCards() as $card) {
+      $scryfall_id = $card['id'] ?? NULL;
+      if (!is_string($scryfall_id) || !isset($nodes[$scryfall_id])) {
+        $skipped++;
+        continue;
+      }
+      $node = $nodes[$scryfall_id];
+      $prices = is_array($card['prices'] ?? NULL) ? $card['prices'] : [];
+      foreach (self::PRICE_FIELDS as $key => $field) {
+        $value = $this->scryfallPrice($prices, $key);
+        if ($value === NULL) {
+          continue;
+        }
+        $rows[$field][] = [
+          'bundle' => 'mtg_card',
+          'deleted' => 0,
+          'entity_id' => $node['entity_id'],
+          'revision_id' => $node['revision_id'],
+          'langcode' => $node['langcode'],
+          'delta' => 0,
+          $field . '_value' => $value,
+        ];
+      }
+      $updated++;
+    }
+
+    // Data tables are keyed by entity, revision tables by the current revision
+    // only, so older revisions keep the prices they had.
+    $keys = [
+      'node__' => ['entity_id', array_values(array_unique(array_column($nodes, 'entity_id')))],
+      'node_revision__' => ['revision_id', array_values(array_unique(array_column($nodes, 'revision_id')))],
+    ];
+    foreach (self::PRICE_FIELDS as $field) {
+      foreach ($keys as $prefix => [$keyColumn, $ids]) {
+        $this->replaceFieldRowsFor($prefix . $field, $field . '_value', $keyColumn, $ids, $rows[$field]);
+      }
+    }
+
+    // Field tables were written directly, so drop cached card entities and
+    // anything (GraphQL results, collection value) built from them.
+    $this->entityCache->deleteAll();
+    $this->cacheTagsInvalidator->invalidateTags(['node_list:mtg_card']);
+
+    $this->loggerFactory->get('mtg_scryfall_sync')->info(
+      'Price refresh: @updated cards written, @skipped bulk rows unmatched.',
+      ['@updated' => $updated, '@skipped' => $skipped],
+    );
+    return ['updated' => $updated, 'skipped' => $skipped];
+  }
+
+  /**
+   * Maps Scryfall IDs to the mtg_card node, revision and langcode.
+   *
+   * @return array<string, array{entity_id: int, revision_id: int, langcode: string}>
+   *   Node keys indexed by Scryfall ID.
+   */
+  private function scryfallNodeMap(): array {
+    $nodes = [];
+    $result = $this->database->query(
+      'SELECT n.nid, n.vid, n.langcode, s.field_scryfall_id_value
+       FROM {node_field_data} n
+       INNER JOIN {node__field_scryfall_id} s
+         ON s.entity_id = n.nid AND s.deleted = 0
+       WHERE n.type = :type AND n.default_langcode = 1',
+      [':type' => 'mtg_card'],
+    );
+    foreach ($result as $row) {
+      $nodes[(string) $row->field_scryfall_id_value] = [
+        'entity_id' => (int) $row->nid,
+        'revision_id' => (int) $row->vid,
+        'langcode' => (string) $row->langcode,
+      ];
+    }
+    return $nodes;
+  }
+
+  /**
+   * Replaces field rows for the given keys, leaving other rows alone.
+   *
+   * @param string $table
+   *   Field data or revision table name.
+   * @param string $value_column
+   *   Value column for this field.
+   * @param string $key_column
+   *   Column the existing rows are matched on (entity_id or revision_id).
+   * @param int[] $ids
+   *   Key values whose existing rows are deleted first.
+   * @param list<array<string, int|string>> $rows
+   *   Rows to insert.
+   */
+  private function replaceFieldRowsFor(string $table, string $value_column, string $key_column, array $ids, array $rows): void {
+    if (!$this->database->schema()->tableExists($table)) {
+      return;
+    }
+    foreach (array_chunk($ids, 1000) as $chunk) {
+      $this->database->delete($table)->condition($key_column, $chunk, 'IN')->execute();
+    }
+    $columns = ['bundle', 'deleted', 'entity_id', 'revision_id', 'langcode', 'delta', $value_column];
+    foreach (array_chunk($rows, 500) as $chunk) {
+      $insert = $this->database->insert($table)->fields($columns);
+      foreach ($chunk as $row) {
+        $insert->values($row);
+      }
+      $insert->execute();
+    }
   }
 
   /**

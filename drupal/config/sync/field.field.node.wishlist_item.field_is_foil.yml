@@ -1,0 +1,23 @@
+uuid: b0c8bb74-1086-4925-b6fe-778cb91c9fe1
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_is_foil
+    - node.type.wishlist_item
+id: node.wishlist_item.field_is_foil
+field_name: field_is_foil
+entity_type: node
+bundle: wishlist_item
+label: Foil
+description: ''
+required: false
+translatable: true
+default_value:
+  -
+    value: 0
+default_value_callback: ''
+settings:
+  on_label: 'On'
+  off_label: 'Off'
+field_type: boolean

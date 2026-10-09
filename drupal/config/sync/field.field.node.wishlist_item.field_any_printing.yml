@@ -1,0 +1,23 @@
+uuid: 5502ead6-989b-419e-b672-7bec7b4b8a82
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_any_printing
+    - node.type.wishlist_item
+id: node.wishlist_item.field_any_printing
+field_name: field_any_printing
+entity_type: node
+bundle: wishlist_item
+label: 'Any printing'
+description: 'Off when only this exact printing will do.'
+required: false
+translatable: true
+default_value:
+  -
+    value: 1
+default_value_callback: ''
+settings:
+  on_label: 'On'
+  off_label: 'Off'
+field_type: boolean

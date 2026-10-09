@@ -61,6 +61,8 @@ type DeckCard {
   quantity: Int!
   isSideboard: Boolean!
   isFoil: Boolean!
+  "main, side or maybe."
+  board: String!
   card: MtgCard!
 }
 
@@ -69,6 +71,8 @@ type DeckCardSlot {
   quantity: Int!
   isSideboard: Boolean!
   isFoil: Boolean!
+  "main, side or maybe."
+  board: String!
 }
 
 type Page {
@@ -82,6 +86,9 @@ type CollectionCard {
   id: ID!
   quantityOwned: Int!
   quantityFoil: Int!
+  "Copies (regular and foil together) available for trade."
+  quantityTrade: Int!
+  binderLocation: String
   card: MtgCard
 }
 
@@ -121,4 +128,41 @@ type SimulationResult {
   deckTitle: String!
   deckNotes: String
   deckCards: [DeckCard!]!
+}
+
+type WishIntent {
+  id: ID!
+  name: String!
+}
+
+type WishlistItem {
+  id: ID!
+  quantity: Int!
+  "Any printing of the card fills the wish; false means this exact printing."
+  anyPrinting: Boolean!
+  foil: Boolean!
+  "Minimum Cardmarket condition: M, NM, EX, GD, LP, PL or PO."
+  minCondition: String
+  notes: String
+  card: MtgCard
+  deck: Deck
+  intent: WishIntent
+  "Copies in the collection that count toward this wish."
+  owned: Int!
+  "True when the collection already holds the wanted quantity."
+  done: Boolean!
+  "Price of one copy in EUR: the cheapest priced printing for any-printing wishes."
+  priceEur: Float
+  "Price of one copy in USD: the cheapest priced printing for any-printing wishes."
+  priceUsd: Float
+}
+
+type CollectionImportResult {
+  "Zero-based index of the input row."
+  row: Int!
+  "matched (dry run), added, skipped or not_found."
+  status: String!
+  "scryfall_id, set_number, set_name, name or none."
+  matchedBy: String!
+  card: MtgCard
 }

@@ -9,6 +9,7 @@ dependencies:
     - field.field.node.deck.field_format
     - field.field.node.deck.field_format_term
     - field.field.node.deck.field_is_foil
+    - field.field.node.deck.field_maybe_cards
     - field.field.node.deck.field_notes
     - node.type.deck
   module:
@@ -128,6 +129,24 @@ content:
     region: content
     settings:
       display_label: true
+    third_party_settings: {  }
+  field_maybe_cards:
+    type: paragraphs
+    weight: 20
+    region: content
+    settings:
+      title: Paragraph
+      title_plural: Paragraphs
+      edit_mode: open
+      closed_mode: summary
+      autocollapse: none
+      closed_mode_threshold: 0
+      add_mode: dropdown
+      form_display_mode: default
+      default_paragraph_type: ''
+      features:
+        collapse_edit_all: collapse_edit_all
+        duplicate: duplicate
     third_party_settings: {  }
   field_notes:
     type: text_textarea

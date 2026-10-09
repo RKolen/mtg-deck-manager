@@ -1,0 +1,25 @@
+uuid: c3dee2a2-a2b7-47a7-9a3d-ffd35fbaa461
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_wish_intent
+    - node.type.wishlist_item
+    - taxonomy.vocabulary.wish_intent
+id: node.wishlist_item.field_wish_intent
+field_name: field_wish_intent
+entity_type: node
+bundle: wishlist_item
+label: Intent
+description: ''
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings:
+  handler: 'default:taxonomy_term'
+  handler_settings:
+    target_bundles:
+      wish_intent: wish_intent
+    auto_create: true
+field_type: entity_reference

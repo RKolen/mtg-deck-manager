@@ -1,0 +1,24 @@
+uuid: e3b2dd59-f0c8-45e1-8ccb-dd55fe7447a9
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_card
+    - node.type.mtg_card
+    - node.type.wishlist_item
+id: node.wishlist_item.field_card
+field_name: field_card
+entity_type: node
+bundle: wishlist_item
+label: Card
+description: ''
+required: true
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings:
+  handler: 'mtg_card:node'
+  handler_settings:
+    target_bundles:
+      mtg_card: mtg_card
+field_type: entity_reference
