@@ -1310,7 +1310,7 @@ final class MtgGraphqlResolverRegistration {
   /**
    * Format display name from the taxonomy term, with the string field fallback.
    */
-  private static function deckFormatName(mixed $node): string {
+  public static function deckFormatName(mixed $node): string {
     if (!$node instanceof NodeInterface) {
       return '';
     }

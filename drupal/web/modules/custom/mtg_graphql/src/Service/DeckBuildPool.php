@@ -7,6 +7,7 @@ namespace Drupal\mtg_graphql\Service;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Database\Query\SelectInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\mtg_graphql\MtgGraphqlResolverRegistration;
 use Drupal\node\NodeInterface;
 use GraphQL\Error\UserError;
 
@@ -364,7 +365,8 @@ final class DeckBuildPool {
         $result[] = [
           'deckId' => (string) $deck->uuid(),
           'deckTitle' => $deck->getTitle(),
-          'format' => (string) ($deck->get('field_format')->value ?? ''),
+          // The format term wins over the older string field, as elsewhere.
+          'format' => MtgGraphqlResolverRegistration::deckFormatName($deck),
           'cards' => $missing,
         ];
       }

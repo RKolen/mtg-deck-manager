@@ -40,6 +40,7 @@ import {
   setCardQuantityInDeck,
   setDeckCardFoil,
   removeCardFromDeck,
+  restoreDeckSlot,
   updateDeck,
 } from '../../services/drupalApi';
 import CommanderPicker from '../../components/CommanderPicker';
@@ -464,6 +465,9 @@ const DeckEditor: React.FC<EditorProps> = ({
     },
   });
 
+  /** Last slot removed with "x", for Undo. */
+  const [lastRemoved, setLastRemoved] = useState<DeckCardWithCard | null>(null);
+
   const remove = useMutation({
     mutationFn: ({ slotId }: { slotId: string }) =>
       removeCardFromDeck(slotId, deckId, cards),
@@ -471,10 +475,29 @@ const DeckEditor: React.FC<EditorProps> = ({
       if (selectedSlotId === vars.slotId) {
         setSelectedSlotId(null);
       }
+      const slot = cards.find(c => c.id === vars.slotId) ?? maybeCards.find(c => c.id === vars.slotId);
+      setLastRemoved(slot ?? null);
       // Deck slot edits never change the collection.
       void invalidateInventoryQueries(qc, { deckId, keepCollectionList: true });
     },
   });
+
+  const undoRemove = useMutation({
+    mutationFn: (slot: DeckCardWithCard) => restoreDeckSlot(deckId, slot),
+    onSuccess: () => {
+      setLastRemoved(null);
+      void invalidateInventoryQueries(qc, { deckId, keepCollectionList: true });
+    },
+  });
+
+  // The Undo offer goes away after a while.
+  useEffect(() => {
+    if (lastRemoved == null) {
+      return undefined;
+    }
+    const timer = setTimeout(() => setLastRemoved(null), 15000);
+    return () => clearTimeout(timer);
+  }, [lastRemoved]);
 
   const setFoil = useMutation({
     mutationFn: ({ slotId, foil }: { slotId: string; foil: boolean }) =>
@@ -635,9 +658,9 @@ const DeckEditor: React.FC<EditorProps> = ({
       }
     },
     onSuccess: () => {
+      // Search results stay open: clearing them made the deck list jump up
+      // under the mouse, so the next click could hit a row's remove button.
       void invalidateInventoryQueries(qc, { deckId });
-      setSearchResults([]);
-      setSearch('');
     },
   });
 
@@ -1565,6 +1588,43 @@ const DeckEditor: React.FC<EditorProps> = ({
           </div>
         ) : null}
       </aside>
+      {lastRemoved != null && (
+        // Fixed position: the notice must not shift the deck list itself.
+        <div
+          role="status"
+          style={{
+            position: 'fixed',
+            right: 24,
+            bottom: 96,
+            zIndex: 50,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            padding: '0.6rem 0.9rem',
+            background: 'var(--bg-2)',
+            border: '1px solid var(--accent)',
+            color: 'var(--ink)',
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.35)',
+            fontSize: 13,
+          }}
+        >
+          <span>
+            Removed {lastRemoved.quantity}x {lastRemoved.card.title} from the{' '}
+            {lastRemoved.board === 'maybe' ? 'maybeboard' : lastRemoved.board === 'side' ? 'sideboard' : 'main deck'}.
+          </span>
+          <button
+            type="button"
+            className="btn-accent"
+            disabled={undoRemove.isPending}
+            onClick={() => undoRemove.mutate(lastRemoved)}
+          >
+            {undoRemove.isPending ? 'Restoring...' : 'Undo'}
+          </button>
+          <button type="button" aria-label="Dismiss" onClick={() => setLastRemoved(null)}>
+            x
+          </button>
+        </div>
+      )}
       <DeckValueList
         cards={cards}
         currency={currency}

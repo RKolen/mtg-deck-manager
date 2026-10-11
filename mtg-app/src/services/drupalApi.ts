@@ -901,6 +901,11 @@ export async function setCardQuantityInDeck(
   await deckCardUpdate(deckId, slotId, quantity);
 }
 
+/** Puts a removed slot back: same printing, quantity, finish and board. */
+export async function restoreDeckSlot(deckId: string, slot: DeckCardWithCard): Promise<void> {
+  await deckCardAdd(deckId, slot.card.id, slot.quantity, slot.board === 'side', slot.isFoil, slot.board);
+}
+
 export async function removeCardFromDeck(
   slotId: string,
   deckId: string,
