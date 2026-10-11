@@ -206,3 +206,18 @@ type CardUse {
   deckTitle: String!
   quantity: Int!
 }
+
+"Cards whose price changed most since the previous price import."
+type PriceMovers {
+  "When the previous prices were captured (Unix time), or null before the first import."
+  since: Int
+  movers: [PriceMover!]!
+}
+
+type PriceMover {
+  card: MtgCard!
+  previous: Float!
+  current: Float!
+  "Change in percent, e.g. 35.2 or -12.5."
+  changePct: Float!
+}

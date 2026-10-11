@@ -83,6 +83,15 @@ extend type Query {
     "Deck being built; its own copies are not reported as used."
     excludeDeckId: ID
   ): [PoolCard!]!
+
+  "Biggest price movers (percent) since the previous price import, across all cards."
+  priceMovers(
+    "EUR or USD."
+    currency: String
+    limit: Int
+    "Only cards costing at least this both before and after (default 1)."
+    minPrice: Float
+  ): PriceMovers!
 }
 
 extend type NodeDeck {

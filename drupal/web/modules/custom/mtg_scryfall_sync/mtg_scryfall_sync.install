@@ -272,3 +272,46 @@ function mtg_scryfall_sync_update_9004(): string {
     ? 'field_full_art and field_border_color already exist.'
     : 'Created: ' . implode(', ', $created) . '.';
 }
+
+/**
+ * Implements hook_schema().
+ */
+function mtg_scryfall_sync_schema(): array {
+  $price = static fn(string $description): array => [
+    'description' => $description,
+    'type' => 'numeric',
+    'precision' => 10,
+    'scale' => 2,
+    'not null' => FALSE,
+  ];
+  return [
+    'mtg_price_previous' => [
+      'description' => 'Card prices as they were before the latest price import, for price movers.',
+      'fields' => [
+        'nid' => [
+          'description' => 'The mtg_card node ID.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ],
+        'eur' => $price('Regular EUR price.'),
+        'eur_foil' => $price('Foil EUR price.'),
+        'usd' => $price('Regular USD price.'),
+        'usd_foil' => $price('Foil USD price.'),
+      ],
+      'primary key' => ['nid'],
+    ],
+  ];
+}
+
+/**
+ * Creates the mtg_price_previous table for price movers.
+ */
+function mtg_scryfall_sync_update_9005(): string {
+  $schema = \Drupal::database()->schema();
+  if ($schema->tableExists('mtg_price_previous')) {
+    return 'mtg_price_previous already exists.';
+  }
+  $schema->createTable('mtg_price_previous', mtg_scryfall_sync_schema()['mtg_price_previous']);
+  return 'Created mtg_price_previous.';
+}

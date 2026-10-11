@@ -360,3 +360,26 @@ button.btn-accent {
 .recharts-default-tooltip .recharts-tooltip-item {
   color: var(--ink) !important;
 }
+
+/* Price movers ticker (collection page). The track holds the list twice so
+   the scroll loops without a gap; -50% moves exactly one copy. */
+@keyframes ticker-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.price-ticker-track {
+  display: inline-flex;
+  white-space: nowrap;
+  animation: ticker-scroll 45s linear infinite;
+}
+
+.price-ticker:hover .price-ticker-track,
+.price-ticker:focus-within .price-ticker-track {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .price-ticker { overflow-x: auto; }
+  .price-ticker-track { animation: none; }
+}

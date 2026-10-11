@@ -16,6 +16,7 @@ services:
       - '@database'
       - '@cache.entity'
       - '@cache_tags.invalidator'
+      - '@mtg_scryfall_sync.price_history'
 
   mtg_scryfall_sync.exchange_rate:
     class: Drupal\mtg_scryfall_sync\Service\ExchangeRate
@@ -24,3 +25,10 @@ services:
       - '@state'
       - '@datetime.time'
       - '@logger.factory'
+
+  mtg_scryfall_sync.price_history:
+    class: Drupal\mtg_scryfall_sync\Service\PriceHistory
+    arguments:
+      - '@database'
+      - '@state'
+      - '@datetime.time'

@@ -47,6 +47,7 @@ final class MtgGraphqlResolverRegistration {
     self::addWishlistResolvers($registry, $builder);
     self::addCollectionImportResolvers($registry, $builder);
     self::addDeckBuildPoolResolvers($registry, $builder);
+    self::addPriceMoverResolvers($registry, $builder);
   }
 
   /**
@@ -177,6 +178,40 @@ final class MtgGraphqlResolverRegistration {
     foreach (['deckId', 'deckTitle', 'quantity'] as $field) {
       $registry->addFieldResolver('CardUse', $field,
         $builder->callback(fn(array $u) => $u[$field])
+      );
+    }
+  }
+
+  /**
+   * Registers the price movers query and its types.
+   */
+  public static function addPriceMoverResolvers(ResolverRegistryInterface $registry, ResolverBuilder $builder): void {
+    $registry->addFieldResolver('Query', 'priceMovers',
+      $builder->callback(function ($value, array $args, ResolveContext $context, ResolveInfo $info, FieldContext $fieldContext): array {
+        $fieldContext->addCacheTags(['node_list:mtg_card']);
+        /** @var \Drupal\mtg_scryfall_sync\Service\PriceHistory $history */
+        $history = \Drupal::service('mtg_scryfall_sync.price_history');
+        $limit = min(50, max(1, (int) ($args['limit'] ?? 10)));
+        $movers = $history->movers(
+          (string) ($args['currency'] ?? 'EUR'),
+          $limit,
+          max(0.0, (float) ($args['minPrice'] ?? 1.0)),
+        );
+        $cards = \Drupal::entityTypeManager()->getStorage('node')->loadMultiple(array_column($movers, 'nid'));
+        $rows = [];
+        foreach ($movers as $mover) {
+          if (isset($cards[$mover['nid']])) {
+            $rows[] = ['card' => $cards[$mover['nid']]] + $mover;
+          }
+        }
+        return ['since' => $history->snapshotTime(), 'movers' => $rows];
+      })
+    );
+    $registry->addFieldResolver('PriceMovers', 'since', $builder->callback(fn(array $r) => $r['since']));
+    $registry->addFieldResolver('PriceMovers', 'movers', $builder->callback(fn(array $r) => $r['movers']));
+    foreach (['card', 'previous', 'current', 'changePct'] as $field) {
+      $registry->addFieldResolver('PriceMover', $field,
+        $builder->callback(fn(array $m) => $m[$field])
       );
     }
   }

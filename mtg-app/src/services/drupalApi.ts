@@ -1289,3 +1289,48 @@ export function poolCardAvailable(p: PoolCard, includeUsed: boolean): number {
 // import above ensures the types are available for callers that do:
 //   import type { ... } from '../services/drupalApi'
 export type { JsonApiResource, JsonApiCollectionResponse, JsonApiSingleResponse };
+
+// ---------------------------------------------------------------------------
+// Price movers (collection ticker)
+// ---------------------------------------------------------------------------
+
+export interface PriceMover {
+  card: JsonApiResource<MtgCardAttributes>;
+  previous: number;
+  current: number;
+  /** Change in percent, e.g. 35.2 or -12.5. */
+  changePct: number;
+}
+
+export interface PriceMovers {
+  /** When the previous prices were captured (Unix seconds), or null. */
+  since: number | null;
+  movers: PriceMover[];
+}
+
+/** Biggest price movers since the previous price import, across all cards. */
+export async function fetchPriceMovers(
+  currency: 'EUR' | 'USD',
+  limit = 10,
+  minPrice = 1,
+): Promise<PriceMovers> {
+  const query = gql`
+    ${CARD_FIELDS}
+    query PriceMovers($currency: String, $limit: Int, $minPrice: Float) {
+      priceMovers(currency: $currency, limit: $limit, minPrice: $minPrice) {
+        since
+        movers { previous current changePct card { ...CardFields } }
+      }
+    }
+  `;
+  const data = await getGraphQLClient().request<{
+    priceMovers: {
+      since: number | null;
+      movers: { previous: number; current: number; changePct: number; card: GqlMtgCard }[];
+    };
+  }>(query, { currency, limit, minPrice });
+  return {
+    since: data.priceMovers.since,
+    movers: data.priceMovers.movers.map(m => ({ ...m, card: toCardResource(m.card) })),
+  };
+}

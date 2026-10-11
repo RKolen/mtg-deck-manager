@@ -15,6 +15,8 @@ import CardFilter, { EMPTY_FILTER, type FilterState } from '../../components/Car
 import CardModal, { type CardData } from '../../components/CardModal';
 import CollectionSidebar from '../../components/CollectionSidebar';
 import TradeList from '../../components/TradeList';
+import PriceTicker from '../../components/PriceTicker';
+import TopCollectionCards from '../../components/TopCollectionCards';
 import { searchCards } from '../../services/cardSearch';
 import {
   fetchCollectionCards,
@@ -311,7 +313,8 @@ const CollectionPage: React.FC = () => {
       : undefined;
 
   return (
-    <main style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+    <main style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
       <CardFilter filter={filter} onChange={handleFilterChange} />
 
       <div style={{ flex: 1, overflow: 'auto', padding: '1rem' }}>
@@ -583,7 +586,7 @@ const CollectionPage: React.FC = () => {
         )}
       </div>
 
-      <div style={{ padding: '1rem', borderLeft: '1px solid var(--line)' }}>
+      <div style={{ padding: '1rem', borderLeft: '1px solid var(--line)', overflowY: 'auto', maxWidth: 280 }}>
         <CollectionSidebar
           totalCards={totalCards}
           totalUnique={totalUnique}
@@ -595,7 +598,11 @@ const CollectionPage: React.FC = () => {
           tradeCopies={tradeCopies}
           tradeValue={tradeTotal}
         />
+        <TopCollectionCards rows={collectionCards} currency={currency} usdToEur={usdToEur} />
       </div>
+      </div>
+
+      <PriceTicker currency={currency} />
 
       {modalCard != null && (
         <CardModal

@@ -11,6 +11,7 @@ use Drupal\Core\Database\Connection;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\State\StateInterface;
+use Drupal\mtg_scryfall_sync\Service\PriceHistory;
 use Drupal\mtg_scryfall_sync\Service\SetTaxonomy;
 use Drupal\node\NodeInterface;
 use GuzzleHttp\ClientInterface;
@@ -143,6 +144,7 @@ class ScryfallImporter {
     private readonly Connection $database,
     private readonly CacheBackendInterface $entityCache,
     private readonly CacheTagsInvalidatorInterface $cacheTagsInvalidator,
+    private readonly PriceHistory $priceHistory,
   ) {}
 
   /**
@@ -299,6 +301,11 @@ class ScryfallImporter {
     $offset = (int) $this->state->get(self::STATE_OFFSET, 0);
     $total = (int) $this->state->get(self::STATE_TOTAL, 0);
     $byte_offset = (int) $this->state->get(self::STATE_BYTE_OFFSET, 0);
+
+    // A full sync starts here: keep the old prices for the price movers.
+    if ($offset === 0) {
+      $this->priceHistory->snapshot();
+    }
 
     // Re-count if total was never stored (e.g. file downloaded outside this
     // class or state was cleared).
@@ -925,6 +932,8 @@ class ScryfallImporter {
     if (!$this->dataFileExists()) {
       throw new \RuntimeException('Scryfall data file not found. Run downloadBulkData() first.');
     }
+    // Keep the old prices for the price movers ticker.
+    $this->priceHistory->snapshot();
     $nodes = $this->scryfallNodeMap();
     $rows = array_fill_keys(array_values(self::PRICE_FIELDS), []);
     $updated = 0;
