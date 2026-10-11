@@ -17,6 +17,7 @@ import {
   saveWishlistItem,
   type WishlistItemInput,
 } from '../../services/drupalApi';
+import WishlistDeckShortfalls from '../../components/WishlistDeckShortfalls';
 import { useTheme } from '../../context/ThemeContext';
 import { bestPrice, formatPrice, type Currency } from '../../utils/prices';
 import { cardImageSrc } from '../../utils/cardImage';
@@ -202,6 +203,7 @@ const WishlistPage: React.FC = () => {
     Promise.all([
       qc.invalidateQueries({ queryKey: ['wishlist'] }),
       qc.invalidateQueries({ queryKey: ['deckCards'] }),
+      qc.invalidateQueries({ queryKey: ['deckShortfalls'] }),
     ]);
   const save = useMutation({
     mutationFn: (input: WishlistItemInput) => saveWishlistItem(input),
@@ -261,7 +263,17 @@ const WishlistPage: React.FC = () => {
   }, [items, currency, usdToEur]);
 
   return (
-    <main style={{ padding: '1rem 1.5rem', color: 'var(--ink)' }}>
+    <main
+      style={{
+        padding: '1rem 1.5rem',
+        color: 'var(--ink)',
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 1fr) 300px',
+        gap: '1.5rem',
+        alignItems: 'start',
+      }}
+    >
+      <div style={{ minWidth: 0 }}>
       <h1 style={{ marginTop: 0 }}>Wishlist</h1>
       <div
         aria-label="Wishlist totals"
@@ -539,6 +551,17 @@ const WishlistPage: React.FC = () => {
           </tbody>
         </table>
       )}
+      </div>
+
+      <div style={{ position: 'sticky', top: 0 }}>
+        <WishlistDeckShortfalls
+          currency={currency}
+          usdToEur={usdToEur}
+          activeDeckId={deckId}
+          onSelectDeck={setDeckId}
+        />
+      </div>
+
       {preview != null && (
         <WishCardPreview item={preview} currency={currency} onClose={() => setPreview(null)} />
       )}

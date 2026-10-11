@@ -84,6 +84,9 @@ extend type Query {
     excludeDeckId: ID
   ): [PoolCard!]!
 
+  "Decks whose main deck or sideboard has cards the collection does not cover."
+  deckShortfalls: [DeckShortfall!]!
+
   "Biggest price movers (percent) since the previous price import, across all cards."
   priceMovers(
     "EUR or USD."

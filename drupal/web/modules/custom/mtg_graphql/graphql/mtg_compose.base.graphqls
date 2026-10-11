@@ -221,3 +221,26 @@ type PriceMover {
   "Change in percent, e.g. 35.2 or -12.5."
   changePct: Float!
 }
+
+"A deck with main deck or sideboard cards that are not owned."
+type DeckShortfall {
+  deckId: ID!
+  deckTitle: String!
+  format: String!
+  cards: [MissingDeckCard!]!
+}
+
+type MissingDeckCard {
+  "The printing used in the deck."
+  card: MtgCard!
+  "Copies in main deck and sideboard."
+  needed: Int!
+  "Copies owned, any printing and finish."
+  owned: Int!
+  "Largest wishlist quantity for this card and deck (0 when not wished)."
+  wished: Int!
+  "Cheapest regular EUR price of any printing (deck needs are wished as any printing)."
+  priceEur: Float
+  "Cheapest regular USD price of any printing."
+  priceUsd: Float
+}

@@ -180,6 +180,30 @@ final class MtgGraphqlResolverRegistration {
         $builder->callback(fn(array $u) => $u[$field])
       );
     }
+
+    $registry->addFieldResolver('Query', 'deckShortfalls',
+      $builder->callback(function ($value, array $args, ResolveContext $context, ResolveInfo $info, FieldContext $fieldContext): array {
+        $fieldContext->addCacheTags([
+          'node_list:collection_card',
+          'node_list:deck',
+          'node_list:wishlist_item',
+          'paragraph_list',
+        ]);
+        /** @var \Drupal\mtg_graphql\Service\DeckBuildPool $pool */
+        $pool = \Drupal::service('mtg_graphql.deck_build_pool');
+        return $pool->shortfalls();
+      })
+    );
+    foreach (['deckId', 'deckTitle', 'format', 'cards'] as $field) {
+      $registry->addFieldResolver('DeckShortfall', $field,
+        $builder->callback(fn(array $d) => $d[$field])
+      );
+    }
+    foreach (['card', 'needed', 'owned', 'wished', 'priceEur', 'priceUsd'] as $field) {
+      $registry->addFieldResolver('MissingDeckCard', $field,
+        $builder->callback(fn(array $c) => $c[$field])
+      );
+    }
   }
 
   /**

@@ -377,6 +377,10 @@ button.btn-accent {
   animation: ticker-scroll 45s linear infinite;
 }
 
+.price-ticker-track-reverse {
+  animation-direction: reverse;
+}
+
 .price-ticker:hover .price-ticker-track,
 .price-ticker:focus-within .price-ticker-track {
   animation-play-state: paused;

@@ -40,14 +40,72 @@ function TickerItem({ mover, currency, copy = false }: { mover: PriceMover; curr
 }
 
 /**
- * Stock-market style strip with the cards whose price moved most (in
+ * Stock-market style strips: the cards whose price rose most and fell most (in
  * percent) since the previous price import. Any card, owned or not.
  * Pauses on hover; static and scrollable with reduced motion.
  */
+/** One scrolling strip: the risers or the fallers. */
+function TickerRow({
+  label,
+  title,
+  movers,
+  currency,
+  reverse,
+}: {
+  label: string;
+  title: string;
+  movers: PriceMover[];
+  currency: Currency;
+  reverse: boolean;
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        borderTop: '1px solid var(--line)',
+        background: 'var(--bg-2)',
+        minHeight: 28,
+      }}
+    >
+      <span
+        className="mono uc"
+        style={{
+          flex: '0 0 150px',
+          padding: '0 0.75rem',
+          fontSize: 10,
+          letterSpacing: '0.08em',
+          color: 'var(--ink)',
+          borderRight: '1px solid var(--line)',
+        }}
+        title={title}
+      >
+        {label}
+      </span>
+      {movers.length === 0 ? (
+        <span className="mono dim" style={{ padding: '0 0.75rem', fontSize: 12 }}>
+          No price changes yet. They appear after the next price import.
+        </span>
+      ) : (
+        <div className="price-ticker" style={{ overflow: 'hidden', flex: 1 }}>
+          <div className={`price-ticker-track${reverse ? ' price-ticker-track-reverse' : ''}`}>
+            {movers.map(m => <TickerItem key={`a-${m.card.id}`} mover={m} currency={currency} />)}
+            {/* Second copy for a seamless loop; hidden from screen readers. */}
+            <span aria-hidden="true" style={{ display: 'inline-flex' }}>
+              {movers.map(m => <TickerItem key={`b-${m.card.id}`} mover={m} currency={currency} copy />)}
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const PriceTicker: React.FC<PriceTickerProps> = ({ currency }) => {
   const { data } = useQuery({
-    queryKey: ['priceMovers', currency],
-    queryFn: () => fetchPriceMovers(currency, 10, 1),
+    // 20 = the 10 biggest risers and the 10 biggest fallers.
+    queryKey: ['priceMovers', currency, 20],
+    queryFn: () => fetchPriceMovers(currency, 20, 1),
     staleTime: 30 * 60 * 1000,
   });
 
@@ -56,48 +114,16 @@ const PriceTicker: React.FC<PriceTickerProps> = ({ currency }) => {
   }
 
   const since = data.since != null
-    ? new Date(data.since * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
-    : null;
+    ? ` since ${new Date(data.since * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`
+    : '';
+  const risers = data.movers.filter(m => m.changePct > 0);
+  const fallers = data.movers.filter(m => m.changePct < 0);
+  const hint = 'Biggest price changes since the previous price import (cards of 1 or more)';
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        borderTop: '1px solid var(--line)',
-        background: 'var(--bg-2)',
-        minHeight: 32,
-      }}
-    >
-      <span
-        className="mono uc"
-        style={{
-          flex: '0 0 auto',
-          padding: '0 0.75rem',
-          fontSize: 10,
-          letterSpacing: '0.08em',
-          color: 'var(--ink)',
-          borderRight: '1px solid var(--line)',
-        }}
-        title="Biggest price changes since the previous price import (cards of 1 or more)"
-      >
-        Movers{since != null ? ` since ${since}` : ''}
-      </span>
-      {data.movers.length === 0 ? (
-        <span className="mono dim" style={{ padding: '0 0.75rem', fontSize: 12 }}>
-          No price changes yet. They appear after the next price import.
-        </span>
-      ) : (
-        <div className="price-ticker" style={{ overflow: 'hidden', flex: 1 }}>
-          <div className="price-ticker-track">
-            {data.movers.map(m => <TickerItem key={`a-${m.card.id}`} mover={m} currency={currency} />)}
-            {/* Second copy for a seamless loop; hidden from screen readers. */}
-            <span aria-hidden="true" style={{ display: 'inline-flex' }}>
-              {data.movers.map(m => <TickerItem key={`b-${m.card.id}`} mover={m} currency={currency} copy />)}
-            </span>
-          </div>
-        </div>
-      )}
+    <div>
+      <TickerRow label={`Up${since}`} title={hint} movers={risers} currency={currency} reverse={false} />
+      <TickerRow label={`Down${since}`} title={hint} movers={fallers} currency={currency} reverse />
     </div>
   );
 };

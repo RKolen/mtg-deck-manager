@@ -1334,3 +1334,50 @@ export async function fetchPriceMovers(
     movers: data.priceMovers.movers.map(m => ({ ...m, card: toCardResource(m.card) })),
   };
 }
+
+// ---------------------------------------------------------------------------
+// Deck shortfalls (wishlist aside)
+// ---------------------------------------------------------------------------
+
+export interface MissingDeckCard {
+  /** The printing used in the deck. */
+  card: JsonApiResource<MtgCardAttributes>;
+  /** Copies in main deck and sideboard. */
+  needed: number;
+  /** Copies owned, any printing and finish. */
+  owned: number;
+  /** Largest wishlist quantity for this card and deck (0 when not wished). */
+  wished: number;
+  /** Cheapest regular price of any printing, as the wishlist uses. */
+  priceEur: number | null;
+  priceUsd: number | null;
+}
+
+export interface DeckShortfall {
+  deckId: string;
+  deckTitle: string;
+  format: string;
+  cards: MissingDeckCard[];
+}
+
+/** Decks whose main deck or sideboard has cards the collection does not cover. */
+export async function fetchDeckShortfalls(): Promise<DeckShortfall[]> {
+  const query = gql`
+    ${CARD_FIELDS}
+    query DeckShortfalls {
+      deckShortfalls {
+        deckId deckTitle format
+        cards { needed owned wished priceEur priceUsd card { ...CardFields } }
+      }
+    }
+  `;
+  const data = await getGraphQLClient().request<{
+    deckShortfalls: (Omit<DeckShortfall, 'cards'> & {
+      cards: (Omit<MissingDeckCard, 'card'> & { card: GqlMtgCard })[];
+    })[];
+  }>(query);
+  return data.deckShortfalls.map(d => ({
+    ...d,
+    cards: d.cards.map(c => ({ ...c, card: toCardResource(c.card) })),
+  }));
+}

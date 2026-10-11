@@ -308,6 +308,131 @@ final class DeckBuildPool {
   }
 
   /**
+   * Decks with main deck or sideboard cards the collection does not cover.
+   *
+   * Ownership is by card name: any printing and finish counts. Copies in
+   * other decks are not subtracted; this is about cards not owned at all.
+   *
+   * @return array<int, array{deckId: string, deckTitle: string, format: string, cards: array<int, array{card: \Drupal\node\NodeInterface, needed: int, owned: int, wished: int, priceEur: float|null, priceUsd: float|null}>}>
+   *   Decks with at least one missing copy, sorted by title.
+   */
+  public function shortfalls(): array {
+    $owned = $this->ownedByTitle();
+    $wished = $this->wishedByDeckAndTitle();
+    $storage = $this->entityTypeManager->getStorage('node');
+    $deckIds = $storage->getQuery()
+      ->accessCheck(FALSE)
+      ->condition('type', 'deck')
+      ->sort('title')
+      ->execute();
+
+    $result = [];
+    foreach ($storage->loadMultiple($deckIds) as $deck) {
+      if (!$deck instanceof NodeInterface) {
+        continue;
+      }
+      $needed = [];
+      $cards = [];
+      foreach ($deck->get('field_deck_cards')->referencedEntities() as $slot) {
+        $card = $slot->get('field_card')->entity;
+        if (!$card instanceof NodeInterface) {
+          continue;
+        }
+        $title = $card->getTitle();
+        $needed[$title] = ($needed[$title] ?? 0) + max(1, (int) ($slot->get('field_quantity')->value ?? 1));
+        $cards[$title] ??= $card;
+      }
+      $missing = [];
+      foreach ($needed as $title => $quantity) {
+        $have = $owned[$title]['owned'] ?? 0;
+        if ($have < $quantity) {
+          $missing[] = [
+            'card' => $cards[$title],
+            'needed' => $quantity,
+            'owned' => $have,
+            'wished' => $wished[(int) $deck->id()][$title] ?? 0,
+          ];
+        }
+      }
+      if ($missing !== []) {
+        $cheapest = $this->cheapestByTitle(array_map(static fn(array $m): string => $m['card']->getTitle(), $missing));
+        foreach ($missing as &$m) {
+          $m += $cheapest[$m['card']->getTitle()] ?? ['priceEur' => NULL, 'priceUsd' => NULL];
+        }
+        unset($m);
+        usort($missing, static fn(array $a, array $b): int => strcmp($a['card']->getTitle(), $b['card']->getTitle()));
+        $result[] = [
+          'deckId' => (string) $deck->uuid(),
+          'deckTitle' => $deck->getTitle(),
+          'format' => (string) ($deck->get('field_format')->value ?? ''),
+          'cards' => $missing,
+        ];
+      }
+    }
+    return $result;
+  }
+
+  /**
+   * Cheapest regular price of any printing, per card name.
+   *
+   * Deck needs are wished as any printing, so this matches the wishlist.
+   *
+   * @param string[] $titles
+   *   Card names.
+   *
+   * @return array<string, array{priceEur: float|null, priceUsd: float|null}>
+   *   Prices keyed by card name.
+   */
+  private function cheapestByTitle(array $titles): array {
+    if ($titles === []) {
+      return [];
+    }
+    $query = $this->database->select('node_field_data', 'c');
+    $query->leftJoin('node__field_price_eur', 'e', 'e.entity_id = c.nid AND e.field_price_eur_value > 0');
+    $query->leftJoin('node__field_price_usd', 'u', 'u.entity_id = c.nid AND u.field_price_usd_value > 0');
+    $query->addField('c', 'title');
+    $query->addExpression('MIN(e.field_price_eur_value)', 'eur');
+    $query->addExpression('MIN(u.field_price_usd_value)', 'usd');
+    $query->condition('c.type', 'mtg_card');
+    $query->condition('c.title', array_values(array_unique($titles)), 'IN');
+    $query->groupBy('c.title');
+
+    $result = [];
+    foreach ($query->execute() as $row) {
+      $result[(string) $row->title] = [
+        'priceEur' => $row->eur !== NULL ? (float) $row->eur : NULL,
+        'priceUsd' => $row->usd !== NULL ? (float) $row->usd : NULL,
+      ];
+    }
+    return $result;
+  }
+
+  /**
+   * Largest wished quantity per deck and card name.
+   *
+   * @return array<int, array<string, int>>
+   *   Quantities keyed by deck node ID, then card name.
+   */
+  private function wishedByDeckAndTitle(): array {
+    $query = $this->database->select('node__field_wish_deck', 'wd');
+    $query->join('node__field_card', 'fc', 'fc.entity_id = wd.entity_id');
+    $query->join('node_field_data', 'c', 'c.nid = fc.field_card_target_id');
+    $query->leftJoin('node__field_wish_quantity', 'q', 'q.entity_id = wd.entity_id');
+    $query->addField('wd', 'field_wish_deck_target_id', 'deck');
+    $query->addField('c', 'title');
+    $query->addExpression('MAX(COALESCE(q.field_wish_quantity_value, 1))', 'quantity');
+    $query->condition('wd.bundle', 'wishlist_item');
+    $query->groupBy('wd.field_wish_deck_target_id');
+    $query->groupBy('c.title');
+
+    $result = [];
+    foreach ($query->execute() as $row) {
+      $result[(int) $row->deck][(string) $row->title] = (int) $row->quantity;
+    }
+    return $result;
+  }
+
+  /**
    * Keeps only valid, unique colour letters.
    *
    * @param array<int, mixed> $colors
