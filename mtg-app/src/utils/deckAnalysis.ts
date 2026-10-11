@@ -13,6 +13,7 @@
  */
 
 import type { DeckCardWithCard } from '../types/drupal';
+import { companionRule, type CompanionCard } from './companions';
 
 export type MtgColor = 'W' | 'U' | 'B' | 'R' | 'G';
 
@@ -253,6 +254,41 @@ export interface DeckListAllowance {
   sideboardSoftMax: number | null;
   /** Nonland mana-value cap, or null when unrestricted. */
   maxManaValue: number | null;
+  /** Companion in the sideboard (its name), or null. */
+  companion: string | null;
+  /** Cards the companion adds to the minimum deck size (Yorion: 20). */
+  companionBonus: number;
+}
+
+const NUMBER_WORDS: Record<string, number> = {
+  five: 5, ten: 10, fifteen: 15, twenty: 20, thirty: 30, forty: 40,
+};
+
+/** True when the card has a companion ability ("Companion — ..."). */
+export function isCompanionCard(card: { field_oracle_text?: unknown }): boolean {
+  return /^companion\s*[—–-]/im.test(getOracleText(card));
+}
+
+/**
+ * The deck's companion: a sideboard card with a companion ability. Companions
+ * start the game outside the deck, in the sideboard.
+ */
+export function deckCompanion(cards: DeckCardWithCard[]): DeckCardWithCard['card'] | null {
+  return sideboard(cards).find(dc => isCompanionCard(dc.card))?.card ?? null;
+}
+
+/**
+ * Extra cards a companion's condition adds to the minimum deck size.
+ * Yorion, Sky Nomad: "at least twenty cards more than the minimum deck
+ * size" = 20. Other companions do not change the size.
+ */
+export function companionDeckSizeBonus(oracleText: string): number {
+  const m = oracleText.match(/at least (\w+) cards more than the minimum deck size/i);
+  if (m == null) {
+    return 0;
+  }
+  const word = m[1]!.toLowerCase();
+  return NUMBER_WORDS[word] ?? (Number.parseInt(word, 10) || 0);
 }
 
 /**
@@ -260,8 +296,29 @@ export interface DeckListAllowance {
  * Constructed: min 60, no maximum. Commander family: exactly 99 + commander.
  * Tiny Leaders / TLR: exactly 49 + commander, soft 10-card sideboard, MV ≤ 3
  * for nonlands. Standard Brawl and Oathbreaker: exactly 59 + commander.
+ *
+ * Pass the deck's cards to apply its companion: Yorion in the sideboard
+ * raises the constructed minimum by 20 (60 to 80). Fixed-size formats
+ * cannot meet Yorion's condition; evaluateDeckLegality reports that.
  */
-export function deckListAllowance(format: string | null | undefined): DeckListAllowance {
+export function deckListAllowance(
+  format: string | null | undefined,
+  cards: DeckCardWithCard[] = [],
+): DeckListAllowance {
+  const base = baseAllowance(format);
+  const companion = deckCompanion(cards);
+  const bonus = companion != null ? companionDeckSizeBonus(getOracleText(companion)) : 0;
+  return {
+    ...base,
+    mainTarget: base.mainHardMax ? base.mainTarget : base.mainTarget + bonus,
+    companion: companion?.title ?? null,
+    companionBonus: bonus,
+  };
+}
+
+function baseAllowance(
+  format: string | null | undefined,
+): Omit<DeckListAllowance, 'companion' | 'companionBonus'> {
   if (isHundredCardSingleton(format)) {
     return {
       mainTarget: usesCommanderCard(format) ? 99 : 100,
@@ -330,9 +387,9 @@ export function canAddToMain(
 export function isMainDeckSizeOk(
   format: string | null | undefined,
   mainCount: number,
-  options?: { nonRulebreakerCount?: number },
+  options?: { nonRulebreakerCount?: number; cards?: DeckCardWithCard[] },
 ): boolean {
-  const allowance = deckListAllowance(format);
+  const allowance = deckListAllowance(format, options?.cards);
   if (allowance.mainHardMax) {
     const nonRb = options?.nonRulebreakerCount ?? mainCount;
     return mainCount >= allowance.mainTarget && nonRb <= allowance.mainTarget;
@@ -424,8 +481,58 @@ export interface DeckLegalityCard {
   field_type_line?: string | null;
   field_cmc?: number | null;
   field_oracle_text?: unknown;
+  field_mana_cost?: string | null;
   field_legal_formats?: string[] | null;
   field_restricted_formats?: string[] | null;
+}
+
+/** Companion check input for one copy of a card. */
+function toCompanionCard(card: DeckLegalityCard): CompanionCard {
+  return {
+    title: card.title,
+    typeLine: card.field_type_line ?? '',
+    cmc: card.field_cmc ?? 0,
+    manaCost: card.field_mana_cost ?? '',
+    oracleText: getOracleText(card),
+  };
+}
+
+/**
+ * Legality issue when the starting deck breaks its companion's condition
+ * (Lurrus, Gyruda, Jegantha, ...). The starting deck is the main deck plus
+ * the commander.
+ */
+function companionConditionIssue(
+  cards: DeckCardWithCard[],
+  commander: DeckLegalityCard | null | undefined,
+): DeckLegalityIssue | null {
+  const companion = deckCompanion(cards);
+  if (companion == null) {
+    return null;
+  }
+  const rule = companionRule(getOracleText(companion));
+  if (rule == null) {
+    return null;
+  }
+  const startingDeck: CompanionCard[] = [];
+  for (const slot of mainDeck(cards)) {
+    for (let i = 0; i < slot.quantity; i++) {
+      startingDeck.push(toCompanionCard(slot.card));
+    }
+  }
+  if (commander != null) {
+    startingDeck.push(toCompanionCard(commander));
+  }
+  const offenders = rule.offenders(startingDeck);
+  if (offenders.length === 0) {
+    return null;
+  }
+  const shown = offenders.slice(0, 4).join(', ');
+  const more = offenders.length > 4 ? ` and ${offenders.length - 4} more` : '';
+  return {
+    code: 'companion',
+    message: `${companion.title} companion: ${rule.summary}. Breaks it: ${shown}${more}.`,
+  };
 }
 
 export type DeckLegalityCode =
@@ -434,7 +541,8 @@ export type DeckLegalityCode =
   | 'restricted'
   | 'illegal'
   | 'mana_value'
-  | 'commander';
+  | 'commander'
+  | 'companion';
 
 export interface DeckLegalityIssue {
   code: DeckLegalityCode;
@@ -487,13 +595,25 @@ export function evaluateDeckLegality(
   commander: DeckLegalityCard | null | undefined = null,
 ): DeckLegality {
   const issues: DeckLegalityIssue[] = [];
-  const allowance = deckListAllowance(format);
+  const allowance = deckListAllowance(format, cards);
   const mainCount = totalCount(mainDeck(cards));
   const nonRb = nonRulebreakerMainCount(cards);
   const formatLabel = (format ?? '').trim() || 'this format';
   const scryfallKey = scryfallFormatKey(format);
 
-  if (!isMainDeckSizeOk(format, mainCount, { nonRulebreakerCount: nonRb })) {
+  const companionIssue = companionConditionIssue(cards, commander);
+  if (companionIssue != null) {
+    issues.push(companionIssue);
+  }
+
+  if (allowance.companion != null && allowance.companionBonus > 0 && allowance.mainHardMax) {
+    issues.push({
+      code: 'companion',
+      message: `${allowance.companion}'s companion condition can't be met in ${formatLabel}: the deck size is fixed.`,
+    });
+  }
+
+  if (!isMainDeckSizeOk(format, mainCount, { nonRulebreakerCount: nonRb, cards })) {
     if (allowance.mainHardMax && nonRb > allowance.mainTarget) {
       issues.push({
         code: 'size',
@@ -503,7 +623,9 @@ export function evaluateDeckLegality(
     else {
       issues.push({
         code: 'size',
-        message: `Main deck has ${mainCount} cards; ${formatLabel} needs ${allowance.mainTarget}.`,
+        message: allowance.companionBonus > 0
+          ? `Main deck has ${mainCount} cards; with ${allowance.companion} as companion it needs at least ${allowance.mainTarget}.`
+          : `Main deck has ${mainCount} cards; ${formatLabel} needs ${allowance.mainTarget}.`,
       });
     }
   }

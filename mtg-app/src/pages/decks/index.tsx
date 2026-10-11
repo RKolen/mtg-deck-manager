@@ -327,6 +327,7 @@ const DecksPage: React.FC = () => {
                   md != null &&
                   isMainDeckSizeOk(d.attributes.field_format, md, {
                     nonRulebreakerCount: nonRulebreakerMainCount(cards ?? []),
+                    cards: cards ?? [],
                   });
                 const legality = cards
                   ? evaluateDeckLegality(

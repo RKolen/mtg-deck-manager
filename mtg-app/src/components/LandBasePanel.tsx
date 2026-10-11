@@ -91,6 +91,7 @@ const LandBasePanel: React.FC<LandBasePanelProps> = ({ deckId, cards, format, co
   }, [commander, main]);
 
   const legalIn = scryfallFormatKey(format);
+  const companionAllowance = deckListAllowance(format, cards);
   const pool = useQuery({
     queryKey: ['deckBuildPool', 'lands', source, legalIn, deckColors.join(''), deckId],
     queryFn: () => fetchDeckBuildPool({
@@ -146,7 +147,8 @@ const LandBasePanel: React.FC<LandBasePanelProps> = ({ deckId, cards, format, co
       bestPrice(p.card.attributes, currency, false, usdToEur),
     ));
 
-    const allowance = deckListAllowance(format);
+    // With Yorion as companion the deck is 80 cards: more lands, same ratios.
+    const allowance = deckListAllowance(format, cards);
     const deckSize = allowance.mainHardMax
       ? allowance.mainTarget
       : Math.max(allowance.mainTarget, main.reduce((s, dc) => s + dc.quantity, 0));
@@ -174,7 +176,7 @@ const LandBasePanel: React.FC<LandBasePanelProps> = ({ deckId, cards, format, co
       commanderFormat,
       landCountOverride: Number.isFinite(override) && override > 0 ? override : null,
     });
-  }, [pool.data, main, includeUsed, source, currency, usdToEur, format, landCountInput, commander, deckColors, commanderFormat]);
+  }, [pool.data, main, cards, includeUsed, source, currency, usdToEur, format, landCountInput, commander, deckColors, commanderFormat]);
 
   /** Printing to add for a card name: the pool printing, else any printing. */
   async function cardIdFor(title: string): Promise<string> {
@@ -354,6 +356,9 @@ const LandBasePanel: React.FC<LandBasePanelProps> = ({ deckId, cards, format, co
               </span>
             )}
             . The deck has {plan.currentLandCount} now.
+            {companionAllowance.companionBonus > 0 && !companionAllowance.mainHardMax && (
+              <> Planned for a {companionAllowance.mainTarget}-card deck ({companionAllowance.companion} companion).</>
+            )}
           </p>
           <p style={{ fontSize: '0.9rem' }}>
             Coloured spells castable on curve: {pct(plan.castableCurrent)} now,{' '}

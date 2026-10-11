@@ -746,12 +746,13 @@ const DeckEditor: React.FC<EditorProps> = ({
     const missing = Math.max(0, dc.quantity - owned);
     return sum + missing * slotUnitPrice(dc.card, currency, dc.isFoil, usdToEur);
   }, 0);
-  const allowance = deckListAllowance(format);
+  const allowance = deckListAllowance(format, cards);
   const showCommander = usesCommanderCard(format);
   const commanderLabel = isTinyLeadersFormat(format) ? 'Tiny Leader' : 'Commander';
   const nonRbMain = nonRulebreakerMainCount(cards);
   const mainOk = isMainDeckSizeOk(format, mainCount, {
     nonRulebreakerCount: nonRbMain,
+    cards,
   });
   const mainOver = allowance.mainHardMax && nonRbMain > allowance.mainTarget;
   const sbSoftMax = allowance.sideboardSoftMax;
@@ -1013,6 +1014,9 @@ const DeckEditor: React.FC<EditorProps> = ({
         >
           Main: {mainCount} / {allowance.mainTarget}
           {allowance.mainHardMax ? '' : '+'}
+          {allowance.companionBonus > 0 && (
+            <span style={{ opacity: 0.7 }}> ({allowance.companion} companion)</span>
+          )}
         </span>
         {'  |  '}
         <span
