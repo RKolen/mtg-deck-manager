@@ -251,6 +251,24 @@ const DecksPage: React.FC = () => {
           >
             + NEW DECK
           </button>
+          <button
+            type="button"
+            onClick={() => void router.push('/decks/generate')}
+            title="Build a random deck from your collection"
+            style={{
+              background: 'transparent',
+              color: 'var(--ink)',
+              border: '1px solid var(--line)',
+              padding: '3px 10px',
+              borderRadius: 2,
+              fontFamily: 'var(--mono)',
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: '0.08em',
+            }}
+          >
+            RANDOM
+          </button>
         </div>
 
         <div style={{ flex: 1, overflow: 'auto' }}>

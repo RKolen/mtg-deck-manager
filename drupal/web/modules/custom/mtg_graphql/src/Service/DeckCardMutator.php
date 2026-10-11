@@ -103,7 +103,7 @@ final class DeckCardMutator {
     $qty = max(1, (int) ($para->get('field_quantity')->value ?? 1));
     $cardId = (int) ($para->get('field_card')->target_id ?? 0);
 
-    $target = $this->findSlotWithCard($deck, $toField, $cardId, $isSideboard, (int) $para->id());
+    $target = $this->findSlotWithCard($deck, $toField, $cardId, $isSideboard, (int) $para->id(), $this->slotIsFoil($para));
     if ($target instanceof Paragraph) {
       $mergedQty = max(1, (int) ($target->get('field_quantity')->value ?? 1)) + $qty;
       $target->set('field_quantity', $mergedQty);
@@ -281,13 +281,10 @@ final class DeckCardMutator {
       return $this->slotPayload($para, $qty, $isSideboard, $foil, $board);
     }
 
-    $merged = $this->findSlotWithCard($deck, $field, (int) $newCard->id(), $isSideboard, (int) $para->id());
+    $merged = $this->findSlotWithCard($deck, $field, (int) $newCard->id(), $isSideboard, (int) $para->id(), $foil);
     if ($merged instanceof Paragraph) {
       $mergedQty = max(1, (int) ($merged->get('field_quantity')->value ?? 1)) + $qty;
       $merged->set('field_quantity', $mergedQty);
-      if ($merged->hasField('field_is_foil')) {
-        $merged->set('field_is_foil', $foil);
-      }
       $merged->setNewRevision(FALSE);
       $merged->save();
       $this->pointDeckAtParagraphRevision($deck, $merged, $field);
@@ -362,7 +359,9 @@ final class DeckCardMutator {
   /**
    * Finds another slot in a deck field that already uses this printing.
    *
-   * On the maybeboard the sideboard flag is ignored.
+   * On the maybeboard the sideboard flag is ignored. Foil and non-foil copies
+   * of a printing are kept in separate slots, so only a slot with the same
+   * finish matches.
    */
   private function findSlotWithCard(
     NodeInterface $deck,
@@ -370,6 +369,7 @@ final class DeckCardMutator {
     int $cardId,
     bool $isSideboard,
     int $excludeId,
+    bool $foil,
   ): ?Paragraph {
     if (!$deck->hasField($field)) {
       return NULL;
@@ -382,6 +382,9 @@ final class DeckCardMutator {
         continue;
       }
       if ((int) ($entity->get('field_card')->target_id ?? 0) !== $cardId) {
+        continue;
+      }
+      if ($this->slotIsFoil($entity) !== $foil) {
         continue;
       }
       return $entity;

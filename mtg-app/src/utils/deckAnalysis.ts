@@ -931,7 +931,7 @@ function logFactorial(n: number): number {
   return LOG_FACT_CACHE[n]!;
 }
 
-function logBinomial(n: number, k: number): number {
+export function logBinomial(n: number, k: number): number {
   if (k < 0 || k > n) return -Infinity;
   if (k === 0 || k === n) return 0;
   return logFactorial(n) - logFactorial(k) - logFactorial(n - k);

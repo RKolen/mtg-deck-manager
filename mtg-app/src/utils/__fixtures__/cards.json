@@ -1,0 +1,1463 @@
+[
+  {
+    "title": "Sol Ring",
+    "typeLine": "Artifact",
+    "oracleText": "{T}: Add {C}{C}.",
+    "cmc": 1,
+    "manaCost": "{1}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Llanowar Elves",
+    "typeLine": "Creature — Elf Druid",
+    "oracleText": "{T}: Add {G}.",
+    "cmc": 1,
+    "manaCost": "{G}",
+    "isManaProducer": true,
+    "producedMana": [
+      "G"
+    ],
+    "power": "1"
+  },
+  {
+    "title": "Birds of Paradise",
+    "typeLine": "Creature — Bird",
+    "oracleText": "Flying\n{T}: Add one mana of any color.",
+    "cmc": 1,
+    "manaCost": "{G}",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": "0"
+  },
+  {
+    "title": "Cultivate",
+    "typeLine": "Sorcery",
+    "oracleText": "Search your library for up to two basic land cards, reveal those cards, put one onto the battlefield tapped and the other into your hand, then shuffle.",
+    "cmc": 3,
+    "manaCost": "{2}{G}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Rampant Growth",
+    "typeLine": "Sorcery",
+    "oracleText": "Search your library for a basic land card, put that card onto the battlefield tapped, then shuffle.",
+    "cmc": 2,
+    "manaCost": "{1}{G}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Arcane Signet",
+    "typeLine": "Artifact",
+    "oracleText": "{T}: Add one mana of any color in your commander's color identity.",
+    "cmc": 2,
+    "manaCost": "{2}",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Farseek",
+    "typeLine": "Sorcery",
+    "oracleText": "Search your library for a Plains, Island, Swamp, or Mountain card, put it onto the battlefield tapped, then shuffle.",
+    "cmc": 2,
+    "manaCost": "{1}{G}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Three Visits",
+    "typeLine": "Sorcery",
+    "oracleText": "Search your library for a Forest card, put it onto the battlefield, then shuffle.",
+    "cmc": 2,
+    "manaCost": "{1}{G}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Dockside Extortionist",
+    "typeLine": "Creature — Goblin Pirate",
+    "oracleText": "When this creature enters, create X Treasure tokens, where X is the number of artifacts and enchantments your opponents control. (Treasure tokens are artifacts with \"{T}, Sacrifice this token: Add one mana of any color.\")",
+    "cmc": 2,
+    "manaCost": "{1}{R}",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": "1"
+  },
+  {
+    "title": "Smothering Tithe",
+    "typeLine": "Enchantment",
+    "oracleText": "Whenever an opponent draws a card, that player may pay {2}. If the player doesn't, you create a Treasure token. (It's an artifact with \"{T}, Sacrifice this token: Add one mana of any color.\")",
+    "cmc": 4,
+    "manaCost": "{3}{W}",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Brainstorm",
+    "typeLine": "Instant",
+    "oracleText": "Draw three cards, then put two cards from your hand on top of your library in any order.",
+    "cmc": 1,
+    "manaCost": "{U}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Ponder",
+    "typeLine": "Sorcery",
+    "oracleText": "Look at the top three cards of your library, then put them back in any order. You may shuffle.\nDraw a card.",
+    "cmc": 1,
+    "manaCost": "{U}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Harmonize",
+    "typeLine": "Sorcery",
+    "oracleText": "Draw three cards.",
+    "cmc": 4,
+    "manaCost": "{2}{G}{G}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Rhystic Study",
+    "typeLine": "Enchantment",
+    "oracleText": "Whenever an opponent casts a spell, you may draw a card unless that player pays {1}.",
+    "cmc": 3,
+    "manaCost": "{2}{U}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Phyrexian Arena",
+    "typeLine": "Enchantment",
+    "oracleText": "At the beginning of your upkeep, you draw a card and lose 1 life.",
+    "cmc": 3,
+    "manaCost": "{1}{B}{B}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Night's Whisper",
+    "typeLine": "Sorcery",
+    "oracleText": "You draw two cards and lose 2 life.",
+    "cmc": 2,
+    "manaCost": "{1}{B}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Mulldrifter",
+    "typeLine": "Creature — Elemental",
+    "oracleText": "Flying\nWhen this creature enters, draw two cards.\nEvoke {2}{U} (You may cast this spell for its evoke cost. If you do, it's sacrificed when it enters.)",
+    "cmc": 5,
+    "manaCost": "{4}{U}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": "2"
+  },
+  {
+    "title": "Esper Sentinel",
+    "typeLine": "Artifact Creature — Human Soldier",
+    "oracleText": "Whenever an opponent casts their first noncreature spell each turn, draw a card unless that player pays {X}, where X is this creature's power.",
+    "cmc": 1,
+    "manaCost": "{W}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": "1"
+  },
+  {
+    "title": "Fact or Fiction",
+    "typeLine": "Instant",
+    "oracleText": "Reveal the top five cards of your library. An opponent separates those cards into two piles. Put one pile into your hand and the other into your graveyard.",
+    "cmc": 4,
+    "manaCost": "{3}{U}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Swords to Plowshares",
+    "typeLine": "Instant",
+    "oracleText": "Exile target creature. Its controller gains life equal to its power.",
+    "cmc": 1,
+    "manaCost": "{W}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Path to Exile",
+    "typeLine": "Instant",
+    "oracleText": "Exile target creature. Its controller may search their library for a basic land card, put that card onto the battlefield tapped, then shuffle.",
+    "cmc": 1,
+    "manaCost": "{W}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Lightning Bolt",
+    "typeLine": "Instant",
+    "oracleText": "Lightning Bolt deals 3 damage to any target.",
+    "cmc": 1,
+    "manaCost": "{R}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Counterspell",
+    "typeLine": "Instant",
+    "oracleText": "Counter target spell.",
+    "cmc": 2,
+    "manaCost": "{U}{U}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Murder",
+    "typeLine": "Instant",
+    "oracleText": "Destroy target creature.",
+    "cmc": 3,
+    "manaCost": "{1}{B}{B}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Doom Blade",
+    "typeLine": "Instant",
+    "oracleText": "Destroy target nonblack creature.",
+    "cmc": 2,
+    "manaCost": "{1}{B}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Beast Within",
+    "typeLine": "Instant",
+    "oracleText": "Destroy target permanent. Its controller creates a 3/3 green Beast creature token.",
+    "cmc": 3,
+    "manaCost": "{2}{G}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Chaos Warp",
+    "typeLine": "Instant",
+    "oracleText": "The owner of target permanent shuffles it into their library, then reveals the top card of their library. If it's a permanent card, they put it onto the battlefield.",
+    "cmc": 3,
+    "manaCost": "{2}{R}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Anguished Unmaking",
+    "typeLine": "Instant",
+    "oracleText": "Exile target nonland permanent. You lose 3 life.",
+    "cmc": 3,
+    "manaCost": "{1}{W}{B}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Wrath of God",
+    "typeLine": "Sorcery",
+    "oracleText": "Destroy all creatures. They can't be regenerated.",
+    "cmc": 4,
+    "manaCost": "{2}{W}{W}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Damnation",
+    "typeLine": "Sorcery",
+    "oracleText": "Destroy all creatures. They can't be regenerated.",
+    "cmc": 4,
+    "manaCost": "{2}{B}{B}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Blasphemous Act",
+    "typeLine": "Sorcery",
+    "oracleText": "This spell costs {1} less to cast for each creature on the battlefield.\nBlasphemous Act deals 13 damage to each creature.",
+    "cmc": 9,
+    "manaCost": "{8}{R}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Toxic Deluge",
+    "typeLine": "Sorcery",
+    "oracleText": "As an additional cost to cast this spell, pay X life.\nAll creatures get -X/-X until end of turn.",
+    "cmc": 3,
+    "manaCost": "{2}{B}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Cyclonic Rift",
+    "typeLine": "Instant",
+    "oracleText": "Return target nonland permanent you don't control to its owner's hand.\nOverload {6}{U} (You may cast this spell for its overload cost. If you do, change \"target\" in its text to \"each.\")",
+    "cmc": 2,
+    "manaCost": "{1}{U}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Austere Command",
+    "typeLine": "Sorcery",
+    "oracleText": "Choose two —\n• Destroy all artifacts.\n• Destroy all enchantments.\n• Destroy all creatures with mana value 3 or less.\n• Destroy all creatures with mana value 4 or greater.",
+    "cmc": 6,
+    "manaCost": "{4}{W}{W}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Grave Titan",
+    "typeLine": "Creature — Giant",
+    "oracleText": "Deathtouch\nWhenever this creature enters or attacks, create two 2/2 black Zombie creature tokens.",
+    "cmc": 6,
+    "manaCost": "{4}{B}{B}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": "6"
+  },
+  {
+    "title": "Craterhoof Behemoth",
+    "typeLine": "Creature — Beast",
+    "oracleText": "Haste\nWhen this creature enters, creatures you control gain trample and get +X/+X until end of turn, where X is the number of creatures you control.",
+    "cmc": 8,
+    "manaCost": "{5}{G}{G}{G}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": "5"
+  },
+  {
+    "title": "Thassa's Oracle",
+    "typeLine": "Creature — Merfolk Wizard",
+    "oracleText": "When this creature enters, look at the top X cards of your library, where X is your devotion to blue. Put up to one of them on top of your library and the rest on the bottom of your library in a random order. If X is greater than or equal to the number of cards in your library, you win the game. (Each {U} in the mana costs of permanents you control counts toward your devotion to blue.)",
+    "cmc": 2,
+    "manaCost": "{U}{U}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": "1"
+  },
+  {
+    "title": "Serra Angel",
+    "typeLine": "Creature — Angel",
+    "oracleText": "Flying\nVigilance (Attacking doesn't cause this creature to tap.)",
+    "cmc": 5,
+    "manaCost": "{3}{W}{W}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": "4"
+  },
+  {
+    "title": "Tarmogoyf",
+    "typeLine": "Creature — Lhurgoyf",
+    "oracleText": "Tarmogoyf's power is equal to the number of card types among cards in all graveyards and its toughness is equal to that number plus 1.",
+    "cmc": 2,
+    "manaCost": "{1}{G}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": "*"
+  },
+  {
+    "title": "Goblin Guide",
+    "typeLine": "Creature — Goblin Scout",
+    "oracleText": "Haste\nWhenever this creature attacks, defending player reveals the top card of their library. If it's a land card, that player puts it into their hand.",
+    "cmc": 1,
+    "manaCost": "{R}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": "2"
+  },
+  {
+    "title": "Jace, the Mind Sculptor",
+    "typeLine": "Legendary Planeswalker — Jace",
+    "oracleText": "+2: Look at the top card of target player's library. You may put that card on the bottom of that player's library.\n0: Draw three cards, then put two cards from your hand on top of your library in any order.\n−1: Return target creature to its owner's hand.\n−12: Exile all cards from target player's library, then that player shuffles their hand into their library.",
+    "cmc": 4,
+    "manaCost": "{2}{U}{U}",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Evolving Wilds",
+    "typeLine": "Land",
+    "oracleText": "{T}, Sacrifice this land: Search your library for a basic land card, put it onto the battlefield tapped, then shuffle.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Command Tower",
+    "typeLine": "Land",
+    "oracleText": "{T}: Add one mana of any color in your commander's color identity.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Hallowed Fountain",
+    "typeLine": "Land — Plains Island",
+    "oracleText": "({T}: Add {W} or {U}.)\nAs this land enters, you may pay 2 life. If you don't, it enters tapped.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Flooded Strand",
+    "typeLine": "Land",
+    "oracleText": "{T}, Pay 1 life, Sacrifice this land: Search your library for a Plains or Island card, put it onto the battlefield, then shuffle.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Watery Grave",
+    "typeLine": "Land — Island Swamp",
+    "oracleText": "({T}: Add {U} or {B}.)\nAs this land enters, you may pay 2 life. If you don't, it enters tapped.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "U"
+    ],
+    "power": null
+  },
+  {
+    "title": "Glacial Fortress",
+    "typeLine": "Land",
+    "oracleText": "This land enters tapped unless you control a Plains or an Island.\n{T}: Add {W} or {U}.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Seachrome Coast",
+    "typeLine": "Land",
+    "oracleText": "This land enters tapped unless you control two or fewer other lands.\n{T}: Add {W} or {U}.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Raffine's Tower",
+    "typeLine": "Land — Plains Island Swamp",
+    "oracleText": "({T}: Add {W}, {U}, or {B}.)\nThis land enters tapped.\nCycling {3} ({3}, Discard this card: Draw a card.)",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Arid Mesa",
+    "typeLine": "Land",
+    "oracleText": "{T}, Pay 1 life, Sacrifice this land: Search your library for a Mountain or Plains card, put it onto the battlefield, then shuffle.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Plains",
+    "typeLine": "Basic Land — Plains",
+    "oracleText": "({T}: Add {W}.)",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Island",
+    "typeLine": "Basic Land — Island",
+    "oracleText": "({T}: Add {U}.)",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "U"
+    ],
+    "power": null
+  },
+  {
+    "title": "City of Brass",
+    "typeLine": "Land",
+    "oracleText": "Whenever this land becomes tapped, it deals 1 damage to you.\n{T}: Add one mana of any color.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Exotic Orchard",
+    "typeLine": "Land",
+    "oracleText": "{T}: Add one mana of any color that a land an opponent controls could produce.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Academy Ruins",
+    "typeLine": "Legendary Land",
+    "oracleText": "{T}: Add {C}.\n{1}{U}, {T}: Put target artifact card from your graveyard on top of your library.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Temple of Enlightenment",
+    "typeLine": "Land",
+    "oracleText": "This land enters tapped.\nWhen this land enters, scry 1. (Look at the top card of your library. You may put that card on the bottom.)\n{T}: Add {W} or {U}.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Azorius Chancery",
+    "typeLine": "Land",
+    "oracleText": "This land enters tapped.\nWhen this land enters, return a land you control to its owner's hand.\n{T}: Add {W}{U}.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Fabled Passage",
+    "typeLine": "Land",
+    "oracleText": "{T}, Sacrifice this land: Search your library for a basic land card, put it onto the battlefield tapped, then shuffle. Then if you control four or more lands, untap that land.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Prismatic Vista",
+    "typeLine": "Land",
+    "oracleText": "{T}, Pay 1 life, Sacrifice this land: Search your library for a basic land card, put it onto the battlefield, then shuffle.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Morphic Pool",
+    "typeLine": "Land",
+    "oracleText": "This land enters tapped unless you have two or more opponents.\n{T}: Add {U} or {B}.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "U"
+    ],
+    "power": null
+  },
+  {
+    "title": "Scoured Barrens",
+    "typeLine": "Land",
+    "oracleText": "This land enters tapped.\nWhen this land enters, you gain 1 life.\n{T}: Add {W} or {B}.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Godless Shrine",
+    "typeLine": "Land — Plains Swamp",
+    "oracleText": "({T}: Add {W} or {B}.)\nAs this land enters, you may pay 2 life. If you don't, it enters tapped.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Caves of Koilos",
+    "typeLine": "Land",
+    "oracleText": "{T}: Add {C}.\n{T}: Add {W} or {B}. This land deals 1 damage to you.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Marsh Flats",
+    "typeLine": "Land",
+    "oracleText": "{T}, Pay 1 life, Sacrifice this land: Search your library for a Plains or Swamp card, put it onto the battlefield, then shuffle.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Underground River",
+    "typeLine": "Land",
+    "oracleText": "{T}: Add {C}.\n{T}: Add {U} or {B}. This land deals 1 damage to you.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "U"
+    ],
+    "power": null
+  },
+  {
+    "title": "Drowned Catacomb",
+    "typeLine": "Land",
+    "oracleText": "This land enters tapped unless you control an Island or a Swamp.\n{T}: Add {U} or {B}.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "U"
+    ],
+    "power": null
+  },
+  {
+    "title": "Silent Clearing",
+    "typeLine": "Land",
+    "oracleText": "{T}, Pay 1 life: Add {W} or {B}.\n{1}, {T}, Sacrifice this land: Draw a card.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Training Center",
+    "typeLine": "Land",
+    "oracleText": "This land enters tapped unless you have two or more opponents.\n{T}: Add {U} or {R}.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "R",
+      "U"
+    ],
+    "power": null
+  },
+  {
+    "title": "Reliquary Tower",
+    "typeLine": "Land",
+    "oracleText": "You have no maximum hand size.\n{T}: Add {C}.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Path of Ancestry",
+    "typeLine": "Land",
+    "oracleText": "This land enters tapped.\n{T}: Add one mana of any color in your commander's color identity. When that mana is spent to cast a creature spell that shares a creature type with your commander, scry 1. (Look at the top card of your library. You may put that card on the bottom.)",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Mana Confluence",
+    "typeLine": "Land",
+    "oracleText": "{T}, Pay 1 life: Add one mana of any color.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Tundra",
+    "typeLine": "Land — Plains Island",
+    "oracleText": "({T}: Add {W} or {U}.)",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Ancient Den",
+    "typeLine": "Artifact Land",
+    "oracleText": "{T}: Add {W}.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Spara's Headquarters",
+    "typeLine": "Land — Forest Plains Island",
+    "oracleText": "({T}: Add {G}, {W}, or {U}.)\nThis land enters tapped.\nCycling {3} ({3}, Discard this card: Draw a card.)",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "G",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Shimmering Grotto",
+    "typeLine": "Land",
+    "oracleText": "{T}: Add {C}.\n{1}, {T}: Add one mana of any color.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Secluded Courtyard",
+    "typeLine": "Land",
+    "oracleText": "As this land enters, choose a creature type.\n{T}: Add {C}.\n{T}: Add one mana of any color. Spend this mana only to cast a creature spell of the chosen type or activate an ability of a creature source of the chosen type.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Corrupted Crossroads",
+    "typeLine": "Land",
+    "oracleText": "{T}: Add {C}. ({C} represents colorless mana.)\n{T}, Pay 1 life: Add one mana of any color. Spend this mana only to cast a spell with devoid.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Springjack Pasture",
+    "typeLine": "Land",
+    "oracleText": "{T}: Add {C}.\n{4}, {T}: Create a 0/1 white Goat creature token.\n{T}, Sacrifice X Goats: Add X mana of any one color. You gain X life.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Crystal Grotto",
+    "typeLine": "Land",
+    "oracleText": "When this land enters, scry 1.\n{T}: Add {C}.\n{1}, {T}: Add one mana of any color.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Gond Gate",
+    "typeLine": "Land — Gate",
+    "oracleText": "Gates you control enter untapped.\n{T}: Add {C}.\n{T}: Add one mana of any color that a Gate you control could produce.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Castle Doom",
+    "typeLine": "Land",
+    "oracleText": "{T}: Add {C}.\n{T}: Add one mana of any color. Spend this mana only to cast an artifact spell.\n{3}, {T}, Sacrifice an artifact: Create a 3/3 colorless Robot Villain artifact creature token named Doombot. Activate only as a sorcery.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Baldur's Gate",
+    "typeLine": "Legendary Land — Gate",
+    "oracleText": "{T}: Add {C}.\n{2}, {T}: Add X mana of any one color, where X is the number of other Gates you control.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Mirrex",
+    "typeLine": "Land — Sphere",
+    "oracleText": "{T}: Add {C}.\n{T}: Add one mana of any color. Activate only if this land entered this turn.\n{3}, {T}: Create a 1/1 colorless Phyrexian Mite artifact creature token with toxic 1 and \"This token can't block.\" (Players dealt combat damage by it also get a poison counter.)",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Ash Barrens",
+    "typeLine": "Land",
+    "oracleText": "{T}: Add {C}.\nBasic landcycling {1} ({1}, Discard this card: Search your library for a basic land card, reveal it, put it into your hand, then shuffle.)",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Demolition Field",
+    "typeLine": "Land",
+    "oracleText": "{T}: Add {C}.\n{2}, {T}, Sacrifice this land: Destroy target nonbasic land an opponent controls. That land's controller may search their library for a basic land card, put it onto the battlefield, then shuffle. You may search your library for a basic land card, put it onto the battlefield, then shuffle.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Shire Terrace",
+    "typeLine": "Land",
+    "oracleText": "{T}: Add {C}.\n{1}, {T}, Sacrifice this land: Search your library for a basic land card, put it onto the battlefield tapped, then shuffle.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Serra's Sanctum",
+    "typeLine": "Legendary Land",
+    "oracleText": "{T}: Add {W} for each enchantment you control.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Undiscovered Paradise",
+    "typeLine": "Land",
+    "oracleText": "{T}: Add one mana of any color. During your next untap step, as you untap your permanents, return this land to its owner's hand.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Reflecting Pool",
+    "typeLine": "Land",
+    "oracleText": "{T}: Add one mana of any type that a land you control could produce.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Cavern of Souls",
+    "typeLine": "Land",
+    "oracleText": "As this land enters, choose a creature type.\n{T}: Add {C}.\n{T}: Add one mana of any color. Spend this mana only to cast a creature spell of the chosen type, and that spell can't be countered.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Thriving Heath",
+    "typeLine": "Land",
+    "oracleText": "This land enters tapped. As it enters, choose a color other than white.\n{T}: Add {W} or one mana of the chosen color.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Crystal Quarry",
+    "typeLine": "Land",
+    "oracleText": "{T}: Add {C}.\n{5}, {T}: Add {W}{U}{B}{R}{G}.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Rhystic Cave",
+    "typeLine": "Land",
+    "oracleText": "{T}: Choose a color. Add one mana of that color unless any player pays {1}. Activate only as an instant.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Lake of the Dead",
+    "typeLine": "Land",
+    "oracleText": "If this land would enter, sacrifice a Swamp instead. If you do, put this land onto the battlefield. If you don't, put it into its owner's graveyard.\n{T}: Add {B}.\n{T}, Sacrifice a Swamp: Add {B}{B}{B}{B}.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B"
+    ],
+    "power": null
+  },
+  {
+    "title": "The Black Gate",
+    "typeLine": "Legendary Land — Gate",
+    "oracleText": "As The Black Gate enters, you may pay 3 life. If you don't, it enters tapped.\n{T}: Add {B}.\n{1}{B}, {T}: Choose a player with the most life or tied for most life. Target creature can't be blocked by creatures that player controls this turn.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B"
+    ],
+    "power": null
+  },
+  {
+    "title": "Darigaaz's Caldera",
+    "typeLine": "Land — Lair",
+    "oracleText": "When this land enters, sacrifice it unless you return a non-Lair land you control to its owner's hand.\n{T}: Add {B}, {R}, or {G}.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R"
+    ],
+    "power": null
+  },
+  {
+    "title": "Horizon Canopy",
+    "typeLine": "Land",
+    "oracleText": "{T}, Pay 1 life: Add {G} or {W}.\n{1}, {T}, Sacrifice this land: Draw a card.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "G",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Grasslands",
+    "typeLine": "Land",
+    "oracleText": "This land enters tapped.\n{T}, Sacrifice this land: Search your library for a Forest or Plains card, put it onto the battlefield, then shuffle.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": false,
+    "producedMana": [],
+    "power": null
+  },
+  {
+    "title": "Tarnished Citadel",
+    "typeLine": "Land",
+    "oracleText": "{T}: Add {C}.\n{T}: Add one mana of any color. This land deals 3 damage to you.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Opal Palace",
+    "typeLine": "Land",
+    "oracleText": "{T}: Add {C}.\n{1}, {T}: Add one mana of any color in your commander's color identity. If you spend this mana to cast your commander, it enters with a number of additional +1/+1 counters on it equal to the number of times it's been cast from the command zone this game.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Abandoned Outpost",
+    "typeLine": "Land",
+    "oracleText": "This land enters tapped.\n{T}: Add {W}.\n{T}, Sacrifice this land: Add one mana of any color.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Aether Hub",
+    "typeLine": "Land",
+    "oracleText": "When this land enters, you get {E} (an energy counter).\n{T}: Add {C}.\n{T}, Pay {E}: Add one mana of any color.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Glimmervoid",
+    "typeLine": "Land",
+    "oracleText": "At the beginning of the end step, if you control no artifacts, sacrifice this land.\n{T}: Add one mana of any color.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "The Grey Havens",
+    "typeLine": "Legendary Land",
+    "oracleText": "When The Grey Havens enters, scry 1.\n{T}: Add {C}.\n{T}: Add one mana of any color among legendary creature cards in your graveyard.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Pinecrest Ridge",
+    "typeLine": "Land",
+    "oracleText": "{T}: Add {C}.\n{T}: Add {R} or {G}. This land doesn't untap during your next untap step.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "G",
+      "R"
+    ],
+    "power": null
+  },
+  {
+    "title": "Forbidden Orchard",
+    "typeLine": "Land",
+    "oracleText": "{T}: Add one mana of any color.\nWhenever you tap this land for mana, target opponent creates a 1/1 colorless Spirit creature token.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Gemstone Caverns",
+    "typeLine": "Legendary Land",
+    "oracleText": "If this card is in your opening hand and you're not the starting player, you may begin the game with Gemstone Caverns on the battlefield with a luck counter on it. If you do, exile a card from your hand.\n{T}: Add {C}. If Gemstone Caverns has a luck counter on it, instead add one mana of any color.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Lotus Vale",
+    "typeLine": "Land",
+    "oracleText": "If this land would enter, sacrifice two untapped lands instead. If you do, put this land onto the battlefield. If you don't, put it into its owner's graveyard.\n{T}: Add three mana of any one color.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Rainbow Vale",
+    "typeLine": "Land",
+    "oracleText": "{T}: Add one mana of any color. An opponent gains control of this land at the beginning of the next end step.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Forsaken City",
+    "typeLine": "Land",
+    "oracleText": "This land doesn't untap during your untap step.\nAt the beginning of your upkeep, you may exile a card from your hand. If you do, untap this land.\n{T}: Add one mana of any color.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Thran Quarry",
+    "typeLine": "Land",
+    "oracleText": "At the beginning of the end step, if you control no creatures, sacrifice this land.\n{T}: Add one mana of any color.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Plaza of Heroes",
+    "typeLine": "Land",
+    "oracleText": "{T}: Add {C}.\n{T}: Add one mana of any color. Spend this mana only to cast a legendary spell.\n{T}: Add one mana of any color among legendary permanents you control.\n{3}, {T}, Exile this land: Target legendary creature gains hexproof and indestructible until end of turn.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Forgotten Monument",
+    "typeLine": "Land — Cave",
+    "oracleText": "{T}: Add {C}.\nOther Caves you control have \"{T}, Pay 1 life: Add one mana of any color.\"",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "Fetid Heath",
+    "typeLine": "Land",
+    "oracleText": "{T}: Add {C}.\n{W/B}, {T}: Add {W}{W}, {W}{B}, or {B}{B}.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "W"
+    ],
+    "power": null
+  },
+  {
+    "title": "River Delta",
+    "typeLine": "Land",
+    "oracleText": "This land doesn't untap during your untap step if it has a depletion counter on it.\nAt the beginning of your upkeep, remove a depletion counter from this land.\n{T}: Add {U} or {B}. Put a depletion counter on this land.",
+    "cmc": 0,
+    "manaCost": "",
+    "isManaProducer": true,
+    "producedMana": [
+      "B",
+      "U"
+    ],
+    "power": null
+  }
+]

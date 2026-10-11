@@ -46,6 +46,7 @@ final class MtgGraphqlResolverRegistration {
     self::addScrapeMetaDecksResolver($registry, $builder);
     self::addWishlistResolvers($registry, $builder);
     self::addCollectionImportResolvers($registry, $builder);
+    self::addDeckBuildPoolResolvers($registry, $builder);
   }
 
   /**
@@ -149,6 +150,35 @@ final class MtgGraphqlResolverRegistration {
     $registry->addFieldResolver('CollectionImportResult', 'card',
       $builder->callback(fn(array $r) => $r['card'])
     );
+  }
+
+  /**
+   * Registers the deck build pool query and its types.
+   */
+  public static function addDeckBuildPoolResolvers(ResolverRegistryInterface $registry, ResolverBuilder $builder): void {
+    $registry->addFieldResolver('Query', 'deckBuildPool',
+      $builder->callback(function ($value, array $args, ResolveContext $context, ResolveInfo $info, FieldContext $fieldContext): array {
+        $fieldContext->addCacheTags([
+          'node_list:collection_card',
+          'node_list:deck',
+          'node_list:mtg_card',
+          'paragraph_list',
+        ]);
+        /** @var \Drupal\mtg_graphql\Service\DeckBuildPool $pool */
+        $pool = \Drupal::service('mtg_graphql.deck_build_pool');
+        return $pool->pool($args);
+      })
+    );
+    foreach (['card', 'owned', 'trade', 'usedIn'] as $field) {
+      $registry->addFieldResolver('PoolCard', $field,
+        $builder->callback(fn(array $p) => $p[$field])
+      );
+    }
+    foreach (['deckId', 'deckTitle', 'quantity'] as $field) {
+      $registry->addFieldResolver('CardUse', $field,
+        $builder->callback(fn(array $u) => $u[$field])
+      );
+    }
   }
 
   /**
@@ -371,35 +401,24 @@ final class MtgGraphqlResolverRegistration {
         $fieldContext->mergeCacheMaxAge(3600);
         $usdToEur = \Drupal::service('mtg_scryfall_sync.exchange_rate')->usdToEur();
         $currency = strtoupper((string) ($args['currency'] ?? 'EUR'));
-        $useEur = $currency === 'EUR';
-        $storage = \Drupal::entityTypeManager()->getStorage('node');
-        $ids = \Drupal::entityQuery('node')
-          ->condition('type', 'collection_card')
-          ->condition('status', 1)
-          ->accessCheck(FALSE)
-          ->execute();
-
-        $total = 0.0;
-        foreach ($storage->loadMultiple($ids) as $cc) {
-          $owned = (int) ($cc->get('field_quantity_owned')->value ?? 0);
-          $foil = (int) ($cc->get('field_quantity_foil')->value ?? 0);
-          if ($owned === 0 && $foil === 0) {
-            continue;
-          }
-          $ref = $cc->get('field_card')->first();
-          if (!$ref instanceof EntityReferenceItem || !$ref->entity) {
-            continue;
-          }
-          $card = $ref->entity;
-          if (!$card instanceof FieldableEntityInterface) {
-            continue;
-          }
-          $total += self::bestPrice($card, $useEur, FALSE, $usdToEur) * $owned
-            + self::bestPrice($card, $useEur, TRUE, $usdToEur) * $foil;
-        }
-        return round($total, 2);
+        return \Drupal::service('mtg_graphql.collection_reader')->value($currency === 'EUR', $usdToEur);
       })
     );
+
+    $registry->addFieldResolver('Query', 'collectionRows',
+      $builder->callback(function ($value, array $args, ResolveContext $context, ResolveInfo $info, FieldContext $fieldContext): array {
+        $fieldContext->addCacheTags(['node_list:collection_card', 'node_list:mtg_card']);
+        return \Drupal::service('mtg_graphql.collection_reader')->rows();
+      })
+    );
+    foreach (['id', 'cardId', 'title', 'quantityOwned', 'quantityFoil', 'quantityTrade', 'binderLocation', 'setCode',
+      'setName', 'collectorNumber', 'typeLine', 'cmc', 'priceUsd', 'priceUsdFoil', 'priceEur', 'priceEurFoil',
+      'imageUri', 'fullArt', 'borderColor',
+    ] as $field) {
+      $registry->addFieldResolver('CollectionRow', $field,
+        $builder->callback(fn(array $row) => $row[$field] ?? NULL)
+      );
+    }
 
     $registry->addFieldResolver('Query', 'usdToEurRate',
       $builder->callback(function ($value, array $args, ResolveContext $context, ResolveInfo $info, FieldContext $fieldContext): float {

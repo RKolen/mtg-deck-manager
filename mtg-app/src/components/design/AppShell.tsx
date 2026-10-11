@@ -5,6 +5,7 @@ import { fetchCollectionCards, fetchCollectionValue } from '../../services/drupa
 import { useTheme } from '../../context/ThemeContext';
 import { TopBar } from './TopBar';
 import { StatusBar } from './StatusBar';
+import { BusyBar } from './BusyBar';
 
 export function AppShell({
   children,
@@ -58,6 +59,7 @@ export function AppShell({
 
   return (
     <div className="app-shell">
+      <BusyBar />
       <TopBar
         uniqueCards={uniqueCards}
         collectionValue={collectionValue}

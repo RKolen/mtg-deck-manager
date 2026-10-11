@@ -1,5 +1,6 @@
 import { gql } from 'graphql-request';
 import type {
+  CardUse,
   CollectionCardAttributes,
   CollectionImportResult,
   CollectionImportRow,
@@ -11,6 +12,8 @@ import type {
   JsonApiResource,
   JsonApiSingleResponse,
   MtgCardAttributes,
+  PoolCard,
+  PoolSource,
   WishIntent,
   WishlistItem,
 } from '../types/drupal';
@@ -77,31 +80,6 @@ interface GqlDeck {
   notes: string | null;
   commander?: GqlMtgCard | null;
   commanderIsFoil?: boolean | null;
-}
-
-interface GqlComposeCollectionCard {
-  id: string;
-  uuid: string;
-  quantityOwned: number;
-  quantityFoil: number;
-  quantityTrade?: number | null;
-  binderLocation?: string | null;
-  card?: {
-    uuid: string;
-    title?: string | null;
-    setCode?: string | null;
-    setName?: string | null;
-    collectorNumber?: string | null;
-    typeLine?: string | null;
-    cmc?: number | null;
-    priceUsd?: string | null;
-    priceEur?: string | null;
-    priceEurFoil?: string | null;
-    priceUsdFoil?: string | null;
-    imageUri?: string | null;
-    fullArt?: boolean | null;
-    borderColor?: string | null;
-  } | null;
 }
 
 interface GqlDeckCard {
@@ -230,39 +208,6 @@ function toDeckResource(d: GqlDeck): JsonApiResource<DeckAttributes> {
       drupal_internal__nid: d.nid,
       field_commander: toDeckCommander(d.commander),
       field_commander_foil: Boolean(d.commanderIsFoil),
-    },
-  };
-}
-
-function toCollectionCardFromCompose(
-  cc: GqlComposeCollectionCard,
-): JsonApiResource<CollectionCardAttributes> {
-  return {
-    id: cc.uuid,
-    type: 'node--collection_card',
-    attributes: {
-      field_quantity_owned: cc.quantityOwned,
-      field_quantity_foil: cc.quantityFoil,
-      field_quantity_trade: cc.quantityTrade ?? 0,
-      field_binder_location: cc.binderLocation ?? null,
-      field_card_title: cc.card?.title ?? '',
-      field_set_code: cc.card?.setCode ?? '',
-      field_set_name: cc.card?.setName ?? '',
-      field_collector_number: cc.card?.collectorNumber ?? '',
-      field_type_line: cc.card?.typeLine ?? '',
-      field_cmc: cc.card?.cmc ?? 0,
-      field_price_usd: cc.card?.priceUsd ?? null,
-      field_price_eur: cc.card?.priceEur ?? null,
-      field_price_eur_foil: cc.card?.priceEurFoil ?? null,
-      field_price_usd_foil: cc.card?.priceUsdFoil ?? null,
-      field_image_uri: cc.card?.imageUri ?? null,
-      field_full_art: Boolean(cc.card?.fullArt),
-      field_border_color: cc.card?.borderColor ?? '',
-    },
-    relationships: {
-      field_card: {
-        data: cc.card != null ? { id: cc.card.uuid, type: 'node--mtg_card' } : null,
-      },
     },
   };
 }
@@ -928,8 +873,11 @@ export async function addCardToDeck(
   board?: DeckBoard,
 ): Promise<void> {
   const target: DeckBoard = board ?? (isSideboard ? 'side' : 'main');
+  // Foil and non-foil copies of a printing live in separate slots. Without
+  // an explicit finish the server uses the deck default, which callers pass
+  // in when they know it.
   const existing = existingSlots.find(
-    s => s.card.id === cardId && s.board === target,
+    s => s.card.id === cardId && s.board === target && (foil == null || s.isFoil === foil),
   );
 
   if (existing != null) {
@@ -965,58 +913,73 @@ export async function removeCardFromDeck(
 // Collection queries and mutations
 // ---------------------------------------------------------------------------
 
+interface GqlCollectionRow {
+  id: string;
+  cardId: string;
+  title: string;
+  quantityOwned: number;
+  quantityFoil: number;
+  quantityTrade: number;
+  binderLocation: string | null;
+  setCode: string | null;
+  setName: string | null;
+  collectorNumber: string | null;
+  typeLine: string | null;
+  cmc: number | null;
+  priceUsd: string | null;
+  priceUsdFoil: string | null;
+  priceEur: string | null;
+  priceEurFoil: string | null;
+  imageUri: string | null;
+  fullArt: boolean;
+  borderColor: string | null;
+}
+
+/**
+ * The whole collection in one request (one SQL query on the server).
+ *
+ * After a single add or edit, pages patch the changed row in the cache
+ * (patchCollectionRow) instead of loading this list again.
+ */
 export async function fetchCollectionCards(): Promise<
   JsonApiResource<CollectionCardAttributes>[]
 > {
   const query = gql`
-    query GetCollectionCards($after: Cursor) {
-      nodeCollectionCards(first: 100, after: $after) {
-        nodes {
-          id uuid quantityOwned quantityFoil quantityTrade binderLocation
-          card {
-            ... on NodeMtgCard {
-              uuid
-              title
-              setCode
-              setName
-              collectorNumber
-              typeLine
-              cmc
-              priceUsd
-              priceEur
-              priceEurFoil
-              priceUsdFoil
-              imageUri
-              fullArt
-              borderColor
-            }
-          }
-        }
-        pageInfo { hasNextPage endCursor }
+    query GetCollectionRows {
+      collectionRows {
+        id cardId title quantityOwned quantityFoil quantityTrade binderLocation
+        setCode setName collectorNumber typeLine cmc
+        priceUsd priceUsdFoil priceEur priceEurFoil imageUri fullArt borderColor
       }
     }
   `;
-  const out: JsonApiResource<CollectionCardAttributes>[] = [];
-  let after: string | null = null;
-  type CollectionPage = {
-    nodeCollectionCards: {
-      nodes: GqlComposeCollectionCard[];
-      pageInfo: { hasNextPage: boolean; endCursor?: string | null };
-    };
-  };
-  for (let page = 0; page < 50; page += 1) {
-    const data: CollectionPage = await getGraphQLClient().request(
-      query,
-      { after },
-    );
-    const conn: CollectionPage['nodeCollectionCards'] = data.nodeCollectionCards;
-    out.push(...conn.nodes.map(toCollectionCardFromCompose));
-    if (!conn.pageInfo.hasNextPage || conn.pageInfo.endCursor == null) {
-      break;
-    }
-    after = conn.pageInfo.endCursor;
-  }
-  return out;
+  const data = await getGraphQLClient().request<{ collectionRows: GqlCollectionRow[] }>(query);
+  return data.collectionRows.map(r => ({
+    id: r.id,
+    type: 'node--collection_card',
+    attributes: {
+      field_quantity_owned: r.quantityOwned,
+      field_quantity_foil: r.quantityFoil,
+      field_quantity_trade: r.quantityTrade,
+      field_binder_location: r.binderLocation,
+      field_card_title: r.title,
+      field_set_code: r.setCode ?? '',
+      field_set_name: r.setName ?? '',
+      field_collector_number: r.collectorNumber ?? '',
+      field_type_line: r.typeLine ?? '',
+      field_cmc: r.cmc ?? 0,
+      field_price_usd: r.priceUsd,
+      field_price_eur: r.priceEur,
+      field_price_eur_foil: r.priceEurFoil,
+      field_price_usd_foil: r.priceUsdFoil,
+      field_image_uri: r.imageUri,
+      field_full_art: r.fullArt,
+      field_border_color: r.borderColor ?? '',
+    },
+    relationships: {
+      field_card: { data: { id: r.cardId, type: 'node--mtg_card' } },
+    },
+  }));
 }
 
 export function collectionPrintingId(
@@ -1251,6 +1214,74 @@ export async function importCollection(
     { rows, apply },
   );
   return data.importCollection;
+}
+
+// ---------------------------------------------------------------------------
+// Deck build pool (land suggester, deck generator)
+// ---------------------------------------------------------------------------
+
+interface GqlPoolCard {
+  card: GqlMtgCard;
+  owned: number;
+  trade: number;
+  usedIn: CardUse[];
+}
+
+/**
+ * Cards for deck building, one printing per card name, with owned, trade
+ * and in-use counts. The cardbase source only returns lands.
+ */
+export async function fetchDeckBuildPool(args: {
+  source: PoolSource;
+  lands?: boolean | null;
+  legalIn?: string | null;
+  colorIdentity?: string[] | null;
+  excludeDeckId?: string | null;
+}): Promise<PoolCard[]> {
+  const query = gql`
+    ${CARD_FIELDS}
+    query DeckBuildPool(
+      $source: String!, $lands: Boolean, $legalIn: String,
+      $colorIdentity: [String!], $excludeDeckId: ID
+    ) {
+      deckBuildPool(
+        source: $source, lands: $lands, legalIn: $legalIn,
+        colorIdentity: $colorIdentity, excludeDeckId: $excludeDeckId
+      ) {
+        owned trade
+        usedIn { deckId deckTitle quantity }
+        card { ...CardFields power toughness }
+      }
+    }
+  `;
+  const data = await getGraphQLClient().request<{ deckBuildPool: GqlPoolCard[] }>(query, {
+    source: args.source,
+    lands: args.lands ?? null,
+    legalIn: args.legalIn ?? null,
+    colorIdentity: args.colorIdentity ?? null,
+    excludeDeckId: args.excludeDeckId ?? null,
+  });
+  return data.deckBuildPool.map(p => ({
+    card: toCardResource(p.card),
+    owned: p.owned,
+    trade: p.trade,
+    usedIn: p.usedIn,
+  }));
+}
+
+/**
+ * Copies of a pool card the deck builder may use.
+ *
+ * With includeUsed, every owned copy outside the trade binder; otherwise
+ * only copies no other deck uses.
+ */
+export function poolCardAvailable(p: PoolCard, includeUsed: boolean): number {
+  const playable = Math.max(0, p.owned - p.trade);
+  if (includeUsed) {
+    return playable;
+  }
+  const used = p.usedIn.reduce((s, u) => s + u.quantity, 0);
+  return Math.max(0, playable - used);
 }
 
 // Re-export JSON:API types that are still used by other services / pages.

@@ -23,6 +23,9 @@ extend type Query {
 
   collectionValue(currency: String): Float!
 
+  "Every collection row with its card fields, in one request."
+  collectionRows: [CollectionRow!]!
+
   "Euros per US dollar (ECB reference rate), for converting USD-only prices."
   usdToEurRate: Float!
 
@@ -66,6 +69,20 @@ extend type Query {
   wishlistForCard(cardId: ID!): [WishlistItem!]!
 
   wishIntents: [WishIntent!]!
+
+  "Cards for the land suggester and deck generator, one printing per card name."
+  deckBuildPool(
+    "COLLECTION or CARDBASE. CARDBASE needs lands: true."
+    source: String!
+    "true keeps only lands, false only non-lands; omit for both."
+    lands: Boolean
+    "Scryfall legality key, e.g. commander."
+    legalIn: String
+    "Only cards whose colour identity fits inside these colours."
+    colorIdentity: [String!]
+    "Deck being built; its own copies are not reported as used."
+    excludeDeckId: ID
+  ): [PoolCard!]!
 }
 
 extend type NodeDeck {

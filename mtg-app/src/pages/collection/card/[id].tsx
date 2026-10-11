@@ -12,7 +12,7 @@ import {
   fetchCollectionCardByCardId,
   upsertCollectionCard,
 } from '../../../services/drupalApi';
-import { invalidateInventoryQueries } from '../../../services/queryCache';
+import { invalidateInventoryQueries, patchCollectionRow } from '../../../services/queryCache';
 import WishlistPanel from '../../../components/WishlistPanel';
 import { getOracleText } from '../../../utils/deckAnalysis';
 import { slugify } from '../../../utils/slugify';
@@ -57,8 +57,19 @@ const CollectionCardPage: React.FC = () => {
         cc?.id,
         trade,
       ),
-    onSuccess: () => {
-      void invalidateInventoryQueries(qc);
+    onSuccess: (saved, { owned, foil, trade }) => {
+      // Update this row in the cached collection list instead of reloading it.
+      const patched =
+        cardId != null
+        && patchCollectionRow(qc, {
+          cardId,
+          id: saved.id,
+          quantityOwned: owned,
+          quantityFoil: foil,
+          quantityTrade: trade?.quantityTrade,
+          binderLocation: trade?.binderLocation,
+        });
+      void invalidateInventoryQueries(qc, { keepCollectionList: patched });
     },
   });
 

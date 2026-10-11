@@ -199,3 +199,22 @@ export interface CollectionImportResult {
   matchedBy: string;
   card: { id: string; title: string; setCode: string | null; setName: string | null; collectorNumber: string | null } | null;
 }
+
+/** Another deck using a card (main deck, sideboard or commander). */
+export interface CardUse {
+  deckId: string;
+  deckTitle: string;
+  quantity: number;
+}
+
+/** A card available for deck building: one printing per card name. */
+export interface PoolCard {
+  card: JsonApiResource<MtgCardAttributes>;
+  /** Copies owned, all printings and finishes. */
+  owned: number;
+  /** Owned copies set aside for trade. */
+  trade: number;
+  usedIn: CardUse[];
+}
+
+export type PoolSource = 'COLLECTION' | 'CARDBASE';

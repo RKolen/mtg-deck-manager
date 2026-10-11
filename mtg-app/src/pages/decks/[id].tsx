@@ -44,6 +44,7 @@ import {
 } from '../../services/drupalApi';
 import CommanderPicker from '../../components/CommanderPicker';
 import DeckValueList from '../../components/DeckValueList';
+import LandBasePanel from '../../components/LandBasePanel';
 import { invalidateInventoryQueries } from '../../services/queryCache';
 import { ManaCost } from '../../components/design/Mana';
 import PrintingFilter, {
@@ -458,7 +459,8 @@ const DeckEditor: React.FC<EditorProps> = ({
     mutationFn: ({ slotId, qty }: { slotId: string; qty: number }) =>
       setCardQuantityInDeck(slotId, qty, deckId, cards),
     onSuccess: () => {
-      void invalidateInventoryQueries(qc, { deckId });
+      // Deck slot edits never change the collection.
+      void invalidateInventoryQueries(qc, { deckId, keepCollectionList: true });
     },
   });
 
@@ -469,7 +471,8 @@ const DeckEditor: React.FC<EditorProps> = ({
       if (selectedSlotId === vars.slotId) {
         setSelectedSlotId(null);
       }
-      void invalidateInventoryQueries(qc, { deckId });
+      // Deck slot edits never change the collection.
+      void invalidateInventoryQueries(qc, { deckId, keepCollectionList: true });
     },
   });
 
@@ -477,7 +480,8 @@ const DeckEditor: React.FC<EditorProps> = ({
     mutationFn: ({ slotId, foil }: { slotId: string; foil: boolean }) =>
       setDeckCardFoil(deckId, slotId, foil),
     onSuccess: () => {
-      void invalidateInventoryQueries(qc, { deckId });
+      // Deck slot edits never change the collection.
+      void invalidateInventoryQueries(qc, { deckId, keepCollectionList: true });
     },
   });
 
@@ -485,7 +489,8 @@ const DeckEditor: React.FC<EditorProps> = ({
     mutationFn: ({ slotId, board }: { slotId: string; board: DeckBoard }) =>
       moveDeckCard(deckId, slotId, board),
     onSuccess: () => {
-      void invalidateInventoryQueries(qc, { deckId });
+      // Deck slot edits never change the collection.
+      void invalidateInventoryQueries(qc, { deckId, keepCollectionList: true });
     },
   });
 
@@ -607,7 +612,7 @@ const DeckEditor: React.FC<EditorProps> = ({
         isSideboard,
         board === 'maybe' ? maybeCards : cards,
         cardName,
-        foil,
+        foil ?? deckIsFoil,
         board,
       );
       const ownedRaw = addOwnedAmount.trim();
@@ -3081,7 +3086,7 @@ const DeckHeader: React.FC<DeckHeaderProps> = ({ deckId, title, format }) => {
 const DeckPage: React.FC = () => {
   const router = useRouter();
   const slug = typeof router.query.id === 'string' ? router.query.id : '';
-  const [tab, setTab] = useState<'editor' | 'analysis' | 'suggestions' | 'meta' | 'simulate'>('editor');
+  const [tab, setTab] = useState<'editor' | 'analysis' | 'lands' | 'suggestions' | 'meta' | 'simulate'>('editor');
 
   const { data: deck, isLoading: deckLoading } = useQuery({
     queryKey: ['deck', slug],
@@ -3164,6 +3169,13 @@ const DeckPage: React.FC = () => {
         </button>
         <button
           type="button"
+          style={tabStyle(tab === 'lands')}
+          onClick={() => setTab('lands')}
+        >
+          Lands
+        </button>
+        <button
+          type="button"
           style={tabStyle(tab === 'suggestions')}
           onClick={() => setTab('suggestions')}
         >
@@ -3205,6 +3217,13 @@ const DeckPage: React.FC = () => {
         />
       ) : tab === 'analysis' ? (
         <DeckAnalysis cards={deckCards} format={deck.attributes.field_format} deckTitle={deck.attributes.title} />
+      ) : tab === 'lands' ? (
+        <LandBasePanel
+          deckId={deckId!}
+          cards={deckCards}
+          format={deck.attributes.field_format}
+          commander={deck.attributes.field_commander}
+        />
       ) : tab === 'suggestions' ? (
         <DeckSuggestions deckNid={deck.attributes.drupal_internal__nid} />
       ) : tab === 'meta' ? (

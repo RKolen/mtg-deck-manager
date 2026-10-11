@@ -195,20 +195,13 @@ field_settings:
 datasource_settings:
   'entity:node':
     bundles:
-      default: true
-      selected: {  }
+      default: false
+      selected:
+        - mtg_card
     languages:
       default: true
       selected: {  }
     plugin_id: 'entity:node'
-    settings:
-      bundles:
-        default: false
-        selected:
-          - mtg_card
-      languages:
-        default: true
-        selected: {  }
 processor_settings:
   add_url: {  }
   aggregated_field: {  }

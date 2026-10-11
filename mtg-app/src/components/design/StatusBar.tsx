@@ -1,4 +1,5 @@
 import React from 'react';
+import { useIsFetching, useIsMutating } from '@tanstack/react-query';
 import { useRouter } from 'next/router';
 import type { NavId } from './TopBar';
 
@@ -68,6 +69,9 @@ export function StatusBar({
   const router = useRouter();
   const route = routeToNav(router.pathname);
   const list = HINTS[route] ?? HINTS.decks;
+  const saving = useIsMutating();
+  const loading = useIsFetching();
+  const busy = saving > 0 || loading > 0;
 
   return (
     <div
@@ -99,7 +103,13 @@ export function StatusBar({
       >
         :
       </button>
-      <span>READY</span>
+      <span
+        role="status"
+        aria-live="polite"
+        style={{ color: busy ? 'var(--accent)' : undefined, fontWeight: busy ? 700 : undefined }}
+      >
+        {saving > 0 ? 'SAVING...' : loading > 0 ? 'LOADING...' : 'READY'}
+      </span>
       {deckTitle && (
         <span>
           · DECK <span style={{ color: 'var(--ink)' }}>{deckTitle.toUpperCase()}</span>

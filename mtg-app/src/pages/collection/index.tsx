@@ -21,7 +21,7 @@ import {
   fetchCollectionValue,
   upsertCollectionCard,
 } from '../../services/drupalApi';
-import { invalidateInventoryQueries } from '../../services/queryCache';
+import { invalidateInventoryQueries, patchCollectionRow } from '../../services/queryCache';
 import { useTheme } from '../../context/ThemeContext';
 import { tradeValue } from '../../utils/prices';
 import type { CollectionCard, JsonApiResource, MtgCardAttributes } from '../../types/drupal';
@@ -176,8 +176,35 @@ const CollectionPage: React.FC = () => {
       existingId?: string;
       trade?: { quantityTrade?: number; binderLocation?: string };
     }) => upsertCollectionCard(cardId, cardName, owned, foil, existingId, trade),
-    onSuccess: () => {
-      void invalidateInventoryQueries(qc);
+    // Show the new count at once; only this row changes in the cached list.
+    onMutate: async ({ cardId, owned, foil, trade }) => {
+      await qc.cancelQueries({ queryKey: ['collectionCards'] });
+      const prev = qc.getQueryData<CollectionCard[]>(['collectionCards']);
+      patchCollectionRow(qc, {
+        cardId,
+        quantityOwned: owned,
+        quantityFoil: foil,
+        quantityTrade: trade?.quantityTrade,
+        binderLocation: trade?.binderLocation,
+      });
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev != null) {
+        qc.setQueryData(['collectionCards'], ctx.prev);
+      }
+    },
+    onSuccess: (saved, { cardId, owned, foil, trade }) => {
+      // A first copy has no cached row yet, so the list refetches once.
+      const patched = patchCollectionRow(qc, {
+        cardId,
+        id: saved.id,
+        quantityOwned: owned,
+        quantityFoil: foil,
+        quantityTrade: trade?.quantityTrade,
+        binderLocation: trade?.binderLocation,
+      });
+      void invalidateInventoryQueries(qc, { keepCollectionList: patched });
     },
   });
 

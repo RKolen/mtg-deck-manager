@@ -92,6 +92,29 @@ type CollectionCard {
   card: MtgCard
 }
 
+"A collection row with the display fields of its card, read in bulk."
+type CollectionRow {
+  id: ID!
+  cardId: ID!
+  title: String!
+  quantityOwned: Int!
+  quantityFoil: Int!
+  quantityTrade: Int!
+  binderLocation: String
+  setCode: String
+  setName: String
+  collectorNumber: String
+  typeLine: String
+  cmc: Float
+  priceUsd: String
+  priceUsdFoil: String
+  priceEur: String
+  priceEurFoil: String
+  imageUri: String
+  fullArt: Boolean!
+  borderColor: String
+}
+
 type MetaDeck {
   id: ID!
   title: String!
@@ -165,4 +188,21 @@ type CollectionImportResult {
   "scryfall_id, set_number, set_name, name or none."
   matchedBy: String!
   card: MtgCard
+}
+
+"A card available for deck building: one printing per card name."
+type PoolCard {
+  card: MtgCard!
+  "Copies owned, all printings and finishes."
+  owned: Int!
+  "Owned copies set aside for trade."
+  trade: Int!
+  "Other decks using this card (main deck, sideboard or commander; not maybeboards)."
+  usedIn: [CardUse!]!
+}
+
+type CardUse {
+  deckId: ID!
+  deckTitle: String!
+  quantity: Int!
 }

@@ -61,7 +61,9 @@ final class CardSearchService {
         continue;
       }
       $node = $object->getValue();
-      if ($node instanceof NodeInterface) {
+      // Only card printings; a stray collection row or wish titled with a
+      // card name would break every MtgCard field in the response.
+      if ($node instanceof NodeInterface && $node->bundle() === 'mtg_card') {
         $cards[] = $node;
       }
     }
