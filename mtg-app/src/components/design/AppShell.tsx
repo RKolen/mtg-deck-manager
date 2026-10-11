@@ -6,6 +6,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { TopBar } from './TopBar';
 import { StatusBar } from './StatusBar';
 import { BusyBar } from './BusyBar';
+import PriceTicker from '../PriceTicker';
 
 export function AppShell({
   children,
@@ -66,7 +67,11 @@ export function AppShell({
         currency={currency}
       />
       <div className="app-shell-main">{children}</div>
-      <StatusBar deckTitle={deckTitle} />
+      {/* One grid row: the price movers ticker sits on top of the status bar. */}
+      <div>
+        <PriceTicker currency={currency} />
+        <StatusBar deckTitle={deckTitle} />
+      </div>
     </div>
   );
 }

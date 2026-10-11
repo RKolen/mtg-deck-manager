@@ -15,7 +15,6 @@ import CardFilter, { EMPTY_FILTER, type FilterState } from '../../components/Car
 import CardModal, { type CardData } from '../../components/CardModal';
 import CollectionSidebar from '../../components/CollectionSidebar';
 import TradeList from '../../components/TradeList';
-import PriceTicker from '../../components/PriceTicker';
 import TopCollectionCards from '../../components/TopCollectionCards';
 import { searchCards } from '../../services/cardSearch';
 import {
@@ -586,7 +585,8 @@ const CollectionPage: React.FC = () => {
         )}
       </div>
 
-      <div style={{ padding: '1rem', borderLeft: '1px solid var(--line)', overflowY: 'auto', maxWidth: 280 }}>
+      {/* flexShrink 0: a scrolling flex item may otherwise shrink to nothing. */}
+      <div style={{ padding: '1rem', borderLeft: '1px solid var(--line)', overflowY: 'auto', flex: '0 0 240px' }}>
         <CollectionSidebar
           totalCards={totalCards}
           totalUnique={totalUnique}
@@ -602,7 +602,6 @@ const CollectionPage: React.FC = () => {
       </div>
       </div>
 
-      <PriceTicker currency={currency} />
 
       {modalCard != null && (
         <CardModal

@@ -109,14 +109,26 @@ const DecksPage: React.FC = () => {
     y: number;
   } | null>(null);
 
+  const [formatFilter, setFormatFilter] = useState('');
+
+  /** Formats used by at least one deck, with deck counts. */
+  const deckFormats = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const d of decks) {
+      const f = d.attributes.field_format || 'Other';
+      counts.set(f, (counts.get(f) ?? 0) + 1);
+    }
+    return [...counts].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [decks]);
+
   const filtered = useMemo(
     () =>
       decks.filter(
         d =>
-          !filter ||
-          d.attributes.title.toLowerCase().includes(filter.toLowerCase()),
+          (!filter || d.attributes.title.toLowerCase().includes(filter.toLowerCase()))
+          && (!formatFilter || (d.attributes.field_format || 'Other') === formatFilter),
       ),
-    [decks, filter],
+    [decks, filter, formatFilter],
   );
 
   useEffect(() => {
@@ -231,6 +243,24 @@ const DecksPage: React.FC = () => {
               color: 'var(--ink)',
             }}
           />
+          <select
+            aria-label="Filter by format"
+            value={formatFilter}
+            onChange={e => setFormatFilter(e.target.value)}
+            className="mono"
+            style={{
+              background: 'var(--bg-2)',
+              border: '1px solid var(--line)',
+              color: 'var(--ink)',
+              fontSize: 11,
+              padding: '2px 6px',
+            }}
+          >
+            <option value="">All formats</option>
+            {deckFormats.map(([f, n]) => (
+              <option key={f} value={f}>{f} ({n})</option>
+            ))}
+          </select>
           <span className="mono dim" style={{ fontSize: 10 }}>
             {filtered.length}/{decks.length}
           </span>

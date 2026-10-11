@@ -381,6 +381,7 @@ class ScryfallImporter {
    */
   public function finalise(): void {
     $this->state->set('mtg_scryfall_sync.last_sync', $this->time->getRequestTime());
+    $this->priceHistory->markUpdated();
     $this->state->set('mtg_scryfall_sync.sync_requested', FALSE);
     $this->loggerFactory->get('mtg_scryfall_sync')->info('Scryfall sync finalised.');
   }
@@ -981,6 +982,7 @@ class ScryfallImporter {
     // anything (GraphQL results, collection value) built from them.
     $this->entityCache->deleteAll();
     $this->cacheTagsInvalidator->invalidateTags(['node_list:mtg_card']);
+    $this->priceHistory->markUpdated();
 
     $this->loggerFactory->get('mtg_scryfall_sync')->info(
       'Price refresh: @updated cards written, @skipped bulk rows unmatched.',

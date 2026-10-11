@@ -271,6 +271,9 @@ kbd {
 .app-shell {
   display: grid;
   grid-template-rows: auto 1fr auto;
+  /* minmax(0, 1fr): wide content (the price ticker's single long line) must
+     not stretch the column past the window. */
+  grid-template-columns: minmax(0, 1fr);
   height: 100vh;
   overflow: hidden;
 }

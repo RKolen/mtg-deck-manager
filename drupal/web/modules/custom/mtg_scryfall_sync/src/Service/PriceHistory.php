@@ -18,9 +18,19 @@ use Drupal\Core\State\StateInterface;
 final class PriceHistory {
 
   /**
-   * State key: when the snapshot was taken (start of the latest import).
+   * State key: when the prices in the snapshot were imported.
    */
   public const STATE_SNAPSHOT = 'mtg_scryfall_sync.price_snapshot';
+
+  /**
+   * State key: when the current prices were imported.
+   */
+  public const STATE_PRICES_UPDATED = 'mtg_scryfall_sync.prices_updated';
+
+  /**
+   * State key of the full sync's completion time (older installs).
+   */
+  private const STATE_LAST_SYNC = 'mtg_scryfall_sync.last_sync';
 
   /**
    * Snapshot table.
@@ -85,11 +95,18 @@ final class PriceHistory {
       $transaction->rollBack();
       throw $e;
     }
-    $this->state->set(self::STATE_SNAPSHOT, $this->time->getRequestTime());
+    // The snapshot holds the prices of the previous import, so date it by
+    // that import, not by now.
+    $previous = $this->state->get(self::STATE_PRICES_UPDATED) ?? $this->state->get(self::STATE_LAST_SYNC);
+    $this->state->set(self::STATE_SNAPSHOT, $previous);
   }
 
   /**
-   * Cards whose regular price changed most, in percent, since the snapshot.
+   * Cards whose regular price rose and fell most, in percent.
+   *
+   * Half the list is risers and half fallers, alternating. Ranking all
+   * changes together would show only risers: a price can rise by hundreds
+   * of percent but never fall by more than 100.
    *
    * @param string $currency
    *   EUR or USD.
@@ -100,10 +117,46 @@ final class PriceHistory {
    *   for cheap cards make jumps like 0.02 to 3.27 meaningless.
    *
    * @return array<int, array{nid: int, previous: float, current: float, changePct: float}>
-   *   Biggest movers first, one printing per card name.
+   *   Risers and fallers alternating, biggest first, one printing per card
+   *   name.
    */
   public function movers(string $currency, int $limit, float $minPrice): array {
     if (!$this->database->schema()->tableExists(self::TABLE)) {
+      return [];
+    }
+    $limit = max(1, $limit);
+    $risers = $this->topMovers($currency, $minPrice, (int) ceil($limit / 2), TRUE);
+    $fallers = $this->topMovers($currency, $minPrice, intdiv($limit, 2), FALSE);
+
+    $result = [];
+    for ($i = 0; $i < max(count($risers), count($fallers)); $i++) {
+      if (isset($risers[$i])) {
+        $result[] = $risers[$i];
+      }
+      if (isset($fallers[$i])) {
+        $result[] = $fallers[$i];
+      }
+    }
+    return $result;
+  }
+
+  /**
+   * The biggest risers or fallers.
+   *
+   * @param string $currency
+   *   EUR or USD.
+   * @param float $minPrice
+   *   Minimum price before and after.
+   * @param int $count
+   *   Number of cards to return.
+   * @param bool $rising
+   *   TRUE for risers, FALSE for fallers.
+   *
+   * @return array<int, array{nid: int, previous: float, current: float, changePct: float}>
+   *   Biggest change first, one printing per card name.
+   */
+  private function topMovers(string $currency, float $minPrice, int $count, bool $rising): array {
+    if ($count <= 0) {
       return [];
     }
     $column = strtoupper($currency) === 'USD' ? 'usd' : 'eur';
@@ -117,16 +170,14 @@ final class PriceHistory {
     $query->addField('n', 'title');
     $query->addField('p', $column, 'previous');
     $query->addField('c', $field . '_value', 'current');
-    $pct = "(c.{$field}_value - p.$column) / p.$column";
-    $query->addExpression($pct, 'change_pct');
+    $query->addExpression("(c.{$field}_value - p.$column) / p.$column", 'change_pct');
     $query->condition("p.$column", 0, '>');
-    $query->where("p.$column <> c.{$field}_value");
-    $query->where("(p.$column >= :min AND c.{$field}_value >= :min)", [":min" => $minPrice]);
+    $query->where($rising ? "c.{$field}_value > p.$column" : "c.{$field}_value < p.$column");
+    $query->where("(p.$column >= :min AND c.{$field}_value >= :min)", [':min' => $minPrice]);
     $query->condition('t.field_type_line_value', 'Token%', 'NOT LIKE');
-    $query->orderBy('abs_change', 'DESC');
-    $query->addExpression("ABS($pct)", 'abs_change');
+    $query->orderBy('change_pct', $rising ? 'DESC' : 'ASC');
     // Fetch extra rows: several printings of one card often move together.
-    $query->range(0, max(1, $limit) * 20);
+    $query->range(0, $count * 20);
 
     $result = [];
     $seen = [];
@@ -141,7 +192,7 @@ final class PriceHistory {
         'current' => (float) $row->current,
         'changePct' => round((float) $row->change_pct * 100, 1),
       ];
-      if (count($result) >= $limit) {
+      if (count($result) >= $count) {
         break;
       }
     }
@@ -149,7 +200,14 @@ final class PriceHistory {
   }
 
   /**
-   * When the snapshot was taken, or NULL when there is none yet.
+   * Records that prices were just imported. Call when an import finishes.
+   */
+  public function markUpdated(): void {
+    $this->state->set(self::STATE_PRICES_UPDATED, $this->time->getRequestTime());
+  }
+
+  /**
+   * When the snapshot's prices were imported, or NULL when unknown.
    */
   public function snapshotTime(): ?int {
     $time = $this->state->get(self::STATE_SNAPSHOT);
