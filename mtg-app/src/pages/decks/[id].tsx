@@ -1398,6 +1398,8 @@ const DeckEditor: React.FC<EditorProps> = ({
         )}
       </section>
       </div>
+      {/* Selected card and commander sit in separate sticky columns, so each
+          stays in view; stacked, they outgrew the viewport. */}
       <aside
         style={{
           width: 280,
@@ -1407,108 +1409,10 @@ const DeckEditor: React.FC<EditorProps> = ({
           alignSelf: 'flex-start',
         }}
       >
-        {showCommander && (
-          <div style={{ marginBottom: selectedSlot != null ? 16 : 0 }}>
-            <div className="mono uc dim" style={{ fontSize: 9, letterSpacing: '0.08em', marginBottom: 8 }}>
-              {commanderLabel}
-            </div>
-            {commander == null ? (
-              <p style={{ margin: 0, opacity: 0.7, fontSize: 13 }}>
-                No {commanderLabel.toLowerCase()} set.
-              </p>
-            ) : (
-              <div>
-                <Link
-                  href={cardPrintingsPath(commander.title, {
-                    printing: commander.id,
-                    deckId,
-                    slotId: COMMANDER_SLOT,
-                    from: deckSlug,
-                    foil: commanderFoil,
-                  })}
-                >
-                  <img
-                    src={cardImageSrc({ field_image_uri: commander.field_image_uri })}
-                    alt={commander.title}
-                    style={{ width: '100%', borderRadius: 8, display: 'block' }}
-                  />
-                </Link>
-                <p style={{ margin: '0.65rem 0 0.25rem', fontWeight: 700 }}>
-                  <Link
-                    href={cardPrintingsPath(commander.title, {
-                      printing: commander.id,
-                      deckId,
-                      slotId: COMMANDER_SLOT,
-                      from: deckSlug,
-                      foil: commanderFoil,
-                    })}
-                    style={{ color: 'inherit', textDecoration: 'none' }}
-                  >
-                    {commander.title}
-                  </Link>
-                </p>
-                <p style={{ margin: '0 0 0.35rem', fontSize: 13, opacity: 0.9 }}>
-                  {(commander.field_set_name || commander.field_set_code || 'Unknown set')}
-                  {commander.field_set_code !== ''
-                    ? ` (${commander.field_set_code.toUpperCase()}`
-                    : ''}
-                  {commander.field_collector_number
-                    ? ` #${commander.field_collector_number}`
-                    : ''}
-                  {commander.field_set_code !== '' ? ')' : ''}
-                </p>
-                <p style={{ margin: '0 0 0.5rem', fontSize: 13 }}>
-                  {formatPrice(priceFor(commander, currency, false), currency)}
-                  {priceFor(commander, currency, true) != null && (
-                    <>
-                      {' · foil '}
-                      {formatPrice(priceFor(commander, currency, true), currency)}
-                    </>
-                  )}
-                </p>
-                <div style={{ margin: '0 0 0.35rem 0' }}>
-                  <FoilToggle
-                    flush
-                    isFoil={commanderFoil}
-                    disabled={setCommanderFoil.isPending}
-                    onToggle={() => setCommanderFoil.mutate(!commanderFoil)}
-                  />
-                </div>
-                <OwnedAmountControl
-                  cardId={commander.id}
-                  cardName={commander.title}
-                  ownedQty={ownedForFinish(ownedByCardId.get(commander.id), commanderFoil)}
-                  foil={commanderFoil}
-                  onCommit={commitOwnedAmount}
-                />
-                <p style={{ margin: '0.5rem 0 0', fontSize: 12 }}>
-                  <Link
-                    href={cardPrintingsPath(commander.title, {
-                      printing: commander.id,
-                      deckId,
-                      slotId: COMMANDER_SLOT,
-                      from: deckSlug,
-                      foil: commanderFoil,
-                    })}
-                    style={{ color: 'var(--accent)' }}
-                  >
-                    Change printing
-                  </Link>
-                </p>
-              </div>
-            )}
-          </div>
-        )}
-        {selectedSlot == null && !showCommander ? (
+        {selectedSlot == null ? (
           <p style={{ margin: 0, opacity: 0.7, fontSize: 13 }}>Select a card</p>
-        ) : selectedSlot != null ? (
-          <div
-            style={
-              showCommander
-                ? { borderTop: '1px solid var(--line)', paddingTop: 12 }
-                : undefined
-            }
-          >
+        ) : (
+          <div>
             {showCommander && (
               <div className="mono uc dim" style={{ fontSize: 9, letterSpacing: '0.08em', marginBottom: 8 }}>
                 Selected
@@ -1600,8 +1504,108 @@ const DeckEditor: React.FC<EditorProps> = ({
               </Link>
             </p>
           </div>
-        ) : null}
+        )}
       </aside>
+      {showCommander && (
+        <aside
+          style={{
+            width: 240,
+            flexShrink: 0,
+            position: 'sticky',
+            top: 16,
+            alignSelf: 'flex-start',
+          }}
+        >
+          <div className="mono uc dim" style={{ fontSize: 9, letterSpacing: '0.08em', marginBottom: 8 }}>
+            {commanderLabel}
+          </div>
+          {commander == null ? (
+            <p style={{ margin: 0, opacity: 0.7, fontSize: 13 }}>
+              No {commanderLabel.toLowerCase()} set.
+            </p>
+          ) : (
+            <div>
+              <Link
+                href={cardPrintingsPath(commander.title, {
+                  printing: commander.id,
+                  deckId,
+                  slotId: COMMANDER_SLOT,
+                  from: deckSlug,
+                  foil: commanderFoil,
+                })}
+              >
+                <img
+                  src={cardImageSrc({ field_image_uri: commander.field_image_uri })}
+                  alt={commander.title}
+                  style={{ width: '100%', borderRadius: 8, display: 'block' }}
+                />
+              </Link>
+              <p style={{ margin: '0.65rem 0 0.25rem', fontWeight: 700 }}>
+                <Link
+                  href={cardPrintingsPath(commander.title, {
+                    printing: commander.id,
+                    deckId,
+                    slotId: COMMANDER_SLOT,
+                    from: deckSlug,
+                    foil: commanderFoil,
+                  })}
+                  style={{ color: 'inherit', textDecoration: 'none' }}
+                >
+                  {commander.title}
+                </Link>
+              </p>
+              <p style={{ margin: '0 0 0.35rem', fontSize: 13, opacity: 0.9 }}>
+                {(commander.field_set_name || commander.field_set_code || 'Unknown set')}
+                {commander.field_set_code !== ''
+                  ? ` (${commander.field_set_code.toUpperCase()}`
+                  : ''}
+                {commander.field_collector_number
+                  ? ` #${commander.field_collector_number}`
+                  : ''}
+                {commander.field_set_code !== '' ? ')' : ''}
+              </p>
+              <p style={{ margin: '0 0 0.5rem', fontSize: 13 }}>
+                {formatPrice(priceFor(commander, currency, false), currency)}
+                {priceFor(commander, currency, true) != null && (
+                  <>
+                    {' · foil '}
+                    {formatPrice(priceFor(commander, currency, true), currency)}
+                  </>
+                )}
+              </p>
+              <div style={{ margin: '0 0 0.35rem 0' }}>
+                <FoilToggle
+                  flush
+                  isFoil={commanderFoil}
+                  disabled={setCommanderFoil.isPending}
+                  onToggle={() => setCommanderFoil.mutate(!commanderFoil)}
+                />
+              </div>
+              <OwnedAmountControl
+                cardId={commander.id}
+                cardName={commander.title}
+                ownedQty={ownedForFinish(ownedByCardId.get(commander.id), commanderFoil)}
+                foil={commanderFoil}
+                onCommit={commitOwnedAmount}
+              />
+              <p style={{ margin: '0.5rem 0 0', fontSize: 12 }}>
+                <Link
+                  href={cardPrintingsPath(commander.title, {
+                    printing: commander.id,
+                    deckId,
+                    slotId: COMMANDER_SLOT,
+                    from: deckSlug,
+                    foil: commanderFoil,
+                  })}
+                  style={{ color: 'var(--accent)' }}
+                >
+                  Change printing
+                </Link>
+              </p>
+            </div>
+          )}
+        </aside>
+      )}
       {lastRemoved != null && (
         // Fixed position: the notice must not shift the deck list itself.
         <div
