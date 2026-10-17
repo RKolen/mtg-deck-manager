@@ -32,7 +32,8 @@ final class CardSearchService {
    * @param array<string, mixed> $params
    *   Keys: q, type, oracleText, legalIn, cmcMin, cmcMax, colors,
    *   colorIdentity, manaProducer, rarity, setCodes, setExclude,
-   *   deckIds, deckExclude, includeTokens, tokensOnly, page, limit.
+   *   collectorNumber, deckIds, deckExclude, includeTokens, tokensOnly,
+   *   page, limit.
    *
    * @return array{cards: \Drupal\node\NodeInterface[], count: int, pages: int}
    *   Matching cards plus result counts.
@@ -197,6 +198,14 @@ final class CardSearchService {
       $hasCondition = TRUE;
     }
 
+    // Collector number is not in the Solr index, so match it via SQL.
+    $number = $this->sanitizeCollectorNumber($params['collectorNumber'] ?? '');
+    if ($number !== '') {
+      $nids = $this->nidsWithCollectorNumber($number, empty($params['setExclude']) ? $setCodes : []);
+      $conditions->addCondition('nid', $nids === [] ? [-1] : $nids, 'IN');
+      $hasCondition = TRUE;
+    }
+
     $deckIds = $this->sanitizeDeckIds($params['deckIds'] ?? []);
     if ($deckIds !== []) {
       $cardNids = $this->cardNidsInDecks($deckIds);
@@ -316,6 +325,42 @@ final class CardSearchService {
       ->range(0, 5000)
       ->execute();
     return array_map('intval', array_values($ids));
+  }
+
+  /**
+   * Normalizes a collector number, dropping a leading "#" and zeros.
+   */
+  private function sanitizeCollectorNumber(mixed $raw): string {
+    $number = ltrim(trim((string) $raw), '#');
+    if (!preg_match('/^[a-z0-9★†\-]{1,10}$/iu', $number)) {
+      return '';
+    }
+    $trimmed = ltrim($number, '0');
+    return $trimmed === '' ? '0' : $trimmed;
+  }
+
+  /**
+   * Card node IDs with the given collector number, optionally in some sets.
+   *
+   * @param string $number
+   *   Collector number without leading zeros.
+   * @param string[] $setCodes
+   *   Set codes to limit the lookup to; empty means all sets.
+   *
+   * @return int[]
+   *   Matching mtg_card node IDs.
+   */
+  private function nidsWithCollectorNumber(string $number, array $setCodes): array {
+    $query = $this->entityTypeManager->getStorage('node')->getQuery()
+      ->accessCheck(FALSE)
+      ->condition('type', 'mtg_card')
+      ->condition('status', 1)
+      ->condition('field_collector_number', [$number, '0' . $number, '00' . $number], 'IN')
+      ->range(0, 5000);
+    if ($setCodes !== []) {
+      $query->condition('field_set_code', $setCodes, 'IN');
+    }
+    return array_map('intval', array_values($query->execute()));
   }
 
   /**

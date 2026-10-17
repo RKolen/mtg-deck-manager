@@ -16,6 +16,8 @@ export interface FilterState {
   setCodes: string[];
   /** When true, exclude the selected sets instead of including only them. */
   setExclude: boolean;
+  /** Exact collector number within a set. */
+  collectorNumber: string;
   /** Deck UUIDs. */
   deckIds: string[];
   /** When true, exclude cards in the selected decks. */
@@ -37,6 +39,7 @@ export const EMPTY_FILTER: FilterState = {
   rarity: '',
   setCodes: [],
   setExclude: false,
+  collectorNumber: '',
   deckIds: [],
   deckExclude: false,
 };
@@ -425,6 +428,20 @@ const CardFilter: React.FC<CardFilterProps> = ({ filter, onChange }) => {
             : filter.setExclude
               ? 'Hiding selected sets'
               : 'Only selected sets'}
+        </div>
+        <label htmlFor="collector-number" style={{ color: 'var(--ink)', fontSize: 11, display: 'block', marginTop: 8 }}>
+          Set number
+        </label>
+        <input
+          id="collector-number"
+          type="search"
+          value={filter.collectorNumber}
+          onChange={e => onChange({ ...filter, collectorNumber: e.target.value })}
+          placeholder="e.g. 237"
+          style={fieldStyle}
+        />
+        <div style={{ fontSize: 10, color: 'var(--ink)', marginTop: 4, opacity: 0.85 }}>
+          Collector number; within the selected sets if any
         </div>
       </div>
 

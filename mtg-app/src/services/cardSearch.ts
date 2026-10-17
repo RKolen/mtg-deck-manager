@@ -20,6 +20,8 @@ export interface CardSearchParams {
   rarity?: string;
   setCodes?: string[];
   setExclude?: boolean;
+  /** Exact collector number, e.g. "237" or "#12a". */
+  collectorNumber?: string;
   /** Deck UUIDs or nids. */
   deckIds?: string[];
   deckExclude?: boolean;
@@ -88,7 +90,7 @@ export async function searchCards(params: CardSearchParams): Promise<CardSearchR
       $q: String, $type: String, $oracleText: String, $legalIn: String,
       $cmcMin: Float, $cmcMax: Float, $colors: [String!], $colorIdentity: [String!],
       $manaProducer: Boolean, $rarity: String, $setCodes: [String!], $setExclude: Boolean,
-      $deckIds: [ID!], $deckExclude: Boolean,
+      $collectorNumber: String, $deckIds: [ID!], $deckExclude: Boolean,
       $includeTokens: Boolean, $tokensOnly: Boolean,
       $page: Int, $limit: Int
     ) {
@@ -96,7 +98,7 @@ export async function searchCards(params: CardSearchParams): Promise<CardSearchR
         q: $q, type: $type, oracleText: $oracleText, legalIn: $legalIn,
         cmcMin: $cmcMin, cmcMax: $cmcMax, colors: $colors, colorIdentity: $colorIdentity,
         manaProducer: $manaProducer, rarity: $rarity, setCodes: $setCodes, setExclude: $setExclude,
-        deckIds: $deckIds, deckExclude: $deckExclude,
+        collectorNumber: $collectorNumber, deckIds: $deckIds, deckExclude: $deckExclude,
         includeTokens: $includeTokens, tokensOnly: $tokensOnly,
         page: $page, limit: $limit
       ) {
@@ -122,6 +124,7 @@ export async function searchCards(params: CardSearchParams): Promise<CardSearchR
     rarity: params.rarity || null,
     setCodes: params.setCodes?.length ? params.setCodes : null,
     setExclude: params.setCodes?.length ? Boolean(params.setExclude) : null,
+    collectorNumber: params.collectorNumber?.trim() || null,
     deckIds: params.deckIds?.length ? params.deckIds : null,
     deckExclude: params.deckIds?.length ? Boolean(params.deckExclude) : null,
     includeTokens: params.includeTokens ?? null,

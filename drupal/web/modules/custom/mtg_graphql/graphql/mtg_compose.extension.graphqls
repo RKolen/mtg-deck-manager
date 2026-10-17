@@ -50,6 +50,8 @@ extend type Query {
     rarity: String
     setCodes: [String!]
     setExclude: Boolean
+    "Exact collector number within a set, e.g. 237 or 12a."
+    collectorNumber: String
     deckIds: [ID!]
     deckExclude: Boolean
     "Include tokens and emblems (excluded by default)."
