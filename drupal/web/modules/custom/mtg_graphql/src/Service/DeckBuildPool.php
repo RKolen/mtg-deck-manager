@@ -309,6 +309,97 @@ final class DeckBuildPool {
   }
 
   /**
+   * Where the copies of one card (any printing) are used.
+   *
+   * Lists every deck that runs the card per board and printing. Main decks,
+   * sideboards and commanders count against owned copies; maybeboards are
+   * listed but do not count, as in the build pool.
+   *
+   * @param string $title
+   *   Card name.
+   *
+   * @return array{owned: int, inDecks: int, decks: array<int, array{deckId: string, deckTitle: string, board: string, quantity: int, setCode: string, foil: bool}>}
+   *   Owned copies (any printing and finish), copies used, and the uses
+   *   sorted by deck title.
+   */
+  public function usageForCard(string $title): array {
+    $uses = [];
+    foreach (['field_deck_cards' => NULL, 'field_maybe_cards' => 'maybe'] as $field => $board) {
+      $table = 'node__' . $field;
+      if (!$this->database->schema()->tableExists($table)) {
+        continue;
+      }
+      $rows = $this->database->query(
+        "SELECT dn.uuid, d.title, sc.field_set_code_value AS set_code,
+           COALESCE(s.field_is_sideboard_value, 0) AS side,
+           COALESCE(f.field_is_foil_value, 0) AS foil,
+           SUM(GREATEST(1, COALESCE(q.field_quantity_value, 1))) AS quantity
+         FROM {{$table}} b
+         INNER JOIN {node_field_data} d ON d.nid = b.entity_id
+         INNER JOIN {node} dn ON dn.nid = d.nid
+         INNER JOIN {paragraph__field_card} pc ON pc.entity_id = b.{$field}_target_id
+         INNER JOIN {node_field_data} c ON c.nid = pc.field_card_target_id
+         LEFT JOIN {node__field_set_code} sc ON sc.entity_id = c.nid
+         LEFT JOIN {paragraph__field_quantity} q ON q.entity_id = pc.entity_id
+         LEFT JOIN {paragraph__field_is_sideboard} s ON s.entity_id = pc.entity_id
+         LEFT JOIN {paragraph__field_is_foil} f ON f.entity_id = pc.entity_id
+         WHERE c.title = :title
+         GROUP BY dn.uuid, d.title, sc.field_set_code_value, side, foil",
+        [':title' => $title],
+      );
+      foreach ($rows as $row) {
+        $uses[] = [
+          'deckId' => (string) $row->uuid,
+          'deckTitle' => (string) $row->title,
+          'board' => $board ?? ((int) $row->side === 1 ? 'side' : 'main'),
+          'quantity' => (int) $row->quantity,
+          'setCode' => (string) ($row->set_code ?? ''),
+          'foil' => (int) $row->foil === 1,
+        ];
+      }
+    }
+    $commanders = $this->database->query(
+      "SELECT dn.uuid, d.title, sc.field_set_code_value AS set_code,
+         COALESCE(cf.field_commander_foil_value, 0) AS foil
+       FROM {node__field_commander} cmd
+       INNER JOIN {node_field_data} d ON d.nid = cmd.entity_id
+       INNER JOIN {node} dn ON dn.nid = d.nid
+       INNER JOIN {node_field_data} c ON c.nid = cmd.field_commander_target_id
+       LEFT JOIN {node__field_set_code} sc ON sc.entity_id = c.nid
+       LEFT JOIN {node__field_commander_foil} cf ON cf.entity_id = d.nid
+       WHERE c.title = :title",
+      [':title' => $title],
+    );
+    foreach ($commanders as $row) {
+      $uses[] = [
+        'deckId' => (string) $row->uuid,
+        'deckTitle' => (string) $row->title,
+        'board' => 'commander',
+        'quantity' => 1,
+        'setCode' => (string) ($row->set_code ?? ''),
+        'foil' => (int) $row->foil === 1,
+      ];
+    }
+    usort($uses, fn(array $a, array $b) => strcasecmp($a['deckTitle'], $b['deckTitle']));
+
+    $owned = (int) $this->database->query(
+      "SELECT SUM(COALESCE(q.field_quantity_owned_value, 0) + COALESCE(f.field_quantity_foil_value, 0))
+       FROM {node__field_card} fc
+       INNER JOIN {node_field_data} cc ON cc.nid = fc.entity_id AND cc.type = 'collection_card'
+       INNER JOIN {node_field_data} c ON c.nid = fc.field_card_target_id
+       LEFT JOIN {node__field_quantity_owned} q ON q.entity_id = cc.nid
+       LEFT JOIN {node__field_quantity_foil} f ON f.entity_id = cc.nid
+       WHERE c.title = :title",
+      [':title' => $title],
+    )->fetchField();
+    $inDecks = array_sum(array_map(
+      fn(array $u) => $u['board'] === 'maybe' ? 0 : $u['quantity'],
+      $uses,
+    ));
+    return ['owned' => $owned, 'inDecks' => $inDecks, 'decks' => $uses];
+  }
+
+  /**
    * Decks with main deck or sideboard cards the collection does not cover.
    *
    * Ownership is by card name: any printing and finish counts. Copies in

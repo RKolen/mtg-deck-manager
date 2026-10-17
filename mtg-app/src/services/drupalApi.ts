@@ -1138,6 +1138,37 @@ export async function fetchWishlistForCard(cardId: string): Promise<WishlistItem
   return data.wishlistForCard.map(toWishlistItem);
 }
 
+/** One deck board using a card printing. */
+export interface CardDeckUse {
+  deckId: string;
+  deckTitle: string;
+  board: 'main' | 'side' | 'maybe' | 'commander';
+  quantity: number;
+  setCode: string;
+  foil: boolean;
+}
+
+/** Where the copies of a card (any printing) are used. */
+export interface CardDeckUsage {
+  owned: number;
+  /** Main deck, sideboard and commander copies; maybeboards excluded. */
+  inDecks: number;
+  decks: CardDeckUse[];
+}
+
+export async function fetchCardDeckUsage(name: string): Promise<CardDeckUsage> {
+  const query = gql`
+    query GetCardDeckUsage($name: String!) {
+      cardDeckUsage(name: $name) {
+        owned inDecks
+        decks { deckId deckTitle board quantity setCode foil }
+      }
+    }
+  `;
+  const data = await getGraphQLClient().request<{ cardDeckUsage: CardDeckUsage }>(query, { name });
+  return data.cardDeckUsage;
+}
+
 export async function fetchWishIntents(): Promise<WishIntent[]> {
   const query = gql`
     query GetWishIntents { wishIntents { id name } }
@@ -1146,6 +1177,7 @@ export async function fetchWishIntents(): Promise<WishIntent[]> {
   return data.wishIntents;
 }
 
+/** Wish fields to save; an omitted field keeps its stored value. */
 export interface WishlistItemInput {
   id?: string | null;
   cardId: string;
@@ -1173,16 +1205,19 @@ export async function saveWishlistItem(input: WishlistItemInput): Promise<Wishli
       ) { ...WishlistFields }
     }
   `;
+  // Fields left undefined are dropped from the variables, so the server keeps
+  // their stored value; null or '' clears them. Sending null for every
+  // unchanged field wiped a wish's intent, notes and condition on each edit.
   const data = await getGraphQLClient().request<{ saveWishlistItem: GqlWishlistItem }>(mutation, {
     id: input.id ?? null,
     cardId: input.cardId,
     quantity: input.quantity,
-    anyPrinting: input.anyPrinting ?? null,
-    foil: input.foil ?? null,
-    deckId: input.deckId ?? null,
-    intentId: input.intentId ?? null,
-    minCondition: input.minCondition ?? null,
-    notes: input.notes ?? null,
+    anyPrinting: input.anyPrinting,
+    foil: input.foil,
+    deckId: input.deckId,
+    intentId: input.intentId,
+    minCondition: input.minCondition,
+    notes: input.notes,
   });
   return toWishlistItem(data.saveWishlistItem);
 }

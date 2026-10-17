@@ -222,6 +222,26 @@ type PriceMover {
   changePct: Float!
 }
 
+"Where the copies of one card are used."
+type CardDeckUsage {
+  "Copies owned, any printing and finish."
+  owned: Int!
+  "Copies in main decks, sideboards and as commander (maybeboards excluded)."
+  inDecks: Int!
+  decks: [CardDeckUse!]!
+}
+
+"One deck board using a card printing."
+type CardDeckUse {
+  deckId: ID!
+  deckTitle: String!
+  "main, side, maybe or commander."
+  board: String!
+  quantity: Int!
+  setCode: String!
+  foil: Boolean!
+}
+
 "A deck with main deck or sideboard cards that are not owned."
 type DeckShortfall {
   deckId: ID!

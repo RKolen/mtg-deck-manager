@@ -7,7 +7,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   deleteWishlistItem,
   fetchDecks,
@@ -44,6 +44,48 @@ function unitPrice(item: WishlistItem, currency: Currency, usdToEur: number | nu
 /** Copies still to get. */
 function stillNeeded(item: WishlistItem): number {
   return Math.max(0, item.quantity - item.owned);
+}
+
+type SortKey = 'card' | 'printing' | 'foil' | 'want' | 'have' | 'need' | 'intent' | 'deck' | 'rarity' | 'each' | 'total';
+
+/** Scryfall rarities, lowest first. */
+const RARITIES = ['common', 'uncommon', 'rare', 'mythic', 'special', 'bonus'];
+
+interface SortState {
+  key: SortKey;
+  dir: 1 | -1;
+}
+
+/** Value a column sorts on; null always sorts last. */
+function sortValue(item: WishlistItem, key: SortKey, currency: Currency, usdToEur: number | null): string | number | null {
+  switch (key) {
+    case 'card':
+      return item.card?.title ?? null;
+    case 'printing':
+      return item.anyPrinting ? '' : `${item.card?.field_set_code ?? ''} ${item.card?.field_collector_number ?? ''}`;
+    case 'foil':
+      return item.foil ? 1 : 0;
+    case 'want':
+      return item.quantity;
+    case 'have':
+      return item.owned;
+    case 'need':
+      return stillNeeded(item);
+    case 'intent':
+      return item.intent?.name ?? null;
+    case 'deck':
+      return item.deck?.title ?? null;
+    case 'rarity': {
+      const rank = RARITIES.indexOf(item.card?.field_rarity ?? '');
+      return rank < 0 ? null : rank;
+    }
+    case 'each':
+      return unitPrice(item, currency, usdToEur);
+    case 'total': {
+      const price = unitPrice(item, currency, usdToEur);
+      return price == null ? null : price * stillNeeded(item);
+    }
+  }
 }
 
 /** Plain-text list grouped by intent, for mailing or printing. */
@@ -175,9 +217,14 @@ const WishCardPreview: React.FC<{ item: WishlistItem; currency: Currency; onClos
 const WishlistPage: React.FC = () => {
   const qc = useQueryClient();
   const { currency, usdToEur } = useTheme();
+  // Applied filters drive the query; the draft ones only apply on "Filter".
   const [deckId, setDeckId] = useState('');
   const [intentId, setIntentId] = useState('');
   const [showDone, setShowDone] = useState(false);
+  const [draftDeckId, setDraftDeckId] = useState('');
+  const [draftIntentId, setDraftIntentId] = useState('');
+  const [draftShowDone, setDraftShowDone] = useState(false);
+  const filtersChanged = draftDeckId !== deckId || draftIntentId !== intentId || draftShowDone !== showDone;
   const [addName, setAddName] = useState('');
   const [addQty, setAddQty] = useState(1);
   const [addIntent, setAddIntent] = useState('');
@@ -187,10 +234,17 @@ const WishlistPage: React.FC = () => {
   const [addError, setAddError] = useState<string | null>(null);
   const [preview, setPreview] = useState<WishlistItem | null>(null);
 
-  const { data: items = [], isLoading } = useQuery({
+  // Keep the current rows on screen while a new filter loads.
+  const { data: items = [], isLoading, isPlaceholderData } = useQuery({
     queryKey: ['wishlist', deckId, intentId, showDone],
     queryFn: () => fetchWishlist({ deckId, intentId, includeDone: showDone }),
+    placeholderData: keepPreviousData,
   });
+
+  function selectDeck(id: string): void {
+    setDeckId(id);
+    setDraftDeckId(id);
+  }
   const { data: intents = [] } = useQuery({
     queryKey: ['wishIntents'],
     queryFn: fetchWishIntents,
@@ -207,7 +261,27 @@ const WishlistPage: React.FC = () => {
     ]);
   const save = useMutation({
     mutationFn: (input: WishlistItemInput) => saveWishlistItem(input),
-    onSuccess: refresh,
+    // Show edits at once so quick +/- clicks build on each other.
+    onMutate: async (input: WishlistItemInput) => {
+      if (input.id == null) return;
+      await qc.cancelQueries({ queryKey: ['wishlist'] });
+      qc.setQueriesData<WishlistItem[]>({ queryKey: ['wishlist'] }, old =>
+        old?.map(w =>
+          w.id === input.id
+            ? {
+                ...w,
+                quantity: input.quantity,
+                anyPrinting: input.anyPrinting ?? w.anyPrinting,
+                foil: input.foil ?? w.foil,
+                notes: input.notes !== undefined ? input.notes : w.notes,
+                intent:
+                  input.intentId !== undefined ? (intents.find(i => i.id === input.intentId) ?? null) : w.intent,
+              }
+            : w,
+        ),
+      );
+    },
+    onSettled: refresh,
   });
   const remove = useMutation({ mutationFn: deleteWishlistItem, onSuccess: refresh });
 
@@ -262,6 +336,67 @@ const WishlistPage: React.FC = () => {
     return { openCount: count, copies: copyCount, cost: sum, unpriced: missing };
   }, [items, currency, usdToEur]);
 
+  // Server order (card name) until a header is clicked. The order is only
+  // recomputed when the sort or the set of wishes changes, so a row does not
+  // jump away while its quantity or intent is being edited.
+  const [sort, setSort] = useState<SortState | null>(null);
+  const idsKey = items.map(item => item.id).join(',');
+  const sortedIds = useMemo(() => {
+    if (sort == null) return null;
+    const keyed = items.map(item => ({ item, value: sortValue(item, sort.key, currency, usdToEur) }));
+    keyed.sort((a, b) => {
+      if (a.value == null || b.value == null) {
+        return a.value == null ? (b.value == null ? 0 : 1) : -1;
+      }
+      const diff =
+        typeof a.value === 'number' && typeof b.value === 'number'
+          ? a.value - b.value
+          : String(a.value).localeCompare(String(b.value));
+      return diff * sort.dir;
+    });
+    return keyed.map(k => k.item.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- values are read once per sort, see above.
+  }, [idsKey, sort, currency, usdToEur]);
+  const sortedItems = useMemo(() => {
+    if (sortedIds == null) return items;
+    const byId = new Map(items.map(item => [item.id, item]));
+    const known = new Set(sortedIds);
+    // Wishes not in the frozen order (just added) go last.
+    return [
+      ...sortedIds.map(id => byId.get(id)).filter((item): item is WishlistItem => item != null),
+      ...items.filter(item => !known.has(item.id)),
+    ];
+  }, [items, sortedIds]);
+
+  /** Clickable column header; a second click reverses the order. */
+  const sortHeader = (key: SortKey, label: string, align: 'left' | 'right' = 'left', title?: string) => {
+    const active = sort?.key === key;
+    return (
+      <th
+        style={{ padding: 4, textAlign: align }}
+        title={title}
+        aria-sort={active ? (sort.dir === 1 ? 'ascending' : 'descending') : 'none'}
+      >
+        <button
+          type="button"
+          onClick={() => setSort(active ? { key, dir: sort.dir === 1 ? -1 : 1 } : { key, dir: 1 })}
+          style={{
+            background: 'none',
+            border: 'none',
+            padding: 0,
+            color: 'inherit',
+            font: 'inherit',
+            fontWeight: 700,
+            cursor: 'pointer',
+          }}
+        >
+          {label}
+          {active ? (sort.dir === 1 ? ' ▲' : ' ▼') : ''}
+        </button>
+      </th>
+    );
+  };
+
   return (
     <main
       style={{
@@ -303,10 +438,19 @@ const WishlistPage: React.FC = () => {
         Prices use the cheapest printing for any-printing wishes. Add cards here or from a card page.
       </p>
 
-      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '1rem' }}>
+      <form
+        onSubmit={e => {
+          e.preventDefault();
+          setDeckId(draftDeckId);
+          setIntentId(draftIntentId);
+          setShowDone(draftShowDone);
+        }}
+        aria-label="Wishlist filters"
+        style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '1rem' }}
+      >
         <label>
           Deck{' '}
-          <select value={deckId} onChange={e => setDeckId(e.target.value)} style={fieldStyle}>
+          <select value={draftDeckId} onChange={e => setDraftDeckId(e.target.value)} style={fieldStyle}>
             <option value="">All</option>
             {decks.map(d => (
               <option key={d.id} value={d.id}>
@@ -317,7 +461,7 @@ const WishlistPage: React.FC = () => {
         </label>
         <label>
           Intent{' '}
-          <select value={intentId} onChange={e => setIntentId(e.target.value)} style={fieldStyle}>
+          <select value={draftIntentId} onChange={e => setDraftIntentId(e.target.value)} style={fieldStyle}>
             <option value="">All</option>
             {intents.map(i => (
               <option key={i.id} value={i.id}>
@@ -327,12 +471,20 @@ const WishlistPage: React.FC = () => {
           </select>
         </label>
         <label>
-          <input type="checkbox" checked={showDone} onChange={e => setShowDone(e.target.checked)} /> Show done
+          <input type="checkbox" checked={draftShowDone} onChange={e => setDraftShowDone(e.target.checked)} /> Show done
         </label>
-        <button type="button" onClick={() => download('want-list.txt', exportText(items, currency, usdToEur))} disabled={items.length === 0}>
+        <button type="submit" disabled={!filtersChanged}>
+          Filter
+        </button>
+        {isPlaceholderData && <span style={{ fontSize: 12, opacity: 0.8 }}>Filtering...</span>}
+        <button
+          type="button"
+          onClick={() => download('want-list.txt', exportText(items, currency, usdToEur))}
+          disabled={items.length === 0 || isPlaceholderData}
+        >
           Export .txt
         </button>
-      </div>
+      </form>
 
       <form
         onSubmit={e => {
@@ -407,22 +559,23 @@ const WishlistPage: React.FC = () => {
         <table className="mono" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
             <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--line)' }}>
-              <th style={{ padding: 4 }}>Card</th>
-              <th style={{ padding: 4 }}>Printing</th>
-              <th style={{ padding: 4 }}>Foil</th>
-              <th style={{ padding: 4 }}>Want</th>
-              <th style={{ padding: 4 }}>Have</th>
-              <th style={{ padding: 4 }}>Intent</th>
-              <th style={{ padding: 4 }}>Deck</th>
-              <th style={{ padding: 4 }}>Min. cond.</th>
-              <th style={{ padding: 4, textAlign: 'right' }}>Each</th>
-              <th style={{ padding: 4, textAlign: 'right' }}>To complete</th>
+              {sortHeader('card', 'Card')}
+              {sortHeader('printing', 'Printing')}
+              {sortHeader('foil', 'Foil')}
+              {sortHeader('want', 'Want')}
+              {sortHeader('have', 'Have')}
+              {sortHeader('need', 'Need', 'left', 'Copies still to get to reach the wanted total')}
+              {sortHeader('intent', 'Intent')}
+              {sortHeader('deck', 'Deck')}
+              {sortHeader('rarity', 'Rarity')}
+              {sortHeader('each', 'Each', 'right')}
+              {sortHeader('total', 'To complete', 'right')}
               <th style={{ padding: 4 }}>Notes</th>
               <th style={{ padding: 4 }} aria-label="Actions" />
             </tr>
           </thead>
           <tbody>
-            {items.map(item => {
+            {sortedItems.map(item => {
               const price = unitPrice(item, currency, usdToEur);
               const need = stillNeeded(item);
               const card = item.card;
@@ -497,6 +650,7 @@ const WishlistPage: React.FC = () => {
                     </button>
                   </td>
                   <td style={{ padding: 4 }}>{item.done ? `${item.owned} (done)` : item.owned}</td>
+                  <td style={{ padding: 4, fontWeight: need > 0 ? 700 : 400 }}>{need}</td>
                   <td style={{ padding: 4 }}>
                     <select
                       value={item.intent?.id ?? ''}
@@ -525,7 +679,7 @@ const WishlistPage: React.FC = () => {
                       <span style={{ opacity: 0.6 }}>-</span>
                     )}
                   </td>
-                  <td style={{ padding: 4 }}>{item.minCondition ?? 'Any'}</td>
+                  <td style={{ padding: 4, textTransform: 'capitalize' }}>{card?.field_rarity || '-'}</td>
                   <td style={{ padding: 4, textAlign: 'right' }}>{formatPrice(price, currency)}</td>
                   <td style={{ padding: 4, textAlign: 'right' }}>{need > 0 ? formatPrice((price ?? 0) * need, currency) : '-'}</td>
                   <td style={{ padding: 4 }}>
@@ -558,7 +712,7 @@ const WishlistPage: React.FC = () => {
           currency={currency}
           usdToEur={usdToEur}
           activeDeckId={deckId}
-          onSelectDeck={setDeckId}
+          onSelectDeck={selectDeck}
         />
       </div>
 

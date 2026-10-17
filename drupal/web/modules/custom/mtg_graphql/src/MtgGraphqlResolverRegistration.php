@@ -181,6 +181,29 @@ final class MtgGraphqlResolverRegistration {
       );
     }
 
+    $registry->addFieldResolver('Query', 'cardDeckUsage',
+      $builder->callback(function ($value, array $args, ResolveContext $context, ResolveInfo $info, FieldContext $fieldContext): array {
+        $fieldContext->addCacheTags([
+          'node_list:collection_card',
+          'node_list:deck',
+          'paragraph_list',
+        ]);
+        /** @var \Drupal\mtg_graphql\Service\DeckBuildPool $pool */
+        $pool = \Drupal::service('mtg_graphql.deck_build_pool');
+        return $pool->usageForCard((string) $args['name']);
+      })
+    );
+    foreach (['owned', 'inDecks', 'decks'] as $field) {
+      $registry->addFieldResolver('CardDeckUsage', $field,
+        $builder->callback(fn(array $u) => $u[$field])
+      );
+    }
+    foreach (['deckId', 'deckTitle', 'board', 'quantity', 'setCode', 'foil'] as $field) {
+      $registry->addFieldResolver('CardDeckUse', $field,
+        $builder->callback(fn(array $u) => $u[$field])
+      );
+    }
+
     $registry->addFieldResolver('Query', 'deckShortfalls',
       $builder->callback(function ($value, array $args, ResolveContext $context, ResolveInfo $info, FieldContext $fieldContext): array {
         $fieldContext->addCacheTags([

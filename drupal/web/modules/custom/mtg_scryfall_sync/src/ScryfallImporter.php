@@ -104,6 +104,31 @@ class ScryfallImporter {
   ];
 
   /**
+   * Scryfall set types whose printings are not tournament legal.
+   *
+   * Memorabilia covers Collectors' Edition, 30th Anniversary Edition, World
+   * Championship decks, prize cards and art cards: real cardboard, but never
+   * playable, so it would only skew prices and printing lists.
+   *
+   * @var string[]
+   */
+  private const UNPLAYABLE_SET_TYPES = [
+    'memorabilia',
+  ];
+
+  /**
+   * Sets skipped by code although their printings are legal.
+   *
+   * Summer Magic (a recalled Revised print run) almost never sells, so its
+   * few price listings are unrealistic and undercut every real printing.
+   *
+   * @var string[]
+   */
+  private const SKIPPED_SETS = [
+    'sum',
+  ];
+
+  /**
    * Layouts imported as tokens and emblems (collectable, never deck cards).
    *
    * @var string[]
@@ -436,9 +461,7 @@ class ScryfallImporter {
     if (isset($card['layout']) && in_array($card['layout'], self::SKIP_LAYOUTS, TRUE)) {
       return;
     }
-    // Online-only printings (MTGO and Arena, e.g. Vintage Masters) cannot be
-    // owned on paper, so they are never imported.
-    if (!empty($card['digital'])) {
+    if ($this->isUnplayable($card)) {
       return;
     }
 
@@ -552,6 +575,151 @@ class ScryfallImporter {
     $node->setChangedTime($now);
 
     $node->save();
+  }
+
+  /**
+   * Whether a printing is one that is never imported.
+   *
+   * Online-only printings (MTGO and Arena, e.g. Vintage Masters and Alchemy)
+   * cannot be owned on paper. Memorabilia and oversized printings are paper
+   * but never tournament legal. Skipped sets have unrealistic prices.
+   *
+   * @param array<string, mixed> $card
+   *   Decoded Scryfall card object.
+   */
+  private function isUnplayable(array $card): bool {
+    return !empty($card['digital'])
+      || !empty($card['oversized'])
+      || in_array($card['set_type'] ?? '', self::UNPLAYABLE_SET_TYPES, TRUE)
+      || in_array($card['set'] ?? '', self::SKIPPED_SETS, TRUE);
+  }
+
+  /**
+   * Deletes card printings, e.g. ones the importer no longer imports.
+   *
+   * Printings in the collection, a deck or a meta deck are kept and reported.
+   * Wishes on a removed printing move to the cheapest remaining printing of
+   * the card. Callers pass small batches; the IDs come from a scan of the
+   * bulk file done outside Drupal.
+   *
+   * @param int[] $remove
+   *   Card node IDs to delete.
+   *
+   * @return array{deleted: int, kept: string[], wishes_moved: int}
+   *   deleted: card nodes removed; kept: referenced printings left in place;
+   *   wishes_moved: wishlist items repointed.
+   */
+  public function removePrintings(array $remove): array {
+    $remove = array_values(array_unique(array_map('intval', $remove)));
+    if ($remove === []) {
+      return ['deleted' => 0, 'kept' => [], 'wishes_moved' => 0];
+    }
+
+    $referenced = $this->referencedCards($remove);
+    $kept = [];
+    if ($referenced !== []) {
+      $kept = $this->database->query(
+        'SELECT title FROM {node_field_data} WHERE nid IN (:nids[])',
+        [':nids[]' => $referenced],
+      )->fetchCol();
+      $remove = array_values(array_diff($remove, $referenced));
+    }
+
+    $moved = $this->moveWishesOff($remove);
+
+    $storage = $this->entityTypeManager->getStorage('node');
+    foreach (array_chunk($remove, 100) as $chunk) {
+      $storage->delete($storage->loadMultiple($chunk));
+      // Keep memory flat over thousands of deletes in one request.
+      $storage->resetCache();
+    }
+
+    $this->loggerFactory->get('mtg_scryfall_sync')->info(
+      'Removed @deleted printings, kept @kept referenced ones, moved @moved wishes.',
+      ['@deleted' => count($remove), '@kept' => count($kept), '@moved' => $moved],
+    );
+    return ['deleted' => count($remove), 'kept' => $kept, 'wishes_moved' => $moved];
+  }
+
+  /**
+   * Card IDs that the collection, a deck or a meta deck points at.
+   *
+   * @param int[] $nids
+   *   Card node IDs to check.
+   *
+   * @return int[]
+   *   The referenced subset.
+   */
+  private function referencedCards(array $nids): array {
+    $sources = [
+      ['node__field_card', 'field_card_target_id', "bundle = 'collection_card'"],
+      ['paragraph__field_card', 'field_card_target_id', '1 = 1'],
+      ['node__field_commander', 'field_commander_target_id', '1 = 1'],
+      ['node__field_key_cards', 'field_key_cards_target_id', '1 = 1'],
+    ];
+    $found = [];
+    foreach ($sources as [$table, $column, $where]) {
+      if (!$this->database->schema()->tableExists($table)) {
+        continue;
+      }
+      foreach (array_chunk($nids, 1000) as $chunk) {
+        $found = array_merge($found, $this->database->query(
+          "SELECT DISTINCT $column FROM {{$table}} WHERE $where AND $column IN (:nids[])",
+          [':nids[]' => $chunk],
+        )->fetchCol());
+      }
+    }
+    return array_values(array_unique(array_map('intval', $found)));
+  }
+
+  /**
+   * Points wishes on the given printings at another printing of the card.
+   *
+   * Picks the cheapest priced printing that is not being removed, so the
+   * wishlist still shows a card. Wishes with no other printing are deleted.
+   *
+   * @param int[] $nids
+   *   Card node IDs being removed.
+   *
+   * @return int
+   *   Wishes moved.
+   */
+  private function moveWishesOff(array $nids): int {
+    if ($nids === []) {
+      return 0;
+    }
+    $storage = $this->entityTypeManager->getStorage('node');
+    $wishIds = $storage->getQuery()
+      ->accessCheck(FALSE)
+      ->condition('type', 'wishlist_item')
+      ->condition('field_card', $nids, 'IN')
+      ->execute();
+    $removing = array_flip($nids);
+    $moved = 0;
+    foreach ($storage->loadMultiple($wishIds) as $wish) {
+      $candidates = $this->database->query(
+        "SELECT n.nid FROM {node_field_data} n
+         LEFT JOIN {node__field_price_eur} p ON p.entity_id = n.nid
+         WHERE n.type = 'mtg_card' AND n.title = :title
+         ORDER BY p.field_price_eur_value IS NULL, p.field_price_eur_value, n.nid",
+        [':title' => $wish->label()],
+      )->fetchCol();
+      $target = NULL;
+      foreach ($candidates as $candidate) {
+        if (!isset($removing[(int) $candidate])) {
+          $target = (int) $candidate;
+          break;
+        }
+      }
+      if ($target === NULL) {
+        $wish->delete();
+        continue;
+      }
+      $wish->set('field_card', ['target_id' => $target]);
+      $wish->save();
+      $moved++;
+    }
+    return $moved;
   }
 
   /**

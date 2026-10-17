@@ -86,6 +86,7 @@ import {
   COLOR_LABEL,
   mainDeck,
   sideboard,
+  isCompanionCard,
   totalCount,
   cardTypeDistribution,
   cmcHistogram,
@@ -770,6 +771,10 @@ const DeckEditor: React.FC<EditorProps> = ({
     return sum + missing * slotUnitPrice(dc.card, currency, dc.isFoil, usdToEur);
   }, 0);
   const allowance = deckListAllowance(format, cards);
+  // A companion only counts from the sideboard; flag one left in the main.
+  const mainCompanion = allowance.companion == null
+    ? main.find(dc => isCompanionCard(dc.card))?.card ?? null
+    : null;
   const showCommander = usesCommanderCard(format);
   const commanderLabel = isTinyLeadersFormat(format) ? 'Tiny Leader' : 'Commander';
   const nonRbMain = nonRulebreakerMainCount(cards);
@@ -944,7 +949,10 @@ const DeckEditor: React.FC<EditorProps> = ({
             </span>
           )}
         </td>
-        <td style={{ padding: '0.25rem 0.5rem', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+        <td
+          style={{ padding: '0.25rem 0.5rem', textAlign: 'center', whiteSpace: 'nowrap' }}
+          onClick={e => e.stopPropagation()}
+        >
           <button
             type="button"
             onClick={() => updateQty.mutate({ slotId: dc.id, qty: dc.quantity - 1 })}
@@ -1093,6 +1101,12 @@ const DeckEditor: React.FC<EditorProps> = ({
             <li key={`${issue.code}-${issue.message}`}>{issue.message}</li>
           ))}
         </ul>
+      )}
+      {mainCompanion != null && (
+        <p style={{ margin: '0 0 0.75rem', color: 'var(--warn)', fontSize: '0.85rem' }}>
+          {mainCompanion.title} is in the main deck, where it is a regular card.
+          Move it to the sideboard to use it as your companion.
+        </p>
       )}
 
       {/* Search */}

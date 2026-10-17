@@ -87,6 +87,9 @@ extend type Query {
   "Decks whose main deck or sideboard has cards the collection does not cover."
   deckShortfalls: [DeckShortfall!]!
 
+  "Which decks use a card (any printing) and how many copies are owned."
+  cardDeckUsage(name: String!): CardDeckUsage!
+
   "Biggest price movers (percent) since the previous price import, across all cards."
   priceMovers(
     "EUR or USD."

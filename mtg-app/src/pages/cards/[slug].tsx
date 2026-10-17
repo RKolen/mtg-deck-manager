@@ -19,6 +19,7 @@ import {
 } from '../../services/drupalApi';
 import { invalidateInventoryQueries } from '../../services/queryCache';
 import WishlistPanel from '../../components/WishlistPanel';
+import CardDeckUsagePanel from '../../components/CardDeckUsagePanel';
 import PrintingSwapDialog, {
   type CollectionSwapMode,
   type PrintingSwapTarget,
@@ -304,6 +305,7 @@ const CardPage: React.FC = () => {
           )}
 
           <WishlistPanel key={displayed.id} cardId={displayed.id} cardTitle={attrs.title} />
+          <CardDeckUsagePanel cardTitle={attrs.title} />
         </div>
       </div>
 
