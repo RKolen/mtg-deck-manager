@@ -52,6 +52,15 @@ const COLORS: { value: MtgColor; label: string; symbol: string }[] = [
   { value: 'G', label: 'Green', symbol: 'G' },
 ];
 
+/** Toggle-button colors: selected buttons are filled with the accent. */
+function toggleStyle(selected: boolean): React.CSSProperties {
+  return {
+    border: selected ? '1px solid var(--accent)' : '1px solid var(--line-2)',
+    background: selected ? 'var(--accent)' : 'var(--bg-2)',
+    color: selected ? 'var(--bg)' : 'var(--ink)',
+  };
+}
+
 const FORMATS = [
   '',
   'standard',
@@ -219,15 +228,14 @@ const CardFilter: React.FC<CardFilterProps> = ({ filter, onChange }) => {
               type="button"
               onClick={() => toggleColor(c.value)}
               title={c.label}
+              aria-pressed={filter.colors.has(c.value)}
               style={{
                 width: 32,
                 height: 32,
                 fontWeight: 'bold',
                 cursor: 'pointer',
-                border: filter.colors.has(c.value) ? '2px solid #000' : '1px solid #000',
                 borderRadius: 4,
-                background: filter.colors.has(c.value) ? '#e8e8e8' : '#fff',
-                color: '#000',
+                ...toggleStyle(filter.colors.has(c.value)),
               }}
             >
               {c.symbol}
@@ -349,13 +357,12 @@ const CardFilter: React.FC<CardFilterProps> = ({ filter, onChange }) => {
           <button
             type="button"
             onClick={() => onChange({ ...filter, setExclude: false })}
+            aria-pressed={!filter.setExclude}
             style={{
               flex: 1,
               fontSize: 11,
               padding: '4px 6px',
-              border: filter.setExclude ? '1px solid #000' : '2px solid #000',
-              background: filter.setExclude ? '#fff' : '#e8e8e8',
-              color: '#000',
+              ...toggleStyle(!filter.setExclude),
               cursor: 'pointer',
             }}
           >
@@ -364,13 +371,12 @@ const CardFilter: React.FC<CardFilterProps> = ({ filter, onChange }) => {
           <button
             type="button"
             onClick={() => onChange({ ...filter, setExclude: true })}
+            aria-pressed={filter.setExclude}
             style={{
               flex: 1,
               fontSize: 11,
               padding: '4px 6px',
-              border: filter.setExclude ? '2px solid #000' : '1px solid #000',
-              background: filter.setExclude ? '#e8e8e8' : '#fff',
-              color: '#000',
+              ...toggleStyle(filter.setExclude),
               cursor: 'pointer',
             }}
           >
@@ -458,13 +464,12 @@ const CardFilter: React.FC<CardFilterProps> = ({ filter, onChange }) => {
           <button
             type="button"
             onClick={() => onChange({ ...filter, deckExclude: false })}
+            aria-pressed={!filter.deckExclude}
             style={{
               flex: 1,
               fontSize: 11,
               padding: '4px 6px',
-              border: filter.deckExclude ? '1px solid #000' : '2px solid #000',
-              background: filter.deckExclude ? '#fff' : '#e8e8e8',
-              color: '#000',
+              ...toggleStyle(!filter.deckExclude),
               cursor: 'pointer',
             }}
           >
@@ -473,13 +478,12 @@ const CardFilter: React.FC<CardFilterProps> = ({ filter, onChange }) => {
           <button
             type="button"
             onClick={() => onChange({ ...filter, deckExclude: true })}
+            aria-pressed={filter.deckExclude}
             style={{
               flex: 1,
               fontSize: 11,
               padding: '4px 6px',
-              border: filter.deckExclude ? '2px solid #000' : '1px solid #000',
-              background: filter.deckExclude ? '#e8e8e8' : '#fff',
-              color: '#000',
+              ...toggleStyle(filter.deckExclude),
               cursor: 'pointer',
             }}
           >
