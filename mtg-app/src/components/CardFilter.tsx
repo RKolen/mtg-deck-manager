@@ -29,6 +29,22 @@ interface CardFilterProps {
   onChange: (next: FilterState) => void;
 }
 
+/** Max CMC option value labelled "7+", meaning mana value 7 or more. */
+export const CMC_SEVEN_PLUS = 7;
+
+/**
+ * Search bounds for the Max CMC filter.
+ *
+ * 0-6 cap the mana value; "7+" asks for 7 or more, so an 8-drop such as
+ * Archetype of Endurance is found instead of being cut off by a 7 cap.
+ */
+export function cmcBounds(maxCmc: number | null): { cmcMin?: number; cmcMax?: number } {
+  if (maxCmc == null) {
+    return {};
+  }
+  return maxCmc >= CMC_SEVEN_PLUS ? { cmcMin: CMC_SEVEN_PLUS } : { cmcMax: maxCmc };
+}
+
 export const EMPTY_FILTER: FilterState = {
   name: '',
   colors: new Set(),
@@ -317,9 +333,9 @@ const CardFilter: React.FC<CardFilterProps> = ({ filter, onChange }) => {
           style={fieldStyle}
         >
           <option value="">Any</option>
-          {[0, 1, 2, 3, 4, 5, 6, 7].map(n => (
+          {[0, 1, 2, 3, 4, 5, 6, CMC_SEVEN_PLUS].map(n => (
             <option key={n} value={n}>
-              {n <= 6 ? String(n) : '7+'}
+              {n < CMC_SEVEN_PLUS ? String(n) : '7+ (7 or more)'}
             </option>
           ))}
         </select>

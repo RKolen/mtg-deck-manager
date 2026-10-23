@@ -11,7 +11,7 @@ import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { slugify } from '../../utils/slugify';
 
-import CardFilter, { EMPTY_FILTER, type FilterState } from '../../components/CardFilter';
+import CardFilter, { EMPTY_FILTER, cmcBounds, type FilterState } from '../../components/CardFilter';
 import CardModal, { type CardData } from '../../components/CardModal';
 import CollectionSidebar from '../../components/CollectionSidebar';
 import TradeList from '../../components/TradeList';
@@ -94,7 +94,7 @@ const CollectionPage: React.FC = () => {
         q: debouncedFilter.name || undefined,
         colors: debouncedFilter.colors.size > 0 ? [...debouncedFilter.colors] : undefined,
         type: debouncedFilter.type !== 'All' ? debouncedFilter.type : undefined,
-        cmcMax: debouncedFilter.maxCmc ?? undefined,
+        ...cmcBounds(debouncedFilter.maxCmc),
         legalIn: debouncedFilter.legalIn || undefined,
         oracleText: debouncedFilter.oracleText || undefined,
         rarity: debouncedFilter.rarity || undefined,
