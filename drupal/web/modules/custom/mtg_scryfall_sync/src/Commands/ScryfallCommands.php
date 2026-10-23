@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\mtg_scryfall_sync\Commands;
 
 use Drupal\mtg_scryfall_sync\ScryfallImporter;
+use Drupal\mtg_scryfall_sync\Service\CardParts;
 use Drupal\mtg_scryfall_sync\Service\SetTaxonomy;
 use Drush\Commands\DrushCommands;
 
@@ -16,8 +17,80 @@ class ScryfallCommands extends DrushCommands {
   public function __construct(
     private readonly ScryfallImporter $importer,
     private readonly SetTaxonomy $setTaxonomy,
+    private readonly CardParts $cardParts,
   ) {
     parent::__construct();
+  }
+
+  /**
+   * Rebuilds which tokens, emblems and game pieces each card makes.
+   *
+   * Without --file it reads the local bulk file. With --file it loads a
+   * tab-separated list (card name, part ID, part name, part type line,
+   * component), e.g. one made on the host by scripts/card-parts.mjs, so the
+   * container does not have to read the whole bulk file.
+   *
+   * @param array $options
+   *   Command options.
+   *
+   * @command mtg:card-parts
+   * @option file Tab-separated card parts file to load instead of the bulk file.
+   * @usage ddev drush mtg:card-parts
+   * @usage ddev drush mtg:card-parts --file=/var/www/html/card_parts.tsv
+   */
+  public function cardParts(array $options = ['file' => NULL]): void {
+    $file = $options['file'] ?? NULL;
+    try {
+      if (is_string($file) && $file !== '') {
+        $written = $this->cardParts->replaceAll($this->readPartsFile($file));
+      }
+      else {
+        if (!$this->importer->dataFileExists()) {
+          $this->logger()->error('No data file found. Run mtg:scryfall-download first, or pass --file.');
+          return;
+        }
+        $written = $this->importer->importCardParts();
+      }
+    }
+    catch (\RuntimeException $e) {
+      $this->logger()->error('Card parts import failed: ' . $e->getMessage());
+      return;
+    }
+    $this->output()->writeln(sprintf('Card parts import complete: %d links written.', $written));
+  }
+
+  /**
+   * Yields rows from a tab-separated card parts file.
+   *
+   * @return \Generator<int, array{card_name: string, part_id: string, name: string, type_line: string, component: string}>
+   *   One link per valid line.
+   *
+   * @throws \RuntimeException
+   *   When the file cannot be opened.
+   */
+  private function readPartsFile(string $file): \Generator {
+    $fh = @fopen($file, 'rb');
+    if ($fh === FALSE) {
+      throw new \RuntimeException('Cannot open ' . $file);
+    }
+    try {
+      while (($line = fgets($fh)) !== FALSE) {
+        $cols = explode("\t", rtrim($line, "\r\n"));
+        if (count($cols) !== 5 || $cols[0] === '' || $cols[1] === '') {
+          continue;
+        }
+        yield [
+          'card_name' => $cols[0],
+          'part_id' => $cols[1],
+          'name' => $cols[2],
+          'type_line' => $cols[3],
+          'component' => $cols[4],
+        ];
+      }
+    }
+    finally {
+      fclose($fh);
+    }
   }
 
   /**

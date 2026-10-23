@@ -17,6 +17,12 @@ services:
       - '@cache.entity'
       - '@cache_tags.invalidator'
       - '@mtg_scryfall_sync.price_history'
+      - '@mtg_scryfall_sync.card_parts'
+
+  mtg_scryfall_sync.card_parts:
+    class: Drupal\mtg_scryfall_sync\Service\CardParts
+    arguments:
+      - '@database'
 
   mtg_scryfall_sync.exchange_rate:
     class: Drupal\mtg_scryfall_sync\Service\ExchangeRate

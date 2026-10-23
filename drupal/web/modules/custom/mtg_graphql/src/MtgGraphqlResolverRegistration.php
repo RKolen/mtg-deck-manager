@@ -204,6 +204,25 @@ final class MtgGraphqlResolverRegistration {
       );
     }
 
+    $registry->addFieldResolver('Query', 'deckTokens',
+      $builder->callback(function ($value, array $args, ResolveContext $context, ResolveInfo $info, FieldContext $fieldContext): array {
+        $fieldContext->addCacheTags([
+          'node_list:collection_card',
+          'node_list:deck',
+          'node_list:mtg_card',
+          'paragraph_list',
+        ]);
+        /** @var \Drupal\mtg_graphql\Service\DeckTokens $tokens */
+        $tokens = \Drupal::service('mtg_graphql.deck_tokens');
+        return $tokens->forDeck((string) $args['deckId']);
+      })
+    );
+    foreach (['card', 'name', 'typeLine', 'power', 'toughness', 'oracleText', 'kind', 'madeBy', 'owned'] as $field) {
+      $registry->addFieldResolver('DeckToken', $field,
+        $builder->callback(fn(array $t) => $t[$field])
+      );
+    }
+
     $registry->addFieldResolver('Query', 'deckShortfalls',
       $builder->callback(function ($value, array $args, ResolveContext $context, ResolveInfo $info, FieldContext $fieldContext): array {
         $fieldContext->addCacheTags([

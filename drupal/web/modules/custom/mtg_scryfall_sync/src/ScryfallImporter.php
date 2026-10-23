@@ -11,6 +11,7 @@ use Drupal\Core\Database\Connection;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\State\StateInterface;
+use Drupal\mtg_scryfall_sync\Service\CardParts;
 use Drupal\mtg_scryfall_sync\Service\PriceHistory;
 use Drupal\mtg_scryfall_sync\Service\SetTaxonomy;
 use Drupal\node\NodeInterface;
@@ -170,6 +171,7 @@ class ScryfallImporter {
     private readonly CacheBackendInterface $entityCache,
     private readonly CacheTagsInvalidatorInterface $cacheTagsInvalidator,
     private readonly PriceHistory $priceHistory,
+    private readonly CardParts $cardParts,
   ) {}
 
   /**
@@ -565,6 +567,11 @@ class ScryfallImporter {
       }
     }
     $node->set('field_combo_pieces', $combo_pieces);
+
+    // Tokens, emblems and game pieces the card makes, for deck token lists.
+    if (!in_array($card['layout'] ?? '', self::TOKEN_LAYOUTS, TRUE)) {
+      $this->cardParts->record((string) ($card['name'] ?? ''), CardParts::fromCard($card));
+    }
 
     // Long-running Drush sync is one HTTP/CLI request, so Drupal's default
     // created/changed stamps would stay frozen at sync start. Use wall clock.
@@ -1082,6 +1089,41 @@ class ScryfallImporter {
       ['@added' => $added, '@updated' => $updated],
     );
     return ['added' => $added, 'updated' => $updated];
+  }
+
+  /**
+   * Rebuilds the token, emblem and game-piece links from the bulk file.
+   *
+   * Reads the file once and writes only the link table, without saving
+   * nodes. Later full syncs keep the links up to date card by card.
+   *
+   * @return int
+   *   Links written.
+   *
+   * @throws \RuntimeException
+   *   When the bulk data file is missing or cannot be read.
+   */
+  public function importCardParts(): int {
+    if (!$this->dataFileExists()) {
+      throw new \RuntimeException('Scryfall data file not found. Run downloadBulkData() first.');
+    }
+    $rows = (function (): \Generator {
+      foreach ($this->iterateBulkCards() as $card) {
+        if (in_array($card['layout'] ?? '', self::TOKEN_LAYOUTS, TRUE)) {
+          continue;
+        }
+        $name = (string) ($card['name'] ?? '');
+        foreach (CardParts::fromCard($card) as $part) {
+          yield ['card_name' => $name] + $part;
+        }
+      }
+    })();
+    $written = $this->cardParts->replaceAll($rows);
+    $this->loggerFactory->get('mtg_scryfall_sync')->info(
+      'Card parts import: @count links written.',
+      ['@count' => $written],
+    );
+    return $written;
   }
 
   /**

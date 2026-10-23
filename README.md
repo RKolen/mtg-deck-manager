@@ -25,6 +25,10 @@ headless backend and a Next.js + TypeScript frontend.
   - Mana Color Distribution: sources % vs pip demand % per colour
   - Hypergeometric hand probability (chance of drawing N sources by turn T)
   - Mana/coloured-card ratio
+  - Tokens & emblems: every token, emblem and game piece the deck makes, from
+    Scryfall's card-to-token links, merged across printings, with owned or
+    missing (`drush mtg:card-parts` rebuilds the links; full syncs keep them
+    current)
 - **Deck import** — drag-and-drop XLSX/ODS files, parse client-side, fuzzy-match
   card names (including smart-quote normalisation), review unmatched cards, and
   POST the complete deck in one operation.

@@ -44,6 +44,7 @@ import {
   updateDeck,
 } from '../../services/drupalApi';
 import CommanderPicker from '../../components/CommanderPicker';
+import DeckTokensPanel from '../../components/DeckTokensPanel';
 import DeckValueList from '../../components/DeckValueList';
 import LandBasePanel from '../../components/LandBasePanel';
 import { invalidateInventoryQueries } from '../../services/queryCache';
@@ -1397,6 +1398,8 @@ const DeckEditor: React.FC<EditorProps> = ({
           </p>
         )}
       </section>
+
+      <DeckTokensPanel deckId={deckId} />
       </div>
       {/* Selected card and commander sit in separate sticky columns, so each
           stays in view; stacked, they outgrew the viewport. */}

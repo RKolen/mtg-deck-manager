@@ -38,6 +38,13 @@ services:
       - '@entity_type.manager'
       - '@database'
 
+  mtg_graphql.deck_tokens:
+    class: Drupal\mtg_graphql\Service\DeckTokens
+    arguments:
+      - '@entity_type.manager'
+      - '@database'
+      - '@mtg_scryfall_sync.card_parts'
+
   mtg_graphql.collection_reader:
     class: Drupal\mtg_graphql\Service\CollectionReader
     arguments:

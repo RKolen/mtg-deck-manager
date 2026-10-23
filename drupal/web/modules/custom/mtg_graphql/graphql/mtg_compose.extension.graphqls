@@ -92,6 +92,9 @@ extend type Query {
   "Which decks use a card (any printing) and how many copies are owned."
   cardDeckUsage(name: String!): CardDeckUsage!
 
+  "Tokens, emblems and game pieces the main deck, sideboard and commander can make, one entry per distinct token."
+  deckTokens(deckId: ID!): [DeckToken!]!
+
   "Biggest price movers (percent) since the previous price import, across all cards."
   priceMovers(
     "EUR or USD."

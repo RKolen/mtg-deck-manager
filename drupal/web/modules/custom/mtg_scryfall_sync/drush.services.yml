@@ -4,5 +4,6 @@ services:
     arguments:
       - '@mtg_scryfall_sync.importer'
       - '@mtg_scryfall_sync.set_taxonomy'
+      - '@mtg_scryfall_sync.card_parts'
     tags:
       - { name: drush.command }

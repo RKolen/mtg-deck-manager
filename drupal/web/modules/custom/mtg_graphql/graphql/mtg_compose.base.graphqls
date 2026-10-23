@@ -231,6 +231,23 @@ type CardDeckUsage {
   decks: [CardDeckUse!]!
 }
 
+"A token, emblem or game piece a deck can make, merged across printings."
+type DeckToken {
+  "A printing to show: an owned one when possible. Null when none is imported."
+  card: MtgCard
+  name: String!
+  typeLine: String!
+  power: String
+  toughness: String
+  oracleText: String
+  "token, emblem or game (dungeons, The Initiative, The Monarch)."
+  kind: String!
+  "Deck cards that make it."
+  madeBy: [String!]!
+  "Copies owned across printings with the same name, stats and abilities."
+  owned: Int!
+}
+
 "One deck board using a card printing."
 type CardDeckUse {
   deckId: ID!

@@ -301,7 +301,47 @@ function mtg_scryfall_sync_schema(): array {
       ],
       'primary key' => ['nid'],
     ],
+    'mtg_card_part' => mtg_scryfall_sync_card_part_schema(),
   ];
+}
+
+/**
+ * Schema of mtg_card_part: tokens, emblems and game pieces a card makes.
+ *
+ * @return array<string, mixed>
+ *   Table definition.
+ */
+function mtg_scryfall_sync_card_part_schema(): array {
+  $text = static fn(string $description, int $length): array => [
+    'description' => $description,
+    'type' => 'varchar',
+    'length' => $length,
+    'not null' => TRUE,
+    'default' => '',
+  ];
+  return [
+    'description' => 'Tokens, emblems and game pieces each card makes, from Scryfall all_parts.',
+    'fields' => [
+      'card_name' => $text('Name of the card that makes the part (mtg_card title).', 255),
+      'part_id' => $text('Scryfall ID of one printing of the part.', 36),
+      'name' => $text('Part name, e.g. Food or The Initiative.', 255),
+      'type_line' => $text('Part type line, e.g. Token Artifact - Food.', 255),
+      'component' => $text('Scryfall component: token or combo_piece.', 32),
+    ],
+    'primary key' => ['card_name', 'part_id'],
+  ];
+}
+
+/**
+ * Creates the mtg_card_part table for deck token lists.
+ */
+function mtg_scryfall_sync_update_9006(): string {
+  $schema = \Drupal::database()->schema();
+  if ($schema->tableExists('mtg_card_part')) {
+    return 'mtg_card_part already exists.';
+  }
+  $schema->createTable('mtg_card_part', mtg_scryfall_sync_card_part_schema());
+  return 'Created mtg_card_part. Fill it with drush mtg:card-parts.';
 }
 
 /**

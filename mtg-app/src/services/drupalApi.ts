@@ -1169,6 +1169,36 @@ export async function fetchCardDeckUsage(name: string): Promise<CardDeckUsage> {
   return data.cardDeckUsage;
 }
 
+/** A token, emblem or game piece a deck makes, merged across printings. */
+export interface DeckToken {
+  /** A printing to show (an owned one when possible); null when none is imported. */
+  card: { id: string; title: string; setCode: string | null; collectorNumber: string | null; imageUri: string | null } | null;
+  name: string;
+  typeLine: string;
+  power: string | null;
+  toughness: string | null;
+  oracleText: string | null;
+  kind: 'token' | 'emblem' | 'game';
+  /** Deck cards that make it. */
+  madeBy: string[];
+  /** Copies owned across printings with the same name, stats and abilities. */
+  owned: number;
+}
+
+/** Tokens, emblems and game pieces of a deck's main deck, sideboard and commander. */
+export async function fetchDeckTokens(deckId: string): Promise<DeckToken[]> {
+  const query = gql`
+    query GetDeckTokens($deckId: ID!) {
+      deckTokens(deckId: $deckId) {
+        name typeLine power toughness oracleText kind madeBy owned
+        card { id title setCode collectorNumber imageUri }
+      }
+    }
+  `;
+  const data = await getGraphQLClient().request<{ deckTokens: DeckToken[] }>(query, { deckId });
+  return data.deckTokens;
+}
+
 export async function fetchWishIntents(): Promise<WishIntent[]> {
   const query = gql`
     query GetWishIntents { wishIntents { id name } }
