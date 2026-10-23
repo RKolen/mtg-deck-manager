@@ -13,6 +13,10 @@ use Drupal\node\NodeInterface;
  *
  * Each row is matched by Scryfall ID, then set code with collector number,
  * then set code with name, then name alone (cheapest regular printing).
+ *
+ * Tokens are matched like any other card. Their printed set code is the
+ * parent set (MKM) while Scryfall files them under a token set (TMKM), so a
+ * set code is also tried with the token prefix.
  */
 final class CollectionImporter {
 
@@ -96,24 +100,38 @@ final class CollectionImporter {
         return [$card, 'scryfall_id'];
       }
     }
-    if ($setCode !== '' && $number !== '') {
-      foreach ($this->candidates($name, $setCode) as $card) {
-        if (ltrim((string) $card->get('field_collector_number')->value, '0') === $number) {
-          return [$card, 'set_number'];
+    $setCodes = $setCode === '' ? [] : self::withTokenSet($setCode);
+    if ($number !== '') {
+      foreach ($setCodes as $code) {
+        foreach ($this->candidates($name, $code) as $card) {
+          if (ltrim((string) $card->get('field_collector_number')->value, '0') === $number) {
+            return [$card, 'set_number'];
+          }
         }
       }
     }
     if ($name === '') {
       return [NULL, 'none'];
     }
-    if ($setCode !== '') {
-      $card = $this->cheapest($this->candidates($name, $setCode), FALSE);
+    foreach ($setCodes as $code) {
+      $card = $this->cheapest($this->candidates($name, $code), FALSE);
       if ($card) {
         return [$card, 'set_name'];
       }
     }
     $card = $this->cheapest($this->candidates($name, ''), TRUE);
     return [$card, $card ? 'name' : 'none'];
+  }
+
+  /**
+   * A set code followed by its token set code (mkm, tmkm).
+   *
+   * @return string[]
+   *   Lowercase set codes to try, in order.
+   */
+  public static function withTokenSet(string $setCode): array {
+    $setCode = strtolower(trim($setCode));
+    return $setCode === '' ? [] : [$setCode, 't' . $setCode];
   }
 
   /**

@@ -181,6 +181,14 @@ final class CardSearchService {
     }
 
     $setCodes = $this->sanitizeSetCodes($params['setCodes'] ?? []);
+    // Tokens show their parent set (MKM) but Scryfall files them under a
+    // token set (TMKM), so the token box matches both.
+    if ($setCodes !== [] && !empty($params['tokensOnly'])) {
+      $setCodes = array_values(array_unique(array_merge(
+        $setCodes,
+        array_map(static fn(string $code): string => 't' . $code, $setCodes),
+      )));
+    }
     if ($setCodes !== []) {
       $exclude = !empty($params['setExclude']);
       if ($exclude) {
