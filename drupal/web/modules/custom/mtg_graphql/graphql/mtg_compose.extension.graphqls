@@ -99,6 +99,9 @@ extend type Query {
   "Tokens, emblems and game pieces the main deck, sideboard and commander can make, one entry per distinct token."
   deckTokens(deckId: ID!): [DeckToken!]!
 
+  "Cheapest price of a token across printings with the same name, stats and abilities."
+  tokenPrice(cardId: ID!): TokenPrice!
+
   "Biggest price movers (percent) since the previous price import, across all cards."
   priceMovers(
     "EUR or USD."

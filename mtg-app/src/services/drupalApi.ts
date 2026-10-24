@@ -1205,6 +1205,23 @@ export async function fetchDeckTokens(deckId: string): Promise<DeckToken[]> {
   return data.deckTokens;
 }
 
+/** Cheapest price of a token across printings with the same name, stats and abilities. */
+export interface TokenPrice {
+  priceEur: number | null;
+  priceUsd: number | null;
+  card: { setCode: string | null; collectorNumber: string | null } | null;
+}
+
+export async function fetchTokenPrice(cardId: string): Promise<TokenPrice> {
+  const query = gql`
+    query GetTokenPrice($cardId: ID!) {
+      tokenPrice(cardId: $cardId) { priceEur priceUsd card { setCode collectorNumber } }
+    }
+  `;
+  const data = await getGraphQLClient().request<{ tokenPrice: TokenPrice }>(query, { cardId });
+  return data.tokenPrice;
+}
+
 export async function fetchWishIntents(): Promise<WishIntent[]> {
   const query = gql`
     query GetWishIntents { wishIntents { id name } }

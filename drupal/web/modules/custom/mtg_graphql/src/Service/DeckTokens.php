@@ -176,6 +176,35 @@ final class DeckTokens {
   }
 
   /**
+   * Cheapest price of a token across printings with the same characteristics.
+   *
+   * For a token printing that has no price of its own: any printing with the
+   * same name, stats and abilities can be used at the table.
+   *
+   * @return array{priceEur: ?float, priceUsd: ?float, card: ?\Drupal\node\NodeInterface}
+   *   Cheapest EUR and USD prices and the cheapest printing.
+   */
+  public function cheapestEquivalent(string $cardUuid): array {
+    $none = ['priceEur' => NULL, 'priceUsd' => NULL, 'card' => NULL];
+    $nodes = $this->entityTypeManager->getStorage('node')->loadByProperties(['uuid' => $cardUuid, 'type' => 'mtg_card']);
+    $node = reset($nodes);
+    if (!$node instanceof NodeInterface) {
+      return $none;
+    }
+    $info = self::nodeInfo($node);
+    $key = self::tokenKey($info['name'], $info['typeLine'], $info['power'], $info['toughness'], $info['colors'], $info['oracleText'] ?? '');
+    $groups = [
+      $key => $info + ['priceEur' => NULL, 'priceUsd' => NULL, 'cheapest' => NULL, 'cheapestPrice' => NULL],
+    ];
+    $this->applyCheapestPrices($groups);
+    return [
+      'priceEur' => $groups[$key]['priceEur'],
+      'priceUsd' => $groups[$key]['priceUsd'],
+      'card' => $groups[$key]['cheapest'],
+    ];
+  }
+
+  /**
    * Identity of a token: printings with the same key are interchangeable.
    *
    * Reminder text in parentheses and letter case are ignored, so printings

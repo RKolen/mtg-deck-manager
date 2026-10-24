@@ -226,6 +226,20 @@ final class MtgGraphqlResolverRegistration {
       );
     }
 
+    $registry->addFieldResolver('Query', 'tokenPrice',
+      $builder->callback(function ($value, array $args, ResolveContext $context, ResolveInfo $info, FieldContext $fieldContext): array {
+        $fieldContext->addCacheTags(['node_list:mtg_card']);
+        /** @var \Drupal\mtg_graphql\Service\DeckTokens $tokens */
+        $tokens = \Drupal::service('mtg_graphql.deck_tokens');
+        return $tokens->cheapestEquivalent((string) $args['cardId']);
+      })
+    );
+    foreach (['priceEur', 'priceUsd', 'card'] as $field) {
+      $registry->addFieldResolver('TokenPrice', $field,
+        $builder->callback(fn(array $p) => $p[$field])
+      );
+    }
+
     $registry->addFieldResolver('Query', 'deckShortfalls',
       $builder->callback(function ($value, array $args, ResolveContext $context, ResolveInfo $info, FieldContext $fieldContext): array {
         $fieldContext->addCacheTags([

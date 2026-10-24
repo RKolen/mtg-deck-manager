@@ -1,9 +1,45 @@
 import React, { useEffect } from 'react';
 import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
 import { getOracleText } from '../utils/deckAnalysis';
 import { slugify } from '../utils/slugify';
-import { formatPrice, priceFor } from '../utils/prices';
+import { formatPrice, priceFor, type Currency } from '../utils/prices';
 import { useTheme } from '../context/ThemeContext';
+import { fetchTokenPrice } from '../services/drupalApi';
+
+/** Tokens, emblems, game pieces and face-down reminder cards. */
+export function isTokenType(typeLine: string | null | undefined): boolean {
+  const type = typeLine ?? '';
+  return /^(Token|Emblem|Dungeon|Card)\b/.test(type) || type === 'Creature';
+}
+
+type PriceFields = {
+  field_price_usd: string | null;
+  field_price_usd_foil: string | null;
+  field_price_eur: string | null;
+  field_price_eur_foil: string | null;
+};
+
+/**
+ * Price in the chosen currency, or the other currency's price converted
+ * (converted: true) when the printing has none in the chosen one.
+ */
+export function priceWithFallback(
+  priced: PriceFields,
+  currency: Currency,
+  foil: boolean,
+  usdToEur: number | null,
+): { value: number | null; converted: boolean } {
+  const own = priceFor(priced, currency, foil);
+  if (own != null) {
+    return { value: own, converted: false };
+  }
+  const raw = priceFor(priced, currency === 'EUR' ? 'USD' : 'EUR', foil);
+  if (raw == null || usdToEur == null || usdToEur <= 0) {
+    return { value: null, converted: false };
+  }
+  return { value: currency === 'EUR' ? raw * usdToEur : raw / usdToEur, converted: true };
+}
 
 export interface CardData {
   id: string;
@@ -65,15 +101,37 @@ const CardModal: React.FC<CardModalProps> = ({
 
   const oracleText = getOracleText(card);
   const total = quantityOwned + quantityFoil;
-  const { currency } = useTheme();
+  const { currency, usdToEur } = useTheme();
   const priced = {
     field_price_usd: card.field_price_usd ?? null,
     field_price_usd_foil: card.field_price_usd_foil ?? null,
     field_price_eur: card.field_price_eur ?? null,
     field_price_eur_foil: card.field_price_eur_foil ?? null,
   };
-  const regularPrice = priceFor(priced, currency);
-  const foilPrice = priceFor(priced, currency, true);
+  const regular = priceWithFallback(priced, currency, false, usdToEur);
+  const foil = priceWithFallback(priced, currency, true, usdToEur);
+
+  // A token printing without any price: any printing with the same name,
+  // stats and abilities works at the table, so show the cheapest of those.
+  const needsTokenPrice = isTokenType(card.field_type_line) && regular.value == null && foil.value == null;
+  const { data: tokenPrice } = useQuery({
+    queryKey: ['tokenPrice', card.id],
+    queryFn: () => fetchTokenPrice(card.id),
+    enabled: needsTokenPrice && card.id !== '',
+  });
+  const anyPrinting = tokenPrice != null
+    ? priceWithFallback(
+      {
+        field_price_eur: tokenPrice.priceEur != null ? String(tokenPrice.priceEur) : null,
+        field_price_eur_foil: null,
+        field_price_usd: tokenPrice.priceUsd != null ? String(tokenPrice.priceUsd) : null,
+        field_price_usd_foil: null,
+      },
+      currency,
+      false,
+      usdToEur,
+    )
+    : null;
 
   return (
     <div
@@ -195,11 +253,31 @@ const CardModal: React.FC<CardModalProps> = ({
             </p>
           )}
 
-          {(regularPrice != null || foilPrice != null) && (
+          {(regular.value != null || foil.value != null) && (
+            <p
+              style={{ margin: '0.25rem 0', fontSize: '0.85rem', color: 'var(--ink)' }}
+              title={regular.converted || foil.converted ? 'Converted from the other currency' : undefined}
+            >
+              {regular.value != null && (
+                <><strong>{currency}:</strong> {regular.converted ? '≈ ' : ''}{formatPrice(regular.value, currency)}</>
+              )}
+              {regular.value != null && foil.value != null && ' · '}
+              {foil.value != null && (
+                <><strong>Foil:</strong> {foil.converted ? '≈ ' : ''}{formatPrice(foil.value, currency)}</>
+              )}
+            </p>
+          )}
+          {needsTokenPrice && (
             <p style={{ margin: '0.25rem 0', fontSize: '0.85rem', color: 'var(--ink)' }}>
-              {regularPrice != null && <><strong>{currency}:</strong> {formatPrice(regularPrice, currency)}</>}
-              {regularPrice != null && foilPrice != null && ' · '}
-              {foilPrice != null && <><strong>Foil:</strong> {formatPrice(foilPrice, currency)}</>}
+              No price for this printing.
+              {anyPrinting?.value != null && (
+                <>
+                  {' '}Any printing: from {anyPrinting.converted ? '≈ ' : ''}{formatPrice(anyPrinting.value, currency)}
+                  {tokenPrice?.card?.setCode
+                    ? ` (${tokenPrice.card.setCode.toUpperCase()}${tokenPrice.card.collectorNumber ? ` #${tokenPrice.card.collectorNumber}` : ''})`
+                    : ''}
+                </>
+              )}
             </p>
           )}
 

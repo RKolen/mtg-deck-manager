@@ -254,6 +254,16 @@ type DeckToken {
   priceUsd: Float
 }
 
+"Cheapest price of a token across interchangeable printings."
+type TokenPrice {
+  "Cheapest EUR price (regular, else foil)."
+  priceEur: Float
+  "Cheapest USD price (regular, else foil)."
+  priceUsd: Float
+  "The cheapest priced printing."
+  card: MtgCard
+}
+
 "One deck board using a card printing."
 type CardDeckUse {
   deckId: ID!
