@@ -18,6 +18,8 @@ import {
   type WishlistItemInput,
 } from '../../services/drupalApi';
 import WishlistDeckShortfalls from '../../components/WishlistDeckShortfalls';
+import CopyCardListButton from '../../components/CopyCardListButton';
+import { countCards, formatCardList, mergeEntries } from '../../utils/cardList';
 import { useTheme } from '../../context/ThemeContext';
 import { bestPrice, formatPrice, type Currency } from '../../utils/prices';
 import { cardImageSrc } from '../../utils/cardImage';
@@ -484,6 +486,19 @@ const WishlistPage: React.FC = () => {
         >
           Export .txt
         </button>
+        <CopyCardListButton
+          build={includeOwned => {
+            // The wishes shown (filters apply); done wishes are left out.
+            const entries = items
+              .filter(item => !item.done)
+              .map(item => ({
+                name: item.card?.title ?? '',
+                quantity: includeOwned ? item.quantity : stillNeeded(item),
+              }));
+            const merged = mergeEntries(entries);
+            return { text: formatCardList(merged), count: countCards(merged) };
+          }}
+        />
       </form>
 
       <form

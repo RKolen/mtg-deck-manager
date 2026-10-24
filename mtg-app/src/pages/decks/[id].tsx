@@ -45,6 +45,8 @@ import {
 } from '../../services/drupalApi';
 import CommanderPicker from '../../components/CommanderPicker';
 import DeckTokensPanel from '../../components/DeckTokensPanel';
+import CopyCardListButton from '../../components/CopyCardListButton';
+import { countCards, formatCardList, missingEntries } from '../../utils/cardList';
 import DeckValueList from '../../components/DeckValueList';
 import LandBasePanel from '../../components/LandBasePanel';
 import { invalidateInventoryQueries } from '../../services/queryCache';
@@ -391,6 +393,18 @@ const DeckEditor: React.FC<EditorProps> = ({
     queryFn: fetchCollectionCards,
     staleTime: 60_000,
   });
+
+  // Owned copies per card name, any printing and finish (for buy lists).
+  const ownedByName = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const cc of collectionCards) {
+      const name = (cc.attributes.field_card_title ?? '').toLowerCase();
+      if (name !== '') {
+        map.set(name, (map.get(name) ?? 0) + collectionOwnedQty(cc));
+      }
+    }
+    return map;
+  }, [collectionCards]);
 
   const ownedByCardId = useMemo(() => {
     const map = new Map<string, OwnedCounts>();
@@ -1109,6 +1123,23 @@ const DeckEditor: React.FC<EditorProps> = ({
           Move it to the sideboard to use it as your companion.
         </p>
       )}
+
+      <div style={{ marginBottom: '0.75rem' }}>
+        <CopyCardListButton
+          build={includeOwned => {
+            const mainEntries = [
+              ...(showCommander && commander != null ? [{ name: commander.title, quantity: 1 }] : []),
+              ...main.map(dc => ({ name: dc.card.title, quantity: dc.quantity })),
+            ];
+            const sideEntries = sb.map(dc => ({ name: dc.card.title, quantity: dc.quantity }));
+            const list = missingEntries(mainEntries, sideEntries, ownedByName, includeOwned);
+            return {
+              text: formatCardList(list.main, list.side),
+              count: countCards(list.main) + countCards(list.side),
+            };
+          }}
+        />
+      </div>
 
       {/* Search */}
       <div style={{ display: 'flex', gap: 8, marginBottom: '1rem' }}>
