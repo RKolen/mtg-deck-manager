@@ -24,6 +24,18 @@ final class DeckTokens {
    */
   private const CHUNK = 500;
 
+  /**
+   * Face-down reminder cards, by the rules text that calls for them.
+   *
+   * Scryfall does not link morph or manifest cards to these reminder cards,
+   * so they are found from the deck cards' oracle text instead.
+   */
+  private const REMINDERS = [
+    'Morph' => '/\b(mega)?morph\b/i',
+    'Manifest' => '/\bmanifest(s|ed)?\b/i',
+    'A Mysterious Creature' => '/\b(disguise|cloak(s|ed)?)\b/i',
+  ];
+
   public function __construct(
     private readonly EntityTypeManagerInterface $entityTypeManager,
     private readonly Connection $database,
@@ -35,7 +47,7 @@ final class DeckTokens {
    *
    * Maybeboard cards are left out, like elsewhere in the deck tools.
    *
-   * @return list<array{card: ?\Drupal\node\NodeInterface, name: string, typeLine: string, power: ?string, toughness: ?string, oracleText: ?string, kind: string, madeBy: list<string>, owned: int}>
+   * @return list<array{card: ?\Drupal\node\NodeInterface, priceEur: ?float, priceUsd: ?float, name: string, typeLine: string, power: ?string, toughness: ?string, colors: string[], oracleText: ?string, kind: string, madeBy: list<string>, owned: int}>
    *   One entry per distinct token, sorted by kind and name.
    */
   public function forDeck(string $deckUuid): array {
@@ -46,43 +58,82 @@ final class DeckTokens {
       return [];
     }
 
+    // Deck card names with their rules text.
     $titles = [];
+    $cards = [];
     foreach ($deck->get('field_deck_cards')->referencedEntities() as $slot) {
-      $card = $slot->get('field_card')->entity;
+      $cards[] = $slot->get('field_card')->entity;
+    }
+    $cards[] = $deck->hasField('field_commander') ? $deck->get('field_commander')->entity : NULL;
+    foreach ($cards as $card) {
       if ($card instanceof NodeInterface) {
-        $titles[$card->label()] = TRUE;
+        $titles[(string) $card->label()] = (string) ($card->get('field_oracle_text')->value ?? '');
       }
     }
-    $commander = $deck->hasField('field_commander') ? $deck->get('field_commander')->entity : NULL;
-    if ($commander instanceof NodeInterface) {
-      $titles[$commander->label()] = TRUE;
-    }
 
-    $links = $this->cardParts->forCards(array_keys($titles));
+    $links = array_merge(
+      $this->cardParts->forCards(array_keys($titles)),
+      $this->reminderLinks($titles),
+    );
     if ($links === []) {
       return [];
     }
     $printings = $this->tokensByScryfallId(array_column($links, 'part_id'));
 
     $groups = [];
+    $addTo = static function (array $info, string $maker) use (&$groups): string {
+      $key = self::tokenKey($info['name'], $info['typeLine'], $info['power'], $info['toughness'], $info['colors'], $info['oracleText'] ?? '');
+      if (!isset($groups[$key])) {
+        $groups[$key] = $info + [
+          'card' => NULL,
+          'madeBy' => [],
+          'owned' => 0,
+          'priceEur' => NULL,
+          'priceUsd' => NULL,
+          'cheapest' => NULL,
+          'cheapestPrice' => NULL,
+        ];
+      }
+      $groups[$key]['madeBy'][$maker] = TRUE;
+      return $key;
+    };
+
+    // Links to imported printings first: they carry the real stats.
+    $unresolved = [];
     foreach ($links as $link) {
       $node = $printings[$link['part_id']] ?? NULL;
-      $info = $node instanceof NodeInterface ? self::nodeInfo($node) : [
+      if (!$node instanceof NodeInterface) {
+        $unresolved[] = $link;
+        continue;
+      }
+      $key = $addTo(self::nodeInfo($node), $link['card_name']);
+      if ($groups[$key]['card'] === NULL && (string) $node->get('field_image_uri')->value !== '') {
+        $groups[$key]['card'] = $node;
+      }
+    }
+
+    // A link to a printing that was never imported (e.g. a digital one) has
+    // no stats. Drop it when the card already makes that token, join the
+    // only token with that name and type, or else list it on its own.
+    foreach ($unresolved as $link) {
+      $sameName = array_keys(array_filter($groups, static fn(array $g): bool =>
+        strcasecmp($g['name'], $link['name']) === 0 && strcasecmp($g['typeLine'], $link['type_line']) === 0));
+      $alreadyMade = array_filter($sameName, static fn(string $key): bool => isset($groups[$key]['madeBy'][$link['card_name']]));
+      if ($alreadyMade !== []) {
+        continue;
+      }
+      if (count($sameName) === 1) {
+        $groups[$sameName[0]]['madeBy'][$link['card_name']] = TRUE;
+        continue;
+      }
+      $addTo([
         'name' => $link['name'],
         'typeLine' => $link['type_line'],
         'power' => NULL,
         'toughness' => NULL,
         'colors' => [],
         'oracleText' => NULL,
-      ];
-      $key = self::tokenKey($info['name'], $info['typeLine'], $info['power'], $info['toughness'], $info['colors'], $info['oracleText'] ?? '');
-      if (!isset($groups[$key])) {
-        $groups[$key] = $info + ['card' => NULL, 'madeBy' => [], 'owned' => 0];
-      }
-      $groups[$key]['madeBy'][$link['card_name']] = TRUE;
-      if ($groups[$key]['card'] === NULL && $node instanceof NodeInterface && (string) $node->get('field_image_uri')->value !== '') {
-        $groups[$key]['card'] = $node;
-      }
+      ], $link['card_name']);
     }
 
     foreach ($this->ownedTokens(array_unique(array_column($groups, 'name'))) as [$node, $quantity]) {
@@ -95,16 +146,23 @@ final class DeckTokens {
       }
     }
 
+    $this->applyCheapestPrices($groups);
+
     $result = [];
     foreach ($groups as $group) {
       $madeBy = array_keys($group['madeBy']);
       sort($madeBy);
+      // A missing token shows the printing that is cheapest to buy.
+      $card = $group['owned'] < 1 && $group['cheapest'] instanceof NodeInterface ? $group['cheapest'] : $group['card'];
       $result[] = [
-        'card' => $group['card'],
+        'card' => $card,
+        'priceEur' => $group['priceEur'],
+        'priceUsd' => $group['priceUsd'],
         'name' => $group['name'],
         'typeLine' => $group['typeLine'],
         'power' => $group['power'],
         'toughness' => $group['toughness'],
+        'colors' => $group['colors'],
         'oracleText' => $group['oracleText'],
         'kind' => self::kind($group['typeLine']),
         'madeBy' => $madeBy,
@@ -152,15 +210,56 @@ final class DeckTokens {
 
   /**
    * Kind of part from its type line: token, emblem or game piece.
+   *
+   * Face-down reminder cards are typed just "Creature" and count as game
+   * pieces.
    */
   public static function kind(string $typeLine): string {
     if (str_starts_with($typeLine, 'Emblem')) {
       return 'emblem';
     }
-    if (str_starts_with($typeLine, 'Dungeon') || str_starts_with($typeLine, 'Card')) {
+    if (str_starts_with($typeLine, 'Dungeon') || str_starts_with($typeLine, 'Card') || $typeLine === 'Creature') {
       return 'game';
     }
     return 'token';
+  }
+
+  /**
+   * Links to face-down reminder cards for deck cards whose text calls for them.
+   *
+   * @param array<string, string> $oracleByTitle
+   *   Deck card rules text keyed by card name.
+   *
+   * @return list<array{card_name: string, part_id: string, name: string, type_line: string, component: string}>
+   *   Links in the same shape as CardParts::forCards(), one per printing.
+   */
+  private function reminderLinks(array $oracleByTitle): array {
+    $links = [];
+    $storage = $this->entityTypeManager->getStorage('node');
+    foreach (self::REMINDERS as $reminder => $pattern) {
+      $makers = array_keys(array_filter($oracleByTitle, static fn(string $text): bool => preg_match($pattern, $text) === 1));
+      if ($makers === []) {
+        continue;
+      }
+      $nids = $storage->getQuery()->accessCheck(FALSE)
+        ->condition('type', 'mtg_card')
+        ->condition('title', $reminder)
+        ->condition('field_type_line', 'Creature')
+        ->execute();
+      foreach ($storage->loadMultiple($nids) as $node) {
+        $id = (string) $node->get('field_scryfall_id')->value;
+        foreach ($makers as $maker) {
+          $links[] = [
+            'card_name' => $maker,
+            'part_id' => $id,
+            'name' => $reminder,
+            'type_line' => 'Creature',
+            'component' => 'reminder',
+          ];
+        }
+      }
+    }
+    return $links;
   }
 
   /**
@@ -184,6 +283,72 @@ final class DeckTokens {
       'colors' => $colors,
       'oracleText' => $value('field_oracle_text'),
     ];
+  }
+
+  /**
+   * Sets the cheapest price of each token across all matching printings.
+   *
+   * Every printing with the same name, stats and abilities counts, not only
+   * the ones Scryfall links to the deck's cards. Per currency the regular
+   * price is used, or the foil price when no regular price exists.
+   *
+   * @param array<string, array<string, mixed>> $groups
+   *   Token groups keyed by token key; priceEur, priceUsd and cheapest are
+   *   filled in.
+   */
+  private function applyCheapestPrices(array &$groups): void {
+    $names = array_values(array_unique(array_column($groups, 'name')));
+    if ($names === []) {
+      return;
+    }
+    $storage = $this->entityTypeManager->getStorage('node');
+    $nids = $storage->getQuery()->accessCheck(FALSE)
+      ->condition('type', 'mtg_card')
+      ->condition('title', $names, 'IN')
+      ->execute();
+    foreach (array_chunk(array_values($nids), self::CHUNK) as $chunk) {
+      foreach ($storage->loadMultiple($chunk) as $node) {
+        if (!$node instanceof NodeInterface) {
+          continue;
+        }
+        $info = self::nodeInfo($node);
+        $key = self::tokenKey($info['name'], $info['typeLine'], $info['power'], $info['toughness'], $info['colors'], $info['oracleText'] ?? '');
+        if (!isset($groups[$key])) {
+          continue;
+        }
+        $eur = self::price($node, 'field_price_eur', 'field_price_eur_foil');
+        $usd = self::price($node, 'field_price_usd', 'field_price_usd_foil');
+        if ($eur !== NULL && ($groups[$key]['priceEur'] === NULL || $eur < $groups[$key]['priceEur'])) {
+          $groups[$key]['priceEur'] = $eur;
+        }
+        if ($usd !== NULL && ($groups[$key]['priceUsd'] === NULL || $usd < $groups[$key]['priceUsd'])) {
+          $groups[$key]['priceUsd'] = $usd;
+        }
+        // Cheapest printing to show for a missing token: by EUR, else USD.
+        $rank = $eur ?? $usd;
+        $hasImage = (string) $node->get('field_image_uri')->value !== '';
+        if ($rank !== NULL && $hasImage && ($groups[$key]['cheapestPrice'] === NULL || $rank < $groups[$key]['cheapestPrice'])) {
+          $groups[$key]['cheapest'] = $node;
+          $groups[$key]['cheapestPrice'] = $rank;
+        }
+      }
+      $storage->resetCache($chunk);
+    }
+  }
+
+  /**
+   * Regular price of a printing, or its foil price when there is none.
+   */
+  private static function price(NodeInterface $node, string $field, string $foilField): ?float {
+    foreach ([$field, $foilField] as $name) {
+      if ($node->hasField($name)) {
+        $value = (float) ($node->get($name)->value ?? 0);
+        if ($value > 0) {
+          return $value;
+        }
+      }
+    }
+    return NULL;
   }
 
   /**

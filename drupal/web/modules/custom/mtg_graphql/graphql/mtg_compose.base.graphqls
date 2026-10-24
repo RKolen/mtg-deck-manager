@@ -239,6 +239,8 @@ type DeckToken {
   typeLine: String!
   power: String
   toughness: String
+  "Color letters (WUBRG); empty for colorless."
+  colors: [String!]!
   oracleText: String
   "token, emblem or game (dungeons, The Initiative, The Monarch)."
   kind: String!
@@ -246,6 +248,10 @@ type DeckToken {
   madeBy: [String!]!
   "Copies owned across printings with the same name, stats and abilities."
   owned: Int!
+  "Cheapest EUR price across matching printings (regular, else foil)."
+  priceEur: Float
+  "Cheapest USD price across matching printings (regular, else foil)."
+  priceUsd: Float
 }
 
 "One deck board using a card printing."

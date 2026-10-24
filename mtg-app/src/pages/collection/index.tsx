@@ -71,6 +71,8 @@ const CollectionPage: React.FC = () => {
   const filterKey = JSON.stringify({
     name: debouncedFilter.name,
     colors: [...debouncedFilter.colors].sort(),
+    multicolor: debouncedFilter.multicolor,
+    colorless: debouncedFilter.colorless,
     type: debouncedFilter.type,
     maxCmc: debouncedFilter.maxCmc,
     legalIn: debouncedFilter.legalIn,
@@ -93,6 +95,8 @@ const CollectionPage: React.FC = () => {
       searchCards({
         q: debouncedFilter.name || undefined,
         colors: debouncedFilter.colors.size > 0 ? [...debouncedFilter.colors] : undefined,
+        multicolor: debouncedFilter.multicolor || undefined,
+        colorless: debouncedFilter.colorless || undefined,
         type: debouncedFilter.type !== 'All' ? debouncedFilter.type : undefined,
         ...cmcBounds(debouncedFilter.maxCmc),
         legalIn: debouncedFilter.legalIn || undefined,
@@ -128,6 +132,8 @@ const CollectionPage: React.FC = () => {
     debouncedFilter.setExclude,
     debouncedFilter.deckExclude,
     debouncedFilter.collectorNumber,
+    debouncedFilter.multicolor,
+    debouncedFilter.colorless,
     colorsKey,
     setsKey,
     decksKey,

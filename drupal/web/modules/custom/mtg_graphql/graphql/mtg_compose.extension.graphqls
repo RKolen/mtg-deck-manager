@@ -45,6 +45,10 @@ extend type Query {
     cmcMin: Float
     cmcMax: Float
     colors: [String!]
+    "Only cards with two or more colors (combines with colors)."
+    multicolor: Boolean
+    "Only colorless cards (no colors; lands included)."
+    colorless: Boolean
     colorIdentity: [String!]
     manaProducer: Boolean
     rarity: String

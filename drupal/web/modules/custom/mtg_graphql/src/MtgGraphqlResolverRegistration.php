@@ -217,7 +217,10 @@ final class MtgGraphqlResolverRegistration {
         return $tokens->forDeck((string) $args['deckId']);
       })
     );
-    foreach (['card', 'name', 'typeLine', 'power', 'toughness', 'oracleText', 'kind', 'madeBy', 'owned'] as $field) {
+    $tokenFields = [
+      'card', 'name', 'typeLine', 'power', 'toughness', 'colors', 'oracleText', 'kind', 'madeBy', 'owned', 'priceEur', 'priceUsd',
+    ];
+    foreach ($tokenFields as $field) {
       $registry->addFieldResolver('DeckToken', $field,
         $builder->callback(fn(array $t) => $t[$field])
       );

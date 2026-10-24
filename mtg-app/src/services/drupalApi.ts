@@ -1177,12 +1177,18 @@ export interface DeckToken {
   typeLine: string;
   power: string | null;
   toughness: string | null;
+  /** Color letters (WUBRG); empty for colorless. */
+  colors: string[];
   oracleText: string | null;
   kind: 'token' | 'emblem' | 'game';
   /** Deck cards that make it. */
   madeBy: string[];
   /** Copies owned across printings with the same name, stats and abilities. */
   owned: number;
+  /** Cheapest EUR price across matching printings (regular, else foil). */
+  priceEur: number | null;
+  /** Cheapest USD price across matching printings (regular, else foil). */
+  priceUsd: number | null;
 }
 
 /** Tokens, emblems and game pieces of a deck's main deck, sideboard and commander. */
@@ -1190,7 +1196,7 @@ export async function fetchDeckTokens(deckId: string): Promise<DeckToken[]> {
   const query = gql`
     query GetDeckTokens($deckId: ID!) {
       deckTokens(deckId: $deckId) {
-        name typeLine power toughness oracleText kind madeBy owned
+        name typeLine power toughness colors oracleText kind madeBy owned priceEur priceUsd
         card { id title setCode collectorNumber imageUri }
       }
     }

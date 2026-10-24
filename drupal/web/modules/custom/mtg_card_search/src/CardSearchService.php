@@ -21,6 +21,11 @@ final class CardSearchService {
 
   private const DEFAULT_LIMIT = 20;
 
+  /**
+   * Type line prefixes of tokens, emblems and game pieces (token box).
+   */
+  private const TOKEN_TYPE_PREFIXES = ['Token', 'Emblem', 'Dungeon', 'Card'];
+
   public function __construct(
     private readonly EntityTypeManagerInterface $entityTypeManager,
     private readonly LoggerInterface $logger,
@@ -31,7 +36,8 @@ final class CardSearchService {
    *
    * @param array<string, mixed> $params
    *   Keys: q, type, oracleText, legalIn, cmcMin, cmcMax, colors,
-   *   colorIdentity, manaProducer, rarity, setCodes, setExclude,
+   *   multicolor, colorless, colorIdentity, manaProducer, rarity, setCodes,
+   *   setExclude,
    *   collectorNumber, deckIds, deckExclude, includeTokens, tokensOnly,
    *   page, limit.
    *
@@ -164,6 +170,28 @@ final class CardSearchService {
       $hasCondition = TRUE;
     }
 
+    // Colorless: no color values at all (lands included, like Scryfall).
+    if (!empty($params['colorless'])) {
+      $conditions->addCondition('field_colors', NULL);
+      $hasCondition = TRUE;
+    }
+
+    // Multicolor: Solr cannot count values, so match any pair of colors.
+    if (!empty($params['multicolor'])) {
+      $letters = ['W', 'U', 'B', 'R', 'G'];
+      $multi = $query->createConditionGroup('OR');
+      foreach ($letters as $i => $first) {
+        foreach (array_slice($letters, $i + 1) as $second) {
+          $pair = $query->createConditionGroup('AND');
+          $pair->addCondition('field_colors', $first);
+          $pair->addCondition('field_colors', $second);
+          $multi->addConditionGroup($pair);
+        }
+      }
+      $conditions->addConditionGroup($multi);
+      $hasCondition = TRUE;
+    }
+
     foreach ($this->sanitizeColors($params['colorIdentity'] ?? []) as $color) {
       $conditions->addCondition('field_color_identity', $color);
       $hasCondition = TRUE;
@@ -228,21 +256,33 @@ final class CardSearchService {
       $hasCondition = TRUE;
     }
 
-    // Tokens and emblems are collectable but never go in a deck. Their type
-    // lines start with "Token" or "Emblem", so match on those string ranges:
-    // only them for the token box, otherwise excluded unless asked for.
+    // Tokens, emblems and game pieces are collectable but never go in a deck.
+    // Their type lines start with "Token", "Emblem", "Dungeon" or "Card" (The
+    // Monarch, Day // Night), so match on those string ranges: only them for
+    // the token box, otherwise excluded unless asked for.
+    // Face-down reminder cards (Morph, Manifest, A Mysterious Creature) are
+    // typed just "Creature" and live in token sets, whose codes start with
+    // "t". The one real card typed just "Creature" (Nameless Race) does not.
     if (!empty($params['tokensOnly'])) {
       $tokenGroup = $query->createConditionGroup('OR');
-      foreach (['Token', 'Emblem'] as $prefix) {
+      foreach (self::TOKEN_TYPE_PREFIXES as $prefix) {
         $tokenGroup->addCondition('field_type_line_string', [$prefix, $prefix . '~'], 'BETWEEN');
       }
+      $reminder = $query->createConditionGroup('AND');
+      $reminder->addCondition('field_type_line_string', 'Creature');
+      $reminder->addCondition('field_set_code', ['t', 't~'], 'BETWEEN');
+      $tokenGroup->addConditionGroup($reminder);
       $conditions->addConditionGroup($tokenGroup);
       $hasCondition = TRUE;
     }
     elseif (empty($params['includeTokens'])) {
-      foreach (['Token', 'Emblem'] as $prefix) {
+      foreach (self::TOKEN_TYPE_PREFIXES as $prefix) {
         $conditions->addCondition('field_type_line_string', [$prefix, $prefix . '~'], 'NOT BETWEEN');
       }
+      $notReminder = $query->createConditionGroup('OR');
+      $notReminder->addCondition('field_type_line_string', 'Creature', '<>');
+      $notReminder->addCondition('field_set_code', ['t', 't~'], 'NOT BETWEEN');
+      $conditions->addConditionGroup($notReminder);
       $hasCondition = TRUE;
     }
 

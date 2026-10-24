@@ -15,6 +15,10 @@ export interface CardSearchParams {
   cmcMin?: number;
   cmcMax?: number;
   colors?: string[];
+  /** Only cards with two or more colors (combines with colors). */
+  multicolor?: boolean;
+  /** Only colorless cards (no colors; lands included). */
+  colorless?: boolean;
   colorIdentity?: string[];
   manaProducer?: boolean;
   rarity?: string;
@@ -89,6 +93,7 @@ export async function searchCards(params: CardSearchParams): Promise<CardSearchR
     query CardSearch(
       $q: String, $type: String, $oracleText: String, $legalIn: String,
       $cmcMin: Float, $cmcMax: Float, $colors: [String!], $colorIdentity: [String!],
+      $multicolor: Boolean, $colorless: Boolean,
       $manaProducer: Boolean, $rarity: String, $setCodes: [String!], $setExclude: Boolean,
       $collectorNumber: String, $deckIds: [ID!], $deckExclude: Boolean,
       $includeTokens: Boolean, $tokensOnly: Boolean,
@@ -97,6 +102,7 @@ export async function searchCards(params: CardSearchParams): Promise<CardSearchR
       cardSearch(
         q: $q, type: $type, oracleText: $oracleText, legalIn: $legalIn,
         cmcMin: $cmcMin, cmcMax: $cmcMax, colors: $colors, colorIdentity: $colorIdentity,
+        multicolor: $multicolor, colorless: $colorless,
         manaProducer: $manaProducer, rarity: $rarity, setCodes: $setCodes, setExclude: $setExclude,
         collectorNumber: $collectorNumber, deckIds: $deckIds, deckExclude: $deckExclude,
         includeTokens: $includeTokens, tokensOnly: $tokensOnly,
@@ -120,6 +126,8 @@ export async function searchCards(params: CardSearchParams): Promise<CardSearchR
     cmcMax: params.cmcMax ?? null,
     colors: params.colors?.length ? params.colors : null,
     colorIdentity: params.colorIdentity?.length ? params.colorIdentity : null,
+    multicolor: params.multicolor ? true : null,
+    colorless: params.colorless ? true : null,
     manaProducer: params.manaProducer ?? null,
     rarity: params.rarity || null,
     setCodes: params.setCodes?.length ? params.setCodes : null,

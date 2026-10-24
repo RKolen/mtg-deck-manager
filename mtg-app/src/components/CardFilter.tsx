@@ -7,6 +7,10 @@ import type { MtgColor } from '../utils/deckAnalysis';
 export interface FilterState {
   name: string;
   colors: Set<MtgColor>;
+  /** Two or more colors; combines with the selected colors. */
+  multicolor: boolean;
+  /** No colors (lands included); clears the selected colors. */
+  colorless: boolean;
   type: string;
   maxCmc: number | null;
   legalIn: string;
@@ -48,6 +52,8 @@ export function cmcBounds(maxCmc: number | null): { cmcMin?: number; cmcMax?: nu
 export const EMPTY_FILTER: FilterState = {
   name: '',
   colors: new Set(),
+  multicolor: false,
+  colorless: false,
   type: 'All',
   maxCmc: null,
   legalIn: '',
@@ -174,7 +180,22 @@ const CardFilter: React.FC<CardFilterProps> = ({ filter, onChange }) => {
     } else {
       next.add(color);
     }
-    onChange({ ...filter, colors: next });
+    // A color and "colorless" cannot both hold.
+    onChange({ ...filter, colors: next, colorless: false });
+  }
+
+  function toggleMulticolor(): void {
+    onChange({ ...filter, multicolor: !filter.multicolor, colorless: false });
+  }
+
+  function toggleColorless(): void {
+    const colorless = !filter.colorless;
+    onChange({
+      ...filter,
+      colorless,
+      colors: colorless ? new Set() : filter.colors,
+      multicolor: colorless ? false : filter.multicolor,
+    });
   }
 
   function addSet(code: string): void {
@@ -255,6 +276,29 @@ const CardFilter: React.FC<CardFilterProps> = ({ filter, onChange }) => {
               }}
             >
               {c.symbol}
+            </button>
+          ))}
+          {[
+            { key: 'M', label: 'Multicolor (two or more colors)', on: filter.multicolor, toggle: toggleMulticolor },
+            { key: 'C', label: 'Colorless (no colors, lands included)', on: filter.colorless, toggle: toggleColorless },
+          ].map(b => (
+            <button
+              key={b.key}
+              type="button"
+              onClick={b.toggle}
+              title={b.label}
+              aria-label={b.label}
+              aria-pressed={b.on}
+              style={{
+                width: 32,
+                height: 32,
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                borderRadius: 4,
+                ...toggleStyle(b.on),
+              }}
+            >
+              {b.key}
             </button>
           ))}
         </div>
