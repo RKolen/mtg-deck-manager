@@ -239,7 +239,7 @@ class ScryfallCommands extends DrushCommands {
    *
    * @param string $setCode
    *   Scryfall set code, e.g. "mh3" or "dsk".
-   * @param array<string, mixed> $options
+   * @param array $options
    *   Drush option bag. Supported key: skip-legality.
    *
    * @command mtg:import-set
@@ -262,7 +262,7 @@ class ScryfallCommands extends DrushCommands {
       $result = $this->importer->importSet($setCode);
     }
     catch (\RuntimeException $e) {
-      $this->logger()->error('Import failed: @msg', ['@msg' => $e->getMessage()]);
+      $this->logger()->error('Import failed: ' . $e->getMessage());
       return;
     }
 
@@ -334,7 +334,7 @@ class ScryfallCommands extends DrushCommands {
       $result = $this->importer->backfillArtFields();
     }
     catch (\RuntimeException $e) {
-      $this->logger()->error('Backfill failed: @msg', ['@msg' => $e->getMessage()]);
+      $this->logger()->error('Backfill failed: ' . $e->getMessage());
       return;
     }
 
@@ -366,7 +366,7 @@ class ScryfallCommands extends DrushCommands {
       $result = $this->importer->backfillLegalities();
     }
     catch (\RuntimeException $e) {
-      $this->logger()->error('Backfill failed: @msg', ['@msg' => $e->getMessage()]);
+      $this->logger()->error('Backfill failed: ' . $e->getMessage());
       return;
     }
 
@@ -397,7 +397,7 @@ class ScryfallCommands extends DrushCommands {
       $result = $this->importer->importTokens();
     }
     catch (\RuntimeException $e) {
-      $this->logger()->error('Token import failed: @msg', ['@msg' => $e->getMessage()]);
+      $this->logger()->error('Token import failed: ' . $e->getMessage());
       return;
     }
     $this->output()->writeln(sprintf(
@@ -435,7 +435,7 @@ class ScryfallCommands extends DrushCommands {
       $result = $this->importer->refreshPrices();
     }
     catch (\RuntimeException $e) {
-      $this->logger()->error('Price refresh failed: @msg', ['@msg' => $e->getMessage()]);
+      $this->logger()->error('Price refresh failed: ' . $e->getMessage());
       return;
     }
     $this->output()->writeln(sprintf(
