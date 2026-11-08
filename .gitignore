@@ -44,11 +44,15 @@ drupal/tmp/
 # ============================================================
 mtg-app/node_modules/
 mtg-app/.next/
+# TypeScript incremental build cache, rewritten by every type check.
+*.tsbuildinfo
 mtg-app/.env
 mtg-app/.env.local
 mtg-app/.env.development
 mtg-app/.env.development.local
 mtg-app/.env.production.local
+# The user's own decklists, used by local tests only (personal data).
+mtg-app/src/utils/__fixtures__/testDecks.json
 *.log
 
 # ============================================================
@@ -83,3 +87,5 @@ skills/
 docs/
 
 REVIEW.md
+# Local database dumps.
+backups/

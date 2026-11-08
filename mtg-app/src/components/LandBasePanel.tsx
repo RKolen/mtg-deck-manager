@@ -285,8 +285,9 @@ const LandBasePanel: React.FC<LandBasePanelProps> = ({ deckId, cards, format, co
     <section style={{ color: 'var(--ink)' }}>
       <h3 style={{ marginTop: 0 }}>Land base suggestion</h3>
       <p style={{ fontSize: '0.85rem', margin: '0 0 0.75rem' }}>
-        Lands are chosen so the most demanding spell of each colour can be cast on curve about 90% of
-        the time. Mana rocks and dorks count as half a source. Utility lands already in the deck are
+        Lands are chosen so the most demanding spell of each colour can be cast on curve, following
+        Frank Karsten: 90% for a one-drop, one point more per mana value, up to 96%. Mulligans are
+        included. Mana rocks and dorks count as half a source. Utility lands already in the deck are
         kept.
       </p>
 
@@ -395,6 +396,7 @@ const LandBasePanel: React.FC<LandBasePanelProps> = ({ deckId, cards, format, co
                   </td>
                   <td style={CELL} className="tnum">
                     {t.target}
+                    <span className="dim"> for {pct(t.goal)}</span>
                     {t.unreachable && <span title="Not reachable with this land count."> (max)</span>}
                     {t.fromProducers > 0 && <span className="dim"> incl. {t.fromProducers} from rocks/dorks</span>}
                   </td>

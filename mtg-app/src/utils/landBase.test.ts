@@ -1,5 +1,7 @@
+/// <reference types="vite/client" />
 import { describe, expect, it } from 'vitest';
 import {
+  castGoal,
   castOnCurveProbability,
   landProfile,
   planLandBase,
@@ -12,6 +14,11 @@ import {
   type SpellInfo,
 } from './landBase';
 import fixtures from './__fixtures__/cards.json';
+
+// The user's decklists are git-ignored personal data: present on their
+// machine only. Without the file the test-deck tests are skipped.
+const testDeckFiles = import.meta.glob<unknown>('./__fixtures__/testDecks.json', { eager: true, import: 'default' });
+const testDecks = Object.values(testDeckFiles)[0] ?? [];
 
 const CARDS = new Map(fixtures.map(c => [c.title, c]));
 
@@ -51,18 +58,59 @@ function spell(title: string, manaCost: string, cmc: number, quantity = 1, extra
 }
 
 describe('castOnCurveProbability / sourcesNeeded', () => {
-  // Karsten (2022), 60 cards with 24 lands, on the play: C on turn 1 = 14,
-  // 1C on turn 2 = 13, 2C on turn 3 = 12, CC on turn 2 = 21. The model
-  // ignores mulligans, so it may be one source off.
-  it.each([
-    [1, 1, 14],
-    [1, 2, 13],
-    [1, 3, 12],
-    [2, 2, 21],
-  ])('%i pip(s) on turn %i needs about %i sources in 60 cards', (pips, turn, karsten) => {
-    const { sources, unreachable } = sourcesNeeded(60, 24, pips, turn);
+  // Karsten, "How Many Sources Do You Need to Consistently Cast Your Spells?
+  // A 2022 Update" (TCGplayer): [cost, mana value, pips, 60, 80, 99, 40].
+  // His assumed land counts: 60 -> 25, 80 -> 35, 99 -> 41 (Commander), 40 -> 17.
+  const KARSTEN_2022: [string, number, number, number, number, number, number][] = [
+    ['5C', 6, 1, 9, 12, 14, 6],
+    ['4C', 5, 1, 9, 14, 15, 6],
+    ['3C', 4, 1, 10, 15, 16, 7],
+    ['2C', 3, 1, 12, 16, 18, 8],
+    ['5CC', 7, 2, 12, 17, 20, 8],
+    ['1C', 2, 1, 13, 18, 19, 9],
+    ['4CC', 6, 2, 13, 19, 22, 9],
+    ['C', 1, 1, 14, 19, 19, 9],
+    ['3CC', 5, 2, 15, 20, 23, 10],
+    ['4CCC', 7, 3, 16, 22, 26, 10],
+    ['2CC', 4, 2, 16, 23, 26, 11],
+    ['3CCC', 6, 3, 17, 24, 28, 11],
+    ['1CC', 3, 2, 18, 25, 28, 12],
+    ['2CCC', 5, 3, 19, 26, 30, 13],
+    ['CC', 2, 2, 21, 28, 30, 14],
+    ['1CCC', 4, 3, 21, 29, 33, 14],
+    ['1CCCC', 5, 4, 22, 31, 36, 15],
+    ['CCC', 3, 3, 23, 32, 36, 16],
+    ['CCCC', 4, 4, 24, 34, 39, 17],
+  ];
+  const SIZES: { deck: number; lands: number; column: number; commander: boolean }[] = [
+    { deck: 60, lands: 25, column: 3, commander: false },
+    { deck: 80, lands: 35, column: 4, commander: false },
+    { deck: 99, lands: 41, column: 5, commander: true },
+    { deck: 40, lands: 17, column: 6, commander: false },
+  ];
+  const cases = SIZES.flatMap(size => KARSTEN_2022.map(row => [
+    `${row[0]} in ${size.deck} cards`, size, row[1], row[2], row[size.column] as number,
+  ] as const));
+
+  it('covers all 76 table values', () => {
+    expect(cases).toHaveLength(76);
+  });
+
+  it.each(cases)('%s matches Karsten within one source', (_name, size, turn, pips, karsten) => {
+    const { sources, unreachable } = sourcesNeeded(size.deck, size.lands, pips, turn, size.commander);
     expect(unreachable).toBe(false);
     expect(Math.abs(sources - karsten)).toBeLessThanOrEqual(1);
+  });
+
+  it('asks 89% plus mana value, capped at 96%', () => {
+    expect(castGoal(1)).toBeCloseTo(0.9, 9);
+    expect(castGoal(4)).toBeCloseTo(0.93, 9);
+    expect(castGoal(7)).toBeCloseTo(0.96, 9);
+    expect(castGoal(9)).toBeCloseTo(0.96, 9);
+  });
+
+  it('gives Commander decks a better chance through the free mulligan and draw', () => {
+    expect(castOnCurveProbability(99, 41, 19, 1, 2, true)).toBeGreaterThan(castOnCurveProbability(99, 41, 19, 1, 2));
   });
 
   it('is 1 when every land makes the colour', () => {
@@ -75,6 +123,81 @@ describe('castOnCurveProbability / sourcesNeeded', () => {
 
   it('flags impossible targets', () => {
     expect(sourcesNeeded(60, 10, 3, 1).unreachable).toBe(true);
+  });
+});
+
+/**
+ * The user's own "normal" decks, exported from their database. Hyper Heroic
+ * is left out on purpose: it runs 17 lands by long testing and is no
+ * benchmark. costOverrides are realistic costs for alternate-cost spells,
+ * read once effective costs exist (plan step 4).
+ */
+interface TestDeck {
+  title: string;
+  format: string;
+  costOverrides: Record<string, string>;
+  commander: (SpellInfo & { rarity: string }) | null;
+  cards: (SpellInfo & { rarity: string })[];
+}
+
+const TEST_DECKS = testDecks as TestDeck[];
+
+function testDeck(title: string): TestDeck {
+  const deck = TEST_DECKS.find(d => d.title === title);
+  if (deck == null) {
+    throw new Error(`Test deck missing: ${title}`);
+  }
+  return deck;
+}
+
+const isFrontLand = (card: SpellInfo): boolean => /\bland\b/i.test(card.typeLine.split(' // ')[0]!);
+
+/** Plans a test deck from scratch, with only basics, at the formula's count. */
+function planTestDeck(deck: TestDeck, landCountOverride: number | null = null) {
+  const spells = deck.cards.filter(c => !isFrontLand(c));
+  const lands = deck.cards.filter(isFrontLand);
+  const costs = [...spells, ...(deck.commander != null ? [deck.commander] : [])].map(c => c.manaCost).join('');
+  const deckColors = (['W', 'U', 'B', 'R', 'G'] as const).filter(c => costs.includes(c));
+  const commanderFormat = deck.commander != null;
+  const plan = planLandBase({
+    spells,
+    commander: deck.commander,
+    currentLands: lands.map(l => ({ land: l, quantity: l.quantity })),
+    options: [],
+    deckColors: commanderFormat ? ['W', 'U', 'B', 'R', 'G'] : [...deckColors],
+    deckSize: deck.cards.reduce((s, c) => s + c.quantity, 0),
+    maxCopies: commanderFormat ? 1 : 4,
+    commanderFormat,
+    landCountOverride,
+  });
+  return { plan, actualLands: lands.reduce((s, c) => s + c.quantity, 0) };
+}
+
+describe.skipIf(TEST_DECKS.length === 0)('test decks', () => {
+  // Baseline before effective costs, cycling and MDFC handling: [deck, lands
+  // the deck runs, formula count]. Later steps should move the formula closer
+  // to the deck's own count; update these numbers on purpose when they do.
+  // The deck's own count is the user's tested choice, not an error.
+  it.each([
+    ['Tortured Existence', 23, 23],
+    ['UB Exhume', 18, 22],
+    ['Bant Miracles', 22, 29],
+    ['Bant Control', 22, 28],
+    ['Go-Shintai: No Creature Zone', 33, 42],
+  ] as const)('%s runs %i lands; the formula says %i', (title, actual, formula) => {
+    const { plan, actualLands } = planTestDeck(testDeck(title));
+    expect(actualLands).toBe(actual);
+    expect(plan.landCount).toBe(formula);
+  });
+
+  it('plans Go-Shintai as a five-colour Commander deck', () => {
+    const { plan } = planTestDeck(testDeck('Go-Shintai: No Creature Zone'), 33);
+    expect(plan.targets.map(t => t.color)).toEqual(['W', 'U', 'B', 'R', 'G']);
+    expect(plan.picks.reduce((s, p) => s + p.quantity, 0)).toBe(33);
+    for (const t of plan.targets) {
+      expect(t.goal).toBeGreaterThanOrEqual(0.9);
+      expect(t.goal).toBeLessThanOrEqual(0.96);
+    }
   });
 });
 

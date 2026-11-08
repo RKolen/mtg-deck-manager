@@ -7,9 +7,11 @@
  * 1. Land count: Frank Karsten's regression on average mana value and cheap
  *    ramp/draw (99-card and 60-card versions, scaled for other sizes).
  * 2. Source target per colour: the fewest sources so that the most
- *    demanding spell of that colour is castable on curve at least 90% of the
- *    time, given that the land drops were hit (Karsten's criterion, on the
- *    play, no mulligans). Calibrated within one source of his 60-card table.
+ *    demanding spell of that colour is castable on curve, given that the
+ *    land drops were hit. Karsten's 2022 model: on the play, a goal of
+ *    89% + mana value (up to 96%), London mulligans, and in Commander a free
+ *    mulligan and an extra draw. Exact, not simulated; within one source of
+ *    all 76 values in his table (40, 60, 80 and 99 cards).
  * 3. Non-land mana producers count 0.5 source per colour, as elsewhere in the
  *    app; the lands cover the rest.
  * 4. Lands are picked one at a time by how much they close the remaining
@@ -100,7 +102,9 @@ export interface ColorTarget {
   target: number;
   /** The spell that sets the target. */
   driver: { title: string; pips: number; turn: number } | null;
-  /** True when even all lands making this colour would not reach 90%. */
+  /** Chance the driver should be castable on curve (0.90-0.96). */
+  goal: number;
+  /** True when even all lands making this colour would not reach the goal. */
   unreachable: boolean;
   fromProducers: number;
   current: number;
@@ -139,8 +143,39 @@ export interface LandBasePlan {
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Required chance to cast the most demanding spell of a colour on curve. */
-export const CAST_PROBABILITY_GOAL = 0.9;
+/**
+ * Required chance to cast a spell on curve: Karsten's 89% + mana value,
+ * so 90% for one-drops up to 96% for seven-drops and above.
+ */
+export function castGoal(turn: number): number {
+  return (89 + Math.min(7, Math.max(1, Math.round(turn)))) / 100;
+}
+
+/**
+ * London mulligan stages. A hand is kept when its land count after putting
+ * cards on the bottom is within the range; the last stage always keeps.
+ * Karsten mulligans 0, 1, 6 and 7 landers on seven, 0, 1, 5 and 6 on six,
+ * 0, 1 and 5 on five, and keeps any four. Commander's free mulligan also
+ * sends back two-landers.
+ */
+interface MulliganStage {
+  size: number;
+  minLands: number;
+  maxLands: number;
+}
+
+const MULLIGAN_STAGES: MulliganStage[] = [
+  { size: 7, minLands: 2, maxLands: 5 },
+  { size: 6, minLands: 2, maxLands: 4 },
+  { size: 5, minLands: 2, maxLands: 4 },
+  { size: 4, minLands: 0, maxLands: 7 },
+];
+
+const FREE_MULLIGAN: MulliganStage = { size: 7, minLands: 3, maxLands: 5 };
+
+/** Results of castOnCurveProbability, which the fill asks for many times. */
+const probabilityCache = new Map<string, number>();
+const PROBABILITY_CACHE_LIMIT = 50000;
 
 export const BASIC_FOR_COLOR: Record<MtgColor, string> = {
   W: 'Plains',
@@ -372,13 +407,19 @@ export function landProfile(land: LandInfo, deckColors: MtgColor[], commanderFor
 
 /**
  * P(at least `pips` sources of a colour by `turn`, given at least `turn`
- * lands by then), on the play.
+ * lands by then), on the play, after mulligans.
+ *
+ * Every opening seven is weighed exactly (hypergeometric). Mulligans follow
+ * MULLIGAN_STAGES; on a mulligan to n, spells go to the bottom first down to
+ * three lands kept, then lands that do not make the colour. Bottomed cards
+ * cannot be drawn in the turns that matter.
  *
  * @param deckSize - Library size (60, 99, ...).
  * @param lands - Lands in the deck.
  * @param sources - Lands that make the colour (capped at `lands`).
  * @param pips - Coloured pips of the spell.
  * @param turn - Turn the spell should be cast (its mana value, 1-7).
+ * @param commanderFormat - Free first mulligan and an extra draw (Commander).
  */
 export function castOnCurveProbability(
   deckSize: number,
@@ -386,44 +427,108 @@ export function castOnCurveProbability(
   sources: number,
   pips: number,
   turn: number,
+  commanderFormat = false,
 ): number {
-  const N = Math.max(1, Math.round(deckSize));
+  const N = Math.max(8, Math.round(deckSize));
   const L = Math.max(0, Math.min(N, Math.round(lands)));
   const K = Math.max(0, Math.min(L, Math.round(sources)));
-  const seen = Math.min(N, 7 + turn - 1);
-  const total = logBinomial(N, seen);
+  const key = `${N}:${L}:${K}:${pips}:${turn}:${commanderFormat ? 1 : 0}`;
+  const cached = probabilityCache.get(key);
+  if (cached != null) {
+    return cached;
+  }
 
-  let hitLandDrops = 0;
-  let castable = 0;
-  for (let a = 0; a <= Math.min(K, seen); a++) {
-    for (let b = 0; b <= Math.min(L - K, seen - a); b++) {
-      if (a + b < turn) {
-        continue;
+  const offColour = L - K;
+  const spells = N - L;
+  const draws = Math.min(N - 7, turn - 1 + (commanderFormat ? 1 : 0));
+  const library = N - 7;
+  const handTotal = logBinomial(N, 7);
+  const drawTotal = logBinomial(library, draws);
+
+  // Chance of the land drop (hit) and of the spell being castable (ok) after
+  // the draws, for a hand that looked at s sources and o other lands and kept
+  // keptS and keptO of them.
+  const outcome = (s: number, o: number, keptS: number, keptO: number): [number, number] => {
+    let hit = 0;
+    let ok = 0;
+    const restSpells = library - (K - s) - (offColour - o);
+    for (let a = 0; a <= Math.min(K - s, draws); a++) {
+      for (let b = 0; b <= Math.min(offColour - o, draws - a); b++) {
+        if (keptS + a + keptO + b < turn) {
+          continue;
+        }
+        const q = Math.exp(
+          logBinomial(K - s, a) + logBinomial(offColour - o, b) + logBinomial(restSpells, draws - a - b) - drawTotal,
+        );
+        hit += q;
+        if (keptS + a >= pips) {
+          ok += q;
+        }
       }
-      const p = Math.exp(
-        logBinomial(K, a) + logBinomial(L - K, b) + logBinomial(N - L, seen - a - b) - total,
-      );
-      hitLandDrops += p;
-      if (a >= pips) {
-        castable += p;
+    }
+    return [hit, ok];
+  };
+
+  // Opening sevens: [sources, other lands, probability].
+  const hands: [number, number, number][] = [];
+  for (let s = 0; s <= Math.min(K, 7); s++) {
+    for (let o = 0; o <= Math.min(offColour, 7 - s); o++) {
+      const p = Math.exp(logBinomial(K, s) + logBinomial(offColour, o) + logBinomial(spells, 7 - s - o) - handTotal);
+      if (p > 0) {
+        hands.push([s, o, p]);
       }
     }
   }
-  return hitLandDrops > 0 ? castable / hitLandDrops : 0;
+
+  const stages = commanderFormat ? [FREE_MULLIGAN, ...MULLIGAN_STAGES] : MULLIGAN_STAGES;
+  let reach = 1;
+  let hitTotal = 0;
+  let okTotal = 0;
+  stages.forEach((stage, index) => {
+    const last = index === stages.length - 1;
+    const toBottom = 7 - stage.size;
+    let mulligan = 0;
+    for (const [s, o, p] of hands) {
+      const spellCount = 7 - s - o;
+      const spellsBottomed = Math.max(0, Math.min(toBottom, spellCount - Math.max(0, stage.size - 3)));
+      const landsBottomed = Math.min(s + o, toBottom - spellsBottomed);
+      const offBottomed = Math.min(o, landsBottomed);
+      const keptS = s - (landsBottomed - offBottomed);
+      const keptO = o - offBottomed;
+      const kept = keptS + keptO;
+      if (!last && (kept < stage.minLands || kept > stage.maxLands)) {
+        mulligan += p;
+        continue;
+      }
+      const [hit, ok] = outcome(s, o, keptS, keptO);
+      hitTotal += reach * p * hit;
+      okTotal += reach * p * ok;
+    }
+    reach *= mulligan;
+  });
+
+  const result = hitTotal > 0 ? okTotal / hitTotal : 0;
+  if (probabilityCache.size >= PROBABILITY_CACHE_LIMIT) {
+    probabilityCache.clear();
+  }
+  probabilityCache.set(key, result);
+  return result;
 }
 
 /**
- * Fewest sources reaching CAST_PROBABILITY_GOAL, or `lands` with
- * `unreachable` set when no count does.
+ * Fewest sources reaching castGoal(turn), or `lands` with `unreachable` set
+ * when no count does.
  */
 export function sourcesNeeded(
   deckSize: number,
   lands: number,
   pips: number,
   turn: number,
+  commanderFormat = false,
 ): { sources: number; unreachable: boolean } {
+  const goal = castGoal(turn);
   for (let k = pips; k <= lands; k++) {
-    if (castOnCurveProbability(deckSize, lands, k, pips, turn) >= CAST_PROBABILITY_GOAL) {
+    if (castOnCurveProbability(deckSize, lands, k, pips, turn, commanderFormat) >= goal) {
       return { sources: k, unreachable: false };
     }
   }
@@ -503,6 +608,7 @@ function castableValue(
   lands: number,
   reqs: Requirement[],
   colors: MtgColor[],
+  commanderFormat: boolean,
 ): (color: MtgColor, sources: number) => number {
   const totalWeight = reqs.reduce((s, r) => s + r.weight, 0) || 1;
   const grouped = new Map<MtgColor, Map<string, { pips: number; turn: number; weight: number }>>();
@@ -517,16 +623,8 @@ function castableValue(
     byKey.set(key, entry);
   }
 
-  const cache = new Map<string, number>();
-  const prob = (pips: number, turn: number, k: number): number => {
-    const key = `${pips}:${turn}:${k}`;
-    let p = cache.get(key);
-    if (p == null) {
-      p = castOnCurveProbability(deckSize, lands, k, pips, turn);
-      cache.set(key, p);
-    }
-    return p;
-  };
+  const prob = (pips: number, turn: number, k: number): number =>
+    castOnCurveProbability(deckSize, lands, k, pips, turn, commanderFormat);
 
   return (color, sources) => {
     const s = Math.max(0, Math.min(lands, sources));
@@ -618,7 +716,7 @@ export function planLandBase(input: LandBaseInput): LandBasePlan {
     const key = `${req.pips}:${req.turn}`;
     let needed = neededCache.get(key);
     if (needed == null) {
-      needed = sourcesNeeded(input.deckSize, landCount, req.pips, req.turn);
+      needed = sourcesNeeded(input.deckSize, landCount, req.pips, req.turn, input.commanderFormat);
       neededCache.set(key, needed);
     }
     const current = targets.get(req.color)!;
@@ -679,7 +777,7 @@ export function planLandBase(input: LandBaseInput): LandBasePlan {
   // on curve (summed over every spell, not just the hardest one). This has
   // diminishing returns built in, so one unreachable BBBB spell cannot starve
   // the other colours.
-  const castValue = castableValue(input.deckSize, landCount, reqs, colors);
+  const castValue = castableValue(input.deckSize, landCount, reqs, colors, input.commanderFormat);
   const sources = { ...producers };
   let tappedPicked = 0;
   for (let i = 0; i < slots; i++) {
@@ -746,7 +844,7 @@ export function planLandBase(input: LandBaseInput): LandBasePlan {
   const currentSources = landSources(currentProfiled);
   const proposedSources = landSources([...picks.values()]);
   const proposedLandCount = [...picks.values()].reduce((s, p) => s + p.quantity, 0);
-  const currentValue = castableValue(input.deckSize, currentLandCount, reqs, colors);
+  const currentValue = castableValue(input.deckSize, currentLandCount, reqs, colors, input.commanderFormat);
   const castableCurrent = colors.reduce((s, c) => s + currentValue(c, currentSources[c] + producers[c]), 0);
   const castableProposed = colors.reduce((s, c) => s + castValue(c, proposedSources[c] + producers[c]), 0);
   const colorTargets: ColorTarget[] = colors.map(color => {
@@ -755,11 +853,12 @@ export function planLandBase(input: LandBaseInput): LandBasePlan {
     const proposed = proposedSources[color] + producers[color];
     const prob = (lands: number, src: number): number => (t.driver == null
       ? 1
-      : castOnCurveProbability(input.deckSize, lands, src, t.driver.pips, t.driver.turn));
+      : castOnCurveProbability(input.deckSize, lands, src, t.driver.pips, t.driver.turn, input.commanderFormat));
     return {
       color,
       target: t.target,
       driver: t.driver != null ? { title: t.driver.title, pips: t.driver.pips, turn: t.driver.turn } : null,
+      goal: castGoal(t.driver?.turn ?? 1),
       unreachable: t.unreachable,
       fromProducers: producers[color],
       current,
