@@ -7,6 +7,7 @@ namespace Drupal\mtg_card_suggestions\Service;
 use Drupal\Core\Entity\EntityStorageInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Logger\LoggerChannelInterface;
+use Drupal\mtg_card_suggestions\Support\CardType;
 use Drupal\mtg_card_suggestions\Support\SidecarUrl;
 use Drupal\node\NodeInterface;
 use GuzzleHttp\ClientInterface;
@@ -164,7 +165,7 @@ class CardSuggester {
       $cmc = (float) ($card['cmc'] ?? 0);
       $typeLine = (string) ($card['type_line'] ?? '');
 
-      if (stripos($typeLine, 'Land') === FALSE) {
+      if (!CardType::isLand($typeLine)) {
         $totalCmc += $cmc * $qty;
         $nonLandQty += $qty;
       }
@@ -343,7 +344,7 @@ class CardSuggester {
     // Add the deck's key non-land card names (highest quantity first).
     usort($deckCards, static fn($a, $b) => ($b['quantity'] ?? 1) <=> ($a['quantity'] ?? 1));
     foreach (array_slice($deckCards, 0, 15) as $card) {
-      if (stripos((string) ($card['type_line'] ?? ''), 'Land') === FALSE) {
+      if (!CardType::isLand((string) ($card['type_line'] ?? ''))) {
         $parts[] = $card['name'];
         // Pull the most relevant keyword phrases from oracle text.
         $oracle = strtolower((string) ($card['oracle_text'] ?? ''));
@@ -545,7 +546,7 @@ PROMPT;
    */
   private function buildUserPrompt(array $deckCards, array $candidates, int $limit, array $archetype = []): string {
     // Show key non-land spells by quantity to anchor context.
-    $keyCards = array_filter($deckCards, static fn($c) => stripos((string) ($c['type_line'] ?? ''), 'Land') === FALSE);
+    $keyCards = array_filter($deckCards, static fn($c) => !CardType::isLand((string) ($c['type_line'] ?? '')));
     usort($keyCards, static fn($a, $b) => ($b['quantity'] ?? 1) <=> ($a['quantity'] ?? 1));
     $keyCardLines = [];
     foreach (array_slice($keyCards, 0, 12) as $card) {

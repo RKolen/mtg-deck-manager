@@ -331,3 +331,103 @@ function mtg_graphql_update_9008(): string {
     ? 'Wishlist intents already present.'
     : 'Created wishlist intents: ' . implode(', ', $created) . '.';
 }
+
+/**
+ * Adds field_mana_settings on deck nodes.
+ *
+ * Holds the land base suggester's per-deck changes as JSON: ratios, card
+ * overrides and the land count. Only differences from the defaults.
+ */
+function mtg_graphql_update_9009(): string {
+  $storage_name = 'field_mana_settings';
+  if (!FieldStorageConfig::loadByName('node', $storage_name)) {
+    FieldStorageConfig::create([
+      'field_name' => $storage_name,
+      'entity_type' => 'node',
+      'type' => 'string_long',
+      'cardinality' => 1,
+    ])->save();
+  }
+
+  if (!FieldConfig::loadByName('node', 'deck', $storage_name)) {
+    FieldConfig::create([
+      'field_name' => $storage_name,
+      'entity_type' => 'node',
+      'bundle' => 'deck',
+      'label' => 'Mana settings',
+      'description' => 'Land base suggester changes for this deck as JSON (ratios, card overrides, land count). Only differences from the defaults are stored.',
+      'required' => FALSE,
+    ])->save();
+  }
+
+  $display = \Drupal::entityTypeManager()
+    ->getStorage('entity_form_display')
+    ->load('node.deck.default');
+  if ($display instanceof EntityFormDisplay) {
+    $display->setComponent($storage_name, [
+      'type' => 'string_textarea',
+      'weight' => 6,
+      'region' => 'content',
+      'settings' => [
+        'rows' => 5,
+        'placeholder' => '',
+      ],
+    ]);
+    $group = $display->getThirdPartySetting('field_group', 'group_deck_details');
+    if (is_array($group) && isset($group['children']) && is_array($group['children'])) {
+      if (!in_array($storage_name, $group['children'], TRUE)) {
+        $group['children'][] = $storage_name;
+        $display->setThirdPartySetting('field_group', 'group_deck_details', $group);
+      }
+    }
+    $display->save();
+  }
+
+  return 'Created field_mana_settings on deck.';
+}
+
+/**
+ * Adds field_swap_for on deck_card paragraphs.
+ *
+ * A maybeboard slot can name the main deck card it is meant to replace, so
+ * swap ideas are kept next to the candidate.
+ */
+function mtg_graphql_update_9010(): string {
+  $storage_name = 'field_swap_for';
+  if (!FieldStorageConfig::loadByName('paragraph', $storage_name)) {
+    FieldStorageConfig::create([
+      'field_name' => $storage_name,
+      'entity_type' => 'paragraph',
+      'type' => 'entity_reference',
+      'cardinality' => 1,
+      'settings' => ['target_type' => 'node'],
+    ])->save();
+  }
+
+  if (!FieldConfig::loadByName('paragraph', 'deck_card', $storage_name)) {
+    FieldConfig::create([
+      'field_name' => $storage_name,
+      'entity_type' => 'paragraph',
+      'bundle' => 'deck_card',
+      'label' => 'Swap for',
+      'description' => 'Maybeboard only: the main deck card this candidate is meant to replace.',
+      'required' => FALSE,
+      'settings' => [
+        'handler' => 'default:node',
+        'handler_settings' => [
+          'target_bundles' => ['mtg_card' => 'mtg_card'],
+          'auto_create' => FALSE,
+        ],
+      ],
+    ])->save();
+  }
+
+  // Expose it on ParagraphDeckCard as swapFor.
+  $config = \Drupal::configFactory()->getEditable('graphql_compose.settings.graphql_compose_server');
+  $key = 'field_config.paragraph.deck_card.' . $storage_name . '.enabled';
+  if ($config->get($key) !== TRUE) {
+    $config->set($key, TRUE)->save();
+  }
+
+  return 'Created field_swap_for on deck_card paragraphs.';
+}

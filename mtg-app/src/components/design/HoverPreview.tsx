@@ -1,4 +1,3 @@
-import React from 'react';
 import { cardImageSrc } from '../../utils/cardImage';
 
 export function HoverPreview({

@@ -20,3 +20,4 @@ indexing_options:
   field_mana_cost:
     indexing_option: contextual_content
     max: -1
+results_cache_mode: per_role

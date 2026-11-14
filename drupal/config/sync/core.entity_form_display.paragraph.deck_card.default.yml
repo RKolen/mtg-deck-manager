@@ -7,6 +7,7 @@ dependencies:
     - field.field.paragraph.deck_card.field_is_foil
     - field.field.paragraph.deck_card.field_is_sideboard
     - field.field.paragraph.deck_card.field_quantity
+    - field.field.paragraph.deck_card.field_swap_for
     - paragraphs.paragraphs_type.deck_card
 id: paragraph.deck_card.default
 targetEntityType: paragraph
@@ -46,4 +47,5 @@ content:
     third_party_settings: {  }
 hidden:
   created: true
+  field_swap_for: true
   status: true

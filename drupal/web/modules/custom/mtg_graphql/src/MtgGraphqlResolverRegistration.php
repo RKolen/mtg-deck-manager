@@ -15,6 +15,7 @@ use GraphQL\Type\Definition\ResolveInfo;
 use Drupal\mtg_graphql\Service\CollectionEnsurer;
 use Drupal\mtg_graphql\Service\DeckCardMutator;
 use Drupal\mtg_graphql\Service\WishlistService;
+use Drupal\mtg_scryfall_sync\Service\CardFaces;
 use Drupal\node\NodeInterface;
 use Drupal\taxonomy\TermInterface;
 use GraphQL\Error\UserError;
@@ -23,6 +24,11 @@ use GraphQL\Error\UserError;
  * Registers MTG custom GraphQL field resolvers.
  */
 final class MtgGraphqlResolverRegistration {
+
+  /**
+   * Largest mana settings JSON accepted, in bytes.
+   */
+  private const MANA_SETTINGS_MAX_BYTES = 65536;
 
   /**
    * Registers all MTG query, mutation, and type resolvers.
@@ -201,6 +207,33 @@ final class MtgGraphqlResolverRegistration {
     foreach (['deckId', 'deckTitle', 'board', 'quantity', 'setCode', 'foil'] as $field) {
       $registry->addFieldResolver('CardDeckUse', $field,
         $builder->callback(fn(array $u) => $u[$field])
+      );
+    }
+
+    $registry->addFieldResolver('Query', 'cardFaces',
+      $builder->callback(function ($value, array $args, ResolveContext $context, ResolveInfo $info, FieldContext $fieldContext): array {
+        $fieldContext->addCacheTags([CardFaces::CACHE_TAG]);
+        /** @var \Drupal\mtg_scryfall_sync\Service\CardFaces $faces */
+        $faces = \Drupal::service('mtg_scryfall_sync.card_faces');
+        return $faces->forCard((string) $args['name']);
+      })
+    );
+    $faceFields = [
+      'name' => 'name',
+      'manaCost' => 'mana_cost',
+      'typeLine' => 'type_line',
+      'oracleText' => 'oracle_text',
+      'layout' => 'layout',
+    ];
+    foreach ($faceFields as $field => $key) {
+      $registry->addFieldResolver('CardFace', $field,
+        $builder->callback(fn(array $f): string => $f[$key])
+      );
+    }
+    // Empty stats mean the face has none, e.g. an instant adventure half.
+    foreach (['power', 'toughness', 'loyalty'] as $field) {
+      $registry->addFieldResolver('CardFace', $field,
+        $builder->callback(fn(array $f): ?string => $f[$field] === '' ? NULL : $f[$field])
       );
     }
 
@@ -631,6 +664,9 @@ final class MtgGraphqlResolverRegistration {
         if (isset($args['commanderFoil']) && $node->hasField('field_commander_foil')) {
           $node->set('field_commander_foil', (bool) $args['commanderFoil']);
         }
+        if (array_key_exists('manaSettings', $args) && $node->hasField('field_mana_settings')) {
+          $node->set('field_mana_settings', self::normalizeManaSettings($args['manaSettings']));
+        }
         $node->save();
         return $node;
       })
@@ -765,6 +801,13 @@ final class MtgGraphqlResolverRegistration {
       })
     );
 
+    $registry->addFieldResolver('Mutation', 'deckCardSetSwapFor',
+      $builder->callback(function ($value, array $args) use ($mutator): array {
+        $cardId = isset($args['cardId']) ? (string) $args['cardId'] : NULL;
+        return $mutator->setSwapFor((string) $args['deckId'], (string) $args['slotId'], $cardId);
+      })
+    );
+
     $registry->addFieldResolver('Mutation', 'deckCardRemove',
       $builder->callback(function ($value, array $args) use ($mutator): bool {
         return $mutator->remove((string) $args['deckId'], (string) $args['slotId']);
@@ -894,6 +937,12 @@ final class MtgGraphqlResolverRegistration {
     );
     $registry->addFieldResolver('NodeDeck', 'commanderIsFoil',
       $builder->callback(fn($n) => self::commanderIsFoil($n))
+    );
+    $registry->addFieldResolver('Deck', 'manaSettings',
+      $builder->callback(fn($n) => self::manaSettings($n))
+    );
+    $registry->addFieldResolver('NodeDeck', 'manaSettings',
+      $builder->callback(fn($n) => self::manaSettings($n))
     );
   }
 
@@ -1438,6 +1487,49 @@ final class MtgGraphqlResolverRegistration {
       return FALSE;
     }
     return (bool) $node->get('field_commander_foil')->value;
+  }
+
+  /**
+   * The deck's land base suggester settings as JSON, or NULL when unset.
+   */
+  private static function manaSettings(mixed $node): ?string {
+    if (!$node instanceof NodeInterface || !$node->hasField('field_mana_settings')) {
+      return NULL;
+    }
+    $value = (string) ($node->get('field_mana_settings')->value ?? '');
+    return $value === '' ? NULL : $value;
+  }
+
+  /**
+   * Validates mana settings JSON for storage.
+   *
+   * @param mixed $raw
+   *   The manaSettings argument: a JSON object, or empty or NULL to clear.
+   *
+   * @return string|null
+   *   Compact JSON, or NULL to clear the field.
+   *
+   * @throws \GraphQL\Error\UserError
+   *   When the value is not a JSON object or is too large.
+   */
+  private static function normalizeManaSettings(mixed $raw): ?string {
+    $text = trim((string) ($raw ?? ''));
+    if ($text === '' || $text === '{}') {
+      return NULL;
+    }
+    if (strlen($text) > self::MANA_SETTINGS_MAX_BYTES) {
+      throw new UserError('Mana settings are too large.');
+    }
+    try {
+      $decoded = json_decode($text, TRUE, 16, JSON_THROW_ON_ERROR);
+    }
+    catch (\JsonException) {
+      throw new UserError('Mana settings must be valid JSON.');
+    }
+    if (!is_array($decoded) || array_is_list($decoded)) {
+      throw new UserError('Mana settings must be a JSON object.');
+    }
+    return json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
   }
 
   /**

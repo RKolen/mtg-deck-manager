@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   fetchDeckBuildPool,
@@ -6,6 +6,7 @@ import {
   importCardToDeck,
   saveWishlistItem,
   setCardQuantityInDeck,
+  updateDeck,
 } from '../services/drupalApi';
 import { invalidateInventoryQueries } from '../services/queryCache';
 import { useTheme } from '../context/ThemeContext';
@@ -23,11 +24,18 @@ import {
   manaRequirement,
   normalizeFormat,
   scryfallFormatKey,
+  sideboard,
   type MtgColor,
 } from '../utils/deckAnalysis';
 import {
+  alternateCostCards,
+  alternateCostReason,
+  manaSettingsDiff,
+  parseManaSettings,
   planLandBase,
+  resolveManaSettings,
   type CurrentLand,
+  type ManaSettings,
   type LandBasePlan,
   type LandKind,
   type LandOption,
@@ -35,12 +43,15 @@ import {
   type SpellInfo,
 } from '../utils/landBase';
 import type { DeckCardWithCard, DeckCommander, PoolCard, PoolSource } from '../types/drupal';
+import ManaSettingsEditor from './ManaSettingsEditor';
 
 interface LandBasePanelProps {
   deckId: string;
   cards: DeckCardWithCard[];
   format: string;
   commander: DeckCommander | null | undefined;
+  /** The deck's stored land base changes (JSON), or null for the defaults. */
+  manaSettings?: string | null;
 }
 
 const KIND_LABEL: Record<LandKind, string> = {
@@ -61,16 +72,54 @@ function pct(p: number): string {
   return `${Math.round(p * 100)}%`;
 }
 
+/** Non-land cards as the land base suggester reads them. */
+function toSpells(slots: DeckCardWithCard[]): SpellInfo[] {
+  return slots
+    .filter(dc => !isLand(dc.card.field_type_line ?? ''))
+    .map(dc => ({
+      rarity: dc.card.field_rarity,
+      title: dc.card.title,
+      typeLine: dc.card.field_type_line ?? '',
+      oracleText: getOracleText(dc.card),
+      cmc: dc.card.field_cmc ?? 0,
+      isManaProducer: dc.card.field_is_mana_producer === true,
+      power: dc.card.field_power ?? null,
+      manaCost: dc.card.field_mana_cost ?? '',
+      producedMana: dc.card.field_produced_mana ?? [],
+      quantity: dc.quantity,
+    }));
+}
+
+/** Settings without the land count, which the panel edits in its own box. */
+function withoutLandCount(settings: Partial<ManaSettings>): Partial<ManaSettings> {
+  const rest = { ...settings };
+  delete rest.landCount;
+  return rest;
+}
+
+/** Source counts can be fractional (rocks, partial fetches): one decimal at most. */
+function num(n: number): string {
+  return String(Math.round(n * 10) / 10);
+}
+
 /**
  * Suggests a land base for the deck from the collection or the whole
  * cardbase, and can apply it or put missing lands on the wishlist.
  */
-const LandBasePanel: React.FC<LandBasePanelProps> = ({ deckId, cards, format, commander }) => {
+const LandBasePanel: React.FC<LandBasePanelProps> = ({ deckId, cards, format, commander, manaSettings = null }) => {
   const qc = useQueryClient();
   const { currency, usdToEur } = useTheme();
+  const saved = useMemo(() => parseManaSettings(manaSettings), [manaSettings]);
+  const savedLandCount = typeof saved.landCount === 'number' && saved.landCount > 0 ? Math.round(saved.landCount) : null;
   const [source, setSource] = useState<PoolSource>('COLLECTION');
   const [includeUsed, setIncludeUsed] = useState(false);
-  const [landCountInput, setLandCountInput] = useState('');
+  const [landCountInput, setLandCountInput] = useState(savedLandCount != null ? String(savedLandCount) : '');
+  const typedLandCount = Number.parseInt(landCountInput, 10);
+  const chosenLandCount = Number.isFinite(typedLandCount) && typedLandCount > 0 ? typedLandCount : null;
+  const currentLandTotal = useMemo(
+    () => mainDeck(cards).filter(dc => isLand(dc.card.field_type_line ?? '')).reduce((s, dc) => s + dc.quantity, 0),
+    [cards],
+  );
   const [requested, setRequested] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -105,24 +154,43 @@ const LandBasePanel: React.FC<LandBasePanelProps> = ({ deckId, cards, format, co
     staleTime: 5 * 60 * 1000,
   });
 
+  const spells = useMemo(() => toSpells(main), [main]);
+  const deckLandTitles = useMemo(() => [...new Set(main
+    .filter(dc => isLand(dc.card.field_type_line ?? '') && !/basic/i.test(dc.card.field_type_line ?? ''))
+    .map(dc => dc.card.title))].sort((a, b) => a.localeCompare(b)), [main]);
+  const sideboardSpells = useMemo(() => toSpells(sideboard(cards)), [cards]);
+  const commanderSpell = useMemo<SpellInfo | null>(() => (commander != null
+    ? {
+      title: commander.title,
+      typeLine: commander.field_type_line,
+      oracleText: commander.field_oracle_text,
+      cmc: commander.field_cmc,
+      isManaProducer: false,
+      manaCost: commander.field_mana_cost,
+      producedMana: [],
+      quantity: 1,
+    }
+    : null), [commander]);
+
+  // Settings being edited: the saved ones until changed. The land count has
+  // its own box.
+  const [draft, setDraft] = useState<Partial<ManaSettings>>(() => withoutLandCount(saved));
+  useEffect(() => {
+    setDraft(withoutLandCount(saved));
+  }, [saved]);
+  const draftSettings = useMemo(() => resolveManaSettings(draft), [draft]);
+  const storedJson = JSON.stringify(manaSettingsDiff({ ...saved, landCount: savedLandCount }));
+  const draftJson = JSON.stringify(manaSettingsDiff({ ...draft, landCount: chosenLandCount }));
+  const dirty = storedJson !== draftJson;
+  const alternateCosts = useMemo(() => alternateCostCards(
+    [...spells, ...(commanderSpell != null ? [commanderSpell] : []), ...(draftSettings.includeSideboard ? sideboardSpells : [])],
+    draft,
+  ), [spells, commanderSpell, sideboardSpells, draftSettings.includeSideboard, draft]);
+
   const plan = useMemo<LandBasePlan | null>(() => {
     if (pool.data == null) {
       return null;
     }
-    const spells: SpellInfo[] = main
-      .filter(dc => !isLand(dc.card.field_type_line ?? ''))
-      .map(dc => ({
-        title: dc.card.title,
-        typeLine: dc.card.field_type_line ?? '',
-        oracleText: getOracleText(dc.card),
-        cmc: dc.card.field_cmc ?? 0,
-        isManaProducer: dc.card.field_is_mana_producer === true,
-        power: dc.card.field_power ?? null,
-        manaCost: dc.card.field_mana_cost ?? '',
-        producedMana: dc.card.field_produced_mana ?? [],
-        quantity: dc.quantity,
-      }));
-
     const lands = new Map<string, CurrentLand>();
     for (const dc of main) {
       if (!isLand(dc.card.field_type_line ?? '')) {
@@ -152,31 +220,42 @@ const LandBasePanel: React.FC<LandBasePanelProps> = ({ deckId, cards, format, co
     const deckSize = allowance.mainHardMax
       ? allowance.mainTarget
       : Math.max(allowance.mainTarget, main.reduce((s, dc) => s + dc.quantity, 0));
-    const override = Number.parseInt(landCountInput, 10);
 
     return planLandBase({
       spells,
-      commander: commander != null
-        ? {
-          title: commander.title,
-          typeLine: commander.field_type_line,
-          oracleText: commander.field_oracle_text,
-          cmc: commander.field_cmc,
-          isManaProducer: false,
-          manaCost: commander.field_mana_cost,
-          producedMana: [],
-          quantity: 1,
-        }
-        : null,
+      commander: commanderSpell,
+      sideboard: sideboardSpells,
       currentLands: [...lands.values()],
       options,
       deckColors,
       deckSize,
       maxCopies: isSingletonFormat(format) ? 1 : 4,
       commanderFormat,
-      landCountOverride: Number.isFinite(override) && override > 0 ? override : null,
+      // A typed or saved count wins; otherwise a deck keeps the lands it has
+      // and only an empty deck starts from the formula, which stays advice.
+      landCountOverride: chosenLandCount ?? (currentLandTotal > 0 ? currentLandTotal : null),
+      settings: { ...draft, landCount: null },
     });
-  }, [pool.data, main, cards, includeUsed, source, currency, usdToEur, format, landCountInput, commander, deckColors, commanderFormat]);
+  }, [pool.data, main, cards, includeUsed, source, currency, usdToEur, format, chosenLandCount, draft, spells,
+    sideboardSpells, commanderSpell, deckColors, commanderFormat, currentLandTotal]);
+
+  // Saves the edited settings and the land count box together.
+  const saveSettings = useMutation({
+    mutationFn: () => {
+      const diff = manaSettingsDiff({ ...draft, landCount: chosenLandCount });
+      return updateDeck(deckId, { field_mana_settings: diff != null ? JSON.stringify(diff) : null });
+    },
+    onSuccess: () => {
+      setMessage('Settings saved for this deck.');
+      void qc.invalidateQueries({ queryKey: ['deck'] });
+    },
+    onError: (e: unknown) => setMessage(e instanceof Error ? e.message : 'Saving failed.'),
+  });
+
+  function discardChanges(): void {
+    setDraft(withoutLandCount(saved));
+    setLandCountInput(savedLandCount != null ? String(savedLandCount) : '');
+  }
 
   /** Printing to add for a card name: the pool printing, else any printing. */
   async function cardIdFor(title: string): Promise<string> {
@@ -256,7 +335,7 @@ const LandBasePanel: React.FC<LandBasePanelProps> = ({ deckId, cards, format, co
 
   function status(pick: LandPick): React.ReactNode {
     if (pick.kept) {
-      return <span className="dim">Kept (utility)</span>;
+      return <span className="dim">Kept</span>;
     }
     if (pick.profile.kind === 'basic') {
       return <span className="dim">Basic</span>;
@@ -287,8 +366,10 @@ const LandBasePanel: React.FC<LandBasePanelProps> = ({ deckId, cards, format, co
       <p style={{ fontSize: '0.85rem', margin: '0 0 0.75rem' }}>
         Lands are chosen so the most demanding spell of each colour can be cast on curve, following
         Frank Karsten: 90% for a one-drop, one point more per mana value, up to 96%. Mulligans are
-        included. Mana rocks and dorks count as half a source. Utility lands already in the deck are
-        kept.
+        included. Mana dorks count as half a source and rocks and ramp spells as three quarters, but
+        only for spells they can speed up. Fetches count for every colour among the lands they can
+        find. One-drops count only lands that are untapped on turn one. Utility lands already in the
+        deck are kept.
       </p>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'center', marginBottom: '1rem' }}>
@@ -326,6 +407,16 @@ const LandBasePanel: React.FC<LandBasePanelProps> = ({ deckId, cards, format, co
             style={{ width: '4.5rem' }}
           />
         </label>
+        {dirty && (
+          <button
+            type="button"
+            onClick={() => { setMessage(null); saveSettings.mutate(); }}
+            disabled={saveSettings.isPending}
+            title="Remember the land count and settings for this deck. Empty the land box to use the formula again."
+          >
+            Save for this deck
+          </button>
+        )}
         <button
           type="button"
           className="btn-accent"
@@ -335,6 +426,22 @@ const LandBasePanel: React.FC<LandBasePanelProps> = ({ deckId, cards, format, co
           {pool.isFetching ? 'Loading lands...' : plan != null ? 'Refresh' : 'Suggest lands'}
         </button>
       </div>
+
+      {deckColors.length > 0 && (
+        <ManaSettingsEditor
+          draft={draft}
+          onChange={setDraft}
+          deckColors={deckColors}
+          cards={[...spells, ...sideboardSpells, ...(commanderSpell != null ? [commanderSpell] : [])]
+            .map(c => ({ title: c.title, manaCost: c.manaCost, alternateCost: alternateCostReason(c) !== '' }))}
+          alternateCosts={alternateCosts}
+          deckLands={deckLandTitles}
+          dirty={dirty}
+          saving={saveSettings.isPending}
+          onSave={() => { setMessage(null); saveSettings.mutate(); }}
+          onDiscard={discardChanges}
+        />
+      )}
 
       {deckColors.length === 0 && (
         <p>This deck has no coloured spells yet, so there is nothing to build a land base for.</p>
@@ -350,13 +457,13 @@ const LandBasePanel: React.FC<LandBasePanelProps> = ({ deckId, cards, format, co
         <>
           <p style={{ fontSize: '0.9rem' }}>
             <strong>{plan.landCount} lands</strong>
-            {landCountInput === '' && (
-              <span className="dim">
-                {' '}({plan.landCountFormula}; avg MV {plan.avgCmc.toFixed(2)}, {plan.cheapRampDraw} cheap
-                ramp/draw)
-              </span>
-            )}
+            {chosenLandCount != null && (chosenLandCount === savedLandCount ? ' (saved for this deck)' : ' (your choice)')}
+            {chosenLandCount == null && (currentLandTotal > 0 ? ' (the deck\'s current count)' : ' (formula)')}
             . The deck has {plan.currentLandCount} now.
+            <span className="dim">
+              {' '}Karsten's formula suggests {plan.formulaLandCount} ({plan.landCountFormula}; avg MV{' '}
+              {plan.avgCmc.toFixed(2)}, {plan.cheapRampDraw} cheap ramp/draw), give or take about two lands.
+            </span>
             {companionAllowance.companionBonus > 0 && !companionAllowance.mainHardMax && (
               <> Planned for a {companionAllowance.mainTarget}-card deck ({companionAllowance.companion} companion).</>
             )}
@@ -364,6 +471,17 @@ const LandBasePanel: React.FC<LandBasePanelProps> = ({ deckId, cards, format, co
           <p style={{ fontSize: '0.9rem' }}>
             Coloured spells castable on curve: {pct(plan.castableCurrent)} now,{' '}
             <strong>{pct(plan.castableProposed)}</strong> with this land base.
+          </p>
+          <p style={{ fontSize: '0.85rem' }}>
+            Tapped lands: {num(plan.tappedCurrent)} now, {num(plan.tappedProposed)} proposed, at most{' '}
+            {plan.tappedLimit} (lands that are sometimes tapped count as a quarter).
+            {plan.mdfcLands > 0 && <> Spell // land cards count as {num(plan.mdfcLands)} lands.</>}
+            {plan.deadFetch.length > 0 && (
+              <>
+                {' '}Chance a drawn fetch finds nothing:{' '}
+                {plan.deadFetch.map(d => `${pct(d.chance)} by turn ${d.turn}`).join(', ')}.
+              </>
+            )}
           </p>
           {sizeChange !== 0 && (
             <p style={{ fontSize: '0.85rem' }}>
@@ -398,16 +516,47 @@ const LandBasePanel: React.FC<LandBasePanelProps> = ({ deckId, cards, format, co
                     {t.target}
                     <span className="dim"> for {pct(t.goal)}</span>
                     {t.unreachable && <span title="Not reachable with this land count."> (max)</span>}
-                    {t.fromProducers > 0 && <span className="dim"> incl. {t.fromProducers} from rocks/dorks</span>}
+                    {t.fromProducers > 0 && <span className="dim"> incl. {num(t.fromProducers)} from non-land cards</span>}
                   </td>
-                  <td style={CELL} className="tnum">{t.current} ({pct(t.probCurrent)})</td>
                   <td style={CELL} className="tnum">
-                    <strong>{t.proposed}</strong> ({pct(t.probProposed)})
+                    {num(t.current)} ({pct(t.probCurrent)})
+                    {t.turnOne != null && (
+                      <span className="dim"> {num(t.turnOne.current)} of {t.turnOne.target} untapped on turn 1</span>
+                    )}
                   </td>
+                  <td style={CELL} className="tnum">
+                    <strong>{num(t.proposed)}</strong> ({pct(t.probProposed)})
+                    {t.turnOne != null && (
+                      <span className="dim"> {num(t.turnOne.proposed)} untapped on turn 1</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {plan.unionTargets.map(u => (
+                <tr key={u.colors.join('')} style={ROW}>
+                  <td style={CELL}>{u.colors.map(c => COLOR_LABEL[c]).join(' or ')}</td>
+                  <td style={CELL}>
+                    {u.driver.title} ({u.driver.pips} coloured pip{u.driver.pips === 1 ? '' : 's'}, turn {u.driver.turn})
+                  </td>
+                  <td style={CELL} className="tnum">
+                    {u.target}
+                    {u.unreachable && <span title="Not reachable with this land count."> (max)</span>}
+                  </td>
+                  <td style={CELL} className="tnum">{num(u.current)}</td>
+                  <td style={CELL} className="tnum"><strong>{num(u.proposed)}</strong></td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {plan.alternateCosts.length > 0 && (
+            <p style={{ fontSize: '0.85rem' }}>
+              These cards may be cast for less than their mana value, which can lower the colour
+              needs and the land count:{' '}
+              {plan.alternateCosts.map(a => `${a.title} (${a.reason})`).join(', ')}. Until you set how they
+              are really cast (under Settings for this deck), they count as able to wait and set no
+              colour target.
+            </p>
+          )}
 
           <table style={{ borderCollapse: 'collapse', fontSize: '0.85rem', width: '100%', marginBottom: '1rem' }}>
             <thead>

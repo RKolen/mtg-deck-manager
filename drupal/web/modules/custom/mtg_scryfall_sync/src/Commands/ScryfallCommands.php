@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\mtg_scryfall_sync\Commands;
 
 use Drupal\mtg_scryfall_sync\ScryfallImporter;
+use Drupal\mtg_scryfall_sync\Service\CardFaces;
 use Drupal\mtg_scryfall_sync\Service\CardParts;
 use Drupal\mtg_scryfall_sync\Service\SetTaxonomy;
 use Drush\Commands\DrushCommands;
@@ -18,8 +19,85 @@ class ScryfallCommands extends DrushCommands {
     private readonly ScryfallImporter $importer,
     private readonly SetTaxonomy $setTaxonomy,
     private readonly CardParts $cardParts,
+    private readonly CardFaces $cardFaces,
   ) {
     parent::__construct();
+  }
+
+  /**
+   * Rebuilds the faces of multi-faced cards (back faces, adventures, splits).
+   *
+   * Without --file it reads the local bulk file. With --file it loads a
+   * file with one JSON face per line, e.g. one made on the host by
+   * scripts/card-faces.mjs, so the container does not have to read the whole
+   * bulk file.
+   *
+   * @param array $options
+   *   Command options.
+   *
+   * @command mtg:card-faces
+   * @option file JSON-lines card faces file to load instead of the bulk file.
+   * @usage ddev drush mtg:card-faces --file=/var/www/html/card_faces.jsonl
+   */
+  public function cardFaces(array $options = ['file' => NULL]): void {
+    $file = $options['file'] ?? NULL;
+    try {
+      if (is_string($file) && $file !== '') {
+        $written = $this->cardFaces->replaceAll($this->readFacesFile($file));
+      }
+      else {
+        if (!$this->importer->dataFileExists()) {
+          $this->logger()->error('No data file found. Run mtg:scryfall-download first, or pass --file.');
+          return;
+        }
+        $written = $this->importer->importCardFaces();
+      }
+    }
+    catch (\RuntimeException $e) {
+      $this->logger()->error('Card faces import failed: ' . $e->getMessage());
+      return;
+    }
+    $this->output()->writeln(sprintf('Card faces import complete: %d faces written.', $written));
+  }
+
+  /**
+   * Yields rows from a JSON-lines card faces file.
+   *
+   * @return \Generator<int, array{card_name: string, face_index: int, name: string, mana_cost: string, type_line: string, oracle_text: string, power: string, toughness: string, loyalty: string, layout: string}>
+   *   One face per valid line.
+   *
+   * @throws \RuntimeException
+   *   When the file cannot be opened.
+   */
+  private function readFacesFile(string $file): \Generator {
+    $fh = @fopen($file, 'rb');
+    if ($fh === FALSE) {
+      throw new \RuntimeException('Cannot open ' . $file);
+    }
+    try {
+      while (($line = fgets($fh)) !== FALSE) {
+        $row = json_decode($line, TRUE);
+        if (!is_array($row) || !is_string($row['card_name'] ?? NULL) || $row['card_name'] === '') {
+          continue;
+        }
+        $text = static fn(string $key): string => is_scalar($row[$key] ?? NULL) ? (string) $row[$key] : '';
+        yield [
+          'card_name' => $row['card_name'],
+          'face_index' => (int) ($row['face_index'] ?? 0),
+          'name' => $text('name'),
+          'mana_cost' => $text('mana_cost'),
+          'type_line' => $text('type_line'),
+          'oracle_text' => $text('oracle_text'),
+          'power' => $text('power'),
+          'toughness' => $text('toughness'),
+          'loyalty' => $text('loyalty'),
+          'layout' => $text('layout'),
+        ];
+      }
+    }
+    finally {
+      fclose($fh);
+    }
   }
 
   /**

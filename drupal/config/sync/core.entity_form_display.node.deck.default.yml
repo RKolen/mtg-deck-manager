@@ -9,6 +9,7 @@ dependencies:
     - field.field.node.deck.field_format
     - field.field.node.deck.field_format_term
     - field.field.node.deck.field_is_foil
+    - field.field.node.deck.field_mana_settings
     - field.field.node.deck.field_maybe_cards
     - field.field.node.deck.field_notes
     - node.type.deck
@@ -38,6 +39,7 @@ third_party_settings:
         - field_deck_cards
         - field_commander
         - field_commander_foil
+        - field_mana_settings
       label: Details
       region: content
       parent_name: group_deck_tabs
@@ -129,6 +131,14 @@ content:
     region: content
     settings:
       display_label: true
+    third_party_settings: {  }
+  field_mana_settings:
+    type: string_textarea
+    weight: 6
+    region: content
+    settings:
+      rows: 5
+      placeholder: ''
     third_party_settings: {  }
   field_maybe_cards:
     type: paragraphs

@@ -219,6 +219,46 @@ final class DeckCardMutator {
   }
 
   /**
+   * Sets or clears the main deck card a maybeboard slot is meant to replace.
+   *
+   * @param string $deckUuid
+   *   Deck node UUID.
+   * @param string $slotUuid
+   *   Maybeboard deck_card paragraph UUID.
+   * @param string|null $cardUuid
+   *   The mtg_card to swap out, or NULL to clear it.
+   *
+   * @return array{id: string, quantity: int, isSideboard: bool, isFoil: bool, board: string}
+   *   The updated deck slot data.
+   *
+   * @throws \Symfony\Component\HttpKernel\Exception\BadRequestHttpException
+   *   When the slot is not on the maybeboard.
+   */
+  public function setSwapFor(string $deckUuid, string $slotUuid, ?string $cardUuid): array {
+    $deck = $this->loadDeck($deckUuid);
+    [$para, $field] = $this->findSlot($deck, $slotUuid);
+    if ($field !== self::MAYBE_FIELD) {
+      throw new BadRequestHttpException('Only maybeboard cards can name a card to swap for');
+    }
+    if (!$para->hasField('field_swap_for')) {
+      throw new BadRequestHttpException('Swap for is not available; run drush updb');
+    }
+    $card = $cardUuid === NULL || $cardUuid === '' ? NULL : $this->loadCard($cardUuid);
+    $para->set('field_swap_for', $card === NULL ? NULL : ['target_id' => $card->id()]);
+    $para->setNewRevision(FALSE);
+    $para->save();
+    $this->pointDeckAtParagraphRevision($deck, $para, $field);
+
+    return $this->slotPayload(
+      $para,
+      max(1, (int) ($para->get('field_quantity')->value ?? 1)),
+      FALSE,
+      $this->slotIsFoil($para),
+      'maybe',
+    );
+  }
+
+  /**
    * Replaces the printing on a deck slot.
    *
    * Collection updates run only for replace or add. none changes the list

@@ -24,6 +24,13 @@ import PrintingSwapDialog, {
   type CollectionSwapMode,
   type PrintingSwapTarget,
 } from '../../components/PrintingSwapDialog';
+import {
+  CardFaceSwitcher,
+  CardFaceText,
+  faceImageRotation,
+  faceImageUri,
+  useCardFaceSwitch,
+} from '../../components/CardFaceSwitcher';
 import { getOracleText } from '../../utils/deckAnalysis';
 import { COMMANDER_SLOT, cardPrintingsPath } from '../../utils/slugify';
 import { useTheme } from '../../context/ThemeContext';
@@ -70,6 +77,7 @@ const CardPage: React.FC = () => {
   });
 
   const title = card?.attributes.title ?? '';
+  const { faces, multiFaced, active: activeFace, setActive: setActiveFace } = useCardFaceSwitch(title);
 
   const { data: printings = [], isLoading: printingsLoading } = useQuery({
     queryKey: ['printings', title],
@@ -228,13 +236,15 @@ const CardPage: React.FC = () => {
       <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', marginBottom: '2rem' }}>
         {attrs.field_image_uri != null && attrs.field_image_uri !== '' && (
           <img
-            src={attrs.field_image_uri}
-            alt={attrs.title}
+            src={faceImageUri(attrs.field_image_uri, faces, activeFace)}
+            alt={multiFaced ? faces[activeFace].name : attrs.title}
             style={{
               width: 265,
               borderRadius: 12,
               alignSelf: 'flex-start',
               flexShrink: 0,
+              transform: faceImageRotation(faces, activeFace),
+              transition: 'transform 0.3s',
             }}
           />
         )}
@@ -259,7 +269,14 @@ const CardPage: React.FC = () => {
             </p>
           )}
 
-          {oracleText !== '' && (
+          {multiFaced && (
+            <>
+              <CardFaceSwitcher faces={faces} active={activeFace} onChange={setActiveFace} />
+              <CardFaceText face={faces[activeFace]} />
+            </>
+          )}
+
+          {!multiFaced && oracleText !== '' && (
             <p
               style={{
                 whiteSpace: 'pre-wrap',
@@ -277,13 +294,13 @@ const CardPage: React.FC = () => {
             </p>
           )}
 
-          {isCreature && (attrs.field_power != null || attrs.field_toughness != null) && (
+          {!multiFaced && isCreature && (attrs.field_power != null || attrs.field_toughness != null) && (
             <p style={{ margin: '0 0 0.5rem', fontWeight: 'bold', color: 'var(--ink)' }}>
               {attrs.field_power ?? '?'} / {attrs.field_toughness ?? '?'}
             </p>
           )}
 
-          {isPlaneswalker && attrs.field_loyalty != null && (
+          {!multiFaced && isPlaneswalker && attrs.field_loyalty != null && (
             <p style={{ margin: '0 0 0.5rem', fontWeight: 'bold', color: 'var(--ink)' }}>
               Loyalty: {attrs.field_loyalty}
             </p>
@@ -356,9 +373,13 @@ const CardPage: React.FC = () => {
               >
                 {a.field_image_uri ? (
                   <img
-                    src={a.field_image_uri}
+                    src={faceImageUri(a.field_image_uri, faces, activeFace)}
                     alt={`${a.title} (${a.field_set_code ?? ''})`}
-                    style={{ width: '100%', display: 'block' }}
+                    style={{
+                      width: '100%',
+                      display: 'block',
+                      transform: faceImageRotation(faces, activeFace),
+                    }}
                   />
                 ) : (
                   <div

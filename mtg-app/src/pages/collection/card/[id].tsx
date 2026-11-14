@@ -14,6 +14,13 @@ import {
 } from '../../../services/drupalApi';
 import { invalidateInventoryQueries, patchCollectionRow } from '../../../services/queryCache';
 import WishlistPanel from '../../../components/WishlistPanel';
+import {
+  CardFaceSwitcher,
+  CardFaceText,
+  faceImageRotation,
+  faceImageUri,
+  useCardFaceSwitch,
+} from '../../../components/CardFaceSwitcher';
 import { getOracleText } from '../../../utils/deckAnalysis';
 import { slugify } from '../../../utils/slugify';
 import { formatPrice, priceFor } from '../../../utils/prices';
@@ -32,6 +39,9 @@ const CollectionCardPage: React.FC = () => {
   });
 
   const cardId = card?.id;
+  const { faces, multiFaced, active: activeFace, setActive: setActiveFace } = useCardFaceSwitch(
+    card?.attributes.title ?? '',
+  );
 
   const { data: cc, isLoading: ccLoading } = useQuery({
     queryKey: ['collectionCard', cardId],
@@ -112,9 +122,16 @@ const CollectionCardPage: React.FC = () => {
       <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
         {a.field_image_uri != null && (
           <img
-            src={a.field_image_uri}
-            alt={a.title}
-            style={{ width: 240, borderRadius: 8, flexShrink: 0 }}
+            src={faceImageUri(a.field_image_uri, faces, activeFace)}
+            alt={multiFaced ? faces[activeFace].name : a.title}
+            style={{
+              width: 240,
+              borderRadius: 8,
+              flexShrink: 0,
+              alignSelf: 'flex-start',
+              transform: faceImageRotation(faces, activeFace),
+              transition: 'transform 0.3s',
+            }}
           />
         )}
 
@@ -128,7 +145,13 @@ const CollectionCardPage: React.FC = () => {
               <span style={{ marginLeft: 8 }}>{a.field_mana_cost}</span>
             )}
           </p>
-          {oracleText !== '' && (
+          {multiFaced && (
+            <div style={{ margin: '0.5rem 0' }}>
+              <CardFaceSwitcher faces={faces} active={activeFace} onChange={setActiveFace} />
+              <CardFaceText face={faces[activeFace]} />
+            </div>
+          )}
+          {!multiFaced && oracleText !== '' && (
             <p
               style={{
                 margin: '0.5rem 0',
@@ -144,7 +167,7 @@ const CollectionCardPage: React.FC = () => {
               {oracleText}
             </p>
           )}
-          {(a.field_power != null || a.field_toughness != null) && (
+          {!multiFaced && (a.field_power != null || a.field_toughness != null) && (
             <p style={{ margin: '0.25rem 0', fontSize: '0.875rem', color: 'var(--ink)' }}>
               {a.field_power}/{a.field_toughness}
             </p>

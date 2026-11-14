@@ -11,6 +11,7 @@ use Drupal\Core\Database\Connection;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\State\StateInterface;
+use Drupal\mtg_scryfall_sync\Service\CardFaces;
 use Drupal\mtg_scryfall_sync\Service\CardParts;
 use Drupal\mtg_scryfall_sync\Service\PriceHistory;
 use Drupal\mtg_scryfall_sync\Service\SetTaxonomy;
@@ -172,6 +173,7 @@ class ScryfallImporter {
     private readonly CacheTagsInvalidatorInterface $cacheTagsInvalidator,
     private readonly PriceHistory $priceHistory,
     private readonly CardParts $cardParts,
+    private readonly CardFaces $cardFaces,
   ) {}
 
   /**
@@ -572,6 +574,9 @@ class ScryfallImporter {
     if (!in_array($card['layout'] ?? '', self::TOKEN_LAYOUTS, TRUE)) {
       $this->cardParts->record((string) ($card['name'] ?? ''), CardParts::fromCard($card));
     }
+
+    // Every face of multi-faced cards; the node keeps only the front face.
+    $this->cardFaces->record((string) ($card['name'] ?? ''), CardFaces::fromCard($card));
 
     // Long-running Drush sync is one HTTP/CLI request, so Drupal's default
     // created/changed stamps would stay frozen at sync start. Use wall clock.
@@ -1121,6 +1126,38 @@ class ScryfallImporter {
     $written = $this->cardParts->replaceAll($rows);
     $this->loggerFactory->get('mtg_scryfall_sync')->info(
       'Card parts import: @count links written.',
+      ['@count' => $written],
+    );
+    return $written;
+  }
+
+  /**
+   * Rebuilds the faces of multi-faced cards from the bulk file.
+   *
+   * Reads the file once and writes only the face table, without saving
+   * nodes. Later full syncs keep the faces up to date card by card.
+   *
+   * @return int
+   *   Faces written.
+   *
+   * @throws \RuntimeException
+   *   When the bulk data file is missing or cannot be read.
+   */
+  public function importCardFaces(): int {
+    if (!$this->dataFileExists()) {
+      throw new \RuntimeException('Scryfall data file not found. Run downloadBulkData() first.');
+    }
+    $rows = (function (): \Generator {
+      foreach ($this->iterateBulkCards() as $card) {
+        $name = (string) ($card['name'] ?? '');
+        foreach (CardFaces::fromCard($card) as $face) {
+          yield ['card_name' => $name] + $face;
+        }
+      }
+    })();
+    $written = $this->cardFaces->replaceAll($rows);
+    $this->loggerFactory->get('mtg_scryfall_sync')->info(
+      'Card faces import: @count faces written.',
       ['@count' => $written],
     );
     return $written;

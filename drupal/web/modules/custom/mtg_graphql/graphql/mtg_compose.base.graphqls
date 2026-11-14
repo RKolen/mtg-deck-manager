@@ -46,6 +46,19 @@ type MtgCard {
   borderColor: String
 }
 
+"One face of a transform, modal, adventure, split or flip card."
+type CardFace {
+  name: String!
+  manaCost: String!
+  typeLine: String!
+  oracleText: String!
+  power: String
+  toughness: String
+  loyalty: String
+  "Scryfall layout of the whole card: transform and modal_dfc have a printed back face; adventure, split, prepare and flip share one image."
+  layout: String!
+}
+
 type Deck {
   id: ID!
   nid: Int!
@@ -54,6 +67,8 @@ type Deck {
   notes: String
   commander: MtgCard
   commanderIsFoil: Boolean!
+  "Land base suggester changes as JSON, or null for the defaults."
+  manaSettings: String
 }
 
 type DeckCard {

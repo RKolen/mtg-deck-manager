@@ -101,6 +101,8 @@ field_config:
         enabled: true
       field_is_foil:
         enabled: true
+      field_swap_for:
+        enabled: true
 settings:
   exclude_unpublished: true
   expose_entity_ids: true

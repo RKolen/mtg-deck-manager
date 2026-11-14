@@ -1,0 +1,19 @@
+uuid: 9d64bcd9-08c4-478b-97d4-88b147e77577
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_mana_settings
+    - node.type.deck
+id: node.deck.field_mana_settings
+field_name: field_mana_settings
+entity_type: node
+bundle: deck
+label: 'Mana settings'
+description: 'Land base suggester changes for this deck as JSON (ratios, card overrides, land count). Only differences from the defaults are stored.'
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: string_long

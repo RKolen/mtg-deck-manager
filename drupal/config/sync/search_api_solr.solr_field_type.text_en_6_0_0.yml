@@ -17765,7 +17765,7 @@ text_files:
     zoogleal, zoogloeal
     zoogleas, zoogloeas
     zygenid, zygaenid
-  protwords: |
+  protwords: |+
 
   accents: |
     # À => A

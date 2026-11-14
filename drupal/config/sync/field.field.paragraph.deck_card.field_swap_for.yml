@@ -1,0 +1,25 @@
+uuid: 9b47359f-ebed-46f7-869e-e5e1b6421b77
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.paragraph.field_swap_for
+    - node.type.mtg_card
+    - paragraphs.paragraphs_type.deck_card
+id: paragraph.deck_card.field_swap_for
+field_name: field_swap_for
+entity_type: paragraph
+bundle: deck_card
+label: 'Swap for'
+description: 'Maybeboard only: the main deck card this candidate is meant to replace.'
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings:
+  handler: 'default:node'
+  handler_settings:
+    target_bundles:
+      mtg_card: mtg_card
+    auto_create: false
+field_type: entity_reference

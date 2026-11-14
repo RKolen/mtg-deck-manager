@@ -31,9 +31,18 @@ export const COLOR_LABEL: Record<MtgColor, string> = {
 // Predicates
 // ---------------------------------------------------------------------------
 
-/** Returns true when the type line indicates a land. */
+/**
+ * Returns true when the card is a land. Only the front face counts: a spell
+ * // land card (MDFC) is a spell that can be played as a land, a Pathway
+ * (Land // Land) is a land.
+ */
 export function isLand(typeLine: string): boolean {
-  return /\bland\b/i.test(typeLine);
+  return /\bland\b/i.test(frontFace(typeLine));
+}
+
+/** Front face of a type line or cost ("Sorcery // Land" -> "Sorcery"). */
+export function frontFace(text: string): string {
+  return text.split(' // ')[0] ?? text;
 }
 
 /**
@@ -934,7 +943,8 @@ export function manaColorDistribution(
 
 /** Returns the broad card category for a given type line. */
 export function classifyType(typeLine: string): string {
-  const lower = typeLine.toLowerCase();
+  // The front face decides, as in isLand.
+  const lower = frontFace(typeLine).toLowerCase();
   if (/\bland\b/.test(lower)) return 'Land';
   if (/creature/.test(lower)) return 'Creature';
   if (/artifact/.test(lower)) return 'Artifact';

@@ -69,6 +69,7 @@ interface GqlComposeDeck {
   changed?: { timestamp: number } | null;
   commander?: GqlMtgCard | null;
   commanderIsFoil?: boolean | null;
+  manaSettings?: string | null;
 }
 
 /** Custom MTG schema Deck (mutations). */
@@ -80,6 +81,7 @@ interface GqlDeck {
   notes: string | null;
   commander?: GqlMtgCard | null;
   commanderIsFoil?: boolean | null;
+  manaSettings?: string | null;
 }
 
 interface GqlDeckCard {
@@ -193,6 +195,7 @@ function toDeckResourceFromCompose(d: GqlComposeDeck): JsonApiResource<DeckAttri
       changed: d.changed?.timestamp ?? null,
       field_commander: toDeckCommander(d.commander),
       field_commander_foil: Boolean(d.commanderIsFoil),
+      field_mana_settings: d.manaSettings ?? null,
     },
   };
 }
@@ -208,6 +211,7 @@ function toDeckResource(d: GqlDeck): JsonApiResource<DeckAttributes> {
       drupal_internal__nid: d.nid,
       field_commander: toDeckCommander(d.commander),
       field_commander_foil: Boolean(d.commanderIsFoil),
+      field_mana_settings: d.manaSettings ?? null,
     },
   };
 }
@@ -302,6 +306,7 @@ const COMPOSE_DECK_FIELDS = gql`
     changed { timestamp }
     commander { ...CardFields }
     commanderIsFoil
+    manaSettings
   }
 `;
 
@@ -311,6 +316,7 @@ const MTG_DECK_FIELDS = gql`
     id nid title format notes
     commander { ...CardFields }
     commanderIsFoil
+    manaSettings
   }
 `;
 
@@ -488,6 +494,7 @@ export async function updateDeck(
       $notes: String
       $commanderId: ID
       $commanderFoil: Boolean
+      $manaSettings: String
     ) {
       updateDeck(
         id: $id
@@ -496,27 +503,39 @@ export async function updateDeck(
         notes: $notes
         commanderId: $commanderId
         commanderFoil: $commanderFoil
+        manaSettings: $manaSettings
       ) { ...DeckFields }
     }
   `;
+  // Only send what the caller passed: a variable sent as null reaches the
+  // server as "clear this field", which used to wipe the notes on every
+  // title, format or commander change.
   const variables: {
     id: string;
-    title: string | null;
-    format: string | null;
-    notes: string | null;
+    title?: string;
+    format?: string;
+    notes?: string | null;
     commanderId?: string;
     commanderFoil?: boolean;
-  } = {
-    id,
-    title: attributes.title ?? null,
-    format: attributes.field_format ?? null,
-    notes: attributes.field_notes ?? null,
-  };
+    manaSettings?: string | null;
+  } = { id };
+  if (attributes.title != null) {
+    variables.title = attributes.title;
+  }
+  if (attributes.field_format != null) {
+    variables.format = attributes.field_format;
+  }
+  if ('field_notes' in attributes) {
+    variables.notes = attributes.field_notes ?? null;
+  }
   if ('commanderId' in attributes) {
     variables.commanderId = attributes.commanderId ?? '';
   }
   if ('commanderFoil' in attributes) {
     variables.commanderFoil = Boolean(attributes.commanderFoil);
+  }
+  if ('field_mana_settings' in attributes) {
+    variables.manaSettings = attributes.field_mana_settings ?? null;
   }
   const data = await getGraphQLClient().request<{ updateDeck: GqlDeck }>(mutation, variables);
   return toDeckResource(data.updateDeck);
@@ -569,6 +588,7 @@ interface GqlComposeDeckCard {
   isSideboard: boolean;
   isFoil?: boolean | null;
   card: GqlComposeMtgCard | null;
+  swapFor?: { uuid: string; title: string } | null;
 }
 
 const COMPOSE_DECK_CARD_FIELDS = gql`
@@ -605,6 +625,12 @@ const COMPOSE_DECK_CARD_FIELDS = gql`
         loyalty
         fullArt
         borderColor
+      }
+    }
+    swapFor {
+      ... on NodeMtgCard {
+        uuid
+        title
       }
     }
   }
@@ -653,6 +679,7 @@ function toDeckCardFromCompose(slot: GqlComposeDeckCard, maybe = false): DeckCar
     board: maybe ? 'maybe' : (slot.isSideboard ? 'side' : 'main'),
     card: composeMtgCardToGql(slot.card),
   });
+  mapped.swapFor = slot.swapFor != null ? { id: slot.swapFor.uuid, title: slot.swapFor.title } : null;
   return mapped;
 }
 
@@ -742,6 +769,20 @@ async function deckCardUpdate(
     }
   `;
   await getGraphQLClient().request(mutation, { deckId, slotId, quantity });
+}
+
+/** Sets the main deck card a maybeboard slot is meant to replace; null clears it. */
+export async function setDeckCardSwapFor(
+  deckId: string,
+  slotId: string,
+  cardId: string | null,
+): Promise<void> {
+  const mutation = gql`
+    mutation DeckCardSetSwapFor($deckId: ID!, $slotId: ID!, $cardId: ID) {
+      deckCardSetSwapFor(deckId: $deckId, slotId: $slotId, cardId: $cardId) { id }
+    }
+  `;
+  await getGraphQLClient().request(mutation, { deckId, slotId, cardId });
 }
 
 export async function setDeckCardFoil(
@@ -1203,6 +1244,35 @@ export async function fetchDeckTokens(deckId: string): Promise<DeckToken[]> {
   `;
   const data = await getGraphQLClient().request<{ deckTokens: DeckToken[] }>(query, { deckId });
   return data.deckTokens;
+}
+
+/** One face of a transform, modal, adventure, split or flip card. */
+export interface CardFace {
+  name: string;
+  manaCost: string;
+  typeLine: string;
+  oracleText: string;
+  power: string | null;
+  toughness: string | null;
+  loyalty: string | null;
+  /** Scryfall layout of the whole card, e.g. transform, modal_dfc, adventure or flip. */
+  layout: string;
+}
+
+/**
+ * Every face of a multi-faced card, front first. Empty for single-faced
+ * cards. Card fields only hold the front face, so back faces come from here.
+ */
+export async function fetchCardFaces(name: string): Promise<CardFace[]> {
+  const query = gql`
+    query GetCardFaces($name: String!) {
+      cardFaces(name: $name) {
+        name manaCost typeLine oracleText power toughness loyalty layout
+      }
+    }
+  `;
+  const data = await getGraphQLClient().request<{ cardFaces: CardFace[] }>(query, { name });
+  return data.cardFaces;
 }
 
 /** Cheapest price of a token across printings with the same name, stats and abilities. */

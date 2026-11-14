@@ -100,6 +100,8 @@ export interface DeckAttributes {
   changed?: number | null;
   field_commander?: DeckCommander | null;
   field_commander_foil?: boolean;
+  /** Land base suggester changes as JSON (see ManaSettings), or null. */
+  field_mana_settings?: string | null;
 }
 
 // Deck cards are stored as paragraph--deck_card entities embedded in
@@ -148,6 +150,8 @@ export interface DeckCardWithCard {
   /** Maybeboard slots never count toward deck size, legality or value. */
   board: DeckBoard;
   card: MtgCardAttributes & { id: string };
+  /** Maybeboard only: the main deck card (printing) this candidate is meant to replace. */
+  swapFor?: { id: string; title: string } | null;
 }
 
 export interface WishIntent {

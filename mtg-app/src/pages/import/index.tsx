@@ -1,9 +1,13 @@
 /**
- * XLSX deck import page — Phase 6.
+ * Deck import page.
  *
  * Parses a Magic Deck Spreadsheet v2 Excel file client-side using xlsx.js,
- * matches card names against the Drupal card library, presents unmatched
- * cards for manual resolution, then creates the deck and slots via GraphQL.
+ * or a plain-text list (.txt) like the deck page's "Copy for Cardmarket"
+ * export or an Arena / Moxfield export. Card names are matched against the
+ * Drupal card library, unmatched cards are resolved by hand, then the deck
+ * and slots are created via GraphQL. In commander formats one line becomes
+ * the commander: a "Commander" section, else the first line, as the export
+ * writes it.
  *
  * The "Collection (CSV)" mode adds cards to the collection instead.
  */
@@ -20,6 +24,10 @@ import {
   importCardToDeck,
 } from '../../services/drupalApi';
 import { slugify } from '../../utils/slugify';
+import { parseCardList } from '../../utils/cardList';
+import { usesCommanderCard } from '../../utils/deckAnalysis';
+import { bestPrice, formatPrice } from '../../utils/prices';
+import { useTheme } from '../../context/ThemeContext';
 import CollectionCsvImport from '../../components/CollectionCsvImport';
 
 // ---------------------------------------------------------------------------
@@ -31,13 +39,20 @@ interface ParsedRow {
   quantity: number;
   isSideboard: boolean;
   isFoil: boolean;
+  /** Listed under a "Commander" header in a text list. */
+  isCommander?: boolean;
+  /** Printing named in a text list, e.g. "(BOT) 17". */
+  setCode?: string | null;
+  collectorNumber?: string | null;
 }
 
 interface MatchedRow extends ParsedRow {
+  /** Stable row key; indexes shift when rows are removed. */
+  uid: number;
   matchId: string | null;
   matchTitle: string | null;
-  candidates: { id: string; title: string }[];
-  addToCollection: boolean;
+  /** Printings to choose from, cheapest first; label adds set, number and price. */
+  candidates: { id: string; title: string; label: string }[];
 }
 
 // ---------------------------------------------------------------------------
@@ -181,6 +196,36 @@ function parseSheet(sheet: XLSX.WorkSheet): ParsedRow[] {
   return results;
 }
 
+/** Whether a dropped or chosen file is a plain-text card list. */
+function isTextList(file: File): boolean {
+  return /\.txt$/i.test(file.name) || file.type === 'text/plain';
+}
+
+/** Rows from a plain-text card list (see parseCardList). */
+function parseTextList(text: string): ParsedRow[] {
+  return parseCardList(text).map(line => ({
+    name: line.name,
+    quantity: line.quantity,
+    isSideboard: line.section === 'side',
+    isFoil: line.isFoil,
+    isCommander: line.section === 'commander',
+    setCode: line.setCode,
+    collectorNumber: line.collectorNumber,
+  }));
+}
+
+/**
+ * The row that becomes the commander: one listed under a Commander header,
+ * else the first line when it is a single main deck copy, which is where
+ * the deck page export writes it.
+ */
+function guessCommanderUid(rows: MatchedRow[]): number | null {
+  const explicit = rows.find(r => r.isCommander === true);
+  if (explicit != null) return explicit.uid;
+  const first = rows[0];
+  return first != null && first.quantity === 1 && !first.isSideboard ? first.uid : null;
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -189,6 +234,7 @@ type Step = 'upload' | 'matching' | 'confirm' | 'importing' | 'done';
 
 const ImportPage: React.FC = () => {
   const router = useRouter();
+  const { currency, usdToEur } = useTheme();
   const [mode, setMode] = useState<'deck' | 'collection'>('deck');
   const [step, setStep] = useState<Step>('upload');
   const [deckTitle, setDeckTitle] = useState('Imported Deck');
@@ -197,7 +243,9 @@ const ImportPage: React.FC = () => {
   const [progress, setProgress] = useState('');
   const [createdDeckId, setCreatedDeckId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [commanderUid, setCommanderUid] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const hasCommander = usesCommanderCard(deckFormat);
 
   const { data: formats = [] } = useQuery({
     queryKey: ['formats'],
@@ -216,25 +264,37 @@ const ImportPage: React.FC = () => {
   const handleFile = useCallback(
     async (file: File): Promise<void> => {
       setError(null);
-      setProgress('Parsing spreadsheet...');
+      const textList = isTextList(file);
+      setProgress(textList ? 'Reading card list...' : 'Parsing spreadsheet...');
       setStep('matching');
 
       try {
-        const buffer = await file.arrayBuffer();
-        const wb = XLSX.read(buffer, { type: 'buffer' });
+        let parsed: ParsedRow[];
+        if (textList) {
+          parsed = parseTextList(await file.text());
+          if (parsed.length === 0) {
+            throw new Error(
+              'Could not detect any cards in this text file. ' +
+                'Expected lines like "4 Lightning Bolt", with the sideboard after a blank line.',
+            );
+          }
+        } else {
+          const buffer = await file.arrayBuffer();
+          const wb = XLSX.read(buffer, { type: 'buffer' });
 
-        // Use the first sheet.
-        const sheetName = wb.SheetNames[0];
-        if (sheetName == null) throw new Error('No sheets found in workbook.');
-        const sheet = wb.Sheets[sheetName];
-        if (sheet == null) throw new Error('Could not read sheet.');
+          // Use the first sheet.
+          const sheetName = wb.SheetNames[0];
+          if (sheetName == null) throw new Error('No sheets found in workbook.');
+          const sheet = wb.Sheets[sheetName];
+          if (sheet == null) throw new Error('Could not read sheet.');
 
-        const parsed = parseSheet(sheet);
-        if (parsed.length === 0) {
-          throw new Error(
-            'Could not detect any cards in this spreadsheet. ' +
-              'Expected rows with a quantity column and a card-name column.',
-          );
+          parsed = parseSheet(sheet);
+          if (parsed.length === 0) {
+            throw new Error(
+              'Could not detect any cards in this spreadsheet. ' +
+                'Expected rows with a quantity column and a card-name column.',
+            );
+          }
         }
 
         setProgress(
@@ -242,33 +302,67 @@ const ImportPage: React.FC = () => {
         );
 
         const matched: MatchedRow[] = [];
-        for (const row of parsed) {
+        for (const [uid, row] of parsed.entries()) {
           // Normalize smart/curly quotes to straight apostrophes so names like
           // "Prey\u2019s Vengeance" match Drupal\u2019s stored straight-apostrophe titles.
           const normalizedName = row.name
             .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
             .replace(/[\u201C\u201D\u201E\u201F]/g, '"');
-          const results = await findCardsByName(normalizedName);
-          const exact = results.find(
-            r => r.attributes.title.toLowerCase() === normalizedName.toLowerCase(),
-          );
+          const lowerName = normalizedName.toLowerCase();
+          let results = await findCardsByName(normalizedName);
+          if (results.length === 0 && !normalizedName.includes(' // ')) {
+            // Arena exports write only the front face of double-faced cards.
+            results = (await findCardsByName(normalizedName, { contains: true }))
+              .filter(r => r.attributes.title.toLowerCase().startsWith(`${lowerName} // `));
+          }
+          const sameCard = results.filter(r => {
+            const title = r.attributes.title.toLowerCase();
+            return title === lowerName || title.startsWith(`${lowerName} // `);
+          });
+          const setCode = row.setCode?.toLowerCase() ?? null;
+          const listedPrinting = setCode == null
+            ? undefined
+            : sameCard.find(r =>
+              (r.attributes.field_set_code ?? '').toLowerCase() === setCode
+              && (row.collectorNumber == null || r.attributes.field_collector_number === row.collectorNumber),
+            );
+          // Cheapest printing first, in the row's finish; unpriced ones last.
+          const price = (r: (typeof results)[number]): number | null =>
+            bestPrice(r.attributes, currency, row.isFoil, usdToEur);
+          const byPrice = (a: (typeof results)[number], b: (typeof results)[number]): number =>
+            (price(a) ?? Infinity) - (price(b) ?? Infinity);
+          const sortedSame = [...sameCard].sort(byPrice);
+          const sorted = [...sortedSame, ...results.filter(r => !sameCard.includes(r)).sort(byPrice)];
+          // A printing named in the list wins; otherwise the cheapest one.
+          const best = listedPrinting ?? sorted[0];
           matched.push({
             ...row,
+            uid,
             name: normalizedName,
-            matchId: exact?.id ?? results[0]?.id ?? null,
-            matchTitle:
-              exact?.attributes.title ??
-              results[0]?.attributes.title ??
-              null,
-            addToCollection: true,
-            candidates: results.map(r => ({
-              id: r.id,
-              title: r.attributes.title,
-            })),
+            matchId: best?.id ?? null,
+            matchTitle: best?.attributes.title ?? null,
+            candidates: sorted.map(r => {
+              const set = (r.attributes.field_set_code ?? '').toUpperCase();
+              const number = r.attributes.field_collector_number ?? '';
+              const printing = set === '' ? '' : ` (${set}${number !== '' ? ` #${number}` : ''})`;
+              const cost = price(r);
+              return {
+                id: r.id,
+                title: r.attributes.title,
+                label: `${r.attributes.title}${printing}${cost != null ? ` — ${formatPrice(cost, currency)}` : ''}`,
+              };
+            }),
           });
         }
 
         setRows(matched);
+        setCommanderUid(guessCommanderUid(matched));
+        // A Commander section, or exactly 100 cards, is a commander deck.
+        const total = parsed.filter(r => !r.isSideboard).reduce((sum, r) => sum + r.quantity, 0);
+        if (parsed.some(r => r.isCommander === true) || total === 100) {
+          const commanderFormat = formats.find(f => f.name.toLowerCase() === 'commander');
+          if (commanderFormat != null) setDeckFormat(commanderFormat.name);
+        }
         setProgress('');
         setStep('confirm');
         setDeckTitle(file.name.replace(/\.[^.]+$/, ''));
@@ -278,7 +372,7 @@ const ImportPage: React.FC = () => {
         setProgress('');
       }
     },
-    [],
+    [formats, currency, usdToEur],
   );
 
   function handleDrop(e: React.DragEvent<HTMLDivElement>): void {
@@ -312,20 +406,17 @@ const ImportPage: React.FC = () => {
     setRows(prev => prev.filter((_, i) => i !== index));
   }
 
-  function toggleCollection(index: number): void {
-    setRows(prev =>
-      prev.map((r, i) => (i === index ? { ...r, addToCollection: !r.addToCollection } : r)),
-    );
-  }
-
   // ----- Step 3: Import -----
 
   async function handleImport(): Promise<void> {
     setError(null);
     setStep('importing');
 
-    const toImport = rows.filter(r => r.matchId != null);
-    if (toImport.length === 0) {
+    const commanderRow = hasCommander
+      ? rows.find(r => r.uid === commanderUid && r.matchId != null) ?? null
+      : null;
+    const toImport = rows.filter(r => r.matchId != null && r !== commanderRow);
+    if (toImport.length === 0 && commanderRow == null) {
       setError('No matched cards to import.');
       setStep('confirm');
       return;
@@ -337,6 +428,7 @@ const ImportPage: React.FC = () => {
         title: deckTitle,
         field_format: deckFormat,
         field_notes: null,
+        commanderId: commanderRow?.matchId ?? null,
       });
 
       setProgress(`Adding ${toImport.length} cards...`);
@@ -366,11 +458,11 @@ const ImportPage: React.FC = () => {
   const unmatched = rows.filter(r => r.matchId == null);
 
   return (
-    <main style={{ padding: '1.5rem', maxWidth: 800 }}>
+    <main style={{ padding: '1.5rem', maxWidth: 1000 }}>
       <p style={{ margin: '0 0 1rem' }}>
-        <Link href="/">Home</Link>
+        <Link href="/" style={{ color: 'var(--accent)' }}>Home</Link>
       </p>
-      <h1 style={{ marginTop: 0 }}>{mode === 'deck' ? 'Import XLSX deck' : 'Import collection CSV'}</h1>
+      <h1 style={{ marginTop: 0 }}>{mode === 'deck' ? 'Import deck' : 'Import collection CSV'}</h1>
 
       <div role="tablist" style={{ display: 'flex', gap: 8, marginBottom: '1rem' }}>
         {(['deck', 'collection'] as const).map(m => (
@@ -382,7 +474,7 @@ const ImportPage: React.FC = () => {
             onClick={() => setMode(m)}
             style={{ fontWeight: mode === m ? 'bold' : 'normal' }}
           >
-            {m === 'deck' ? 'Deck (XLSX)' : 'Collection (CSV)'}
+            {m === 'deck' ? 'Deck (XLSX / TXT)' : 'Collection (CSV)'}
           </button>
         ))}
       </div>
@@ -393,13 +485,21 @@ const ImportPage: React.FC = () => {
       <>
 
       {error != null && (
-        <p style={{ color: '#c00', background: '#fff0f0', padding: '0.75rem', borderRadius: 4 }}>
+        <p
+          style={{
+            color: 'var(--ink)',
+            background: 'color-mix(in srgb, var(--neg) 15%, transparent)',
+            border: '1px solid var(--neg)',
+            padding: '0.75rem',
+            borderRadius: 4,
+          }}
+        >
           {error}
         </p>
       )}
 
       {progress !== '' && (
-        <p style={{ color: '#555', fontStyle: 'italic' }}>{progress}</p>
+        <p style={{ color: 'var(--ink-2)', fontStyle: 'italic' }}>{progress}</p>
       )}
 
       {/* Upload step */}
@@ -409,7 +509,7 @@ const ImportPage: React.FC = () => {
             onDrop={handleDrop}
             onDragOver={e => e.preventDefault()}
             style={{
-              border: '2px dashed #aaa',
+              border: '2px dashed var(--line-2)',
               borderRadius: 8,
               padding: '3rem',
               textAlign: 'center',
@@ -420,24 +520,33 @@ const ImportPage: React.FC = () => {
           >
             <p style={{ margin: 0, fontSize: '1.1rem' }}>
               Drag and drop a{' '}
-              <strong>Magic Deck Spreadsheet v2.xlsx</strong> file here
+              <strong>Magic Deck Spreadsheet v2.xlsx</strong> or a{' '}
+              <strong>.txt card list</strong> here
             </p>
-            <p style={{ margin: '0.5rem 0 0', color: '#888' }}>
+            <p style={{ margin: '0.5rem 0 0', color: 'var(--ink-2)' }}>
               or click to browse
             </p>
           </div>
           <input
             ref={fileRef}
             type="file"
-            accept=".xlsx,.xls,.ods,.csv"
+            accept=".xlsx,.xls,.ods,.csv,.txt"
             style={{ display: 'none' }}
             onChange={handleFileInput}
           />
-          <p style={{ fontSize: '0.85rem', color: '#666' }}>
-            The parser looks for columns named <em>Name</em> and{' '}
+          <p style={{ fontSize: '0.85rem', color: 'var(--ink-2)' }}>
+            Spreadsheets: the parser looks for columns named <em>Name</em> and{' '}
             <em>Quantity</em>, or rows with a numeric quantity in the first
             column followed by the card name. A row or cell containing
             &ldquo;Sideboard&rdquo; marks the sideboard section.
+          </p>
+          <p style={{ fontSize: '0.85rem', color: 'var(--ink-2)' }}>
+            Text lists: one card per line as <em>4 Lightning Bolt</em>, with the
+            sideboard after a blank line &mdash; the format the deck page&rsquo;s
+            &ldquo;Copy for Cardmarket&rdquo; writes. Arena and Moxfield exports
+            (Commander / Deck / Sideboard headers, set codes, *F* foils) work too.
+            In commander formats the Commander section, or else the first line,
+            becomes the commander.
           </p>
         </div>
       )}
@@ -453,8 +562,9 @@ const ImportPage: React.FC = () => {
           {unmatched.length > 0 && (
             <div
               style={{
-                background: '#fff3cd',
-                border: '1px solid #ffc107',
+                color: 'var(--ink)',
+                background: 'color-mix(in srgb, var(--warn) 15%, transparent)',
+                border: '1px solid var(--warn)',
                 borderRadius: 4,
                 padding: '0.75rem',
                 marginBottom: '1rem',
@@ -489,6 +599,25 @@ const ImportPage: React.FC = () => {
                 ))}
               </select>
             </label>
+            {hasCommander && (
+              <label>
+                Commander
+                <select
+                  value={commanderUid ?? ''}
+                  onChange={e => setCommanderUid(e.target.value === '' ? null : Number(e.target.value))}
+                  style={{ display: 'block', marginTop: 4, maxWidth: 320 }}
+                >
+                  <option value="">-- none --</option>
+                  {rows
+                    .filter(r => r.matchId != null && !r.isSideboard)
+                    .map(r => (
+                      <option key={r.uid} value={r.uid}>
+                        {r.matchTitle ?? r.name}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            )}
           </div>
 
           <table
@@ -499,23 +628,24 @@ const ImportPage: React.FC = () => {
             }}
           >
             <thead>
-              <tr style={{ background: '#f5f5f0' }}>
+              <tr style={{ background: 'var(--bg-2)', color: 'var(--ink)', borderBottom: '1px solid var(--line-2)' }}>
                 <th style={{ padding: '0.4rem', textAlign: 'left' }}>Qty</th>
                 <th style={{ padding: '0.4rem', textAlign: 'left' }}>Parsed name</th>
                 <th style={{ padding: '0.4rem', textAlign: 'left' }}>Matched card</th>
                 <th style={{ padding: '0.4rem' }}>SB</th>
                 <th style={{ padding: '0.4rem' }}>Foil</th>
-                <th style={{ padding: '0.4rem' }} title="Add to collection">Collect</th>
                 <th style={{ padding: '0.4rem' }}></th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row, i) => (
                 <tr
-                  key={i}
+                  key={row.uid}
                   style={{
-                    borderTop: '1px solid #eee',
-                    background: row.matchId == null ? '#fff0f0' : undefined,
+                    borderTop: '1px solid var(--line)',
+                    background: row.matchId == null
+                      ? 'color-mix(in srgb, var(--neg) 15%, transparent)'
+                      : undefined,
                   }}
                 >
                   <td style={{ padding: '0.3rem 0.4rem' }}>{row.quantity}</td>
@@ -525,33 +655,24 @@ const ImportPage: React.FC = () => {
                       <select
                         value={row.matchId ?? ''}
                         onChange={e => updateMatch(i, e.target.value)}
-                        style={{ maxWidth: 260 }}
+                        style={{ maxWidth: 440 }}
                       >
                         <option value="">-- unmatched --</option>
                         {row.candidates.map(c => (
                           <option key={c.id} value={c.id}>
-                            {c.title}
+                            {c.label}
                           </option>
                         ))}
                       </select>
                     ) : (
-                      <span style={{ color: '#c00' }}>No candidates found</span>
+                      <span style={{ color: 'var(--neg)' }}>No candidates found</span>
                     )}
                   </td>
                   <td style={{ padding: '0.3rem 0.4rem', textAlign: 'center' }}>
-                    {row.isSideboard ? 'SB' : ''}
+                    {hasCommander && row.uid === commanderUid ? 'CMD' : row.isSideboard ? 'SB' : ''}
                   </td>
                   <td style={{ padding: '0.3rem 0.4rem', textAlign: 'center' }}>
                     {row.isFoil ? 'F' : ''}
-                  </td>
-                  <td style={{ padding: '0.3rem 0.4rem', textAlign: 'center' }}>
-                    <input
-                      type="checkbox"
-                      checked={row.addToCollection}
-                      disabled={row.matchId == null}
-                      onChange={() => toggleCollection(i)}
-                      aria-label="Add to collection"
-                    />
                   </td>
                   <td style={{ padding: '0.3rem 0.4rem', textAlign: 'center' }}>
                     <button
@@ -578,6 +699,7 @@ const ImportPage: React.FC = () => {
               }
             >
               Import {rows.filter(r => r.matchId != null).length} cards
+              {hasCommander && commanderUid != null ? ' (1 as commander)' : ''}
             </button>
             <button
               type="button"
@@ -598,7 +720,7 @@ const ImportPage: React.FC = () => {
       {/* Done */}
       {step === 'done' && createdDeckId != null && (
         <div>
-          <p style={{ color: 'green', fontWeight: 'bold' }}>
+          <p style={{ color: 'var(--pos)', fontWeight: 'bold' }}>
             Deck imported successfully.
           </p>
           <button

@@ -8,6 +8,7 @@ use Drupal\Core\Entity\EntityStorageInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Logger\LoggerChannelInterface;
 use Drupal\node\NodeInterface;
+use Drupal\mtg_card_suggestions\Support\CardType;
 use Drupal\mtg_card_suggestions\Support\SidecarUrl;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\GuzzleException;
@@ -110,7 +111,7 @@ class MatchupAdvisor {
       $name = (string) $card->label();
       $cmc = (float) ($card->hasField('field_cmc') ? $card->get('field_cmc')->value : 0);
       $typeLine = (string) ($card->hasField('field_type_line') ? $card->get('field_type_line')->value : '');
-      $isLand = stripos($typeLine, 'land') !== FALSE;
+      $isLand = CardType::isLand($typeLine);
 
       $lines[] = "{$qty}x {$name}";
       if ($isLand) {

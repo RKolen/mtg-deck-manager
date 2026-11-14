@@ -39,6 +39,7 @@ import {
   addCardToDeck,
   setCardQuantityInDeck,
   setDeckCardFoil,
+  setDeckCardSwapFor,
   removeCardFromDeck,
   restoreDeckSlot,
   updateDeck,
@@ -524,6 +525,15 @@ const DeckEditor: React.FC<EditorProps> = ({
     },
   });
 
+  const setSwapFor = useMutation({
+    mutationFn: ({ slotId, cardId }: { slotId: string; cardId: string | null }) =>
+      setDeckCardSwapFor(deckId, slotId, cardId),
+    onSuccess: () => {
+      // Deck slot edits never change the collection.
+      void invalidateInventoryQueries(qc, { deckId, keepCollectionList: true });
+    },
+  });
+
   const moveSlot = useMutation({
     mutationFn: ({ slotId, board }: { slotId: string; board: DeckBoard }) =>
       moveDeckCard(deckId, slotId, board),
@@ -818,6 +828,64 @@ const DeckEditor: React.FC<EditorProps> = ({
       (copiesByName.get(commander.title) ?? 0) + 1,
     );
   }
+  // Cards a maybeboard candidate can be marked to replace, one per name: the
+  // main deck, or another maybeboard card it is an alternative to.
+  const byTitle = (list: DeckCardWithCard[]): [string, string][] =>
+    [...new Map(list.map(dc => [dc.card.title, dc.card.id])).entries()]
+      .sort(([a], [b]) => a.localeCompare(b));
+  const swapTargets = byTitle(main);
+  const maybeSwapTargets = byTitle(maybeCards);
+
+  /** The "swap for" line under a maybeboard card. */
+  function renderSwapFor(dc: DeckCardWithCard): React.ReactNode {
+    const target = dc.swapFor ?? null;
+    const otherMaybe = maybeSwapTargets.filter(([title]) => title !== dc.card.title);
+    const allTargets = [...swapTargets, ...otherMaybe];
+    const known = target != null && allTargets.some(([title]) => title === target.title);
+    const GONE = '__gone';
+    const value = target == null ? '' : known ? target.title : GONE;
+    return (
+      <label
+        style={{
+          display: 'inline-flex',
+          gap: 6,
+          alignItems: 'center',
+          opacity: target == null ? 0.7 : 1,
+        }}
+      >
+        <span aria-hidden="true">↳</span>
+        Swap for
+        <select
+          value={value}
+          disabled={setSwapFor.isPending}
+          onChange={e => {
+            const title = e.target.value;
+            if (title === GONE) return;
+            const cardId = allTargets.find(([t]) => t === title)?.[1] ?? null;
+            setSwapFor.mutate({ slotId: dc.id, cardId });
+          }}
+          style={{ fontSize: '0.8rem', maxWidth: 260 }}
+        >
+          <option value="">—</option>
+          {target != null && !known && (
+            <option value={GONE}>{target.title} (no longer in this deck)</option>
+          )}
+          <optgroup label="Main deck">
+            {swapTargets.map(([title]) => (
+              <option key={title} value={title}>{title}</option>
+            ))}
+          </optgroup>
+          {otherMaybe.length > 0 && (
+            <optgroup label="Maybe board">
+              {otherMaybe.map(([title]) => (
+                <option key={`maybe-${title}`} value={title}>{title}</option>
+              ))}
+            </optgroup>
+          )}
+        </select>
+      </label>
+    );
+  }
 
   function renderTypeGroups(
     list: DeckCardWithCard[],
@@ -888,8 +956,8 @@ const DeckEditor: React.FC<EditorProps> = ({
     const notOwned = ownedQty < 1;
     const selected = selectedSlotId === dc.id;
     return (
+      <React.Fragment key={dc.id}>
       <tr
-        key={dc.id}
         onClick={() => setSelectedSlotId(dc.id)}
         style={{
           background: selected ? 'var(--bg-2)' : undefined,
@@ -1041,6 +1109,18 @@ const DeckEditor: React.FC<EditorProps> = ({
           </button>
         </td>
       </tr>
+      {isMaybe && (
+        <tr style={{ background: selected ? 'var(--bg-2)' : undefined }}>
+          <td
+            colSpan={4}
+            style={{ padding: '0 0.5rem 0.4rem 1.25rem', fontSize: '0.8rem' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {renderSwapFor(dc)}
+          </td>
+        </tr>
+      )}
+      </React.Fragment>
     );
   }
 
@@ -3339,6 +3419,7 @@ const DeckPage: React.FC = () => {
           cards={deckCards}
           format={deck.attributes.field_format}
           commander={deck.attributes.field_commander}
+          manaSettings={deck.attributes.field_mana_settings ?? null}
         />
       ) : tab === 'suggestions' ? (
         <DeckSuggestions deckNid={deck.attributes.drupal_internal__nid} />

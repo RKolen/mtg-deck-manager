@@ -302,7 +302,76 @@ function mtg_scryfall_sync_schema(): array {
       'primary key' => ['nid'],
     ],
     'mtg_card_part' => mtg_scryfall_sync_card_part_schema(),
+    'mtg_card_face' => mtg_scryfall_sync_card_face_schema(),
   ];
+}
+
+/**
+ * Schema of mtg_card_face: every face of multi-faced cards.
+ *
+ * @return array<string, mixed>
+ *   Table definition.
+ */
+function mtg_scryfall_sync_card_face_schema(): array {
+  $text = static fn(string $description, int $length): array => [
+    'description' => $description,
+    'type' => 'varchar',
+    'length' => $length,
+    'not null' => TRUE,
+    'default' => '',
+  ];
+  return [
+    'description' => 'Faces of transform, modal, adventure, split and flip cards, from Scryfall card_faces.',
+    'fields' => [
+      'card_name' => $text('Full card name (mtg_card title).', 255),
+      'face_index' => [
+        'description' => 'Position of the face on the card, front face first.',
+        'type' => 'int',
+        'size' => 'tiny',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ],
+      'name' => $text('Face name.', 255),
+      'mana_cost' => $text('Face mana cost.', 64),
+      'type_line' => $text('Face type line.', 255),
+      'oracle_text' => [
+        'description' => 'Face oracle text.',
+        'type' => 'text',
+        'size' => 'normal',
+        'not null' => FALSE,
+      ],
+      'power' => $text('Face power.', 16),
+      'toughness' => $text('Face toughness.', 16),
+      'loyalty' => $text('Face loyalty.', 16),
+      'layout' => $text('Scryfall layout of the card, e.g. transform or adventure.', 32),
+    ],
+    'primary key' => ['card_name', 'face_index'],
+  ];
+}
+
+/**
+ * Adds the card layout to mtg_card_face, for the front/back switcher.
+ */
+function mtg_scryfall_sync_update_9008(): string {
+  $schema = \Drupal::database()->schema();
+  if ($schema->fieldExists('mtg_card_face', 'layout')) {
+    return 'mtg_card_face.layout already exists.';
+  }
+  $schema->addField('mtg_card_face', 'layout', mtg_scryfall_sync_card_face_schema()['fields']['layout']);
+  return 'Added mtg_card_face.layout. Refill it with drush mtg:card-faces.';
+}
+
+/**
+ * Creates the mtg_card_face table for back-face rules text.
+ */
+function mtg_scryfall_sync_update_9007(): string {
+  $schema = \Drupal::database()->schema();
+  if ($schema->tableExists('mtg_card_face')) {
+    return 'mtg_card_face already exists.';
+  }
+  $schema->createTable('mtg_card_face', mtg_scryfall_sync_card_face_schema());
+  return 'Created mtg_card_face. Fill it with drush mtg:card-faces.';
 }
 
 /**

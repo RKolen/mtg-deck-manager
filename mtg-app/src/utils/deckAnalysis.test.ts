@@ -4,9 +4,24 @@ import {
   companionDeckSizeBonus,
   deckCompanion,
   deckListAllowance,
+  classifyType,
   evaluateDeckLegality,
+  isLand,
   isMainDeckSizeOk,
 } from './deckAnalysis';
+
+describe('isLand / classifyType', () => {
+  it('judge two-faced cards by the front face', () => {
+    expect(isLand('Basic Land — Island')).toBe(true);
+    expect(isLand('Land // Land')).toBe(true);
+    expect(isLand('Land — Town // Sorcery — Adventure')).toBe(true);
+    expect(isLand('Instant // Land')).toBe(false);
+    expect(isLand('Creature — Human Wizard // Creature — Human Insect')).toBe(false);
+    expect(classifyType('Sorcery // Land')).toBe('Sorcery');
+    expect(classifyType('Instant // Land')).toBe('Instant');
+    expect(classifyType('Land // Land')).toBe('Land');
+  });
+});
 
 const YORION_TEXT = 'Companion — Your starting deck contains at least twenty cards more than the minimum deck size. '
   + '(If this card is your chosen companion, you may put it into your hand from outside the game for {3} as a '

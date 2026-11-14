@@ -121,10 +121,15 @@
         }
     },
     "require-dev": {
+        "behat/mink": "^1.11",
         "drupal/coder": "^9.0",
         "mglaman/phpstan-drupal": "^2.0",
+        "mikey179/vfsstream": "^1.6.11",
+        "phpspec/prophecy-phpunit": "^2",
         "phpstan/phpstan": "^2.1",
         "phpstan/phpstan-deprecation-rules": "^2.0",
+        "phpstan/phpstan-phpunit": "^2.0.16",
+        "phpunit/phpunit": "^11.5.50",
         "squizlabs/php_codesniffer": "^4.0"
     }
 }

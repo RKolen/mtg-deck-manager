@@ -96,6 +96,9 @@ extend type Query {
   "Which decks use a card (any printing) and how many copies are owned."
   cardDeckUsage(name: String!): CardDeckUsage!
 
+  "Every face of a multi-faced card, front first; empty for single-faced cards."
+  cardFaces(name: String!): [CardFace!]!
+
   "Tokens, emblems and game pieces the main deck, sideboard and commander can make, one entry per distinct token."
   deckTokens(deckId: ID!): [DeckToken!]!
 
@@ -115,12 +118,23 @@ extend type Query {
 extend type NodeDeck {
   commander: MtgCard
   commanderIsFoil: Boolean!
+  "Land base suggester changes as JSON, or null for the defaults."
+  manaSettings: String
 }
 
 extend type Mutation {
   createDeck(title: String!, format: String!, notes: String, commanderId: ID): Deck!
 
-  updateDeck(id: ID!, title: String, format: String, notes: String, commanderId: ID, commanderFoil: Boolean): Deck!
+  updateDeck(
+    id: ID!
+    title: String
+    format: String
+    notes: String
+    commanderId: ID
+    commanderFoil: Boolean
+    "Land base suggester changes as a JSON object; empty clears them. Omit to keep."
+    manaSettings: String
+  ): Deck!
 
   deleteDeck(id: ID!): Boolean!
 
@@ -159,6 +173,9 @@ extend type Mutation {
   ): DeckCardSlot!
 
   deckCardRemove(deckId: ID!, slotId: ID!): Boolean!
+
+  "Sets the main deck card a maybeboard slot is meant to replace; omit or null cardId to clear it."
+  deckCardSetSwapFor(deckId: ID!, slotId: ID!, cardId: ID): DeckCardSlot!
 
   "Moves a slot to main, side or maybe, merging with an existing slot of the same printing."
   deckCardMove(deckId: ID!, slotId: ID!, board: String!): DeckCardSlot!

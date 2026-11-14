@@ -105,8 +105,12 @@ class CardInfo:
 
     @property
     def is_land(self) -> bool:
-        """True when the card's type line contains 'Land'."""
-        return "Land" in self.type_line
+        """True when the card's front face is a land.
+
+        A spell // land card (modal double-faced card) is a spell that can be
+        played as a land; a Pathway (Land // Land) is a land.
+        """
+        return "Land" in self.type_line.split(" // ")[0]
 
     @property
     def is_creature(self) -> bool:
