@@ -100,6 +100,9 @@ export interface DeckAttributes {
   changed?: number | null;
   field_commander?: DeckCommander | null;
   field_commander_foil?: boolean;
+  /** Second commander (Partner, Friends forever, Background, Doctor's companion). */
+  field_partner?: DeckCommander | null;
+  field_partner_foil?: boolean;
   /** Land base suggester changes as JSON (see ManaSettings), or null. */
   field_mana_settings?: string | null;
 }

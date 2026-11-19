@@ -347,7 +347,10 @@ const DecksPage: React.FC = () => {
                 const colors = cards
                   ? deckColorIdentity(
                       cards,
-                      d.attributes.field_commander?.field_color_identity ?? [],
+                      [
+                        ...(d.attributes.field_commander?.field_color_identity ?? []),
+                        ...(d.attributes.field_partner?.field_color_identity ?? []),
+                      ],
                     )
                   : [];
                 const value = cards
@@ -358,12 +361,14 @@ const DecksPage: React.FC = () => {
                   isMainDeckSizeOk(d.attributes.field_format, md, {
                     nonRulebreakerCount: nonRulebreakerMainCount(cards ?? []),
                     cards: cards ?? [],
+                    extraCommanders: d.attributes.field_partner != null ? 1 : 0,
                   });
                 const legality = cards
                   ? evaluateDeckLegality(
                       d.attributes.field_format,
                       cards,
                       d.attributes.field_commander ?? null,
+                      d.attributes.field_partner ?? null,
                     )
                   : null;
                 return (
@@ -480,6 +485,7 @@ const DecksPage: React.FC = () => {
                     selected.attributes.field_format,
                     selectedCards,
                     selected.attributes.field_commander ?? null,
+                    selected.attributes.field_partner ?? null,
                   )
                 : null
             }
@@ -623,7 +629,10 @@ function DeckPreview({
   const top = [...md].sort((a, b) => b.quantity - a.quantity).slice(0, 6);
   const colors = deckColorIdentity(
     cards,
-    deck.attributes.field_commander?.field_color_identity ?? [],
+    [
+      ...(deck.attributes.field_commander?.field_color_identity ?? []),
+      ...(deck.attributes.field_partner?.field_color_identity ?? []),
+    ],
   );
 
   return (

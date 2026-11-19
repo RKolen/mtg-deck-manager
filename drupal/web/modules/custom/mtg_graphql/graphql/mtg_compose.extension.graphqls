@@ -118,12 +118,14 @@ extend type Query {
 extend type NodeDeck {
   commander: MtgCard
   commanderIsFoil: Boolean!
+  partner: MtgCard
+  partnerIsFoil: Boolean!
   "Land base suggester changes as JSON, or null for the defaults."
   manaSettings: String
 }
 
 extend type Mutation {
-  createDeck(title: String!, format: String!, notes: String, commanderId: ID): Deck!
+  createDeck(title: String!, format: String!, notes: String, commanderId: ID, partnerId: ID): Deck!
 
   updateDeck(
     id: ID!
@@ -132,6 +134,9 @@ extend type Mutation {
     notes: String
     commanderId: ID
     commanderFoil: Boolean
+    "Second commander; empty clears it. Must be a legal pair with the commander."
+    partnerId: ID
+    partnerFoil: Boolean
     "Land base suggester changes as a JSON object; empty clears them. Omit to keep."
     manaSettings: String
   ): Deck!

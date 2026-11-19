@@ -81,15 +81,15 @@ class DeckCopyLimitValidator extends ConstraintValidator {
       }
     }
 
-    $commander = $this->commanderCard($entity);
-    if ($commander instanceof ContentEntityInterface) {
+    $commanders = $this->commanderCards($entity);
+    foreach ($commanders as $commander) {
       $commander_id = (int) $commander->id();
       if ($commander_id > 0) {
         $slot_card_ids[$commander_id] = $commander_id;
       }
     }
 
-    if ($slot_rows === [] && !$commander instanceof ContentEntityInterface) {
+    if ($slot_rows === [] && $commanders === []) {
       return;
     }
 
@@ -120,7 +120,7 @@ class DeckCopyLimitValidator extends ConstraintValidator {
       $copiesByName[$name]['qty'] += $row['qty'];
     }
 
-    if ($commander instanceof ContentEntityInterface) {
+    foreach ($commanders as $commander) {
       $name = (string) $commander->label();
       if ($name !== '') {
         if (!isset($copiesByName[$name])) {
@@ -162,6 +162,7 @@ class DeckCopyLimitValidator extends ConstraintValidator {
       $formatLabel,
       $mainQuantities,
       $cards,
+      max(0, count($commanders) - 1),
     );
   }
 
@@ -285,18 +286,23 @@ class DeckCopyLimitValidator extends ConstraintValidator {
   }
 
   /**
-   * Designated commander card, if the deck has one.
+   * Designated commander and partner commander cards the deck has.
+   *
+   * @return \Drupal\Core\Entity\ContentEntityInterface[]
+   *   Zero, one or two cards.
    */
-  private function commanderCard(ContentEntityInterface $deck): ?ContentEntityInterface {
-    if (!$deck->hasField('field_commander') || $deck->get('field_commander')->isEmpty()) {
-      return NULL;
+  private function commanderCards(ContentEntityInterface $deck): array {
+    $out = [];
+    foreach (['field_commander', 'field_partner'] as $field) {
+      if (!$deck->hasField($field) || $deck->get($field)->isEmpty()) {
+        continue;
+      }
+      $item = $deck->get($field)->first();
+      if ($item instanceof EntityReferenceItem && $item->entity instanceof ContentEntityInterface) {
+        $out[] = $item->entity;
+      }
     }
-    $item = $deck->get('field_commander')->first();
-    if (!$item instanceof EntityReferenceItem || $item->entity === NULL) {
-      return NULL;
-    }
-    $commander = $item->entity;
-    return $commander instanceof ContentEntityInterface ? $commander : NULL;
+    return $out;
   }
 
   /**
@@ -344,6 +350,8 @@ class DeckCopyLimitValidator extends ConstraintValidator {
    *   Main-deck quantity keyed by card nid.
    * @param array<int, \Drupal\Core\Entity\ContentEntityInterface|null> $cards
    *   Loaded card nodes keyed by nid.
+   * @param int $extra_commanders
+   *   Commanders beyond the first (a partner takes one main-deck slot).
    */
   private function validateMainDeckSize(
     DeckCopyLimit $constraint,
@@ -351,11 +359,13 @@ class DeckCopyLimitValidator extends ConstraintValidator {
     string $format_label,
     array $main_quantities,
     array $cards,
+    int $extra_commanders = 0,
   ): void {
     $max = $this->mainHardMax($normalized);
     if ($max === NULL) {
       return;
     }
+    $max -= $extra_commanders;
 
     $main_total = 0;
     $non_rulebreaker = 0;

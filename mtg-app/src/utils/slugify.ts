@@ -22,6 +22,9 @@ export function slugify(title: string): string {
 /** Sentinel slot id for the deck-level commander printing. */
 export const COMMANDER_SLOT = 'commander';
 
+/** Sentinel slot id for the deck-level partner (second commander) printing. */
+export const PARTNER_SLOT = 'partner';
+
 /** Builds /cards/:slug with optional printing / deck-slot context. */
 export function cardPrintingsPath(
   title: string,

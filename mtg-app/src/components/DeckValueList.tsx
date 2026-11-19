@@ -5,7 +5,7 @@
 import React, { useMemo } from 'react';
 import { useTheme } from '../context/ThemeContext';
 import type { DeckCardWithCard, DeckCommander } from '../types/drupal';
-import { COMMANDER_SLOT } from '../utils/slugify';
+import { COMMANDER_SLOT, PARTNER_SLOT } from '../utils/slugify';
 import {
   formatPrice,
   slotUnitPrice,
@@ -18,6 +18,8 @@ export interface DeckValueListProps {
   commander?: DeckCommander | null;
   commanderFoil?: boolean;
   commanderLabel?: string;
+  partner?: DeckCommander | null;
+  partnerFoil?: boolean;
   selectedSlotId: string | null;
   onSelect: (slotId: string) => void;
 }
@@ -47,6 +49,8 @@ const DeckValueList: React.FC<DeckValueListProps> = ({
   commander,
   commanderFoil = false,
   commanderLabel = 'Commander',
+  partner = null,
+  partnerFoil = false,
   selectedSlotId,
   onSelect,
 }) => {
@@ -62,6 +66,17 @@ const DeckValueList: React.FC<DeckValueListProps> = ({
         line: unit,
         zone: 'commander',
         foil: commanderFoil,
+      });
+    }
+    if (partner != null) {
+      const unit = slotUnitPrice(partner, currency, partnerFoil, usdToEur);
+      items.push({
+        slotId: PARTNER_SLOT,
+        title: partner.title,
+        quantity: 1,
+        line: unit,
+        zone: 'commander',
+        foil: partnerFoil,
       });
     }
     for (const slot of cards) {
@@ -82,7 +97,7 @@ const DeckValueList: React.FC<DeckValueListProps> = ({
       return a.title.localeCompare(b.title);
     });
     return items;
-  }, [cards, commander, commanderFoil, currency, usdToEur]);
+  }, [cards, commander, commanderFoil, partner, partnerFoil, currency, usdToEur]);
 
   const total = rows.reduce((sum, row) => sum + row.line, 0);
   const priced = rows.filter(row => row.line > 0).length;

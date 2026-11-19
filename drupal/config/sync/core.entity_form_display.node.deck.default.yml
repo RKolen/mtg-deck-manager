@@ -12,6 +12,8 @@ dependencies:
     - field.field.node.deck.field_mana_settings
     - field.field.node.deck.field_maybe_cards
     - field.field.node.deck.field_notes
+    - field.field.node.deck.field_partner
+    - field.field.node.deck.field_partner_foil
     - node.type.deck
   module:
     - field_group
@@ -40,6 +42,8 @@ third_party_settings:
         - field_commander
         - field_commander_foil
         - field_mana_settings
+        - field_partner
+        - field_partner_foil
       label: Details
       region: content
       parent_name: group_deck_tabs
@@ -165,6 +169,23 @@ content:
     settings:
       rows: 5
       placeholder: ''
+    third_party_settings: {  }
+  field_partner:
+    type: entity_reference_autocomplete
+    weight: 6
+    region: content
+    settings:
+      match_operator: CONTAINS
+      match_limit: 10
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_partner_foil:
+    type: boolean_checkbox
+    weight: 7
+    region: content
+    settings:
+      display_label: true
     third_party_settings: {  }
   langcode:
     type: language_select

@@ -51,11 +51,20 @@ export function useCardFaceSwitch(cardTitle: string): CardFaceSwitch {
  * Scryfall serves the back of a double-faced printing at the same URL with
  * /front/ swapped for /back/; this holds for every transform and modal_dfc
  * printing in the bulk data. Other layouts print every face on one image.
+ * A locally cached front (mtg_cards/<scryfall id>.jpg) has no back copy, so
+ * the back is loaded from Scryfall by that id.
  */
 export function faceImageUri(frontUri: string, faces: CardFace[], index: number): string {
   const layout = faces[0]?.layout ?? '';
-  if (index > 0 && TWO_SIDED_LAYOUTS.has(layout)) {
+  if (index === 0 || !TWO_SIDED_LAYOUTS.has(layout)) {
+    return frontUri;
+  }
+  if (frontUri.includes('/front/')) {
     return frontUri.replace('/front/', '/back/');
+  }
+  const local = /\/mtg_cards\/(([0-9a-f])([0-9a-f])[0-9a-f-]{34})\.jpg/.exec(frontUri);
+  if (local != null) {
+    return `https://cards.scryfall.io/normal/back/${local[2]}/${local[3]}/${local[1]}.jpg`;
   }
   return frontUri;
 }

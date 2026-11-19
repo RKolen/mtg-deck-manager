@@ -431,3 +431,88 @@ function mtg_graphql_update_9010(): string {
 
   return 'Created field_swap_for on deck_card paragraphs.';
 }
+
+/**
+ * Adds field_partner and field_partner_foil on deck nodes.
+ *
+ * A second commander for Partner, Partner with, Friends forever, Choose a
+ * Background and Doctor's companion pairs. Kept separate from
+ * field_commander so single-commander code keeps working unchanged.
+ */
+function mtg_graphql_update_9011(): string {
+  if (!FieldStorageConfig::loadByName('node', 'field_partner')) {
+    FieldStorageConfig::create([
+      'field_name' => 'field_partner',
+      'entity_type' => 'node',
+      'type' => 'entity_reference',
+      'cardinality' => 1,
+      'settings' => ['target_type' => 'node'],
+    ])->save();
+  }
+  if (!FieldConfig::loadByName('node', 'deck', 'field_partner')) {
+    FieldConfig::create([
+      'field_name' => 'field_partner',
+      'entity_type' => 'node',
+      'bundle' => 'deck',
+      'label' => 'Partner commander',
+      'description' => 'Second commander (Partner, Friends forever, Background, Doctor\'s companion).',
+      'required' => FALSE,
+      'settings' => [
+        'handler' => 'default:node',
+        'handler_settings' => [
+          'target_bundles' => ['mtg_card' => 'mtg_card'],
+          'auto_create' => FALSE,
+        ],
+      ],
+    ])->save();
+  }
+
+  if (!FieldStorageConfig::loadByName('node', 'field_partner_foil')) {
+    FieldStorageConfig::create([
+      'field_name' => 'field_partner_foil',
+      'entity_type' => 'node',
+      'type' => 'boolean',
+      'cardinality' => 1,
+    ])->save();
+  }
+  if (!FieldConfig::loadByName('node', 'deck', 'field_partner_foil')) {
+    FieldConfig::create([
+      'field_name' => 'field_partner_foil',
+      'entity_type' => 'node',
+      'bundle' => 'deck',
+      'label' => 'Partner foil',
+      'description' => 'When enabled, the partner commander is a foil copy.',
+      'required' => FALSE,
+      'default_value' => [['value' => 0]],
+      'settings' => ['on_label' => 'Foil', 'off_label' => 'Non-foil'],
+    ])->save();
+  }
+
+  $display = \Drupal::entityTypeManager()->getStorage('entity_form_display')->load('node.deck.default');
+  if ($display instanceof EntityFormDisplay) {
+    $display->setComponent('field_partner', [
+      'type' => 'entity_reference_autocomplete',
+      'weight' => 6,
+      'region' => 'content',
+      'settings' => ['match_operator' => 'CONTAINS', 'match_limit' => 10, 'size' => 60, 'placeholder' => ''],
+    ]);
+    $display->setComponent('field_partner_foil', [
+      'type' => 'boolean_checkbox',
+      'weight' => 7,
+      'region' => 'content',
+      'settings' => ['display_label' => TRUE],
+    ]);
+    $group = $display->getThirdPartySetting('field_group', 'group_deck_details');
+    if (is_array($group) && isset($group['children']) && is_array($group['children'])) {
+      foreach (['field_partner', 'field_partner_foil'] as $name) {
+        if (!in_array($name, $group['children'], TRUE)) {
+          $group['children'][] = $name;
+        }
+      }
+      $display->setThirdPartySetting('field_group', 'group_deck_details', $group);
+    }
+    $display->save();
+  }
+
+  return 'Created field_partner and field_partner_foil on deck.';
+}

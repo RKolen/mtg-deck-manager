@@ -67,6 +67,9 @@ type Deck {
   notes: String
   commander: MtgCard
   commanderIsFoil: Boolean!
+  "Second commander (Partner, Friends forever, Background, Doctor's companion)."
+  partner: MtgCard
+  partnerIsFoil: Boolean!
   "Land base suggester changes as JSON, or null for the defaults."
   manaSettings: String
 }

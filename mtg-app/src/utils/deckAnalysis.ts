@@ -14,6 +14,7 @@
 
 import type { DeckCardWithCard } from '../types/drupal';
 import { companionRule, type CompanionCard } from './companions';
+import { canPair } from './partnerRules';
 
 export type MtgColor = 'W' | 'U' | 'B' | 'R' | 'G';
 
@@ -313,13 +314,15 @@ export function companionDeckSizeBonus(oracleText: string): number {
 export function deckListAllowance(
   format: string | null | undefined,
   cards: DeckCardWithCard[] = [],
+  extraCommanders = 0,
 ): DeckListAllowance {
   const base = baseAllowance(format);
   const companion = deckCompanion(cards);
   const bonus = companion != null ? companionDeckSizeBonus(getOracleText(companion)) : 0;
   return {
     ...base,
-    mainTarget: base.mainHardMax ? base.mainTarget : base.mainTarget + bonus,
+    // A partner commander takes one of the fixed main-deck slots.
+    mainTarget: base.mainHardMax ? base.mainTarget - extraCommanders : base.mainTarget + bonus,
     companion: companion?.title ?? null,
     companionBonus: bonus,
   };
@@ -396,9 +399,9 @@ export function canAddToMain(
 export function isMainDeckSizeOk(
   format: string | null | undefined,
   mainCount: number,
-  options?: { nonRulebreakerCount?: number; cards?: DeckCardWithCard[] },
+  options?: { nonRulebreakerCount?: number; cards?: DeckCardWithCard[]; extraCommanders?: number },
 ): boolean {
-  const allowance = deckListAllowance(format, options?.cards);
+  const allowance = deckListAllowance(format, options?.cards, options?.extraCommanders ?? 0);
   if (allowance.mainHardMax) {
     const nonRb = options?.nonRulebreakerCount ?? mainCount;
     return mainCount >= allowance.mainTarget && nonRb <= allowance.mainTarget;
@@ -514,6 +517,7 @@ function toCompanionCard(card: DeckLegalityCard): CompanionCard {
 function companionConditionIssue(
   cards: DeckCardWithCard[],
   commander: DeckLegalityCard | null | undefined,
+  partner: DeckLegalityCard | null | undefined = null,
 ): DeckLegalityIssue | null {
   const companion = deckCompanion(cards);
   if (companion == null) {
@@ -529,8 +533,10 @@ function companionConditionIssue(
       startingDeck.push(toCompanionCard(slot.card));
     }
   }
-  if (commander != null) {
-    startingDeck.push(toCompanionCard(commander));
+  for (const c of [commander, partner]) {
+    if (c != null) {
+      startingDeck.push(toCompanionCard(c));
+    }
   }
   const offenders = rule.offenders(startingDeck);
   if (offenders.length === 0) {
@@ -602,15 +608,17 @@ export function evaluateDeckLegality(
   format: string | null | undefined,
   cards: DeckCardWithCard[],
   commander: DeckLegalityCard | null | undefined = null,
+  partner: DeckLegalityCard | null | undefined = null,
 ): DeckLegality {
   const issues: DeckLegalityIssue[] = [];
-  const allowance = deckListAllowance(format, cards);
+  const extraCommanders = partner != null ? 1 : 0;
+  const allowance = deckListAllowance(format, cards, extraCommanders);
   const mainCount = totalCount(mainDeck(cards));
   const nonRb = nonRulebreakerMainCount(cards);
   const formatLabel = (format ?? '').trim() || 'this format';
   const scryfallKey = scryfallFormatKey(format);
 
-  const companionIssue = companionConditionIssue(cards, commander);
+  const companionIssue = companionConditionIssue(cards, commander, partner);
   if (companionIssue != null) {
     issues.push(companionIssue);
   }
@@ -622,7 +630,7 @@ export function evaluateDeckLegality(
     });
   }
 
-  if (!isMainDeckSizeOk(format, mainCount, { nonRulebreakerCount: nonRb, cards })) {
+  if (!isMainDeckSizeOk(format, mainCount, { nonRulebreakerCount: nonRb, cards, extraCommanders })) {
     if (allowance.mainHardMax && nonRb > allowance.mainTarget) {
       issues.push({
         code: 'size',
@@ -645,6 +653,15 @@ export function evaluateDeckLegality(
       message: `Missing commander for ${formatLabel}.`,
     });
   }
+  if (commander != null && partner != null) {
+    const pair = (c: DeckLegalityCard) => ({ title: c.title, typeLine: c.field_type_line ?? '', oracleText: getOracleText(c) });
+    if (!canPair(pair(commander), pair(partner))) {
+      issues.push({
+        code: 'commander',
+        message: `${partner.title} cannot be a second commander with ${commander.title}.`,
+      });
+    }
+  }
 
   const byName = new Map<string, { qty: number; card: DeckLegalityCard }>();
   const addNamed = (card: DeckLegalityCard, qty: number) => {
@@ -663,8 +680,10 @@ export function evaluateDeckLegality(
   for (const slot of cards) {
     addNamed(slot.card, slot.quantity);
   }
-  if (commander != null) {
-    addNamed(commander, 1);
+  for (const c of [commander, partner]) {
+    if (c != null) {
+      addNamed(c, 1);
+    }
   }
 
   for (const { qty, card } of byName.values()) {
@@ -717,8 +736,10 @@ export function evaluateDeckLegality(
   for (const slot of cards) {
     checkManaValue(slot.card);
   }
-  if (commander != null) {
-    checkManaValue(commander);
+  for (const c of [commander, partner]) {
+    if (c != null) {
+      checkManaValue(c);
+    }
   }
 
   return { ok: issues.length === 0, issues };

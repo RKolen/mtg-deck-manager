@@ -203,8 +203,13 @@ final class WishlistService {
         }
       }
     }
-    $commander = $deck->hasField('field_commander') ? $deck->get('field_commander')->entity : NULL;
-    return $commander instanceof NodeInterface && $commander->getTitle() === $title;
+    foreach (['field_commander', 'field_partner'] as $field) {
+      $commander = $deck->hasField($field) ? $deck->get($field)->entity : NULL;
+      if ($commander instanceof NodeInterface && $commander->getTitle() === $title) {
+        return TRUE;
+      }
+    }
+    return FALSE;
   }
 
   /**

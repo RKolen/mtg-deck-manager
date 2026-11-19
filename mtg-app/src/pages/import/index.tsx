@@ -226,6 +226,12 @@ function guessCommanderUid(rows: MatchedRow[]): number | null {
   return first != null && first.quantity === 1 && !first.isSideboard ? first.uid : null;
 }
 
+/** A second card under the Commander header becomes the partner commander. */
+function guessPartnerUid(rows: MatchedRow[]): number | null {
+  const listed = rows.filter(r => r.isCommander === true);
+  return listed.length >= 2 ? listed[1].uid : null;
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -244,6 +250,7 @@ const ImportPage: React.FC = () => {
   const [createdDeckId, setCreatedDeckId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [commanderUid, setCommanderUid] = useState<number | null>(null);
+  const [partnerUid, setPartnerUid] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const hasCommander = usesCommanderCard(deckFormat);
 
@@ -357,6 +364,7 @@ const ImportPage: React.FC = () => {
 
         setRows(matched);
         setCommanderUid(guessCommanderUid(matched));
+        setPartnerUid(guessPartnerUid(matched));
         // A Commander section, or exactly 100 cards, is a commander deck.
         const total = parsed.filter(r => !r.isSideboard).reduce((sum, r) => sum + r.quantity, 0);
         if (parsed.some(r => r.isCommander === true) || total === 100) {
@@ -415,7 +423,10 @@ const ImportPage: React.FC = () => {
     const commanderRow = hasCommander
       ? rows.find(r => r.uid === commanderUid && r.matchId != null) ?? null
       : null;
-    const toImport = rows.filter(r => r.matchId != null && r !== commanderRow);
+    const partnerRow = hasCommander && commanderRow != null
+      ? rows.find(r => r.uid === partnerUid && r.matchId != null && r !== commanderRow) ?? null
+      : null;
+    const toImport = rows.filter(r => r.matchId != null && r !== commanderRow && r !== partnerRow);
     if (toImport.length === 0 && commanderRow == null) {
       setError('No matched cards to import.');
       setStep('confirm');
@@ -429,6 +440,7 @@ const ImportPage: React.FC = () => {
         field_format: deckFormat,
         field_notes: null,
         commanderId: commanderRow?.matchId ?? null,
+        partnerId: partnerRow?.matchId ?? null,
       });
 
       setProgress(`Adding ${toImport.length} cards...`);
@@ -618,6 +630,26 @@ const ImportPage: React.FC = () => {
                 </select>
               </label>
             )}
+            {hasCommander && commanderUid != null && (
+              <label>
+                Partner (optional)
+                <select
+                  value={partnerUid ?? ''}
+                  onChange={e => setPartnerUid(e.target.value === '' ? null : Number(e.target.value))}
+                  style={{ display: 'block', marginTop: 4, maxWidth: 320 }}
+                  title="Second commander: Partner, Friends forever, Background or Doctor's companion"
+                >
+                  <option value="">-- none --</option>
+                  {rows
+                    .filter(r => r.matchId != null && !r.isSideboard && r.uid !== commanderUid)
+                    .map(r => (
+                      <option key={r.uid} value={r.uid}>
+                        {r.matchTitle ?? r.name}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            )}
           </div>
 
           <table
@@ -669,7 +701,9 @@ const ImportPage: React.FC = () => {
                     )}
                   </td>
                   <td style={{ padding: '0.3rem 0.4rem', textAlign: 'center' }}>
-                    {hasCommander && row.uid === commanderUid ? 'CMD' : row.isSideboard ? 'SB' : ''}
+                    {hasCommander && row.uid === commanderUid
+                      ? 'CMD'
+                      : hasCommander && row.uid === partnerUid ? 'PTR' : row.isSideboard ? 'SB' : ''}
                   </td>
                   <td style={{ padding: '0.3rem 0.4rem', textAlign: 'center' }}>
                     {row.isFoil ? 'F' : ''}
@@ -699,7 +733,9 @@ const ImportPage: React.FC = () => {
               }
             >
               Import {rows.filter(r => r.matchId != null).length} cards
-              {hasCommander && commanderUid != null ? ' (1 as commander)' : ''}
+              {hasCommander && commanderUid != null
+                ? partnerUid != null ? ' (2 as commanders)' : ' (1 as commander)'
+                : ''}
             </button>
             <button
               type="button"

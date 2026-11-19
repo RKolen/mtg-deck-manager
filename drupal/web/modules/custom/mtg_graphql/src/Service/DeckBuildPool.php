@@ -292,10 +292,12 @@ final class DeckBuildPool {
           $counts[$title] = ($counts[$title] ?? 0) + max(1, (int) ($slot->get('field_quantity')->value ?? 1));
         }
       }
-      $commander = $deck->hasField('field_commander') ? $deck->get('field_commander')->entity : NULL;
-      if ($commander instanceof NodeInterface) {
-        $title = $commander->getTitle();
-        $counts[$title] = ($counts[$title] ?? 0) + 1;
+      foreach (['field_commander', 'field_partner'] as $field) {
+        $commander = $deck->hasField($field) ? $deck->get($field)->entity : NULL;
+        if ($commander instanceof NodeInterface) {
+          $title = $commander->getTitle();
+          $counts[$title] = ($counts[$title] ?? 0) + 1;
+        }
       }
       foreach ($counts as $title => $quantity) {
         $usage[$title][] = [
@@ -358,27 +360,33 @@ final class DeckBuildPool {
         ];
       }
     }
-    $commanders = $this->database->query(
-      "SELECT dn.uuid, d.title, sc.field_set_code_value AS set_code,
-         COALESCE(cf.field_commander_foil_value, 0) AS foil
-       FROM {node__field_commander} cmd
-       INNER JOIN {node_field_data} d ON d.nid = cmd.entity_id
-       INNER JOIN {node} dn ON dn.nid = d.nid
-       INNER JOIN {node_field_data} c ON c.nid = cmd.field_commander_target_id
-       LEFT JOIN {node__field_set_code} sc ON sc.entity_id = c.nid
-       LEFT JOIN {node__field_commander_foil} cf ON cf.entity_id = d.nid
-       WHERE c.title = :title",
-      [':title' => $title],
-    );
-    foreach ($commanders as $row) {
-      $uses[] = [
-        'deckId' => (string) $row->uuid,
-        'deckTitle' => (string) $row->title,
-        'board' => 'commander',
-        'quantity' => 1,
-        'setCode' => (string) ($row->set_code ?? ''),
-        'foil' => (int) $row->foil === 1,
-      ];
+    // The commander and the partner commander both count.
+    foreach (['field_commander' => 'field_commander_foil', 'field_partner' => 'field_partner_foil'] as $field => $foilField) {
+      if (!$this->database->schema()->tableExists('node__' . $field)) {
+        continue;
+      }
+      $commanders = $this->database->query(
+        "SELECT dn.uuid, d.title, sc.field_set_code_value AS set_code,
+           COALESCE(cf.{$foilField}_value, 0) AS foil
+         FROM {node__{$field}} cmd
+         INNER JOIN {node_field_data} d ON d.nid = cmd.entity_id
+         INNER JOIN {node} dn ON dn.nid = d.nid
+         INNER JOIN {node_field_data} c ON c.nid = cmd.{$field}_target_id
+         LEFT JOIN {node__field_set_code} sc ON sc.entity_id = c.nid
+         LEFT JOIN {node__{$foilField}} cf ON cf.entity_id = d.nid
+         WHERE c.title = :title",
+        [':title' => $title],
+      );
+      foreach ($commanders as $row) {
+        $uses[] = [
+          'deckId' => (string) $row->uuid,
+          'deckTitle' => (string) $row->title,
+          'board' => 'commander',
+          'quantity' => 1,
+          'setCode' => (string) ($row->set_code ?? ''),
+          'foil' => (int) $row->foil === 1,
+        ];
+      }
     }
     usort($uses, fn(array $a, array $b) => strcasecmp($a['deckTitle'], $b['deckTitle']));
 

@@ -667,6 +667,7 @@ class ScryfallImporter {
       ['node__field_card', 'field_card_target_id', "bundle = 'collection_card'"],
       ['paragraph__field_card', 'field_card_target_id', '1 = 1'],
       ['node__field_commander', 'field_commander_target_id', '1 = 1'],
+      ['node__field_partner', 'field_partner_target_id', '1 = 1'],
       ['node__field_key_cards', 'field_key_cards_target_id', '1 = 1'],
     ];
     $found = [];

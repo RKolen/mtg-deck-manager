@@ -1,5 +1,7 @@
 /**
- * Commander / Tiny Leaders commander card picker.
+ * Commander / Tiny Leaders commander card picker. With role "partner" it
+ * picks the second commander instead, offering only cards that pair with
+ * the commander (Partner, Friends forever, Background, Doctor's companion).
  */
 
 import React, { useMemo, useRef, useState } from 'react';
@@ -8,6 +10,7 @@ import { findCardsByName, updateDeck } from '../services/drupalApi';
 import type { DeckCommander } from '../types/drupal';
 import { cardImageSrc } from '../utils/cardImage';
 import { isLegalCommanderCard, isTinyLeadersFormat } from '../utils/deckAnalysis';
+import { canPair, partnerLabel } from '../utils/partnerRules';
 import PrintingFilter, {
   EMPTY_PRINTING_FILTER,
   matchesPrintingFilter,
@@ -16,14 +19,22 @@ import PrintingFilter, {
 interface CommanderPickerProps {
   deckId: string;
   format: string;
+  /** The card currently in this slot (commander, or partner in partner mode). */
   commander: DeckCommander | null | undefined;
+  /** "partner" picks the second commander for pairWith. */
+  role?: 'commander' | 'partner';
+  /** The commander to pair with (partner mode only). */
+  pairWith?: DeckCommander | null;
 }
 
 const CommanderPicker: React.FC<CommanderPickerProps> = ({
   deckId,
   format,
   commander,
+  role = 'commander',
+  pairWith = null,
 }) => {
+  const isPartner = role === 'partner';
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [searching, setSearching] = useState(false);
@@ -47,7 +58,8 @@ const CommanderPicker: React.FC<CommanderPickerProps> = ({
   const lastSearchName = useRef('');
 
   const save = useMutation({
-    mutationFn: (commanderId: string) => updateDeck(deckId, { commanderId }),
+    mutationFn: (cardId: string) =>
+      updateDeck(deckId, isPartner ? { partnerId: cardId } : { commanderId: cardId }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['deck'] });
       setChanging(false);
@@ -109,7 +121,10 @@ const CommanderPicker: React.FC<CommanderPickerProps> = ({
     [results, printingFilter],
   );
 
-  const label = isTinyLeadersFormat(format) ? 'Tiny Leader' : 'Commander';
+  const pairCard = (c: DeckCommander) => ({ title: c.title, typeLine: c.field_type_line, oracleText: c.field_oracle_text });
+  const label = isPartner && pairWith != null
+    ? partnerLabel(pairCard(pairWith))
+    : isTinyLeadersFormat(format) ? 'Tiny Leader' : 'Commander';
 
   return (
     <div>
@@ -175,12 +190,9 @@ const CommanderPicker: React.FC<CommanderPickerProps> = ({
           {filteredResults.length > 0 && (
             <ul style={{ listStyle: 'none', margin: '8px 0 0', padding: 0 }}>
               {filteredResults.map(r => {
-                const legal = isLegalCommanderCard(
-                  r.typeLine,
-                  r.cmc,
-                  r.oracleText,
-                  format,
-                );
+                const legal = isPartner
+                  ? pairWith != null && canPair(pairCard(pairWith), { title: r.title, typeLine: r.typeLine, oracleText: r.oracleText })
+                  : isLegalCommanderCard(r.typeLine, r.cmc, r.oracleText, format);
                 const meta = [r.setName || r.setCode.toUpperCase(), r.collectorNumber]
                   .filter(Boolean)
                   .join(' · ');
@@ -215,7 +227,9 @@ const CommanderPicker: React.FC<CommanderPickerProps> = ({
                       title={
                         legal
                           ? `Set as ${label.toLowerCase()}`
-                          : `Not a legal ${label.toLowerCase()} for ${format}`
+                          : isPartner
+                            ? `Cannot pair with ${pairWith?.title ?? 'the commander'}`
+                            : `Not a legal ${label.toLowerCase()} for ${format}`
                       }
                       onClick={() => save.mutate(r.id)}
                     >
@@ -232,6 +246,11 @@ const CommanderPicker: React.FC<CommanderPickerProps> = ({
             </p>
           )}
         </div>
+      )}
+      {save.isError && (
+        <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--neg)' }}>
+          {save.error instanceof Error ? save.error.message : 'Could not save.'}
+        </p>
       )}
     </div>
   );

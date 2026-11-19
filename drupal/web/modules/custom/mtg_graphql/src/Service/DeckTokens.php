@@ -65,6 +65,7 @@ final class DeckTokens {
       $cards[] = $slot->get('field_card')->entity;
     }
     $cards[] = $deck->hasField('field_commander') ? $deck->get('field_commander')->entity : NULL;
+    $cards[] = $deck->hasField('field_partner') ? $deck->get('field_partner')->entity : NULL;
     foreach ($cards as $card) {
       if ($card instanceof NodeInterface) {
         $titles[(string) $card->label()] = (string) ($card->get('field_oracle_text')->value ?? '');

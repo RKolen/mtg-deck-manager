@@ -50,6 +50,8 @@ interface LandBasePanelProps {
   cards: DeckCardWithCard[];
   format: string;
   commander: DeckCommander | null | undefined;
+  /** Second commander; adds its colours and is cast like the commander. */
+  partner?: DeckCommander | null;
   /** The deck's stored land base changes (JSON), or null for the defaults. */
   manaSettings?: string | null;
 }
@@ -106,7 +108,7 @@ function num(n: number): string {
  * Suggests a land base for the deck from the collection or the whole
  * cardbase, and can apply it or put missing lands on the wishlist.
  */
-const LandBasePanel: React.FC<LandBasePanelProps> = ({ deckId, cards, format, commander, manaSettings = null }) => {
+const LandBasePanel: React.FC<LandBasePanelProps> = ({ deckId, cards, format, commander, partner = null, manaSettings = null }) => {
   const qc = useQueryClient();
   const { currency, usdToEur } = useTheme();
   const saved = useMemo(() => parseManaSettings(manaSettings), [manaSettings]);
@@ -129,7 +131,8 @@ const LandBasePanel: React.FC<LandBasePanelProps> = ({ deckId, cards, format, co
 
   const deckColors = useMemo<MtgColor[]>(() => {
     if (commander != null) {
-      return ALL_COLORS.filter(c => commander.field_color_identity.includes(c));
+      const identity = [...commander.field_color_identity, ...(partner?.field_color_identity ?? [])];
+      return ALL_COLORS.filter(c => identity.includes(c));
     }
     const pips = manaRequirement(main);
     const demanded = ALL_COLORS.filter(c => pips[c] > 0);
@@ -137,7 +140,7 @@ const LandBasePanel: React.FC<LandBasePanelProps> = ({ deckId, cards, format, co
       return demanded;
     }
     return ALL_COLORS.filter(c => main.some(dc => (dc.card.field_color_identity ?? []).includes(c)));
-  }, [commander, main]);
+  }, [commander, partner, main]);
 
   const legalIn = scryfallFormatKey(format);
   const companionAllowance = deckListAllowance(format, cards);
@@ -154,7 +157,20 @@ const LandBasePanel: React.FC<LandBasePanelProps> = ({ deckId, cards, format, co
     staleTime: 5 * 60 * 1000,
   });
 
-  const spells = useMemo(() => toSpells(main), [main]);
+  const spells = useMemo<SpellInfo[]>(() => [
+    ...toSpells(main),
+    // The partner is a second commander: cast it like one.
+    ...(partner != null ? [{
+      title: partner.title,
+      typeLine: partner.field_type_line,
+      oracleText: partner.field_oracle_text,
+      cmc: partner.field_cmc,
+      isManaProducer: false,
+      manaCost: partner.field_mana_cost,
+      producedMana: [],
+      quantity: 1,
+    }] : []),
+  ], [main, partner]);
   const deckLandTitles = useMemo(() => [...new Set(main
     .filter(dc => isLand(dc.card.field_type_line ?? '') && !/basic/i.test(dc.card.field_type_line ?? ''))
     .map(dc => dc.card.title))].sort((a, b) => a.localeCompare(b)), [main]);
@@ -216,7 +232,7 @@ const LandBasePanel: React.FC<LandBasePanelProps> = ({ deckId, cards, format, co
     ));
 
     // With Yorion as companion the deck is 80 cards: more lands, same ratios.
-    const allowance = deckListAllowance(format, cards);
+    const allowance = deckListAllowance(format, cards, partner != null ? 1 : 0);
     const deckSize = allowance.mainHardMax
       ? allowance.mainTarget
       : Math.max(allowance.mainTarget, main.reduce((s, dc) => s + dc.quantity, 0));
@@ -237,7 +253,7 @@ const LandBasePanel: React.FC<LandBasePanelProps> = ({ deckId, cards, format, co
       settings: { ...draft, landCount: null },
     });
   }, [pool.data, main, cards, includeUsed, source, currency, usdToEur, format, chosenLandCount, draft, spells,
-    sideboardSpells, commanderSpell, deckColors, commanderFormat, currentLandTotal]);
+    sideboardSpells, commanderSpell, deckColors, commanderFormat, currentLandTotal, partner]);
 
   // Saves the edited settings and the land count box together.
   const saveSettings = useMutation({

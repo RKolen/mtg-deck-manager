@@ -1,0 +1,23 @@
+uuid: 9b85241a-4a3c-46b1-b7b9-a1fce1b87a09
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_partner_foil
+    - node.type.deck
+id: node.deck.field_partner_foil
+field_name: field_partner_foil
+entity_type: node
+bundle: deck
+label: 'Partner foil'
+description: 'When enabled, the partner commander is a foil copy.'
+required: false
+translatable: true
+default_value:
+  -
+    value: 0
+default_value_callback: ''
+settings:
+  on_label: Foil
+  off_label: Non-foil
+field_type: boolean

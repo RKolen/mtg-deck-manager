@@ -84,7 +84,8 @@ import {
   type ArchetypeProbability,
 } from '../../services/metaApi';
 import type { CollectionCard, DeckBoard, DeckCardWithCard, DeckCommander } from '../../types/drupal';
-import { COMMANDER_SLOT, cardPrintingsPath } from '../../utils/slugify';
+import { COMMANDER_SLOT, PARTNER_SLOT, cardPrintingsPath } from '../../utils/slugify';
+import { allowsPartner, partnerLabel } from '../../utils/partnerRules';
 import {
   ALL_COLORS,
   COLOR_LABEL,
@@ -177,6 +178,9 @@ interface EditorProps {
   deckIsFoil: boolean;
   commander?: DeckCommander | null;
   commanderFoil?: boolean;
+  /** Second commander (Partner, Friends forever, Background, Doctor's companion). */
+  partner?: DeckCommander | null;
+  partnerFoil?: boolean;
 }
 
 type OwnedCounts = { owned: number; foil: number };
@@ -363,6 +367,8 @@ const DeckEditor: React.FC<EditorProps> = ({
   deckIsFoil,
   commander,
   commanderFoil = false,
+  partner = null,
+  partnerFoil = false,
 }) => {
   const { currency, usdToEur } = useTheme();
   const [search, setSearch] = useState('');
@@ -549,6 +555,82 @@ const DeckEditor: React.FC<EditorProps> = ({
       void qc.invalidateQueries({ queryKey: ['deck'] });
     },
   });
+  const setPartnerFoil = useMutation({
+    mutationFn: (foil: boolean) => updateDeck(deckId, { partnerFoil: foil }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['deck'] });
+    },
+  });
+
+  // Second commander: only for commanders with Partner, Friends forever,
+  // Choose a Background, Doctor's companion (or a Time Lord Doctor).
+  const commanderPair = commander != null
+    ? { title: commander.title, typeLine: commander.field_type_line, oracleText: commander.field_oracle_text }
+    : null;
+  const canHavePartner = commanderPair != null && allowsPartner(commanderPair);
+  const partnerSlotLabel = commanderPair != null ? partnerLabel(commanderPair) : 'Partner';
+  const extraCommanders = partner != null ? 1 : 0;
+
+  /** Sidebar card for the commander or the partner. */
+  function renderCommanderCard(
+    card: DeckCommander,
+    foil: boolean,
+    slotId: string,
+    foilMutation: { isPending: boolean; mutate: (foil: boolean) => void },
+  ): React.ReactNode {
+    const href = cardPrintingsPath(card.title, { printing: card.id, deckId, slotId, from: deckSlug, foil });
+    return (
+      <div>
+        <Link href={href}>
+          <img
+            src={cardImageSrc({ field_image_uri: card.field_image_uri })}
+            alt={card.title}
+            style={{ width: '100%', borderRadius: 8, display: 'block' }}
+          />
+        </Link>
+        <p style={{ margin: '0.65rem 0 0.25rem', fontWeight: 700 }}>
+          <Link href={href} style={{ color: 'inherit', textDecoration: 'none' }}>
+            {card.title}
+          </Link>
+        </p>
+        <p style={{ margin: '0 0 0.35rem', fontSize: 13, opacity: 0.9 }}>
+          {(card.field_set_name || card.field_set_code || 'Unknown set')}
+          {card.field_set_code !== '' ? ` (${card.field_set_code.toUpperCase()}` : ''}
+          {card.field_collector_number ? ` #${card.field_collector_number}` : ''}
+          {card.field_set_code !== '' ? ')' : ''}
+        </p>
+        <p style={{ margin: '0 0 0.5rem', fontSize: 13 }}>
+          {formatPrice(priceFor(card, currency, false), currency)}
+          {priceFor(card, currency, true) != null && (
+            <>
+              {' · foil '}
+              {formatPrice(priceFor(card, currency, true), currency)}
+            </>
+          )}
+        </p>
+        <div style={{ margin: '0 0 0.35rem 0' }}>
+          <FoilToggle
+            flush
+            isFoil={foil}
+            disabled={foilMutation.isPending}
+            onToggle={() => foilMutation.mutate(!foil)}
+          />
+        </div>
+        <OwnedAmountControl
+          cardId={card.id}
+          cardName={card.title}
+          ownedQty={ownedForFinish(ownedByCardId.get(card.id), foil)}
+          foil={foil}
+          onCommit={commitOwnedAmount}
+        />
+        <p style={{ margin: '0.5rem 0 0', fontSize: 12 }}>
+          <Link href={href} style={{ color: 'var(--accent)' }}>
+            Change printing
+          </Link>
+        </p>
+      </div>
+    );
+  }
 
   const setOwned = useMutation({
     mutationFn: ({
@@ -795,7 +877,7 @@ const DeckEditor: React.FC<EditorProps> = ({
     const missing = Math.max(0, dc.quantity - owned);
     return sum + missing * slotUnitPrice(dc.card, currency, dc.isFoil, usdToEur);
   }, 0);
-  const allowance = deckListAllowance(format, cards);
+  const allowance = deckListAllowance(format, cards, extraCommanders);
   // A companion only counts from the sideboard; flag one left in the main.
   const mainCompanion = allowance.companion == null
     ? main.find(dc => isCompanionCard(dc.card))?.card ?? null
@@ -806,6 +888,7 @@ const DeckEditor: React.FC<EditorProps> = ({
   const mainOk = isMainDeckSizeOk(format, mainCount, {
     nonRulebreakerCount: nonRbMain,
     cards,
+    extraCommanders,
   });
   const mainOver = allowance.mainHardMax && nonRbMain > allowance.mainTarget;
   const sbSoftMax = allowance.sideboardSoftMax;
@@ -814,7 +897,7 @@ const DeckEditor: React.FC<EditorProps> = ({
   const illegalMvCount = cards.filter(
     dc => !isLegalManaValue(dc.card.field_type_line ?? '', dc.card.field_cmc, format),
   ).length;
-  const legality = evaluateDeckLegality(format, cards, commander ?? null);
+  const legality = evaluateDeckLegality(format, cards, commander ?? null, partner ?? null);
   const copiesByName = new Map<string, number>();
   for (const slot of cards) {
     copiesByName.set(
@@ -822,11 +905,10 @@ const DeckEditor: React.FC<EditorProps> = ({
       (copiesByName.get(slot.card.title) ?? 0) + slot.quantity,
     );
   }
-  if (commander != null) {
-    copiesByName.set(
-      commander.title,
-      (copiesByName.get(commander.title) ?? 0) + 1,
-    );
+  for (const c of [commander, partner]) {
+    if (c != null) {
+      copiesByName.set(c.title, (copiesByName.get(c.title) ?? 0) + 1);
+    }
   }
   // Cards a maybeboard candidate can be marked to replace, one per name: the
   // main deck, or another maybeboard card it is an alternative to.
@@ -1165,6 +1247,7 @@ const DeckEditor: React.FC<EditorProps> = ({
               style={{ color: commander != null ? 'var(--pos)' : 'var(--ink)' }}
             >
               {commanderLabel}: {commander != null ? commander.title : 'none'}
+              {partner != null ? ` + ${partner.title}` : ''}
             </span>
           </>
         )}
@@ -1209,6 +1292,7 @@ const DeckEditor: React.FC<EditorProps> = ({
           build={includeOwned => {
             const mainEntries = [
               ...(showCommander && commander != null ? [{ name: commander.title, quantity: 1 }] : []),
+              ...(showCommander && partner != null ? [{ name: partner.title, quantity: 1 }] : []),
               ...main.map(dc => ({ name: dc.card.title, quantity: dc.quantity })),
             ];
             const sideEntries = sb.map(dc => ({ name: dc.card.title, quantity: dc.quantity }));
@@ -1382,7 +1466,7 @@ const DeckEditor: React.FC<EditorProps> = ({
           >
             {commanderLabel}
             <span style={{ marginLeft: 8, color: 'var(--ink)', fontWeight: 'normal', fontSize: '0.9rem' }}>
-              ({commander != null ? 1 : 0})
+              ({(commander != null ? 1 : 0) + (partner != null ? 1 : 0)})
             </span>
           </h3>
           {commander != null && (
@@ -1445,6 +1529,68 @@ const DeckEditor: React.FC<EditorProps> = ({
             format={format}
             commander={commander}
           />
+          {canHavePartner && (
+            <div style={{ marginTop: 10 }}>
+              <div className="mono uc dim" style={{ fontSize: 9, letterSpacing: '0.08em', marginBottom: 4 }}>
+                {partnerSlotLabel} (optional)
+              </div>
+              {partner != null && (
+                <table style={{ width: '100%', borderCollapse: 'collapse', color: 'var(--ink)', marginBottom: 8 }}>
+                  <tbody>
+                    <tr
+                      onClick={() => setSelectedSlotId(PARTNER_SLOT)}
+                      style={{
+                        background: selectedSlotId === PARTNER_SLOT ? 'var(--bg-2)' : undefined,
+                        outline: selectedSlotId === PARTNER_SLOT ? '1px solid var(--accent)' : undefined,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <td style={{ padding: '0.25rem 0.5rem' }}>
+                        <Link
+                          href={cardPrintingsPath(partner.title, {
+                            printing: partner.id,
+                            deckId,
+                            slotId: PARTNER_SLOT,
+                            from: deckSlug,
+                            foil: partnerFoil,
+                          })}
+                          onClick={e => e.stopPropagation()}
+                          style={{ color: 'inherit', textDecoration: 'none', fontWeight: 'bold' }}
+                        >
+                          {partner.title}
+                        </Link>
+                        {partner.field_set_code !== '' && (
+                          <span style={{ marginLeft: 8, fontSize: '0.75rem', opacity: 0.85, fontFamily: 'var(--mono)' }}>
+                            [{partner.field_set_code.toUpperCase()}]
+                          </span>
+                        )}
+                        <span style={{ marginLeft: 8, display: 'inline-flex', verticalAlign: 'middle' }}>
+                          <ManaCost cost={partner.field_mana_cost} size={14} />
+                        </span>
+                        <FoilToggle
+                          isFoil={partnerFoil}
+                          disabled={setPartnerFoil.isPending}
+                          onToggle={() => setPartnerFoil.mutate(!partnerFoil)}
+                        />
+                        <span style={{ marginLeft: 8, fontSize: 11, opacity: 0.65 }}>
+                          {ownedForFinish(ownedByCardId.get(partner.id), partnerFoil) < 1
+                            ? 'not owned'
+                            : `owned ${ownedForFinish(ownedByCardId.get(partner.id), partnerFoil)}`}
+                        </span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              )}
+              <CommanderPicker
+                deckId={deckId}
+                format={format}
+                commander={partner}
+                role="partner"
+                pairWith={commander}
+              />
+            </div>
+          )}
         </section>
       )}
 
@@ -1638,85 +1784,17 @@ const DeckEditor: React.FC<EditorProps> = ({
               No {commanderLabel.toLowerCase()} set.
             </p>
           ) : (
-            <div>
-              <Link
-                href={cardPrintingsPath(commander.title, {
-                  printing: commander.id,
-                  deckId,
-                  slotId: COMMANDER_SLOT,
-                  from: deckSlug,
-                  foil: commanderFoil,
-                })}
-              >
-                <img
-                  src={cardImageSrc({ field_image_uri: commander.field_image_uri })}
-                  alt={commander.title}
-                  style={{ width: '100%', borderRadius: 8, display: 'block' }}
-                />
-              </Link>
-              <p style={{ margin: '0.65rem 0 0.25rem', fontWeight: 700 }}>
-                <Link
-                  href={cardPrintingsPath(commander.title, {
-                    printing: commander.id,
-                    deckId,
-                    slotId: COMMANDER_SLOT,
-                    from: deckSlug,
-                    foil: commanderFoil,
-                  })}
-                  style={{ color: 'inherit', textDecoration: 'none' }}
-                >
-                  {commander.title}
-                </Link>
-              </p>
-              <p style={{ margin: '0 0 0.35rem', fontSize: 13, opacity: 0.9 }}>
-                {(commander.field_set_name || commander.field_set_code || 'Unknown set')}
-                {commander.field_set_code !== ''
-                  ? ` (${commander.field_set_code.toUpperCase()}`
-                  : ''}
-                {commander.field_collector_number
-                  ? ` #${commander.field_collector_number}`
-                  : ''}
-                {commander.field_set_code !== '' ? ')' : ''}
-              </p>
-              <p style={{ margin: '0 0 0.5rem', fontSize: 13 }}>
-                {formatPrice(priceFor(commander, currency, false), currency)}
-                {priceFor(commander, currency, true) != null && (
-                  <>
-                    {' · foil '}
-                    {formatPrice(priceFor(commander, currency, true), currency)}
-                  </>
-                )}
-              </p>
-              <div style={{ margin: '0 0 0.35rem 0' }}>
-                <FoilToggle
-                  flush
-                  isFoil={commanderFoil}
-                  disabled={setCommanderFoil.isPending}
-                  onToggle={() => setCommanderFoil.mutate(!commanderFoil)}
-                />
-              </div>
-              <OwnedAmountControl
-                cardId={commander.id}
-                cardName={commander.title}
-                ownedQty={ownedForFinish(ownedByCardId.get(commander.id), commanderFoil)}
-                foil={commanderFoil}
-                onCommit={commitOwnedAmount}
-              />
-              <p style={{ margin: '0.5rem 0 0', fontSize: 12 }}>
-                <Link
-                  href={cardPrintingsPath(commander.title, {
-                    printing: commander.id,
-                    deckId,
-                    slotId: COMMANDER_SLOT,
-                    from: deckSlug,
-                    foil: commanderFoil,
-                  })}
-                  style={{ color: 'var(--accent)' }}
-                >
-                  Change printing
-                </Link>
-              </p>
-            </div>
+            <>
+              {renderCommanderCard(commander, commanderFoil, COMMANDER_SLOT, setCommanderFoil)}
+              {partner != null && (
+                <>
+                  <div className="mono uc dim" style={{ fontSize: 9, letterSpacing: '0.08em', margin: '16px 0 8px' }}>
+                    {partnerSlotLabel}
+                  </div>
+                  {renderCommanderCard(partner, partnerFoil, PARTNER_SLOT, setPartnerFoil)}
+                </>
+              )}
+            </>
           )}
         </aside>
       )}
@@ -1763,6 +1841,8 @@ const DeckEditor: React.FC<EditorProps> = ({
         commander={commander}
         commanderFoil={commanderFoil}
         commanderLabel={commanderLabel}
+        partner={partner}
+        partnerFoil={partnerFoil}
         selectedSlotId={selectedSlotId}
         onSelect={setSelectedSlotId}
       />
@@ -3410,6 +3490,8 @@ const DeckPage: React.FC = () => {
           deckIsFoil={Boolean(deck.attributes.field_is_foil)}
           commander={deck.attributes.field_commander}
           commanderFoil={Boolean(deck.attributes.field_commander_foil)}
+          partner={deck.attributes.field_partner ?? null}
+          partnerFoil={Boolean(deck.attributes.field_partner_foil)}
         />
       ) : tab === 'analysis' ? (
         <DeckAnalysis cards={deckCards} format={deck.attributes.field_format} deckTitle={deck.attributes.title} />
@@ -3419,6 +3501,7 @@ const DeckPage: React.FC = () => {
           cards={deckCards}
           format={deck.attributes.field_format}
           commander={deck.attributes.field_commander}
+          partner={deck.attributes.field_partner ?? null}
           manaSettings={deck.attributes.field_mana_settings ?? null}
         />
       ) : tab === 'suggestions' ? (

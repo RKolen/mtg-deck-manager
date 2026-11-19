@@ -633,6 +633,9 @@ final class MtgGraphqlResolverRegistration {
         if (isset($args['commanderId'])) {
           self::setCommander($node, (string) $args['commanderId']);
         }
+        if (isset($args['partnerId'])) {
+          self::setPartner($node, (string) $args['partnerId']);
+        }
         $node->save();
         return $node;
       })
@@ -663,6 +666,16 @@ final class MtgGraphqlResolverRegistration {
         }
         if (isset($args['commanderFoil']) && $node->hasField('field_commander_foil')) {
           $node->set('field_commander_foil', (bool) $args['commanderFoil']);
+        }
+        if (isset($args['partnerId'])) {
+          self::setPartner($node, (string) $args['partnerId']);
+        }
+        elseif (isset($args['commanderId'])) {
+          // A new commander may not pair with the old partner.
+          self::dropInvalidPartner($node);
+        }
+        if (isset($args['partnerFoil']) && $node->hasField('field_partner_foil')) {
+          $node->set('field_partner_foil', (bool) $args['partnerFoil']);
         }
         if (array_key_exists('manaSettings', $args) && $node->hasField('field_mana_settings')) {
           $node->set('field_mana_settings', self::normalizeManaSettings($args['manaSettings']));
@@ -938,6 +951,15 @@ final class MtgGraphqlResolverRegistration {
     $registry->addFieldResolver('NodeDeck', 'commanderIsFoil',
       $builder->callback(fn($n) => self::commanderIsFoil($n))
     );
+    foreach (['Deck', 'NodeDeck'] as $type) {
+      $registry->addFieldResolver($type, 'partner',
+        $builder->callback(fn($n) => self::partnerCard($n))
+      );
+      $registry->addFieldResolver($type, 'partnerIsFoil',
+        $builder->callback(fn($n) => $n instanceof NodeInterface && $n->hasField('field_partner_foil')
+          && (bool) $n->get('field_partner_foil')->value)
+      );
+    }
     $registry->addFieldResolver('Deck', 'manaSettings',
       $builder->callback(fn($n) => self::manaSettings($n))
     );
@@ -1449,6 +1471,7 @@ final class MtgGraphqlResolverRegistration {
       if ($node->hasField('field_commander_foil')) {
         $node->set('field_commander_foil', FALSE);
       }
+      self::setPartner($node, '');
       return;
     }
     $cards = \Drupal::entityTypeManager()
@@ -1459,6 +1482,78 @@ final class MtgGraphqlResolverRegistration {
       throw new UserError('Commander card not found.');
     }
     $node->set('field_commander', ['target_id' => (int) $card->id()]);
+  }
+
+  /**
+   * Sets or clears the partner commander from a card UUID.
+   *
+   * @throws \GraphQL\Error\UserError
+   *   When the card is unknown, there is no commander, or the two cannot be
+   *   commanders together.
+   */
+  private static function setPartner(NodeInterface $node, string $partnerId): void {
+    if (!$node->hasField('field_partner')) {
+      return;
+    }
+    if ($partnerId === '') {
+      $node->set('field_partner', []);
+      if ($node->hasField('field_partner_foil')) {
+        $node->set('field_partner_foil', FALSE);
+      }
+      return;
+    }
+    $cards = \Drupal::entityTypeManager()
+      ->getStorage('node')
+      ->loadByProperties(['uuid' => $partnerId, 'type' => 'mtg_card']);
+    $card = reset($cards);
+    if (!$card instanceof NodeInterface) {
+      throw new UserError('Partner card not found.');
+    }
+    $commander = self::commanderCard($node);
+    if ($commander === NULL) {
+      throw new UserError('Pick a commander before adding a partner.');
+    }
+    if (!PartnerRules::canPair(self::pairInfo($commander), self::pairInfo($card))) {
+      throw new UserError(sprintf('%s cannot be a second commander with %s.', $card->getTitle(), $commander->getTitle()));
+    }
+    $node->set('field_partner', ['target_id' => (int) $card->id()]);
+  }
+
+  /**
+   * Clears the partner when it no longer pairs with the commander.
+   */
+  private static function dropInvalidPartner(NodeInterface $node): void {
+    $partner = self::partnerCard($node);
+    $commander = self::commanderCard($node);
+    if ($partner !== NULL && ($commander === NULL
+      || !PartnerRules::canPair(self::pairInfo($commander), self::pairInfo($partner)))) {
+      self::setPartner($node, '');
+    }
+  }
+
+  /**
+   * Name, type line and oracle text of a card, for the pairing rules.
+   *
+   * @return array{name: string, typeLine: string, oracle: string}
+   *   Card data.
+   */
+  private static function pairInfo(NodeInterface $card): array {
+    return [
+      'name' => $card->getTitle(),
+      'typeLine' => (string) $card->get('field_type_line')->value,
+      'oracle' => (string) $card->get('field_oracle_text')->value,
+    ];
+  }
+
+  /**
+   * Referenced partner card, or NULL when unset.
+   */
+  private static function partnerCard(mixed $node): ?NodeInterface {
+    if (!$node instanceof NodeInterface || !$node->hasField('field_partner') || $node->get('field_partner')->isEmpty()) {
+      return NULL;
+    }
+    $entity = $node->get('field_partner')->entity;
+    return $entity instanceof NodeInterface ? $entity : NULL;
   }
 
   /**

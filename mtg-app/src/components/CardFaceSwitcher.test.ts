@@ -22,6 +22,14 @@ describe('faceImageUri', () => {
     expect(faceImageUri(FRONT, faces, 1)).toBe('https://cards.scryfall.io/normal/back/6/1/619e0c3a.jpg?1664414000');
   });
 
+  it('loads the back from Scryfall when the front is a locally cached image', () => {
+    const local = 'https://mtg-deck-manager.ddev.site/sites/default/files/mtg_cards/eb2d2d35-4956-42fa-94e0-b241ed666683.jpg';
+    const faces = [face('Bruce Banner', 'modal_dfc'), face('The Incredible Hulk', 'modal_dfc')];
+    expect(faceImageUri(local, faces, 0)).toBe(local);
+    expect(faceImageUri(local, faces, 1))
+      .toBe('https://cards.scryfall.io/normal/back/e/b/eb2d2d35-4956-42fa-94e0-b241ed666683.jpg');
+  });
+
   it('keeps the single image for adventure, split and flip cards', () => {
     for (const layout of ['adventure', 'split', 'flip', 'prepare']) {
       expect(faceImageUri(FRONT, [face('A', layout), face('B', layout)], 1)).toBe(FRONT);

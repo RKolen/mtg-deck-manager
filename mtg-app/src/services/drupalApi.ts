@@ -69,6 +69,8 @@ interface GqlComposeDeck {
   changed?: { timestamp: number } | null;
   commander?: GqlMtgCard | null;
   commanderIsFoil?: boolean | null;
+  partner?: GqlMtgCard | null;
+  partnerIsFoil?: boolean | null;
   manaSettings?: string | null;
 }
 
@@ -81,6 +83,8 @@ interface GqlDeck {
   notes: string | null;
   commander?: GqlMtgCard | null;
   commanderIsFoil?: boolean | null;
+  partner?: GqlMtgCard | null;
+  partnerIsFoil?: boolean | null;
   manaSettings?: string | null;
 }
 
@@ -195,6 +199,8 @@ function toDeckResourceFromCompose(d: GqlComposeDeck): JsonApiResource<DeckAttri
       changed: d.changed?.timestamp ?? null,
       field_commander: toDeckCommander(d.commander),
       field_commander_foil: Boolean(d.commanderIsFoil),
+      field_partner: toDeckCommander(d.partner),
+      field_partner_foil: Boolean(d.partnerIsFoil),
       field_mana_settings: d.manaSettings ?? null,
     },
   };
@@ -211,6 +217,8 @@ function toDeckResource(d: GqlDeck): JsonApiResource<DeckAttributes> {
       drupal_internal__nid: d.nid,
       field_commander: toDeckCommander(d.commander),
       field_commander_foil: Boolean(d.commanderIsFoil),
+      field_partner: toDeckCommander(d.partner),
+      field_partner_foil: Boolean(d.partnerIsFoil),
       field_mana_settings: d.manaSettings ?? null,
     },
   };
@@ -306,6 +314,8 @@ const COMPOSE_DECK_FIELDS = gql`
     changed { timestamp }
     commander { ...CardFields }
     commanderIsFoil
+    partner { ...CardFields }
+    partnerIsFoil
     manaSettings
   }
 `;
@@ -316,6 +326,8 @@ const MTG_DECK_FIELDS = gql`
     id nid title format notes
     commander { ...CardFields }
     commanderIsFoil
+    partner { ...CardFields }
+    partnerIsFoil
     manaSettings
   }
 `;
@@ -461,12 +473,13 @@ export async function fetchDeck(
 export async function createDeck(
   attributes: Pick<DeckAttributes, 'title' | 'field_format' | 'field_notes'> & {
     commanderId?: string | null;
+    partnerId?: string | null;
   },
 ): Promise<JsonApiResource<DeckAttributes>> {
   const mutation = gql`
     ${MTG_DECK_FIELDS}
-    mutation CreateDeck($title: String!, $format: String!, $notes: String, $commanderId: ID) {
-      createDeck(title: $title, format: $format, notes: $notes, commanderId: $commanderId) { ...DeckFields }
+    mutation CreateDeck($title: String!, $format: String!, $notes: String, $commanderId: ID, $partnerId: ID) {
+      createDeck(title: $title, format: $format, notes: $notes, commanderId: $commanderId, partnerId: $partnerId) { ...DeckFields }
     }
   `;
   const data = await getGraphQLClient().request<{ createDeck: GqlDeck }>(mutation, {
@@ -474,6 +487,7 @@ export async function createDeck(
     format: attributes.field_format,
     notes: attributes.field_notes ?? null,
     commanderId: attributes.commanderId ?? null,
+    partnerId: attributes.partnerId ?? null,
   });
   return toDeckResource(data.createDeck);
 }
@@ -483,6 +497,8 @@ export async function updateDeck(
   attributes: Partial<DeckAttributes> & {
     commanderId?: string | null;
     commanderFoil?: boolean;
+    partnerId?: string | null;
+    partnerFoil?: boolean;
   },
 ): Promise<JsonApiResource<DeckAttributes>> {
   const mutation = gql`
@@ -494,6 +510,8 @@ export async function updateDeck(
       $notes: String
       $commanderId: ID
       $commanderFoil: Boolean
+      $partnerId: ID
+      $partnerFoil: Boolean
       $manaSettings: String
     ) {
       updateDeck(
@@ -503,6 +521,8 @@ export async function updateDeck(
         notes: $notes
         commanderId: $commanderId
         commanderFoil: $commanderFoil
+        partnerId: $partnerId
+        partnerFoil: $partnerFoil
         manaSettings: $manaSettings
       ) { ...DeckFields }
     }
@@ -517,6 +537,8 @@ export async function updateDeck(
     notes?: string | null;
     commanderId?: string;
     commanderFoil?: boolean;
+    partnerId?: string;
+    partnerFoil?: boolean;
     manaSettings?: string | null;
   } = { id };
   if (attributes.title != null) {
@@ -533,6 +555,12 @@ export async function updateDeck(
   }
   if ('commanderFoil' in attributes) {
     variables.commanderFoil = Boolean(attributes.commanderFoil);
+  }
+  if ('partnerId' in attributes) {
+    variables.partnerId = attributes.partnerId ?? '';
+  }
+  if ('partnerFoil' in attributes) {
+    variables.partnerFoil = Boolean(attributes.partnerFoil);
   }
   if ('field_mana_settings' in attributes) {
     variables.manaSettings = attributes.field_mana_settings ?? null;
@@ -806,8 +834,12 @@ export async function replaceCommanderPrinting(
   foil: boolean,
   previousCardId?: string,
   previousCardName?: string,
+  role: 'commander' | 'partner' = 'commander',
 ): Promise<void> {
-  await updateDeck(deckId, { commanderId: nextCardId, commanderFoil: foil });
+  await updateDeck(
+    deckId,
+    role === 'partner' ? { partnerId: nextCardId, partnerFoil: foil } : { commanderId: nextCardId, commanderFoil: foil },
+  );
   if (collectionMode === 'none') {
     return;
   }

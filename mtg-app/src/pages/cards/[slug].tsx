@@ -32,7 +32,7 @@ import {
   useCardFaceSwitch,
 } from '../../components/CardFaceSwitcher';
 import { getOracleText } from '../../utils/deckAnalysis';
-import { COMMANDER_SLOT, cardPrintingsPath } from '../../utils/slugify';
+import { COMMANDER_SLOT, PARTNER_SLOT, cardPrintingsPath } from '../../utils/slugify';
 import { useTheme } from '../../context/ThemeContext';
 import PrintingFilter, {
   EMPTY_PRINTING_FILTER,
@@ -52,7 +52,8 @@ const CardPage: React.FC = () => {
   const slotId = typeof router.query.slot === 'string' ? router.query.slot : '';
   const fromSlug = typeof router.query.from === 'string' ? router.query.from : '';
   const deckIsFoil = router.query.foil === '1' || router.query.foil === 'true';
-  const isCommanderSlot = slotId === COMMANDER_SLOT;
+  const isPartnerSlot = slotId === PARTNER_SLOT;
+  const isCommanderSlot = slotId === COMMANDER_SLOT || isPartnerSlot;
   const fromDeck = deckId !== '' && slotId !== '';
 
   const [pending, setPending] = useState<PrintingSwapTarget | null>(null);
@@ -135,6 +136,7 @@ const CardPage: React.FC = () => {
             foil,
             currentPrinting?.id,
             currentPrinting?.attributes.title,
+            isPartnerSlot ? 'partner' : 'commander',
           )
         : replaceDeckCardPrinting(deckId, slotId, nextId, mode, foil),
     onSuccess: async (_data, vars) => {
