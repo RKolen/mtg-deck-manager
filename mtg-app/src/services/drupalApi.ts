@@ -1086,6 +1086,94 @@ export async function fetchCollectionValue(currency: 'USD' | 'EUR' = 'EUR'): Pro
   return data.collectionValue;
 }
 
+export interface StatBucket {
+  printings: number;
+  copies: number;
+  value: number;
+}
+
+export interface CollectionStats {
+  currency: string;
+  includeTrade: boolean;
+  cutoff: number;
+  totals: {
+    printings: number;
+    copies: number;
+    regular: number;
+    foil: number;
+    trade: number;
+    value: number;
+    average: number;
+    median: number;
+    unpricedCopies: number;
+  };
+  rarities: Array<StatBucket & { rarity: string; share: number }>;
+  /** Price bands per copy; min and max null is the unpriced band. */
+  bands: Array<StatBucket & { min: number | null; max: number | null }>;
+  aboveCutoff: StatBucket;
+  belowCutoff: StatBucket;
+  concentration: Array<{ top: number; value: number; share: number }>;
+  topCards: Array<{
+    title: string;
+    setCode: string;
+    setName: string;
+    rarity: string;
+    foil: boolean;
+    unitPrice: number;
+    quantity: number;
+    value: number;
+  }>;
+  sets: Array<
+    StatBucket & {
+      setCode: string;
+      setName: string;
+      setSize: number;
+      mythic: number;
+      rare: number;
+      uncommon: number;
+      common: number;
+    }
+  >;
+  decks: {
+    copiesInDecks: number;
+    valueInDecks: number;
+    copiesFree: number;
+    valueFree: number;
+    decks: Array<{ title: string; needed: number; owned: number; value: number }>;
+  };
+}
+
+/** Collection statistics (rarity, price bands, sets, deck usage). */
+export async function fetchCollectionStats(
+  currency: 'USD' | 'EUR',
+  includeTrade: boolean,
+  cutoff: number,
+): Promise<CollectionStats> {
+  const bucket = 'printings copies value';
+  const query = gql`
+    query GetCollectionStats($currency: String, $includeTrade: Boolean, $cutoff: Float) {
+      collectionStats(currency: $currency, includeTrade: $includeTrade, cutoff: $cutoff) {
+        currency includeTrade cutoff
+        totals { printings copies regular foil trade value average median unpricedCopies }
+        rarities { rarity share ${bucket} }
+        bands { min max ${bucket} }
+        aboveCutoff { ${bucket} }
+        belowCutoff { ${bucket} }
+        concentration { top value share }
+        topCards { title setCode setName rarity foil unitPrice quantity value }
+        sets { setCode setName setSize mythic rare uncommon common ${bucket} }
+        decks { copiesInDecks valueInDecks copiesFree valueFree decks { title needed owned value } }
+      }
+    }
+  `;
+  const data = await getGraphQLClient().request<{ collectionStats: CollectionStats }>(query, {
+    currency,
+    includeTrade,
+    cutoff,
+  });
+  return data.collectionStats;
+}
+
 /** Euros per US dollar, for valuing cards that only have a USD price. */
 export async function fetchUsdToEurRate(): Promise<number> {
   const query = gql`

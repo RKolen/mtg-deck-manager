@@ -50,6 +50,7 @@ export function AppShell({
       if (key === 'h') router.push('/');
       else if (key === 'd') router.push('/decks');
       else if (key === 'c') router.push('/collection');
+      else if (key === 't') router.push('/collection/stats');
       else if (key === 'w') router.push('/wishlist');
       else if (key === 'i') router.push('/import');
       else if (key === 'm') router.push('/meta-decks');

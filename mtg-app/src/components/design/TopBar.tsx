@@ -9,6 +9,7 @@ export type NavId =
   | 'decks'
   | 'builder'
   | 'collection'
+  | 'stats'
   | 'wishlist'
   | 'sim'
   | 'import'
@@ -18,6 +19,7 @@ const TABS: Array<{ id: NavId; label: string; href: string; hotkey: string }> = 
   { id: 'home', label: 'HOME', href: '/', hotkey: 'H' },
   { id: 'decks', label: 'DECKS', href: '/decks', hotkey: 'D' },
   { id: 'collection', label: 'COLLECTION', href: '/collection', hotkey: 'C' },
+  { id: 'stats', label: 'STATS', href: '/collection/stats', hotkey: 'T' },
   { id: 'wishlist', label: 'WISHLIST', href: '/wishlist', hotkey: 'W' },
   { id: 'import', label: 'IMPORT', href: '/import', hotkey: 'I' },
   { id: 'meta', label: 'META', href: '/meta-decks', hotkey: 'M' },
@@ -28,6 +30,7 @@ function routeToNav(pathname: string): NavId {
   // Deck pages (/decks/[id]) are where decks are built, so they keep the
   // DECKS tab active.
   if (pathname.startsWith('/decks')) return 'decks';
+  if (pathname.startsWith('/collection/stats')) return 'stats';
   if (pathname.startsWith('/collection')) return 'collection';
   if (pathname.startsWith('/wishlist')) return 'wishlist';
   if (pathname.startsWith('/import')) return 'import';

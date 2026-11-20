@@ -26,6 +26,15 @@ extend type Query {
   "Every collection row with its card fields, in one request."
   collectionRows: [CollectionRow!]!
 
+  "Collection statistics: rarities, price bands, sets and deck usage."
+  collectionStats(
+    currency: String
+    "false leaves trade copies out (default true)."
+    includeTrade: Boolean
+    "Per-copy price splitting valuable cards from bulk (default 1)."
+    cutoff: Float
+  ): CollectionStats!
+
   "Euros per US dollar (ECB reference rate), for converting USD-only prices."
   usdToEurRate: Float!
 

@@ -26,6 +26,11 @@ const HINTS: Record<NavId, Array<[string, string]>> = {
     ['F', 'FOIL'],
     ['/', 'FILTER'],
   ],
+  stats: [
+    ['C', 'COLLECTION'],
+    ['T', 'STATS'],
+    ['D', 'DECKS'],
+  ],
   wishlist: [
     ['W', 'WISHLIST'],
     ['C', 'COLLECTION'],
@@ -51,6 +56,7 @@ function routeToNav(pathname: string): NavId {
   if (pathname === '/') return 'home';
   if (pathname.startsWith('/decks/') && pathname !== '/decks') return 'builder';
   if (pathname.startsWith('/decks')) return 'decks';
+  if (pathname.startsWith('/collection/stats')) return 'stats';
   if (pathname.startsWith('/collection')) return 'collection';
   if (pathname.startsWith('/wishlist')) return 'wishlist';
   if (pathname.startsWith('/import')) return 'import';

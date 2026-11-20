@@ -49,3 +49,8 @@ services:
     class: Drupal\mtg_graphql\Service\CollectionReader
     arguments:
       - '@database'
+
+  mtg_graphql.collection_stats:
+    class: Drupal\mtg_graphql\Service\CollectionStats
+    arguments:
+      - '@database'

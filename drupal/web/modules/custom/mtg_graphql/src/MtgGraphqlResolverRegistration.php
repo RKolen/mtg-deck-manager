@@ -571,6 +571,46 @@ final class MtgGraphqlResolverRegistration {
       );
     }
 
+    $registry->addFieldResolver('Query', 'collectionStats',
+      $builder->callback(function ($value, array $args, ResolveContext $context, ResolveInfo $info, FieldContext $fieldContext): array {
+        $fieldContext->addCacheTags(['node_list:collection_card', 'node_list:mtg_card', 'node_list:deck']);
+        $fieldContext->mergeCacheMaxAge(3600);
+        $usdToEur = \Drupal::service('mtg_scryfall_sync.exchange_rate')->usdToEur();
+        $currency = strtoupper((string) ($args['currency'] ?? 'EUR'));
+        return \Drupal::service('mtg_graphql.collection_stats')->compute(
+          $currency === 'EUR',
+          $usdToEur,
+          ($args['includeTrade'] ?? TRUE) !== FALSE,
+          max(0.0, (float) ($args['cutoff'] ?? 1.0)),
+        );
+      })
+    );
+    $statFields = [
+      'CollectionStats' => ['currency', 'includeTrade', 'cutoff', 'totals', 'rarities', 'bands', 'aboveCutoff',
+        'belowCutoff', 'concentration', 'topCards', 'sets', 'decks',
+      ],
+      'CollectionStatsTotals' => ['printings', 'copies', 'regular', 'foil', 'trade', 'value', 'average', 'median',
+        'unpricedCopies',
+      ],
+      'RarityStat' => ['rarity', 'printings', 'copies', 'value', 'share'],
+      'ValueBand' => ['min', 'max', 'printings', 'copies', 'value'],
+      'StatBucket' => ['printings', 'copies', 'value'],
+      'TopShare' => ['top', 'value', 'share'],
+      'TopCardStat' => ['title', 'setCode', 'setName', 'rarity', 'foil', 'unitPrice', 'quantity', 'value'],
+      'SetStat' => ['setCode', 'setName', 'setSize', 'printings', 'copies', 'value', 'mythic', 'rare', 'uncommon',
+        'common',
+      ],
+      'DeckUsage' => ['copiesInDecks', 'valueInDecks', 'copiesFree', 'valueFree', 'decks'],
+      'DeckUsageRow' => ['title', 'needed', 'owned', 'value'],
+    ];
+    foreach ($statFields as $type => $fields) {
+      foreach ($fields as $field) {
+        $registry->addFieldResolver($type, $field,
+          $builder->callback(fn(array $row) => $row[$field] ?? NULL)
+        );
+      }
+    }
+
     $registry->addFieldResolver('Query', 'usdToEurRate',
       $builder->callback(function ($value, array $args, ResolveContext $context, ResolveInfo $info, FieldContext $fieldContext): float {
         $fieldContext->mergeCacheMaxAge(3600);

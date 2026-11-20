@@ -133,6 +133,105 @@ type CollectionRow {
   borderColor: String
 }
 
+"Statistics for the collection page."
+type CollectionStats {
+  currency: String!
+  includeTrade: Boolean!
+  cutoff: Float!
+  totals: CollectionStatsTotals!
+  rarities: [RarityStat!]!
+  "Price bands per copy; the last band (min and max null) is unpriced copies."
+  bands: [ValueBand!]!
+  aboveCutoff: StatBucket!
+  belowCutoff: StatBucket!
+  "Share of the value held by the most valuable copies."
+  concentration: [TopShare!]!
+  topCards: [TopCardStat!]!
+  sets: [SetStat!]!
+  decks: DeckUsage!
+}
+
+type CollectionStatsTotals {
+  printings: Int!
+  copies: Int!
+  regular: Int!
+  foil: Int!
+  trade: Int!
+  value: Float!
+  average: Float!
+  median: Float!
+  unpricedCopies: Int!
+}
+
+type RarityStat {
+  rarity: String!
+  printings: Int!
+  copies: Int!
+  value: Float!
+  share: Float!
+}
+
+type ValueBand {
+  min: Float
+  max: Float
+  printings: Int!
+  copies: Int!
+  value: Float!
+}
+
+type StatBucket {
+  printings: Int!
+  copies: Int!
+  value: Float!
+}
+
+type TopShare {
+  top: Int!
+  value: Float!
+  share: Float!
+}
+
+type TopCardStat {
+  title: String!
+  setCode: String!
+  setName: String!
+  rarity: String!
+  foil: Boolean!
+  unitPrice: Float!
+  quantity: Int!
+  value: Float!
+}
+
+type SetStat {
+  setCode: String!
+  setName: String!
+  "Printings of this set in the card database."
+  setSize: Int!
+  printings: Int!
+  copies: Int!
+  value: Float!
+  mythic: Int!
+  rare: Int!
+  uncommon: Int!
+  common: Int!
+}
+
+"Copies tied up in decks, matched by card name (any printing)."
+type DeckUsage {
+  copiesInDecks: Int!
+  valueInDecks: Float!
+  copiesFree: Int!
+  valueFree: Float!
+  decks: [DeckUsageRow!]!
+}
+
+type DeckUsageRow {
+  title: String!
+  needed: Int!
+  owned: Int!
+  value: Float!
+}
+
 type MetaDeck {
   id: ID!
   title: String!

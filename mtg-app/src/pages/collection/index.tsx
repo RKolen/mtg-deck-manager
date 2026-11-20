@@ -353,6 +353,12 @@ const CollectionPage: React.FC = () => {
               {v.id === 'trade' && tradeCopies > 0 ? ` (${tradeCopies})` : ''}
             </button>
           ))}
+          <Link
+            href="/collection/stats"
+            style={{ padding: '0.25rem 0.75rem', marginLeft: 'auto', alignSelf: 'center' }}
+          >
+            Stats →
+          </Link>
         </div>
 
         {view === 'trade' && (
