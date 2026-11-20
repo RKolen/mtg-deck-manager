@@ -4,7 +4,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
-  useState,
+  useSyncExternalStore,
 } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchUsdToEurRate } from '../services/drupalApi';
@@ -54,21 +54,45 @@ function loadPrefs(): ThemePrefs {
   }
 }
 
+// Preferences live in localStorage; this small store lets React read them
+// with useSyncExternalStore (server render and hydration use DEFAULTS, the
+// client then switches to the stored values without a mismatch).
+const listeners = new Set<() => void>();
+let current: ThemePrefs | null = null;
+
+function getSnapshot(): ThemePrefs {
+  if (current === null) {
+    current = loadPrefs();
+  }
+  return current;
+}
+
+function getServerSnapshot(): ThemePrefs {
+  return DEFAULTS;
+}
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+function setPrefs(update: (prefs: ThemePrefs) => ThemePrefs): void {
+  current = update(getSnapshot());
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(current));
+  } catch {
+    // Storage blocked: keep the preference for this page view only.
+  }
+  listeners.forEach(l => l());
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [prefs, setPrefs] = useState<ThemePrefs>(DEFAULTS);
-  const [hydrated, setHydrated] = useState(false);
+  const prefs = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   useEffect(() => {
-    setPrefs(loadPrefs());
-    setHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    if (!hydrated) return;
     document.documentElement.setAttribute('data-theme', prefs.dark ? 'dark' : 'light');
     document.documentElement.style.setProperty('--accent-color', prefs.accentColor);
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
-  }, [prefs, hydrated]);
+  }, [prefs]);
 
   const setDark = useCallback((dark: boolean) => {
     setPrefs(p => ({ ...p, dark }));

@@ -4,7 +4,7 @@
  * front face, so the faces come from the cardFaces query.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchCardFaces, type CardFace } from '../services/drupalApi';
 
@@ -34,9 +34,13 @@ export interface CardFaceSwitch {
 export function useCardFaceSwitch(cardTitle: string): CardFaceSwitch {
   const faces = useCardFaces(cardTitle);
   const [active, setActive] = useState(0);
-  useEffect(() => {
+  // Back to the front face when the card changes (adjusted during render,
+  // not in an effect, so there is no extra render with the old face).
+  const [shownFor, setShownFor] = useState(cardTitle);
+  if (shownFor !== cardTitle) {
+    setShownFor(cardTitle);
     setActive(0);
-  }, [cardTitle]);
+  }
   return {
     faces,
     multiFaced: faces.length > 1,

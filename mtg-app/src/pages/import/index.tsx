@@ -12,7 +12,7 @@
  * The "Collection (CSV)" mode adds cards to the collection instead.
  */
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
@@ -244,7 +244,7 @@ const ImportPage: React.FC = () => {
   const [mode, setMode] = useState<'deck' | 'collection'>('deck');
   const [step, setStep] = useState<Step>('upload');
   const [deckTitle, setDeckTitle] = useState('Imported Deck');
-  const [deckFormat, setDeckFormat] = useState('Standard');
+  const [deckFormatRaw, setDeckFormat] = useState('Standard');
   const [rows, setRows] = useState<MatchedRow[]>([]);
   const [progress, setProgress] = useState('');
   const [createdDeckId, setCreatedDeckId] = useState<string | null>(null);
@@ -252,19 +252,18 @@ const ImportPage: React.FC = () => {
   const [commanderUid, setCommanderUid] = useState<number | null>(null);
   const [partnerUid, setPartnerUid] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const hasCommander = usesCommanderCard(deckFormat);
 
   const { data: formats = [] } = useQuery({
     queryKey: ['formats'],
     queryFn: fetchFormats,
   });
 
-  useEffect(() => {
-    if (formats.length === 0) return;
-    if (!formats.some(f => f.name === deckFormat)) {
-      setDeckFormat(formats[0]?.name ?? 'Standard');
-    }
-  }, [formats, deckFormat]);
+  // The deck format must be a known one; fall back to the first.
+  const deckFormat =
+    formats.length === 0 || formats.some(f => f.name === deckFormatRaw)
+      ? deckFormatRaw
+      : (formats[0]?.name ?? 'Standard');
+  const hasCommander = usesCommanderCard(deckFormat);
 
   // ----- Step 1: File parsing + name matching -----
 

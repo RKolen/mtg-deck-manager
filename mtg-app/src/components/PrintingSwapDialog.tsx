@@ -94,13 +94,19 @@ const PrintingSwapDialog: React.FC<PrintingSwapDialogProps> = ({
     return () => window.removeEventListener('keydown', handler);
   }, [isSaving, onCancel]);
 
-  useEffect(() => {
+  // Reset the choices when another printing is picked or the owned counts
+  // arrive (adjusted during render rather than in an effect).
+  const [modeFor, setModeFor] = useState(next.id);
+  if (modeFor !== next.id) {
+    setModeFor(next.id);
     setMode('none');
-  }, [next.id]);
-
-  useEffect(() => {
+  }
+  const foilKey = `${next.id}|${deckIsFoil}|${currentFoil}|${currentOwned}`;
+  const [foilFor, setFoilFor] = useState(foilKey);
+  if (foilFor !== foilKey) {
+    setFoilFor(foilKey);
     setFoil(deckIsFoil || (currentFoil > 0 && currentOwned < 1));
-  }, [deckIsFoil, currentFoil, currentOwned, next.id]);
+  }
 
   const foilPrice = priceFor(next.attributes, currency, true);
   const regularPrice = priceFor(next.attributes, currency);

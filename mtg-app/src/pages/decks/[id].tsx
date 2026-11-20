@@ -241,16 +241,25 @@ function OwnedAmountControl({
   const focused = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const metaRef = useRef({ cardId, cardName, ownedQty, foil });
-  metaRef.current = { cardId, cardName, ownedQty, foil };
+  useEffect(() => {
+    metaRef.current = { cardId, cardName, ownedQty, foil };
+  });
 
+  // Another card or finish: show its count (adjusted during render) and drop
+  // a pending edit of the previous one.
+  const slotKey = `${cardId}|${foil}`;
+  const [textFor, setTextFor] = useState(slotKey);
+  if (textFor !== slotKey) {
+    setTextFor(slotKey);
+    setText(String(ownedQty));
+  }
   useEffect(() => {
     if (debounceRef.current != null) {
       clearTimeout(debounceRef.current);
       debounceRef.current = null;
     }
-    setText(String(ownedQty));
     focused.current = false;
-  }, [cardId, foil]);
+  }, [slotKey]);
 
   useEffect(() => {
     if (!focused.current) {
@@ -1869,10 +1878,9 @@ const DeckAnalysis: React.FC<{ cards: DeckCardWithCard[]; format: string; deckTi
   const manaReq = useMemo(() => manaRequirement(cards), [cards]);
   const sources = useMemo(() => effectiveManaSources(cards), [cards]);
   const totalSources = useMemo(() => totalManaSources(cards), [cards]);
-  const handTable = useMemo(
-    () => manaHandProbability(cards, selectedColor),
-    [cards, selectedColor],
-  );
+  // Cheap (21 probabilities), so no manual memo; the React Compiler could not
+  // preserve one here.
+  const handTable = manaHandProbability(cards, selectedColor);
   const ratio = useMemo(() => manaColoredCardRatio(cards), [cards]);
   const mainCount = totalCount(main);
 
@@ -2777,7 +2785,7 @@ const DeckSuggestions: React.FC<{ deckNid: number }> = ({ deckNid }) => {
       )}
 
       <p style={{ margin: '0 0 1rem', color: 'var(--ink)' }}>
-        AI-powered card suggestions based on the deck's semantic profile.
+        AI-powered card suggestions based on the deck’s semantic profile.
         Results come from Milvus vector search and are ranked by Ollama.
       </p>
 
@@ -2832,7 +2840,7 @@ const DeckSuggestions: React.FC<{ deckNid: number }> = ({ deckNid }) => {
         </p>
       )}
       {!isFetched && !isFetching && !isError && (
-        <p style={{ color: 'var(--ink)', fontStyle: 'italic' }}>Click 'Get Suggestions' to start.</p>
+        <p style={{ color: 'var(--ink)', fontStyle: 'italic' }}>Click ‘Get Suggestions’ to start.</p>
       )}
 
       {suggestions.length > 0 && (
@@ -2980,7 +2988,7 @@ const DeckMetaMatchup: React.FC<DeckMetaMatchupProps> = ({ deckNid, format }) =>
       <section>
         <h3>Deck deduction</h3>
         <p style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', color: 'var(--ink)' }}>
-          Enter cards you've seen the opponent play — the classifier updates P(archetype) live.
+          Enter cards you’ve seen the opponent play — the classifier updates P(archetype) live.
           {classifierResults.length === 0 && ' (Requires the Python classifier service — set NEXT_PUBLIC_CLASSIFIER_URL.)'}
         </p>
         <div style={{ display: 'flex', gap: 8, marginBottom: '0.75rem' }}>
@@ -3207,7 +3215,7 @@ const CoachPanel: React.FC<CoachPanelProps> = ({ cards, format, deckTitle }) => 
   return (
     <section style={{ marginTop: '2rem', borderTop: '1px solid var(--line)', paddingTop: '1rem' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: open ? '0.75rem' : 0 }}>
-        <h3 style={{ margin: 0 }}>Coach's notes</h3>
+        <h3 style={{ margin: 0 }}>Coach’s notes</h3>
         <button
           type="button"
           onClick={() => {

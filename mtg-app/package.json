@@ -8,6 +8,7 @@
     "build": "NODE_EXTRA_CA_CERTS=$HOME/.ddev/mkcert/rootCA.pem next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
     "test": "node scripts/vitest.mjs run"
   },
   "dependencies": {
@@ -26,6 +27,8 @@
     "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "eslint": "10.15.0",
+    "eslint-config-next": "16.4.5",
     "typescript": "^5.0.0",
     "vitest": "^5.1.0"
   }

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   fetchDeckBuildPool,
@@ -191,9 +191,11 @@ const LandBasePanel: React.FC<LandBasePanelProps> = ({ deckId, cards, format, co
   // Settings being edited: the saved ones until changed. The land count has
   // its own box.
   const [draft, setDraft] = useState<Partial<ManaSettings>>(() => withoutLandCount(saved));
-  useEffect(() => {
+  const [draftFrom, setDraftFrom] = useState(saved);
+  if (draftFrom !== saved) {
+    setDraftFrom(saved);
     setDraft(withoutLandCount(saved));
-  }, [saved]);
+  }
   const draftSettings = useMemo(() => resolveManaSettings(draft), [draft]);
   const storedJson = JSON.stringify(manaSettingsDiff({ ...saved, landCount: savedLandCount }));
   const draftJson = JSON.stringify(manaSettingsDiff({ ...draft, landCount: chosenLandCount }));
@@ -477,7 +479,7 @@ const LandBasePanel: React.FC<LandBasePanelProps> = ({ deckId, cards, format, co
             {chosenLandCount == null && (currentLandTotal > 0 ? ' (the deck\'s current count)' : ' (formula)')}
             . The deck has {plan.currentLandCount} now.
             <span className="dim">
-              {' '}Karsten's formula suggests {plan.formulaLandCount} ({plan.landCountFormula}; avg MV{' '}
+              {' '}Karsten’s formula suggests {plan.formulaLandCount} ({plan.landCountFormula}; avg MV{' '}
               {plan.avgCmc.toFixed(2)}, {plan.cheapRampDraw} cheap ramp/draw), give or take about two lands.
             </span>
             {companionAllowance.companionBonus > 0 && !companionAllowance.mainHardMax && (

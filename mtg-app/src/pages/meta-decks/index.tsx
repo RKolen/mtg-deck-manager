@@ -7,7 +7,8 @@
  * Decks that have fallen out of the meta are never deleted.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { gql } from 'graphql-request';
 import { getGraphQLClient } from '../../services/graphqlClient';
@@ -105,7 +106,7 @@ async function runScrape(format: string, limit: number): Promise<ScrapeResult> {
 
 const MetaDecksPage: React.FC = () => {
   const qc = useQueryClient();
-  const [selectedFormat, setSelectedFormat] = useState<string | null>(null);
+  const [pickedFormat, setSelectedFormat] = useState<string | null>(null);
   const [scrapeLimit, setScrapeLimit] = useState(20);
   const [lastResult, setLastResult] = useState<ScrapeResult | null>(null);
   const [scrapeError, setScrapeError] = useState<string | null>(null);
@@ -117,11 +118,8 @@ const MetaDecksPage: React.FC = () => {
 
   const scrapeableFormats = formats.filter(f => f.slug !== '');
 
-  useEffect(() => {
-    if (selectedFormat === null && scrapeableFormats[0] != null) {
-      setSelectedFormat(scrapeableFormats[0].name);
-    }
-  }, [scrapeableFormats, selectedFormat]);
+  // The first scrapeable format until one is picked.
+  const selectedFormat = pickedFormat ?? scrapeableFormats[0]?.name ?? null;
 
   const { data: decks = [], isLoading: decksLoading } = useQuery<MetaDeck[]>({
     queryKey: ['metaDecks', selectedFormat],
@@ -149,7 +147,7 @@ const MetaDecksPage: React.FC = () => {
       <h1 style={{ marginTop: 0 }}>Meta Decks</h1>
 
       <nav style={{ marginBottom: '1.5rem' }}>
-        <a href="/" style={{ marginRight: '1rem', color: '#fff' }}>Home</a>
+        <Link href="/" style={{ marginRight: '1rem', color: 'var(--ink)' }}>Home</Link>
       </nav>
 
       {formatsLoading && <p>Loading formats...</p>}

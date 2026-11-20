@@ -54,9 +54,14 @@ export function TopBar({
   const [now, setNow] = useState<Date | null>(null);
 
   useEffect(() => {
-    setNow(new Date());
-    const id = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(id);
+    const tick = (): void => setNow(new Date());
+    // First tick right after mount, then every second.
+    const first = setTimeout(tick, 0);
+    const id = setInterval(tick, 1000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(id);
+    };
   }, []);
 
   const ts = now ? now.toISOString().slice(11, 19) + 'Z' : '--:--:--Z';
@@ -99,7 +104,7 @@ export function TopBar({
         >
           MTG
         </span>
-        <span className="dim">//</span>
+        <span className="dim">{'//'}</span>
         <span>DECK MANAGER</span>
       </Link>
 

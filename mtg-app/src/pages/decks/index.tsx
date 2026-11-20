@@ -96,11 +96,11 @@ const DecksPage: React.FC = () => {
     return map;
   }, [decks, cardQueries]);
 
-  const [sel, setSel] = useState(0);
+  const [selRaw, setSel] = useState(0);
   const [filter, setFilter] = useState('');
   const [creating, setCreating] = useState(false);
   const [title, setTitle] = useState('');
-  const [format, setFormat] = useState('Standard');
+  const [formatRaw, setFormat] = useState('Standard');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [hover, setHover] = useState<{
     name: string;
@@ -131,16 +131,13 @@ const DecksPage: React.FC = () => {
     [decks, filter, formatFilter],
   );
 
-  useEffect(() => {
-    if (sel >= filtered.length) setSel(Math.max(0, filtered.length - 1));
-  }, [filtered.length, sel]);
-
-  useEffect(() => {
-    if (formats.length === 0) return;
-    if (!formats.some(f => f.name === format)) {
-      setFormat(formats[0]?.name ?? 'Standard');
-    }
-  }, [formats, format]);
+  // The selection stays inside the filtered list.
+  const sel = Math.min(selRaw, Math.max(0, filtered.length - 1));
+  // The new-deck format must be a known one; fall back to the first.
+  const format =
+    formats.length === 0 || formats.some(f => f.name === formatRaw)
+      ? formatRaw
+      : (formats[0]?.name ?? 'Standard');
 
   const selected = filtered[sel] ?? null;
   const selectedCards = selected ? cardsByDeckId.get(selected.id) ?? [] : [];
@@ -195,10 +192,10 @@ const DecksPage: React.FC = () => {
       }
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setSel(s => Math.min(filtered.length - 1, s + 1));
+        setSel(s => Math.max(0, Math.min(filtered.length - 1, s + 1)));
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        setSel(s => Math.max(0, s - 1));
+        setSel(s => Math.max(0, Math.min(s, filtered.length - 1) - 1));
       } else if (e.key === 'Enter' && selected) {
         void router.push(`/decks/${slugify(selected.attributes.title)}`);
       } else if (e.key.toLowerCase() === 'n') {

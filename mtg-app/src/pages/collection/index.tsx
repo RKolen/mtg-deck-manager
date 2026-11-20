@@ -6,7 +6,7 @@
  * runtime via GraphQL and managed through @tanstack/react-query.
  */
 
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { slugify } from '../../utils/slugify';
@@ -66,9 +66,7 @@ const CollectionPage: React.FC = () => {
   // Fetch card catalogue page — refetches when debounced filter changes.
   const [page, setPage] = useState(0);
 
-  const setsKey = debouncedFilter.setCodes.slice().sort().join(',');
-  const decksKey = debouncedFilter.deckIds.slice().sort().join(',');
-  const filterKey = JSON.stringify({
+  const filtersOnlyKey = JSON.stringify({
     name: debouncedFilter.name,
     colors: [...debouncedFilter.colors].sort(),
     multicolor: debouncedFilter.multicolor,
@@ -83,9 +81,16 @@ const CollectionPage: React.FC = () => {
     collectorNumber: debouncedFilter.collectorNumber.trim(),
     deckIds: debouncedFilter.deckIds.slice().sort(),
     deckExclude: debouncedFilter.deckExclude,
-    tokens: view === 'tokens',
-    page,
+    view,
   });
+  // Back to the first page when the filters or view change (adjusted during
+  // render, so the old page number is never fetched for the new filters).
+  const [pageFor, setPageFor] = useState(filtersOnlyKey);
+  if (pageFor !== filtersOnlyKey) {
+    setPageFor(filtersOnlyKey);
+    setPage(0);
+  }
+  const filterKey = `${filtersOnlyKey}|${page}`;
   const {
     data: searchResult,
     isLoading: cardsLoading,
@@ -113,32 +118,6 @@ const CollectionPage: React.FC = () => {
       }),
     enabled: view !== 'trade',
   });
-
-  const colorsKey = useMemo(
-    () => [...debouncedFilter.colors].sort().join(','),
-    [debouncedFilter.colors],
-  );
-
-  // Reset to first page when filters change.
-  useEffect(() => {
-    setPage(0);
-  }, [
-    debouncedFilter.name,
-    debouncedFilter.type,
-    debouncedFilter.maxCmc,
-    debouncedFilter.legalIn,
-    debouncedFilter.oracleText,
-    debouncedFilter.rarity,
-    debouncedFilter.setExclude,
-    debouncedFilter.deckExclude,
-    debouncedFilter.collectorNumber,
-    debouncedFilter.multicolor,
-    debouncedFilter.colorless,
-    colorsKey,
-    setsKey,
-    decksKey,
-    view,
-  ]);
 
   const { data: estValue = null } = useQuery<number>({
     queryKey: ['collectionValue', currency],
