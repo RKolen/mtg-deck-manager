@@ -226,10 +226,102 @@ type DeckUsage {
 }
 
 type DeckUsageRow {
+  "Deck node ID, for the deck statistics page."
+  nid: Int!
   title: String!
   needed: Int!
   owned: Int!
   value: Float!
+}
+
+"One deck's cards with prices and how much of each you own (by name)."
+type DeckStats {
+  nid: Int!
+  title: String!
+  currency: String!
+  totals: DeckStatsTotals!
+  cards: [DeckStatsCard!]!
+}
+
+type DeckStatsTotals {
+  cards: Int!
+  ownedCopies: Int!
+  missingCopies: Int!
+  "Value of the deck at its chosen printings."
+  value: Float!
+  ownedValue: Float!
+  "Missing copies at the cheapest printing of each card."
+  costToComplete: Float!
+  unpricedMissing: Int!
+  "Deck slots whose card name other decks also use."
+  sharedCards: Int!
+}
+
+type DeckStatsCard {
+  cardId: ID!
+  title: String!
+  "commander, main or side."
+  board: String!
+  quantity: Int!
+  foil: Boolean!
+  setCode: String!
+  setName: String!
+  collectorNumber: String!
+  rarity: String!
+  unitPrice: Float
+  value: Float!
+  "Copies of this card name in the collection (any printing)."
+  owned: Int!
+  "Copies of this slot covered by the collection."
+  covered: Int!
+  missing: Int!
+  cheapestPrice: Float
+  costToComplete: Float!
+  "Other decks using this card name."
+  otherDecks: Int!
+  "owned, partial or missing."
+  status: String!
+}
+
+"Every printing of one set with owned copies and prices."
+type SetStatsDetail {
+  setCode: String!
+  setName: String!
+  currency: String!
+  totals: SetStatsTotals!
+  rarities: [SetRarityStat!]!
+  cards: [SetStatsCard!]!
+}
+
+type SetStatsTotals {
+  printings: Int!
+  ownedPrintings: Int!
+  copies: Int!
+  foilCopies: Int!
+  value: Float!
+  "One regular copy of every printing not owned yet."
+  costToComplete: Float!
+  unpricedMissing: Int!
+}
+
+type SetRarityStat {
+  rarity: String!
+  printings: Int!
+  owned: Int!
+  value: Float!
+}
+
+type SetStatsCard {
+  cardId: ID!
+  title: String!
+  collectorNumber: String!
+  rarity: String!
+  regular: Int!
+  foil: Int!
+  unitPrice: Float
+  foilPrice: Float
+  value: Float!
+  owned: Boolean!
 }
 
 type MetaDeck {

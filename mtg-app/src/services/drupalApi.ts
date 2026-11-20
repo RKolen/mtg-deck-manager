@@ -1139,8 +1139,112 @@ export interface CollectionStats {
     valueInDecks: number;
     copiesFree: number;
     valueFree: number;
-    decks: Array<{ title: string; needed: number; owned: number; value: number }>;
+    decks: Array<{ nid: number; title: string; needed: number; owned: number; value: number }>;
   };
+}
+
+export interface DeckStatsCard {
+  cardId: string;
+  title: string;
+  /** commander, main or side. */
+  board: string;
+  quantity: number;
+  foil: boolean;
+  setCode: string;
+  setName: string;
+  collectorNumber: string;
+  rarity: string;
+  unitPrice: number | null;
+  value: number;
+  /** Copies of this card name in the collection (any printing). */
+  owned: number;
+  covered: number;
+  missing: number;
+  cheapestPrice: number | null;
+  costToComplete: number;
+  otherDecks: number;
+  status: 'owned' | 'partial' | 'missing';
+}
+
+export interface DeckStats {
+  nid: number;
+  title: string;
+  currency: string;
+  totals: {
+    cards: number;
+    ownedCopies: number;
+    missingCopies: number;
+    value: number;
+    ownedValue: number;
+    costToComplete: number;
+    unpricedMissing: number;
+    sharedCards: number;
+  };
+  cards: DeckStatsCard[];
+}
+
+export interface SetStatsCard {
+  cardId: string;
+  title: string;
+  collectorNumber: string;
+  rarity: string;
+  regular: number;
+  foil: number;
+  unitPrice: number | null;
+  foilPrice: number | null;
+  value: number;
+  owned: boolean;
+}
+
+export interface SetStatsDetail {
+  setCode: string;
+  setName: string;
+  currency: string;
+  totals: {
+    printings: number;
+    ownedPrintings: number;
+    copies: number;
+    foilCopies: number;
+    value: number;
+    costToComplete: number;
+    unpricedMissing: number;
+  };
+  rarities: Array<{ rarity: string; printings: number; owned: number; value: number }>;
+  cards: SetStatsCard[];
+}
+
+/** One deck's cards with prices and ownership; null when not a deck. */
+export async function fetchDeckStats(nid: number, currency: 'USD' | 'EUR'): Promise<DeckStats | null> {
+  const query = gql`
+    query GetDeckStats($nid: Int!, $currency: String) {
+      deckStats(nid: $nid, currency: $currency) {
+        nid title currency
+        totals { cards ownedCopies missingCopies value ownedValue costToComplete unpricedMissing sharedCards }
+        cards {
+          cardId title board quantity foil setCode setName collectorNumber rarity unitPrice value
+          owned covered missing cheapestPrice costToComplete otherDecks status
+        }
+      }
+    }
+  `;
+  const data = await getGraphQLClient().request<{ deckStats: DeckStats | null }>(query, { nid, currency });
+  return data.deckStats;
+}
+
+/** Every printing of a set with ownership and prices; null for an unknown set. */
+export async function fetchSetStats(setCode: string, currency: 'USD' | 'EUR'): Promise<SetStatsDetail | null> {
+  const query = gql`
+    query GetSetStats($setCode: String!, $currency: String) {
+      setStats(setCode: $setCode, currency: $currency) {
+        setCode setName currency
+        totals { printings ownedPrintings copies foilCopies value costToComplete unpricedMissing }
+        rarities { rarity printings owned value }
+        cards { cardId title collectorNumber rarity regular foil unitPrice foilPrice value owned }
+      }
+    }
+  `;
+  const data = await getGraphQLClient().request<{ setStats: SetStatsDetail | null }>(query, { setCode, currency });
+  return data.setStats;
 }
 
 /** Collection statistics (rarity, price bands, sets, deck usage). */
@@ -1162,7 +1266,7 @@ export async function fetchCollectionStats(
         concentration { top value share }
         topCards { title setCode setName rarity foil unitPrice quantity value }
         sets { setCode setName setSize mythic rare uncommon common ${bucket} }
-        decks { copiesInDecks valueInDecks copiesFree valueFree decks { title needed owned value } }
+        decks { copiesInDecks valueInDecks copiesFree valueFree decks { nid title needed owned value } }
       }
     }
   `;

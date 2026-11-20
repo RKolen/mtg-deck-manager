@@ -7,11 +7,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { fetchCollectionStats, type StatBucket } from '../../services/drupalApi';
-import { useTheme } from '../../context/ThemeContext';
-import { Panel, Stat } from '../../components/design/Panel';
-import { formatPrice, priceSourceLabel } from '../../utils/prices';
-import { slugify } from '../../utils/slugify';
+import { fetchCollectionStats, type StatBucket } from '../../../services/drupalApi';
+import { useTheme } from '../../../context/ThemeContext';
+import { Panel, Stat } from '../../../components/design/Panel';
+import { formatPrice, priceSourceLabel } from '../../../utils/prices';
+import { slugify } from '../../../utils/slugify';
 import {
   bandLabel,
   completion,
@@ -21,26 +21,8 @@ import {
   shareOf,
   sortSets,
   type SetSortKey,
-} from '../../utils/collectionStats';
-
-const cell: React.CSSProperties = { padding: '3px 6px', whiteSpace: 'nowrap' };
-const num: React.CSSProperties = { ...cell, textAlign: 'right' };
-const link: React.CSSProperties = { color: 'var(--accent)', textDecoration: 'none' };
-
-/** Horizontal bar showing a share of the whole. */
-function Bar({ share }: { share: number }) {
-  return (
-    <div style={{ height: 8, background: 'var(--bg-2)', width: '100%' }}>
-      <div
-        style={{
-          height: '100%',
-          width: `${Math.max(0, Math.min(1, share)) * 100}%`,
-          background: 'var(--accent)',
-        }}
-      />
-    </div>
-  );
-}
+} from '../../../utils/collectionStats';
+import { Bar, cell, link, num } from '../../../components/StatsBits';
 
 const CollectionStatsPage: React.FC = () => {
   const { currency } = useTheme();
@@ -258,7 +240,7 @@ const CollectionStatsPage: React.FC = () => {
                     {stats.decks.decks.map(d => (
                       <tr key={d.title} style={{ borderBottom: '1px solid var(--line)' }}>
                         <td style={{ ...cell, whiteSpace: 'normal' }}>
-                          <Link href={`/decks/${slugify(d.title)}`} style={link}>{d.title}</Link>
+                          <Link href={`/collection/stats/deck/${d.nid}`} style={link}>{d.title}</Link>
                         </td>
                         <td style={num}>
                           {d.owned} / {d.needed}
@@ -351,7 +333,10 @@ const CollectionStatsPage: React.FC = () => {
                     return (
                       <tr key={s.setCode} style={{ borderBottom: '1px solid var(--line)' }}>
                         <td style={{ ...cell, whiteSpace: 'normal' }}>
-                          {s.setName} <span className="dim">{s.setCode.toUpperCase()}</span>
+                          <Link href={`/collection/stats/set/${encodeURIComponent(s.setCode)}`} style={link}>
+                            {s.setName}
+                          </Link>{' '}
+                          <span className="dim">{s.setCode.toUpperCase()}</span>
                         </td>
                         <td style={num}>{s.printings}</td>
                         <td style={num}>{s.copies}</td>

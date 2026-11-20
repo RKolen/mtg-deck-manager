@@ -50,6 +50,52 @@ export function currencySymbol(currency: Currency): string {
   return currency === 'EUR' ? 'EUR ' : '$';
 }
 
+export type OwnFilter = 'all' | 'owned' | 'missing';
+
+/** Deck cards for an owned filter; "missing" includes partly owned slots. */
+export function filterDeckCards<T extends { status: string }>(cards: T[], filter: OwnFilter): T[] {
+  if (filter === 'owned') return cards.filter(c => c.status === 'owned');
+  if (filter === 'missing') return cards.filter(c => c.status !== 'owned');
+  return cards;
+}
+
+export type DeckCardSort = 'board' | 'value' | 'toComplete' | 'name';
+
+const BOARD_ORDER: Record<string, number> = { commander: 0, main: 1, side: 2 };
+
+/** Sorts deck cards; board keeps commander, main, side order, then name. */
+export function sortDeckCards<T extends {
+  board: string;
+  title: string;
+  value: number;
+  costToComplete: number;
+}>(cards: T[], key: DeckCardSort): T[] {
+  const rows = [...cards];
+  const byName = (a: T, b: T): number => a.title.localeCompare(b.title);
+  if (key === 'name') return rows.sort(byName);
+  if (key === 'value') return rows.sort((a, b) => b.value - a.value || byName(a, b));
+  if (key === 'toComplete') return rows.sort((a, b) => b.costToComplete - a.costToComplete || byName(a, b));
+  return rows.sort((a, b) => (BOARD_ORDER[a.board] ?? 9) - (BOARD_ORDER[b.board] ?? 9) || byName(a, b));
+}
+
+/** Short board label for deck tables. */
+export function boardLabel(board: string): string {
+  return board === 'commander' ? 'CMD' : board === 'side' ? 'SB' : '';
+}
+
+/** Set cards for an owned filter and an optional rarity. */
+export function filterSetCards<T extends { owned: boolean; rarity: string }>(
+  cards: T[],
+  filter: OwnFilter,
+  rarity: string,
+): T[] {
+  return cards.filter(
+    c =>
+      (filter === 'all' || (filter === 'owned') === c.owned)
+      && (rarity === '' || c.rarity === rarity),
+  );
+}
+
 export type SetSortKey = 'value' | 'copies' | 'printings' | 'completion' | 'setName';
 
 /** Sorts set rows by a key; names ascending, numbers descending. */

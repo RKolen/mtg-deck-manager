@@ -40,7 +40,7 @@ final class CollectionStatsCalculator {
    * @param array<int, array<string, mixed>> $rows
    *   Collection rows: title, setCode, setName, rarity, regular, foil, trade,
    *   eur, eurFoil, usd, usdFoil.
-   * @param array<int, array{deck: string, card: string, quantity: int}> $deckNeeds
+   * @param array<int, array{deck: string, nid?: int, card: string, quantity: int}> $deckNeeds
    *   Copies of each card name each deck uses (main deck, sideboard and
    *   commanders; maybeboards excluded).
    * @param array<string, int> $setSizes
@@ -118,8 +118,6 @@ final class CollectionStatsCalculator {
    *   unit (NULL when unpriced).
    */
   public static function lines(array $rows, bool $eur, float $usdToEur, bool $includeTrade): array {
-    [$cur, $oth] = $eur ? ['eur', 'usd'] : ['usd', 'eur'];
-    $factor = $eur ? $usdToEur : 1 / $usdToEur;
     $lines = [];
     foreach ($rows as $row) {
       $regular = max(0, (int) ($row['regular'] ?? 0));
@@ -130,11 +128,9 @@ final class CollectionStatsCalculator {
         $regular -= $fromRegular;
         $foil = max(0, $foil - ($trade - $fromRegular));
       }
-      $p = static fn(string $key): ?float => isset($row[$key]) && (float) $row[$key] > 0 ? (float) $row[$key] : NULL;
-      $c = static fn(string $key): ?float => $p($key) === NULL ? NULL : $p($key) * $factor;
       $units = [
-        FALSE => $p($cur) ?? $p($cur . 'Foil') ?? $c($oth) ?? $c($oth . 'Foil'),
-        TRUE => $p($cur . 'Foil') ?? $p($cur) ?? $c($oth . 'Foil') ?? $c($oth),
+        FALSE => self::unitPrice($row, FALSE, $eur, $usdToEur),
+        TRUE => self::unitPrice($row, TRUE, $eur, $usdToEur),
       ];
       foreach ([FALSE => $regular, TRUE => $foil] as $isFoil => $quantity) {
         if ($quantity < 1) {
@@ -153,6 +149,31 @@ final class CollectionStatsCalculator {
       }
     }
     return $lines;
+  }
+
+  /**
+   * Price of one copy of a printing, or NULL when it has no price.
+   *
+   * Regular: the regular price, then foil, then the same in the other
+   * currency converted. Foil: the same with foil first. 0 means no price.
+   *
+   * @param array<string, mixed> $row
+   *   Prices keyed eur, eurFoil, usd, usdFoil.
+   * @param bool $foil
+   *   TRUE for a foil copy.
+   * @param bool $eur
+   *   TRUE for EUR, FALSE for USD.
+   * @param float $usdToEur
+   *   Euros per US dollar.
+   */
+  public static function unitPrice(array $row, bool $foil, bool $eur, float $usdToEur): ?float {
+    [$cur, $oth] = $eur ? ['eur', 'usd'] : ['usd', 'eur'];
+    $factor = $eur ? $usdToEur : 1 / $usdToEur;
+    $p = static fn(string $key): ?float => isset($row[$key]) && (float) $row[$key] > 0 ? (float) $row[$key] : NULL;
+    $c = static fn(string $key): ?float => $p($key) === NULL ? NULL : $p($key) * $factor;
+    return $foil
+      ? $p($cur . 'Foil') ?? $p($cur) ?? $c($oth . 'Foil') ?? $c($oth)
+      : $p($cur) ?? $p($cur . 'Foil') ?? $c($oth) ?? $c($oth . 'Foil');
   }
 
   /**
@@ -372,7 +393,7 @@ final class CollectionStatsCalculator {
    *
    * @param array<int, array<string, mixed>> $lines
    *   Lines.
-   * @param array<int, array{deck: string, card: string, quantity: int}> $deckNeeds
+   * @param array<int, array{deck: string, nid?: int, card: string, quantity: int}> $deckNeeds
    *   Deck usage per card name.
    *
    * @return array<string, mixed>
@@ -389,9 +410,11 @@ final class CollectionStatsCalculator {
 
     $needed = [];
     $perDeck = [];
+    $deckNids = [];
     foreach ($deckNeeds as $need) {
       $needed[$need['card']] = ($needed[$need['card']] ?? 0) + $need['quantity'];
       $perDeck[$need['deck']][$need['card']] = ($perDeck[$need['deck']][$need['card']] ?? 0) + $need['quantity'];
+      $deckNids[$need['deck']] = (int) ($need['nid'] ?? 0);
     }
 
     $inDecks = 0;
@@ -412,6 +435,7 @@ final class CollectionStatsCalculator {
         $deckValue += $used * $average($name);
       }
       $decks[] = [
+        'nid' => $deckNids[$deck] ?? 0,
         'title' => (string) $deck,
         'needed' => array_sum($cards),
         'owned' => $have,

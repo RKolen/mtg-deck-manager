@@ -35,6 +35,12 @@ extend type Query {
     cutoff: Float
   ): CollectionStats!
 
+  "One deck's cards with prices and ownership; null when not a deck."
+  deckStats(nid: Int!, currency: String): DeckStats
+
+  "Every printing of a set with ownership and prices; null for an unknown set."
+  setStats(setCode: String!, currency: String): SetStatsDetail
+
   "Euros per US dollar (ECB reference rate), for converting USD-only prices."
   usdToEurRate: Float!
 

@@ -585,6 +585,30 @@ final class MtgGraphqlResolverRegistration {
         );
       })
     );
+    $registry->addFieldResolver('Query', 'deckStats',
+      $builder->callback(function ($value, array $args, ResolveContext $context, ResolveInfo $info, FieldContext $fieldContext): ?array {
+        $fieldContext->addCacheTags(['node_list:collection_card', 'node_list:mtg_card', 'node_list:deck']);
+        $fieldContext->mergeCacheMaxAge(3600);
+        $usdToEur = \Drupal::service('mtg_scryfall_sync.exchange_rate')->usdToEur();
+        return \Drupal::service('mtg_graphql.collection_stats')->deck(
+          (int) $args['nid'],
+          strtoupper((string) ($args['currency'] ?? 'EUR')) === 'EUR',
+          $usdToEur,
+        );
+      })
+    );
+    $registry->addFieldResolver('Query', 'setStats',
+      $builder->callback(function ($value, array $args, ResolveContext $context, ResolveInfo $info, FieldContext $fieldContext): ?array {
+        $fieldContext->addCacheTags(['node_list:collection_card', 'node_list:mtg_card']);
+        $fieldContext->mergeCacheMaxAge(3600);
+        $usdToEur = \Drupal::service('mtg_scryfall_sync.exchange_rate')->usdToEur();
+        return \Drupal::service('mtg_graphql.collection_stats')->set(
+          (string) $args['setCode'],
+          strtoupper((string) ($args['currency'] ?? 'EUR')) === 'EUR',
+          $usdToEur,
+        );
+      })
+    );
     $statFields = [
       'CollectionStats' => ['currency', 'includeTrade', 'cutoff', 'totals', 'rarities', 'bands', 'aboveCutoff',
         'belowCutoff', 'concentration', 'topCards', 'sets', 'decks',
@@ -601,7 +625,23 @@ final class MtgGraphqlResolverRegistration {
         'common',
       ],
       'DeckUsage' => ['copiesInDecks', 'valueInDecks', 'copiesFree', 'valueFree', 'decks'],
-      'DeckUsageRow' => ['title', 'needed', 'owned', 'value'],
+      'DeckUsageRow' => ['nid', 'title', 'needed', 'owned', 'value'],
+      'DeckStats' => ['nid', 'title', 'currency', 'totals', 'cards'],
+      'DeckStatsTotals' => ['cards', 'ownedCopies', 'missingCopies', 'value', 'ownedValue', 'costToComplete',
+        'unpricedMissing', 'sharedCards',
+      ],
+      'DeckStatsCard' => ['cardId', 'title', 'board', 'quantity', 'foil', 'setCode', 'setName', 'collectorNumber',
+        'rarity', 'unitPrice', 'value', 'owned', 'covered', 'missing', 'cheapestPrice', 'costToComplete', 'otherDecks',
+        'status',
+      ],
+      'SetStatsDetail' => ['setCode', 'setName', 'currency', 'totals', 'rarities', 'cards'],
+      'SetStatsTotals' => ['printings', 'ownedPrintings', 'copies', 'foilCopies', 'value', 'costToComplete',
+        'unpricedMissing',
+      ],
+      'SetRarityStat' => ['rarity', 'printings', 'owned', 'value'],
+      'SetStatsCard' => ['cardId', 'title', 'collectorNumber', 'rarity', 'regular', 'foil', 'unitPrice', 'foilPrice',
+        'value', 'owned',
+      ],
     ];
     foreach ($statFields as $type => $fields) {
       foreach ($fields as $field) {
